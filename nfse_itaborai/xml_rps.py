@@ -154,7 +154,8 @@ def gerar_xml_rps(rps: Rps) -> str:
     partes.append("<Tomador>"
                   + _tag("Tipo", t.tipo)
                   + _tag("CpfCnpj", so_digitos(t.cpf_cnpj))
-                  + _tag("InscricaoMunicipal", texto(t.inscricao_municipal))
+                  # Sem inscrição municipal a prefeitura exige "0" (como no retorno da NFS-e 3385)
+                  + _tag("InscricaoMunicipal", texto(t.inscricao_municipal) or ("0" if t.tipo else ""))
                   + _tag("InscricaoEstadual", texto(t.inscricao_estadual))
                   + _tag("RazaoSocial", texto(t.razao_social))
                   + "</Tomador>")

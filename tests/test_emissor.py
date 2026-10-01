@@ -91,6 +91,7 @@ def test_conteudo_dos_campos():
     assert r.findtext("InformacoesIBSCBS/ClassificacaoTributaria") == "000001"
     assert r.findtext("Informacoes/ClassificacaoCNAE") == "6920601"
     assert r.findtext("Tomador/Tipo") == "1"
+    assert r.findtext("Tomador/InscricaoMunicipal") == "0"
     assert r.findtext("Endereco/CodigoPais") == "1058"
 
 
