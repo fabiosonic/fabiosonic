@@ -31,11 +31,12 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 
 1. Instale o Python (python.org) e marque "Add Python to PATH".
 2. Copie esta pasta para o computador.
-3. Copie `.env.exemplo` para `.env` e preencha:
-   - `ITABORAI_CHAVE`: no portal NFS-e, menu **Chave Privada Webservice**;
-   - `ITABORAI_PROXIMO_RPS`: o próximo número da sequência de RPS da empresa.
+3. Dê dois cliques em `configurar.bat` e responda às perguntas:
+   - a **Chave Privada Webservice**, que fica no portal NFS-e, menu "Chave Privada Webservice";
+   - o **próximo número de RPS** da empresa.
 
-   O arquivo `.env` guarda a chave e **nunca** vai para o Git (está no `.gitignore`).
+   O programa cria o arquivo `.env` na pasta. Esse arquivo guarda a chave e **nunca** vai para o Git (está no
+   `.gitignore`). Também é possível criá-lo à mão, copiando `.env.exemplo`.
 4. Dê dois cliques em `iniciar_tela.bat`. A tela abre em `http://127.0.0.1:8765`.
 
 ## Uso

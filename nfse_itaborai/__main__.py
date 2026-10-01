@@ -29,6 +29,41 @@ def _imprimir(resp: cliente.Resposta) -> int:
     return 0 if resp.sucesso else 1
 
 
+def configurar() -> int:
+    """Cria o .env na pasta do emissor, sem precisar editar arquivo à mão."""
+    import getpass
+    arq = emissor.RAIZ / ".env"
+    atual: dict[str, str] = {}
+    if arq.exists():
+        for linha in arq.read_text(encoding="utf-8").splitlines():
+            if "=" in linha and not linha.lstrip().startswith("#"):
+                k, v = linha.split("=", 1)
+                atual[k.strip()] = v.strip()
+    padrao = {"ITABORAI_CNPJ": "24875410000144", "ITABORAI_IM": "1034265", "ITABORAI_SIMPLES": "S",
+              "ITABORAI_AMBIENTE": "homologacao", "ITABORAI_CIENTE_IRREVERSIVEL": "NAO"} | atual
+
+    def perguntar(chave: str, texto: str, oculto: bool = False) -> None:
+        sugestao = padrao.get(chave, "")
+        mostra = "(já preenchida)" if oculto and sugestao else sugestao
+        entrada = (getpass.getpass if oculto else input)(f"{texto} [{mostra}]: ").strip()
+        padrao[chave] = entrada or sugestao
+
+    print(f"Configurando {arq}  (Enter mantém o valor entre colchetes)")
+    perguntar("ITABORAI_CNPJ", "CNPJ do prestador")
+    perguntar("ITABORAI_IM", "Inscrição municipal")
+    perguntar("ITABORAI_CHAVE", "Chave Privada Webservice (não aparece ao digitar/colar)", oculto=True)
+    perguntar("ITABORAI_PROXIMO_RPS", "Próximo número de RPS")
+    perguntar("ITABORAI_SIMPLES", "Optante do Simples Nacional? (S/N)")
+    if not padrao.get("ITABORAI_CHAVE"):
+        print("Chave não informada: nada foi gravado.")
+        return 2
+    padrao.setdefault("ITABORAI_PROXIMO_LOTE", "1")
+    arq.write_text("".join(f"{k}={v}\n" for k, v in padrao.items()), encoding="utf-8")
+    print(f"OK: {arq} gravado. Produção continua bloqueada até você mudar "
+          "ITABORAI_AMBIENTE=producao e ITABORAI_CIENTE_IRREVERSIVEL=SIM nesse arquivo.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nfse_itaborai", description="Emissor de NFS-e de Itaboraí/RJ via webservice")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -44,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("numero_nfse")
     x.add_argument("justificativa")
     x.add_argument("--producao", action="store_true")
+
+    sub.add_parser("configurar", help="cria/atualiza o arquivo .env perguntando os dados")
 
     t = sub.add_parser("tela", help="abre a tela de emissão no navegador (http://127.0.0.1:8765)")
     t.add_argument("--porta", type=int, default=8765)
@@ -64,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
             return _imprimir(emissor.emitir(rps, producao=a.producao))
         if a.cmd == "cancelar":
             return _imprimir(emissor.cancelar(a.numero_nfse, a.justificativa, producao=a.producao))
+        if a.cmd == "configurar":
+            return configurar()
         if a.cmd == "tela":
             from .tela import servir
             servir(a.porta)
