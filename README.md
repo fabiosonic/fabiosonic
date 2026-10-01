@@ -30,10 +30,21 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 ## Início rápido (Windows)
 
 1. Descompacte o pacote numa pasta, por exemplo `C:\EmissorItaborai`.
-2. Dê dois cliques em **`TESTE_HOMOLOGACAO.bat`**. Ele envia um RPS de teste em homologação, sem validade
-   fiscal, e grava o resultado em `resultado_teste.txt`.
-3. Para usar no dia a dia, dê dois cliques em **`INICIAR.bat`**. Ele instala o que faltar e abre a tela de
-   emissão.
+2. Dê dois cliques em **`INICIAR.bat`**. Ele faz quatro coisas sozinho:
+   - instala o que faltar;
+   - cadastra os clientes a partir dos XML das notas já emitidas, que ficam em
+     `Downloads\nfse\MORAES OLIVEIRA CONTABILIDADE LTDA`;
+   - abre a tela.
+3. Na tela:
+   - **Emitir nota**: escolha o cliente, digite o valor e clique em **Emitir nota**.
+   - **Emitir em lote**: marque os clientes e clique em **Emitir selecionadas**. O valor já vem com o da
+     última nota de cada cliente.
+   - **Clientes**: digite o CNPJ, clique em **Buscar na Receita** e depois em **Salvar**.
+   - **Ambiente**: o selo no topo mostra se você está em HOMOLOGAÇÃO (teste) ou PRODUÇÃO. Clique no selo
+     para trocar; a troca pede confirmação.
+
+O serviço padrão de todas as notas fica em `servico_padrao.json`: descrição, item 17.19, NBS, desdobro,
+IBS/CBS e percentual IBPT.
 
 ## Instalação (Windows)
 
@@ -52,7 +63,7 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 **Pela tela:** preencha o tomador e os itens e clique em **Conferir XML**. Depois use
 **Emitir em homologação** e, por fim, **Emitir em PRODUÇÃO**.
 
-Item, NBS, desdobro, CNAE, alíquota e IBS/CBS vêm pré-preenchidos de `exemplos/padrao_prestador.json`, com os
+Item, NBS, desdobro, CNAE, alíquota e IBS/CBS vêm de `servico_padrao.json`, com os
 dados da Moraes & Oliveira: 17.19 / NBS 113022100 / desdobro 17.19.01 / CNAE 6920601 / cIndOp 100301 /
 cClassTrib 200052. Os códigos de IBS/CBS seguem a **Tabela IBS x CBS** da prefeitura para o item 17.19. O
 cClassTrib 200052 corresponde à redução de 30% para profissões intelectuais (LC 214/2025, art. 127). Outros

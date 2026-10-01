@@ -255,3 +255,28 @@ def cancelar(numero_nfse: str, justificativa: str, producao: bool = False,
     resp = cliente.interpretar_cancelamento(xml, status, retorno)
     resp.pasta = str(pasta)
     return resp
+
+
+# ---------------------------------------------------------------- ambiente (tela)
+
+def em_producao() -> bool:
+    carregar_env()
+    return (os.environ.get("ITABORAI_AMBIENTE", "").lower() == "producao"
+            and os.environ.get("ITABORAI_CIENTE_IRREVERSIVEL", "").upper() == "SIM")
+
+
+def definir_ambiente(producao: bool) -> None:
+    """Grava ITABORAI_AMBIENTE / ITABORAI_CIENTE_IRREVERSIVEL no .env e no processo atual."""
+    valores = {"ITABORAI_AMBIENTE": "producao" if producao else "homologacao",
+               "ITABORAI_CIENTE_IRREVERSIVEL": "SIM" if producao else "NAO"}
+    arq = RAIZ / ".env"
+    linhas = arq.read_text(encoding="utf-8").splitlines() if arq.exists() else []
+    feitas = set()
+    for i, linha in enumerate(linhas):
+        chave = linha.split("=", 1)[0].strip()
+        if chave in valores:
+            linhas[i] = f"{chave}={valores[chave]}"
+            feitas.add(chave)
+    linhas += [f"{k}={v}" for k, v in valores.items() if k not in feitas]
+    arq.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    os.environ.update(valores)

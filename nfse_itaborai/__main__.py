@@ -87,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("configurar", help="cria/atualiza o arquivo .env perguntando os dados")
 
+    ic = sub.add_parser("importar-clientes", help="cadastra os tomadores encontrados em XMLs de NFS-e")
+    ic.add_argument("pasta", type=Path)
+
     t = sub.add_parser("tela", help="abre a tela de emissão no navegador (http://127.0.0.1:8765)")
     t.add_argument("--porta", type=int, default=8765)
 
@@ -108,6 +111,12 @@ def main(argv: list[str] | None = None) -> int:
             return _imprimir(emissor.cancelar(a.numero_nfse, a.justificativa, producao=a.producao))
         if a.cmd == "configurar":
             return configurar()
+        if a.cmd == "importar-clientes":
+            from . import clientes
+            r = clientes.importar_xmls(a.pasta, emissor.prestador_do_ambiente().cnpj)
+            print(f"XML lidos: {r['xml_lidos']} | ignorados: {r['xml_ignorados']} | "
+                  f"clientes novos: {r['clientes_novos']} | total no cadastro: {r['clientes_total']}")
+            return 0
         if a.cmd == "tela":
             from .tela import servir
             servir(a.porta)

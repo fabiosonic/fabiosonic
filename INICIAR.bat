@@ -11,10 +11,14 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-python -c "import lxml" 2>nul || (
-  echo Instalando validador XSD lxml - so na primeira vez...
-  python -m pip install --quiet --disable-pip-version-check lxml
-)
+python -c "import lxml" 2>nul || python -m pip install --quiet --disable-pip-version-check lxml
 if not exist ".env" python -m nfse_itaborai configurar
+rem Atualiza o cadastro de clientes com os XML das notas ja emitidas (pasta configuravel no .env)
+set "XMLS=%USERPROFILE%\Downloads\nfse\MORAES OLIVEIRA CONTABILIDADE LTDA"
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do if /i "%%a"=="ITABORAI_PASTA_XML" set "XMLS=%%b"
+if exist "%XMLS%" (
+  echo Atualizando clientes a partir de %XMLS% ...
+  python -m nfse_itaborai importar-clientes "%XMLS%"
+)
 python -m nfse_itaborai tela
 pause

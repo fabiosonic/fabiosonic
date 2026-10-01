@@ -1,0 +1,14 @@
+{
+  "descricao": "HONORARIOS CONTABEIS MENSAIS",
+  "item_lista_servico": "17.19",
+  "codigo_nbs": "113022100",
+  "codigo_desdobro": "171901",
+  "cnae": "6920601",
+  "aliquota_iss": "0.00",
+  "tipo_tributacao": "4",
+  "iss_retido": "2",
+  "indicador_operacao": "100301",
+  "classificacao_tributaria": "200052",
+  "ibpt_percentual": "18.18",
+  "observacoes": ""
+}
