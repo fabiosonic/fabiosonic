@@ -58,6 +58,19 @@ Cada envio grava em `saida\AAAA-MM\RPS_<n>\`:
 O número do RPS só avança quando ele vira NFS-e. Se o RPS for rejeitado, o mesmo número é reaproveitado
 na correção.
 
+## Validar o XML no portal da prefeitura
+
+Antes do primeiro envio, confira o XML no **validador da prefeitura**:
+https://prefeituradeitaborai.online/engine8.php?m=modnfse_pref_nfe_rps_pre_validar
+
+1. Gere o XML sem enviar nada:
+   `python -m nfse_itaborai conferir exemplos\rps_exemplo.json > rps.xml`
+   Pela tela, o botão **Conferir XML** mostra o mesmo conteúdo.
+2. Cole o conteúdo de `rps.xml` no validador.
+
+O arquivo `exemplos/xml_para_validar.xml` já vem pronto para esse teste. Ele usa uma chave fictícia, o que não
+afeta a validação de estrutura (XSD).
+
 ## Trava de produção
 
 A prefeitura avisa: **depois que a emissão pelo webservice começa, não é mais possível emitir notas
