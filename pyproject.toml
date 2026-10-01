@@ -1,0 +1,12 @@
+[project]
+name = "nfse-itaborai"
+version = "1.0.0"
+description = "Emissor de NFS-e da Prefeitura de Itaboraí/RJ via webservice (RPS -> NFS-e)"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+teste = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

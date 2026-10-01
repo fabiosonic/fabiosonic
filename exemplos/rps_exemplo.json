@@ -1,0 +1,34 @@
+{
+  "numero": "",
+  "competencia": "2026-10",
+  "itens": [
+    {"descricao": "HONORARIOS CONTABEIS MENSAIS", "quantidade": 1, "valor_unitario": "1000.00"}
+  ],
+  "item_lista_servico": "17.19",
+  "codigo_nbs": "113022100",
+  "codigo_desdobro": "171901",
+  "cnae": "6920601",
+  "aliquota_iss": "2.00",
+  "tipo_tributacao": "4",
+  "iss_retido": "2",
+  "responsavel_recolhimento": "",
+  "valor_total_tributos": "182.00",
+  "observacoes": "",
+  "tomador": {
+    "cpf_cnpj": "11222333000181",
+    "razao_social": "CLIENTE EXEMPLO LTDA",
+    "inscricao_municipal": "",
+    "email": "financeiro@exemplo.com.br",
+    "telefone": "21999999999",
+    "endereco": {
+      "tipo_logradouro": "RUA",
+      "logradouro": "EXEMPLO",
+      "numero": "100",
+      "complemento": "",
+      "bairro": "CENTRO",
+      "codigo_municipio": "3301900",
+      "uf": "RJ",
+      "cep": "24800000"
+    }
+  }
+}
