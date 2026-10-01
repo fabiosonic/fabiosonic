@@ -88,7 +88,7 @@ def test_conteudo_dos_campos():
     assert r.findtext("Informacoes/CodigoLsnDesdobro") == "17.19.01"   # como na NFS-e 3385 aceita
     assert r.findtext("Informacoes/ResponsavelRecolhimento") == "2"
     assert r.findtext("InformacoesIBSCBS/IndicadorOperacao") == "100301"
-    assert r.findtext("InformacoesIBSCBS/ClassificacaoTributaria") == "000001"
+    assert r.findtext("InformacoesIBSCBS/ClassificacaoTributaria") == "200052"
     assert r.findtext("Informacoes/ClassificacaoCNAE") == "6920601"
     assert r.findtext("Tomador/Tipo") == "1"
     assert r.findtext("Tomador/InscricaoMunicipal") == "0"

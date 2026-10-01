@@ -54,7 +54,9 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 
 Item, NBS, desdobro, CNAE, alíquota e IBS/CBS vêm pré-preenchidos de `exemplos/padrao_prestador.json`, com os
 dados da Moraes & Oliveira: 17.19 / NBS 113022100 / desdobro 17.19.01 / CNAE 6920601 / cIndOp 100301 /
-cClassTrib 000001. Os códigos de IBS/CBS são os mesmos da NFS-e de 08/2026 da empresa.
+cClassTrib 200052. Os códigos de IBS/CBS seguem a **Tabela IBS x CBS** da prefeitura para o item 17.19. O
+cClassTrib 200052 corresponde à redução de 30% para profissões intelectuais (LC 214/2025, art. 127). Outros
+serviços devem usar o par cIndOp/cClassTrib que a tabela indica para o respectivo item e NBS.
 
 **Pela linha de comando:**
 

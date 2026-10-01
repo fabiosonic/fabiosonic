@@ -116,7 +116,7 @@ class Rps:
     iss_retido: str = ISS_RETIDO_NAO
     responsavel_recolhimento: str = ""          # vazio = automático pelo IssRetido
     indicador_operacao: str = ""                # IBS/CBS - cIndOp (Tabela IBS x CBS), ex.: 100301
-    classificacao_tributaria: str = ""          # IBS/CBS - cClassTrib, ex.: 000001
+    classificacao_tributaria: str = ""          # IBS/CBS - cClassTrib, ex.: 200052 (17.19)
     competencia: Optional[date] = None
     data_emissao: Optional[datetime] = None
     local_prestacao: str = CODIGO_IBGE_ITABORAI
