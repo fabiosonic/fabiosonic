@@ -27,6 +27,14 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 | Itens | até 5 itens por RPS (`Servico1` a `Servico5`), descrição de até 190 caracteres |
 | Cancelamento | `CancelaNfse`, com Base64(SHA-1) na chave de segurança |
 
+## Início rápido (Windows)
+
+1. Descompacte o pacote numa pasta, por exemplo `C:\EmissorItaborai`.
+2. Dê dois cliques em **`TESTE_HOMOLOGACAO.bat`**. Ele envia um RPS de teste em homologação, sem validade
+   fiscal, e grava o resultado em `resultado_teste.txt`.
+3. Para usar no dia a dia, dê dois cliques em **`INICIAR.bat`**. Ele instala o que faltar e abre a tela de
+   emissão.
+
 ## Instalação (Windows)
 
 1. Instale o Python (python.org) e marque "Add Python to PATH".

@@ -248,21 +248,31 @@ def ambiente(tmp_path, monkeypatch):
     srv.shutdown()
 
 
-def test_emissao_ponta_a_ponta(ambiente):
+def test_homologacao_nao_consome_rps(ambiente):
     url, pasta = ambiente
+    resp = emissor.emitir(emissor.rps_de_dict(json.loads(EXEMPLO.read_text(encoding="utf-8"))), url=url)
+    assert resp.sucesso
+    seq = json.loads((pasta / "dados" / "sequencia.json").read_text())
+    assert seq == {"proximo_rps": 3400, "proximo_lote": 2}
+
+
+def test_emissao_ponta_a_ponta(ambiente, monkeypatch):
+    url, pasta = ambiente
+    monkeypatch.setenv("ITABORAI_AMBIENTE", "producao")
+    monkeypatch.setenv("ITABORAI_CIENTE_IRREVERSIVEL", "SIM")
     rps = emissor.rps_de_dict(json.loads(EXEMPLO.read_text(encoding="utf-8")))
-    resp = emissor.emitir(rps, url=url)
+    resp = emissor.emitir(rps, producao=True, url=url)
     assert resp.sucesso, resp.erros
     assert resp.notas[0].numero_nfse == "202600099009999"
     assert resp.notas[0].numero_rps == "3400"
     assert resp.notas[0].link.endswith("a=1&b=2")
     nome, xml = Simulador.recebidos[0]
-    assert nome == "1-env-lot.xml" and "<Producao>1</Producao>" in xml
+    assert nome == "1-env-lot.xml" and "<Producao>2</Producao>" in xml
     assert (Path(resp.pasta) / "NFSe_202600099009999.xml").exists()
     seq = json.loads((pasta / "dados" / "sequencia.json").read_text())
     assert seq == {"proximo_rps": 3401, "proximo_lote": 2}
     # próximo RPS sai numerado automaticamente
-    resp2 = emissor.emitir(emissor.rps_de_dict(json.loads(EXEMPLO.read_text(encoding="utf-8"))), url=url)
+    resp2 = emissor.emitir(emissor.rps_de_dict(json.loads(EXEMPLO.read_text(encoding="utf-8"))), producao=True, url=url)
     assert resp2.notas[0].numero_rps == "3401"
 
 

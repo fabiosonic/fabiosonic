@@ -170,7 +170,7 @@ def preparar(rps: Rps, prestador: Prestador, producao: bool) -> tuple[str, str, 
 
 
 def _avancar_sequencia(lote: str, rps_numero: str | None) -> None:
-    """O lote avança a cada envio; o número do RPS só quando vira NFS-e."""
+    """O lote avança a cada envio; o número do RPS só quando vira NFS-e em produção."""
     seq = _ler_sequencia()
     seq["proximo_lote"] = max(seq["proximo_lote"], int(lote) + 1)
     if rps_numero:
@@ -187,7 +187,8 @@ def emitir(rps: Rps, producao: bool = False, url: str = cliente.URL_WEBSERVICE) 
     status, retorno = cliente.postar(xml, f"{lote}-env-lot.xml", url=url)
     (pasta / "retorno.xml").write_text(retorno, encoding="utf-8")
     resp = cliente.interpretar_emissao(xml, status, retorno)
-    _avancar_sequencia(lote, rps.numero if resp.sucesso else None)
+    # Homologação não consome a numeração real de RPS
+    _avancar_sequencia(lote, rps.numero if resp.sucesso and producao else None)
     for nota in resp.notas:
         if nota.xml:
             (pasta / f"NFSe_{nota.numero_nfse or rps.numero}.xml").write_text(nota.xml, encoding="utf-8")
