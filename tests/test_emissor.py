@@ -193,6 +193,7 @@ def test_alerta_pis_cofins():
 class Simulador(BaseHTTPRequestHandler):
     recebidos: list = []
     modo = "sucesso"
+    esperado = None
 
     def do_POST(self):  # noqa: N802
         corpo = self.rfile.read(int(self.headers["Content-Length"]))
@@ -211,6 +212,10 @@ class Simulador(BaseHTTPRequestHandler):
                     % raiz.findtext("Nfse/IdentificacaoNfse/Numero")) if ok else "Chave de seguranca invalida"
         elif raiz.findtext("ChaveSeguranca") != chave_seguranca_envio(cnpj, CHAVE, dt):
             resp = "Chave de seguranca invalida"
+        elif Simulador.esperado and raiz.findtext("ListaRps/Rps/IdentificacaoRps/Numero") != str(Simulador.esperado):
+            resp = ("<a><mensagem>ERRO em xml_ListaRps_Rps_IdentificacaoRps_Numero | Lote RPS j\u00e1 informado ou "
+                    "N\u00famero do lote inv\u00e1lido! Este Lote possui o n\u00famero [%s] mas deveria ser [%s];"
+                    "</mensagem></a>" % (raiz.findtext("ListaRps/Rps/IdentificacaoRps/Numero"), Simulador.esperado))
         elif Simulador.modo == "erro":
             resp = ("<?xml version='1.0'?><a><Rps><NumeroRPS>%s</NumeroRPS><EstadoDoRPS>Rejeitado</EstadoDoRPS>"
                     "<ListadeErros>Codigo NBS nao corresponde ao item 17.19</ListadeErros></Rps></a>"
@@ -244,6 +249,7 @@ def ambiente(tmp_path, monkeypatch):
         monkeypatch.setenv(k, v)
     Simulador.recebidos = []
     Simulador.modo = "sucesso"
+    Simulador.esperado = None
     yield f"http://127.0.0.1:{srv.server_address[1]}/wsnfse/", tmp_path
     srv.shutdown()
 
@@ -370,3 +376,37 @@ def test_le_retorno_real_do_webservice():
     assert n.numero_rps == "3385"
     assert n.codigo_verificacao == "6feec6225bc4a78ca1f4524208bf477a"
     assert n.link.startswith("https://prefeituradeitaborai.online/2via_online.php?sid=")
+
+
+def test_corrige_numero_do_rps_informado_pela_prefeitura(ambiente, monkeypatch):
+    """Resposta real de 30/09/2026: 'Este Lote possui o número [3481] mas deveria ser [3509]'."""
+    url, pasta = ambiente
+    monkeypatch.setenv("ITABORAI_PROXIMO_RPS", "3481")
+    monkeypatch.setenv("ITABORAI_AMBIENTE", "producao")
+    monkeypatch.setenv("ITABORAI_CIENTE_IRREVERSIVEL", "SIM")
+    Simulador.esperado = 3509
+    resp = emissor.emitir(emissor.rps_de_dict(json.loads(EXEMPLO.read_text(encoding="utf-8"))),
+                          producao=True, url=url)
+    assert resp.sucesso, resp.erros
+    assert resp.notas[0].numero_rps == "3509"
+    assert "3509" in resp.alertas[0]
+    assert [ET.fromstring(x).findtext("ListaRps/Rps/IdentificacaoRps/Numero") for _, x in Simulador.recebidos] \
+        == ["3481", "3509"]
+    assert json.loads((pasta / "dados" / "sequencia.json").read_text())["proximo_rps"] == 3510
+
+
+def test_numero_manual_nao_e_alterado(ambiente):
+    url, _ = ambiente
+    Simulador.esperado = 3509
+    d = json.loads(EXEMPLO.read_text(encoding="utf-8")) | {"numero": "3481"}
+    resp = emissor.emitir(emissor.rps_de_dict(d), url=url)
+    assert not resp.sucesso and len(Simulador.recebidos) == 1
+    assert emissor.rps_esperado(resp.erros) == 3509
+
+
+def test_env_atualizado_prevalece_sobre_controle_local(ambiente, monkeypatch):
+    url, pasta = ambiente
+    (pasta / "dados").mkdir()
+    (pasta / "dados" / "sequencia.json").write_text('{"proximo_rps": 3481, "proximo_lote": 5}')
+    monkeypatch.setenv("ITABORAI_PROXIMO_RPS", "3509")
+    assert emissor._ler_sequencia() == {"proximo_rps": 3509, "proximo_lote": 5}

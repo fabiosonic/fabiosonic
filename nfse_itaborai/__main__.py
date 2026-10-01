@@ -65,6 +65,11 @@ def configurar() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for fluxo in (sys.stdout, sys.stderr):
+        try:
+            fluxo.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(prog="nfse_itaborai", description="Emissor de NFS-e de Itaboraí/RJ via webservice")
     sub = ap.add_subparsers(dest="cmd", required=True)
 

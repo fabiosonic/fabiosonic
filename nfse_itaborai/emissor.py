@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -72,12 +73,33 @@ def _arquivo_sequencia() -> Path:
 
 
 def _ler_sequencia() -> dict:
+    """Usa o maior valor entre o .env e o controle local, para que ajustes no .env valham."""
+    carregar_env()
+    seq = {"proximo_rps": int(os.environ.get("ITABORAI_PROXIMO_RPS", "1")),
+           "proximo_lote": int(os.environ.get("ITABORAI_PROXIMO_LOTE", "1"))}
     arq = _arquivo_sequencia()
     if arq.exists():
-        return json.loads(arq.read_text(encoding="utf-8"))
-    carregar_env()
-    return {"proximo_rps": int(os.environ.get("ITABORAI_PROXIMO_RPS", "1")),
-            "proximo_lote": int(os.environ.get("ITABORAI_PROXIMO_LOTE", "1"))}
+        salvo = json.loads(arq.read_text(encoding="utf-8"))
+        seq = {k: max(v, int(salvo.get(k, 0))) for k, v in seq.items()}
+    return seq
+
+
+def _definir_proximo_rps(numero: int) -> None:
+    seq = _ler_sequencia()
+    seq["proximo_rps"] = numero
+    _gravar_sequencia(seq)
+
+
+# "Este Lote possui o número [3481] mas deveria ser [3509]"
+_RPS_ESPERADO = re.compile(r"deveria ser \[(\d+)\]", re.IGNORECASE)
+
+
+def rps_esperado(erros: list[str]) -> int | None:
+    for e in erros:
+        m = _RPS_ESPERADO.search(e)
+        if m and "numero" in e.lower().replace("ú", "u"):
+            return int(m.group(1))
+    return None
 
 
 def _gravar_sequencia(seq: dict) -> None:
@@ -181,6 +203,21 @@ def _avancar_sequencia(lote: str, rps_numero: str | None) -> None:
 def emitir(rps: Rps, producao: bool = False, url: str = cliente.URL_WEBSERVICE) -> cliente.Resposta:
     prestador = prestador_do_ambiente()
     producao = producao_autorizada(producao)
+    numero_automatico = not so_digitos(rps.numero)
+    resp = _enviar(rps, prestador, producao, url)
+    # A prefeitura informa o RPS esperado; com numeração automática, corrige e reenvia uma vez.
+    esperado = rps_esperado(resp.erros)
+    if esperado and numero_automatico and str(esperado) != rps.numero:
+        _definir_proximo_rps(esperado)
+        anterior = rps.numero
+        rps.numero = ""
+        resp = _enviar(rps, prestador, producao, url)
+        resp.alertas.insert(0, f"Numeração ajustada: a prefeitura esperava o RPS {esperado} "
+                               f"(o controle local estava em {anterior}). Reenviado automaticamente.")
+    return resp
+
+
+def _enviar(rps: Rps, prestador: Prestador, producao: bool, url: str) -> cliente.Resposta:
     xml, lote, alertas = preparar(rps, prestador, producao)
     pasta = _pasta_saida(rps.numero)
     (pasta / "envio.xml").write_text(xml, encoding="utf-8")

@@ -1,6 +1,8 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 title Emissor NFS-e Itaborai
 where python >nul 2>nul
 if errorlevel 1 (
@@ -11,7 +13,7 @@ if errorlevel 1 (
 )
 python -c "import lxml" 2>nul || (
   echo Instalando validador XSD lxml - so na primeira vez...
-  python -m pip install --quiet lxml
+  python -m pip install --quiet --disable-pip-version-check lxml
 )
 if not exist ".env" python -m nfse_itaborai configurar
 python -m nfse_itaborai tela
