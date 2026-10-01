@@ -1,6 +1,6 @@
 .env
-saida/
-dados/
+/saida/
+/dados/
 __pycache__/
 *.pyc
 .pytest_cache/

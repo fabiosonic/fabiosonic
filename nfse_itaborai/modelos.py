@@ -24,8 +24,11 @@ TRIBUTACAO = {
 ISS_RETIDO_SIM = "1"
 ISS_RETIDO_NAO = "2"
 
-# ResponsavelRecolhimento ("" quando o próprio prestador recolhe)
-RESPONSAVEL = {"": "Prestador", "1": "Tomador", "2": "Intermediário"}
+# ResponsavelRecolhimento: XSD aceita 0-2. NFS-e 3385 (08/2026, sem retenção) foi aceita com "2",
+# logo 1 = tomador (ISS retido) e 2 = prestador.
+RESPONSAVEL_TOMADOR = "1"
+RESPONSAVEL_PRESTADOR = "2"
+RESPONSAVEL = {"0": "Não se aplica", RESPONSAVEL_TOMADOR: "Tomador", RESPONSAVEL_PRESTADOR: "Prestador"}
 
 # Tipo do tomador ("" = pessoa física não identificada)
 TOMADOR_PJ = "1"
@@ -111,7 +114,9 @@ class Rps:
     aliquota_iss: Decimal            # em percentual, ex.: 2.00
     tipo_tributacao: str = "4"
     iss_retido: str = ISS_RETIDO_NAO
-    responsavel_recolhimento: str = ""
+    responsavel_recolhimento: str = ""          # vazio = automático pelo IssRetido
+    indicador_operacao: str = ""                # IBS/CBS - cIndOp (Tabela IBS x CBS), ex.: 100301
+    classificacao_tributaria: str = ""          # IBS/CBS - cClassTrib, ex.: 000001
     competencia: Optional[date] = None
     data_emissao: Optional[datetime] = None
     local_prestacao: str = CODIGO_IBGE_ITABORAI
@@ -124,6 +129,12 @@ class Rps:
     retencoes: Retencoes = field(default_factory=Retencoes)
     valor_total_tributos: Decimal = Decimal(0)   # Lei 12.741/2012 (IBPT)
     observacoes: str = ""
+
+    @property
+    def responsavel(self) -> str:
+        if self.responsavel_recolhimento:
+            return self.responsavel_recolhimento
+        return RESPONSAVEL_TOMADOR if self.iss_retido == ISS_RETIDO_SIM else RESPONSAVEL_PRESTADOR
 
     @property
     def valor_servicos(self) -> Decimal:

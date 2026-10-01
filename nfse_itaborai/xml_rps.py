@@ -1,9 +1,9 @@
 """Geração do XML de envio (RpsNfse) e de cancelamento (CancelaNfse).
 
-O layout segue a implementação do provedor CTA 2.00 no Projeto ACBr
-(Fontes/ACBrDFe/ACBrNFSeX/Provedores/CTA.*), que atende Itaboraí/RJ, incluindo a
-correção de 29/09/2026 (ACBR-9690) que acrescentou CodigoNbs e CodigoLsnDesdobro
-antes de ClassificacaoCNAE, como o XSD da prefeitura exige.
+Estrutura validada contra o XSD oficial da prefeitura (schemas/webserviceNFSe.xsd).
+Autenticação, transporte e cancelamento seguem o provedor CTA 2.00 do Projeto ACBr
+(Fontes/ACBrDFe/ACBrNFSeX/Provedores/CTA.*). Formatos de desdobro e de
+ResponsavelRecolhimento conferidos com a NFS-e 3385 (08/2026) aceita pelo webservice.
 """
 
 from __future__ import annotations
@@ -46,13 +46,15 @@ def data_hora(dt: datetime) -> str:
 
 
 def formatar_item_lista(item: str) -> str:
-    """'1719' / '17.19' -> '17.19'; '140101' -> '14.01.01' (regra do ACBr)."""
-    d = so_digitos(item)
-    if len(d) >= 5:
-        d = d.zfill(6)
-        return f"{d[0:2]}.{d[2:4]}.{d[4:6]}"
-    d = d.zfill(4)
+    """'1719' / '17.19' / '701' -> 'NN.NN' (o XSD exige exatamente 5 caracteres)."""
+    d = so_digitos(item).zfill(4)[:4]
     return f"{d[0:2]}.{d[2:4]}"
+
+
+def formatar_desdobro(codigo: str) -> str:
+    """'171901' -> '17.19.01' (formato aceito na NFS-e 3385 de 08/2026)."""
+    d = so_digitos(codigo)
+    return f"{d[0:2]}.{d[2:4]}.{d[4:6]}" if len(d) == 6 else d
 
 
 def chave_seguranca_envio(cnpj: str, chave: str, data_emissao: str) -> str:
@@ -117,13 +119,19 @@ def gerar_xml_rps(rps: Rps) -> str:
 
     partes.append("<Informacoes>"
                   + _tag("IssRetido", rps.iss_retido)
-                  + _tag("ResponsavelRecolhimento", rps.responsavel_recolhimento)
+                  + _tag("ResponsavelRecolhimento", rps.responsavel)
                   + _tag("ItemListaServico", formatar_item_lista(rps.item_lista_servico))
                   + _tag("CodigoNbs", so_digitos(rps.codigo_nbs))
-                  + _tag("CodigoLsnDesdobro", so_digitos(rps.codigo_desdobro))
+                  + _tag("CodigoLsnDesdobro", formatar_desdobro(rps.codigo_desdobro))
                   + _tag("ClassificacaoCNAE", so_digitos(rps.cnae))
                   + _tag("CodigoTributacaoMunicipio", texto(rps.codigo_tributacao_municipio))
                   + "</Informacoes>")
+
+    if so_digitos(rps.indicador_operacao) or so_digitos(rps.classificacao_tributaria):
+        partes.append("<InformacoesIBSCBS>"
+                      + _tag("IndicadorOperacao", so_digitos(rps.indicador_operacao))
+                      + _tag("ClassificacaoTributaria", so_digitos(rps.classificacao_tributaria))
+                      + "</InformacoesIBSCBS>")
 
     r = rps.retencoes
     partes.append("<ValoresRetencoes>"
@@ -148,7 +156,7 @@ def gerar_xml_rps(rps: Rps) -> str:
                   + _tag("CpfCnpj", so_digitos(t.cpf_cnpj))
                   + _tag("InscricaoMunicipal", texto(t.inscricao_municipal))
                   + _tag("InscricaoEstadual", texto(t.inscricao_estadual))
-                  + (_tag("RazaoSocial", texto(t.razao_social)) if t.razao_social.strip() else "")
+                  + _tag("RazaoSocial", texto(t.razao_social))
                   + "</Tomador>")
 
     e = t.endereco

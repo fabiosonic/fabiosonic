@@ -12,6 +12,7 @@ from pathlib import Path
 from . import cliente
 from .modelos import Endereco, ItemServico, Prestador, Retencoes, Rps, Tomador
 from .validacao import validar
+from .xsd import validar_xsd
 from .xml_rps import gerar_cancelamento, gerar_envio, so_digitos
 
 FUSO = timezone(timedelta(hours=-3), "Brasilia")  # sem horário de verão desde 2019
@@ -130,6 +131,8 @@ def rps_de_dict(d: dict) -> Rps:
         tipo_tributacao=str(d.get("tipo_tributacao", "4")),
         iss_retido=str(d.get("iss_retido", "2")),
         responsavel_recolhimento=str(d.get("responsavel_recolhimento", "")),
+        indicador_operacao=str(d.get("indicador_operacao", "")),
+        classificacao_tributaria=str(d.get("classificacao_tributaria", "")),
         competencia=_data(d.get("competencia")),
         local_prestacao=str(d.get("local_prestacao", "3301900")),
         local_recolhimento=str(d.get("local_recolhimento", "3301900")),
@@ -162,6 +165,7 @@ def preparar(rps: Rps, prestador: Prestador, producao: bool) -> tuple[str, str, 
     lote = str(seq["proximo_lote"])
     alertas = validar(rps)
     xml = gerar_envio(prestador, [rps], lote=lote, producao=producao, agora=agora)
+    validar_xsd(xml)
     return xml, lote, alertas
 
 

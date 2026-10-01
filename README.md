@@ -4,22 +4,27 @@ Converte RPS em NFS-e pelo webservice da prefeitura (`https://prefeituradeitabor
 com tela de emissão local, linha de comando, cancelamento e as críticas da Reforma Tributária
 publicadas na página **Manuais & Tabelas** do portal.
 
-Não depende de nenhuma biblioteca externa: precisa só de Python 3.10 ou superior.
+Precisa de Python 3.10 ou superior. Recomenda-se instalar `lxml` (`pip install lxml`): com ele, cada RPS é
+validado contra o XSD oficial da prefeitura antes do envio.
 
 ## De onde vem o layout
 
-A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**). O layout foi reproduzido da
-implementação de código aberto do Projeto ACBr (`Fontes/ACBrDFe/ACBrNFSeX/Provedores/CTA.*`), que está em
-produção em vários emissores do mercado. Ela inclui a correção de **29/09/2026 (ACBR-9690)**, feita depois que
-o XSD de Itaboraí rejeitou o RPS: `CodigoNbs` e `CodigoLsnDesdobro` passaram a vir antes de
-`ClassificacaoCNAE`.
+A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
+
+- **Estrutura do XML:** segue o **XSD oficial** da prefeitura (`schemas/webserviceNFSe.xsd`, de
+  `prefeituradeitaborai.online/wsnfse/webserviceNFSe.xsd`), inclusive o bloco `InformacoesIBSCBS`.
+- **Transporte, autenticação e cancelamento:** seguem a implementação de código aberto do Projeto ACBr
+  (`Fontes/ACBrDFe/ACBrNFSeX/Provedores/CTA.*`).
+- **Formatos conferidos com uma nota real:** desdobro `17.19.01`, `ResponsavelRecolhimento` e alíquota zero
+  no Simples sem retenção foram conferidos com o retorno real da NFS-e 3385 (08/2026), aceita pelo webservice.
+  O leitor de respostas é testado com esse retorno, anonimizado em `tests/dados/`.
 
 | Item | Como funciona |
 |---|---|
 | Transporte | `POST` `multipart/form-data`, com o XML enviado como arquivo |
 | Autenticação | sem certificado digital; `ChaveSeguranca` = Base64(SHA-256 em hexadecimal minúsculo de `CNPJ + Chave Privada + DataEmissao`) |
 | Ambiente | mesma URL para os dois; `<Producao>2</Producao>` = produção, `1` = homologação |
-| Itens | até 5 itens por RPS (`Servico1` a `Servico5`), descrição de até 60 caracteres |
+| Itens | até 5 itens por RPS (`Servico1` a `Servico5`), descrição de até 190 caracteres |
 | Cancelamento | `CancelaNfse`, com Base64(SHA-1) na chave de segurança |
 
 ## Instalação (Windows)
@@ -36,9 +41,11 @@ o XSD de Itaboraí rejeitou o RPS: `CodigoNbs` e `CodigoLsnDesdobro` passaram a 
 ## Uso
 
 **Pela tela:** preencha o tomador e os itens e clique em **Conferir XML**. Depois use
-**Emitir em homologação** e, por fim, **Emitir em PRODUÇÃO**. Item, NBS, desdobro, CNAE e alíquota vêm
-pré-preenchidos de `exemplos/padrao_prestador.json`, configurado com os dados da Moraes & Oliveira:
-17.19 / NBS 113022100 / desdobro 171901 / CNAE 6920601.
+**Emitir em homologação** e, por fim, **Emitir em PRODUÇÃO**.
+
+Item, NBS, desdobro, CNAE, alíquota e IBS/CBS vêm pré-preenchidos de `exemplos/padrao_prestador.json`, com os
+dados da Moraes & Oliveira: 17.19 / NBS 113022100 / desdobro 17.19.01 / CNAE 6920601 / cIndOp 100301 /
+cClassTrib 000001. Os códigos de IBS/CBS são os mesmos da NFS-e de 08/2026 da empresa.
 
 **Pela linha de comando:**
 
@@ -68,8 +75,8 @@ https://prefeituradeitaborai.online/engine8.php?m=modnfse_pref_nfe_rps_pre_valid
    Pela tela, o botão **Conferir XML** mostra o mesmo conteúdo.
 2. Cole o conteúdo de `rps.xml` no validador.
 
-O arquivo `exemplos/xml_para_validar.xml` já vem pronto para esse teste. Ele usa uma chave fictícia, o que não
-afeta a validação de estrutura (XSD).
+O arquivo `exemplos/xml_para_validar.xml` já vem pronto para esse teste e passa no XSD oficial. Ele usa uma
+chave fictícia, o que não afeta a validação de estrutura (XSD).
 
 ## Trava de produção
 
@@ -88,17 +95,21 @@ manualmente, e isso é irreversível.** Por isso a produção só funciona quand
 | Desdobros 141403 e 141404 exigem o código da obra cadastrada | 01/06/2026 | Nota Técnica 004 |
 | Retenção de PIS/COFINS/CSLL gera alerta (Situação Tributária / Tipo de Retenção) | 01/06/2026 | Nota Técnica 005 |
 | Item 03.01 gera alerta para conferir o NBS atualizado | 01/05/2026 | Nota Técnica 006 |
-| Limites do layout: 5 itens, descrição de 60 caracteres, observações de 190, alíquota de no máximo 5% (LC 116/2003, art. 8º, II) | — | layout CTA |
+| IBS/CBS obrigatório: Indicador da Operação (cIndOp) e Classificação Tributária (cClassTrib) | 01/06/2026 | Nota Técnica 003 / Tabela IBS x CBS |
+| Simples Nacional com ISS retido exige a alíquota efetiva do PGDAS-D | — | LC 123/2006, art. 21, § 4º |
+| Limites do XSD: 5 itens, descrição de 190 caracteres, observações de 190, tamanhos de tomador e endereço; alíquota de no máximo 5% | — | XSD oficial; LC 116/2003, art. 8º, II |
+| Validação completa contra o XSD oficial (com `lxml` instalado) | — | `schemas/webserviceNFSe.xsd` |
 
 ## Testes
 
 ```
-pip install pytest
+pip install pytest lxml
 python -m pytest
 ```
 
-São 23 testes, que cobrem:
-- a ordem e o conteúdo de cada campo do XML;
+São 27 testes, que cobrem:
+- a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
+- a leitura do retorno real do webservice;
 - a chave de segurança;
 - os cálculos (base, ISS, líquido pela fórmula ABRASF, carga tributária);
 - todas as críticas;
@@ -110,10 +121,9 @@ São 23 testes, que cobrem:
 
 ## Limitações conhecidas
 
-- **IBS/CBS (Nota Técnica 003)** e **Situação Tributária / Tipo de Retenção de PIS/COFINS/CSLL (Nota Técnica
-  005):** o layout público do provedor ainda não traz esses campos. Notas **sem retenção federal**, que é o
-  caso normal de um prestador do Simples Nacional, saem normalmente. Se uma nota com retenção de
-  PIS/COFINS/CSLL for rejeitada, o erro da prefeitura aparece na tela e em `retorno.xml`. Basta enviar o PDF
-  das Notas Técnicas 003 e 005 para incluir esses campos.
-- O formato exato da resposta foi reproduzido da leitura que o ACBr faz do retorno, e o leitor aceita as
-  variações conhecidas: XML, XML escapado ou texto puro. O retorno bruto fica sempre salvo em `retorno.xml`.
+- **Situação Tributária / Tipo de Retenção de PIS/COFINS/CSLL (Nota Técnica 005):** o XSD atual não tem
+  esses campos. Notas **sem retenção federal**, que é o caso normal de um prestador do Simples Nacional, não
+  são afetadas. Se uma nota com retenção de PIS/COFINS/CSLL for rejeitada, o erro da prefeitura aparece na
+  tela e em `retorno.xml`.
+- O grupo opcional `ImovelIBSCBS` (endereço do imóvel) e o grupo `Evento` do XSD ainda não são gerados.
+- Erros de rejeição: o formato foi reproduzido do ACBr, e o retorno bruto fica sempre salvo em `retorno.xml`.

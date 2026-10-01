@@ -42,14 +42,15 @@ pre{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;white-space:
 <label>Bairro<input name="e_bairro"></label><label>Cód. IBGE município<input name="e_mun" value="3301900"></label>
 <label>UF<input name="e_uf" value="RJ" maxlength="2"></label><label>CEP<input name="e_cep"></label>
 </div></fieldset>
-<fieldset><legend>Serviço (até 5 itens; descrição até 60 caracteres)</legend><div class="itens" id="itens"></div>
+<fieldset><legend>Serviço (até 5 itens; descrição até 190 caracteres)</legend><div class="itens" id="itens"></div>
 <div class="g">
 <label>Item LC 116<input name="item" required></label><label>NBS (9 dígitos)<input name="nbs" required></label>
 <label>Desdobro (6 dígitos)<input name="desdobro" required></label><label>CNAE<input name="cnae" required></label>
-<label>Alíquota ISS %<input name="aliq" required></label>
+<label>Alíquota ISS % (Simples sem retenção: 0)<input name="aliq" required></label>
 <label>Tributação<select name="trib"><option value="4">4 - Simples Nacional</option><option value="0">0 - Tributado no município</option><option value="1">1 - Tributado fora do município</option><option value="2">2 - Isento/imune</option><option value="3">3 - Exigibilidade suspensa</option><option value="5">5 - Retido no município</option></select></label>
 <label>ISS retido<select name="ret"><option value="2">Não</option><option value="1">Sim</option></select></label>
-<label>Responsável recolhimento<select name="resp"><option value="">Prestador</option><option value="1">Tomador</option><option value="2">Intermediário</option></select></label>
+<label>IBS/CBS - Indicador operação (cIndOp)<input name="indop" required></label>
+<label>IBS/CBS - Classif. tributária (cClassTrib)<input name="ctrib" required></label>
 <label>Competência<input name="comp" type="month"></label>
 <label>Código da obra (14.14)<input name="obra"></label>
 <label>Local prestação (IBGE)<input name="lp" value="3301900"></label><label>Local recolhimento (IBGE)<input name="lr" value="3301900"></label>
@@ -69,13 +70,13 @@ pre{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;white-space:
 <script>
 const P=__PADRAO__;
 const it=document.getElementById('itens');
-for(let i=0;i<5;i++)it.insertAdjacentHTML('beforeend',`<div><input name="d${i}" maxlength="60" placeholder="Descrição item ${i+1}"><input name="q${i}" value="1"><input name="v${i}" placeholder="Valor unitário"></div>`);
+for(let i=0;i<5;i++)it.insertAdjacentHTML('beforeend',`<div><input name="d${i}" maxlength="190" placeholder="Descrição item ${i+1}"><input name="q${i}" value="1"><input name="v${i}" placeholder="Valor unitário"></div>`);
 const f=document.getElementById('f');
 for(const[k,v]of Object.entries(P))if(f.elements[k])f.elements[k].value=v;
 function dados(){const g=n=>f.elements[n].value.trim();const itens=[];
 for(let i=0;i<5;i++)if(g('d'+i))itens.push({descricao:g('d'+i),quantidade:+g('q'+i)||1,valor_unitario:g('v'+i)});
 return{numero:g('rps'),itens,item_lista_servico:g('item'),codigo_nbs:g('nbs'),codigo_desdobro:g('desdobro'),cnae:g('cnae'),
-aliquota_iss:g('aliq'),tipo_tributacao:g('trib'),iss_retido:g('ret'),responsavel_recolhimento:g('resp'),
+aliquota_iss:g('aliq'),tipo_tributacao:g('trib'),iss_retido:g('ret'),indicador_operacao:g('indop'),classificacao_tributaria:g('ctrib'),
 competencia:g('comp'),codigo_obra:g('obra'),local_prestacao:g('lp'),local_recolhimento:g('lr'),
 valor_total_tributos:g('ibpt'),observacoes:g('obs'),
 tomador:{cpf_cnpj:g('t_doc'),razao_social:g('t_nome'),inscricao_municipal:g('t_im'),email:g('t_email'),telefone:g('t_fone'),

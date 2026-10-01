@@ -1,0 +1,953 @@
+<schema xmlns="http://www.w3.org/2001/XMLSchema">
+	<element name="RpsNfse">
+		<complexType>
+			<sequence>
+				<element name="ChaveSeguranca">
+					<simpleType>
+						<restriction base='string'>
+							<minLength value="0"/>
+							<maxLength value="256"/>
+						</restriction>
+					</simpleType>
+				</element>
+				<element name="Producao">
+					<simpleType>
+						<restriction base='integer'>
+							<maxInclusive value="9" />
+							<pattern value="[1-2]"/>
+						</restriction>
+					</simpleType>
+				</element>
+				<element name="Prestador">
+					<complexType>
+						<sequence>
+							<element type="dateTime" name="DataEmissao"/>
+							<element name="Cnpj">
+								<simpleType>
+									<restriction base='string'>
+										<length value="14"/>
+									</restriction>
+								</simpleType>
+							</element>
+							<element name="InscricaoEstadual">
+								<simpleType>
+									<restriction base='string'>
+										<minLength value="0"/>
+										<maxLength value="14"/>
+									</restriction>
+								</simpleType>
+							</element>
+							<element name="InscricaoMunicipal">
+								<simpleType>
+									<restriction base='string'>
+										<minLength value="0"/>
+										<maxLength value="10"/>
+									</restriction>
+								</simpleType>
+							</element>
+							<element name="OptanteSimplesNacional">
+								<simpleType>
+									<restriction base='integer'>
+										<maxInclusive value="9" />
+										<pattern value="[1-2]"/>
+									</restriction>
+								</simpleType>
+							</element>
+							<element name="IncentivoFiscalImunidade">
+								<simpleType>
+									<restriction base='integer'>
+										<maxInclusive value="9" />
+										<pattern value="[1-3]"/>
+									</restriction>
+								</simpleType>
+							</element>
+						</sequence>
+					</complexType>
+				</element>
+				<element name="ListaRps">
+					<complexType>
+						<sequence>
+							<element name="Rps" maxOccurs="999">
+								<complexType>
+									<choice maxOccurs="9999" minOccurs="1">
+										<element name="IdentificacaoRps">
+											<complexType>
+												<sequence>
+													<element name="Numero">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9999999999" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element type="dateTime" name="DataDeEmissao"/>
+													<element name="Competencia">
+														<simpleType>
+															<restriction base='string'>
+																<length value="7"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="LocalDaPrestacao">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9999999" />
+																<minInclusive value="1" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="LocalDoRecolhimento">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9999999" />
+																<minInclusive value="1" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CodigoDaObra">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="6"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="TipoDeTributacao">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9" />
+																<pattern value="[0-5]"/>
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Servico1">
+											<complexType>
+												<sequence>
+													<element name="QuantidadeDoItem">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9999999999" />
+																<minInclusive value="1" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="DescritivoDoItem">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="1"/>
+																<maxLength value="190"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorUnitarioDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minExclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorTotalDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minExclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Servico2">
+											<complexType>
+												<sequence>
+													<element name="QuantidadeDoItem">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9999999999" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="DescritivoDoItem">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="190"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorUnitarioDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorTotalDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Servico3">
+											<complexType>
+												<sequence>
+													<element name="QuantidadeDoItem">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9999999999" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="DescritivoDoItem">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="190"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorUnitarioDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorTotalDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Servico4">
+											<complexType>
+												<sequence>
+													<element name="QuantidadeDoItem">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9999999999" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="DescritivoDoItem">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="190"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorUnitarioDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorTotalDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Servico5">
+											<complexType>
+												<sequence>
+													<element name="QuantidadeDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="DescritivoDoItem">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="190"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorUnitarioDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorTotalDoItem">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Valores">
+											<complexType>
+												<sequence>
+													<element name="ValorTotalDosServicos">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minExclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorDeducoes">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="DescontoIncondicionado">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="DescontoCondicionado">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="BaseDeCalculoDoISS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Aliquota">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="4" />
+																<fractionDigits value="2" />
+																<maxInclusive value="99.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorIss">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorLiquidoNota">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CargaTributariaTotal">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="15"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorCargaTributariaTotal">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="15"/>
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Informacoes">
+											<complexType>
+												<sequence>
+													<element name="IssRetido">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9" />
+																<pattern value="[1-2]"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ResponsavelRecolhimento">
+														<simpleType>
+															<restriction base='integer'>
+																<maxInclusive value="9" />
+																<pattern value="[0-2]"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ItemListaServico">
+														<simpleType>
+															<restriction base='string'>
+																<length value="5"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CodigoNbs">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="15"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CodigoLsnDesdobro">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="15"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ClassificacaoCNAE">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="9"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CodigoTributacaoMunicipio">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="9"/>
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="InformacoesIBSCBS">
+											<complexType>
+												<sequence>
+													<element name="IndicadorOperacao">
+														<simpleType>
+															<restriction base='integer'>
+																<minInclusive value="1" />
+																<maxInclusive value="999999" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ClassificacaoTributaria">
+														<simpleType>
+															<restriction base='integer'>
+																<minInclusive value="1" />
+																<maxInclusive value="999999" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ImovelIBSCBS" maxOccurs="1" minOccurs="0">
+														<complexType>
+															<sequence>
+																<element name="Cep">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="8"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="CodigoMunicipio">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="7"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Uf">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="2"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="TipoLogradouro">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="10"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Logradouro">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="80"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Bairro">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="30"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Numero">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="6"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Complemento">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="30"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+															</sequence>
+														</complexType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="ValoresRetencoes">
+											<complexType>
+												<sequence>
+													<element name="AliquotaPIS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="4" />
+																<fractionDigits value="2" />
+																<maxInclusive value="99.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorPIS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="AliquotaCOFINS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="4" />
+																<fractionDigits value="2" />
+																<maxInclusive value="99.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorCOFINS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="AliquotaCSLL">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="4" />
+																<fractionDigits value="2" />
+																<maxInclusive value="99.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorCSLL">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="BaseCalculoINSS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="AliquotaINSS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="4" />
+																<fractionDigits value="2" />
+																<maxInclusive value="99.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorINSS">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="AliquotaIR">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="4" />
+																<fractionDigits value="2" />
+																<maxInclusive value="99.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="ValorIR">
+														<simpleType>
+															<restriction base='decimal'>
+																<totalDigits value="15" />
+																<fractionDigits value="2" />
+																<maxInclusive value="9999999999999.99" />
+																<minInclusive value="0" />
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Observacoes">
+											<simpleType>
+												<restriction base='string'>
+													<minLength value="0"/>
+													<maxLength value="190"/>
+												</restriction>
+											</simpleType>
+										</element>
+										<element name="Tomador">
+											<complexType>
+												<sequence>
+													<element name="Tipo">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="1"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CpfCnpj">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="14"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Nif" maxOccurs="1" minOccurs="0">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="33"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="InscricaoMunicipal">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="10"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="InscricaoEstadual">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="14"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="RazaoSocial">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="80"/>
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+										<element name="Endereco">
+											<complexType>
+												<sequence>
+													<element name="TipoLogradouro">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="10"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Logradouro">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="80"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Numero">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="6"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Complemento">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="30"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Bairro">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="30"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CodigoMunicipio">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="7"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Uf">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="2"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CodigoPais">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="4"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="CidadeEstrangeiro" maxOccurs="1" minOccurs="0">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="55"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="Cep">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="8"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="TelefoneContatoTomador">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="11"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element name="EmailTomador">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="255"/>
+															</restriction>
+														</simpleType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+
+										<element name="Evento" maxOccurs="1" minOccurs="0">
+											<complexType>
+												<sequence>
+													<element name="NomeEvento">
+														<simpleType>
+															<restriction base='string'>
+																<minLength value="0"/>
+																<maxLength value="255"/>
+															</restriction>
+														</simpleType>
+													</element>
+													<element type="date" name="DataInicio"/>
+													<element type="date" name="DataFim"/>
+
+													<element name="EnderecoEvento">
+														<complexType>
+															<sequence>
+																<element name="Cep">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="8"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="TipoLogradouro">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="10"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Logradouro">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="80"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Numero">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="6"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Bairro">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="30"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+																<element name="Complemento">
+																	<simpleType>
+																		<restriction base='string'>
+																			<minLength value="0"/>
+																			<maxLength value="30"/>
+																		</restriction>
+																	</simpleType>
+																</element>
+															</sequence>
+														</complexType>
+													</element>
+												</sequence>
+											</complexType>
+										</element>
+									</choice>
+								</complexType>
+							</element>
+						</sequence>
+					</complexType>
+				</element>
+			</sequence>
+			<attribute type="float" name="versao"/>
+			<attribute type="integer" name="Id"/>
+		</complexType>
+	</element>
+</schema>

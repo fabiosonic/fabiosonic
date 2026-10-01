@@ -48,7 +48,9 @@ def test_estrutura_e_ordem_identicas_ao_provedor_cta():
                                               "OptanteSimplesNacional", "IncentivoFiscalImunidade"]
     rps = raiz.find("ListaRps/Rps")
     assert filhos(rps) == ["IdentificacaoRps", "Servico1", "Servico2", "Servico3", "Servico4", "Servico5",
-                           "Valores", "Informacoes", "ValoresRetencoes", "Observacoes", "Tomador", "Endereco"]
+                           "Valores", "Informacoes", "InformacoesIBSCBS", "ValoresRetencoes", "Observacoes",
+                           "Tomador", "Endereco"]
+    assert filhos(rps.find("InformacoesIBSCBS")) == ["IndicadorOperacao", "ClassificacaoTributaria"]
     assert filhos(rps.find("IdentificacaoRps")) == ["Numero", "DataDeEmissao", "Competencia", "LocalDaPrestacao",
                                                     "LocalDoRecolhimento", "CodigoDaObra", "TipoDeTributacao"]
     # Correção ACBR-9690 (29/09/2026): NBS e desdobro antes do CNAE
@@ -77,12 +79,16 @@ def test_conteudo_dos_campos():
     assert r.findtext("IdentificacaoRps/TipoDeTributacao") == "4"
     assert r.findtext("Servico1/ValorTotalDoItem") == "1000.00"
     assert r.findtext("Servico2/QuantidadeDoItem") == "0"
-    assert r.findtext("Valores/ValorIss") == "20.00"
+    assert r.findtext("Valores/Aliquota") == "0.00"   # Simples sem retenção: ISS vai no DAS
+    assert r.findtext("Valores/ValorIss") == "0.00"
     assert r.findtext("Valores/ValorLiquidoNota") == "1000.00"
     assert r.findtext("Valores/CargaTributariaTotal") == "18.20"
     assert r.findtext("Informacoes/ItemListaServico") == "17.19"
     assert r.findtext("Informacoes/CodigoNbs") == "113022100"
-    assert r.findtext("Informacoes/CodigoLsnDesdobro") == "171901"
+    assert r.findtext("Informacoes/CodigoLsnDesdobro") == "17.19.01"   # como na NFS-e 3385 aceita
+    assert r.findtext("Informacoes/ResponsavelRecolhimento") == "2"
+    assert r.findtext("InformacoesIBSCBS/IndicadorOperacao") == "100301"
+    assert r.findtext("InformacoesIBSCBS/ClassificacaoTributaria") == "000001"
     assert r.findtext("Informacoes/ClassificacaoCNAE") == "6920601"
     assert r.findtext("Tomador/Tipo") == "1"
     assert r.findtext("Endereco/CodigoPais") == "1058"
@@ -116,13 +122,14 @@ def test_cancelamento_xml():
 
 
 @pytest.mark.parametrize("entrada,saida", [("1719", "17.19"), ("17.19", "17.19"), ("701", "07.01"),
-                                           ("140101", "14.01.01")])
+                                           ("7.01", "07.01")])
 def test_formatar_item(entrada, saida):
     assert formatar_item_lista(entrada) == saida
 
 
 def test_retencoes_reduzem_liquido():
-    rps = rps_exemplo(iss_retido="1", responsavel_recolhimento="1")
+    rps = rps_exemplo(iss_retido="1", aliquota_iss="2.00")
+    assert rps.responsavel == "1"
     rps.retencoes = Retencoes(valor_pis=Decimal("6.50"), valor_cofins=Decimal("30.00"), valor_csll=Decimal("10.00"),
                               valor_ir=Decimal("15.00"))
     assert rps.valor_liquido == Decimal("918.50")  # 1000 - 61.50 - ISS 20
@@ -157,9 +164,22 @@ def test_obra_obrigatoria_14_14():
 
 
 def test_limites_do_layout():
-    assert "60" in _erros(rps_exemplo(itens=[{"descricao": "X" * 61, "valor_unitario": 10}]))
+    assert "190" in _erros(rps_exemplo(itens=[{"descricao": "X" * 191, "valor_unitario": 10}]))
+    validar(rps_exemplo(itens=[{"descricao": "X" * 190, "valor_unitario": 10}]))
     assert "máximo 5" in _erros(rps_exemplo(itens=[{"descricao": "A", "valor_unitario": 1}] * 6))
-    assert "ResponsavelRecolhimento" in _erros(rps_exemplo(iss_retido="1"))
+    assert "alíquota efetiva" in _erros(rps_exemplo(iss_retido="1"))
+    rps = rps_exemplo()
+    rps.tomador.endereco.numero = "1234567"
+    assert "numero" in _erros(rps)
+
+
+def test_ibs_cbs_obrigatorio_desde_junho_2026():
+    assert "IBS/CBS" in _erros(rps_exemplo(indicador_operacao="", classificacao_tributaria=""))
+    rps = rps_exemplo(indicador_operacao="", classificacao_tributaria="")
+    rps.data_emissao = datetime(2026, 5, 31)
+    validar(rps)
+    xml = gerar_envio(PRESTADOR, [rps], lote="1", producao=False, agora=AGORA)
+    assert "InformacoesIBSCBS" not in xml
 
 
 def test_alerta_pis_cofins():
@@ -301,3 +321,42 @@ def test_resposta_escapada_em_envelope():
     env = "<string>" + interno.replace("<", "&lt;").replace(">", "&gt;") + "</string>"
     resp = cliente.interpretar_emissao("", 200, env)
     assert resp.sucesso and resp.notas[0].numero_nfse == "55"
+
+
+# ------------------------------------------------------------------ XSD oficial e retorno real
+
+def test_xml_valido_no_xsd_oficial():
+    from nfse_itaborai.xsd import disponivel, validar_xsd
+    if not disponivel():
+        pytest.skip("lxml não instalado")
+    rps = rps_exemplo(itens=[{"descricao": "HONORARIOS", "quantidade": 2, "valor_unitario": "350.50"},
+                             {"descricao": "ABERTURA DE EMPRESA", "valor_unitario": "800"}],
+                      iss_retido="1", aliquota_iss="2.01", observacoes="Teste & <acentuação>")
+    rps.retencoes = Retencoes(valor_ir=Decimal("15.00"), aliquota_ir=Decimal("1.50"))
+    rps.codigo_obra = "123"
+    assert validar_xsd(gerar_envio(PRESTADOR, [rps], lote="12", producao=True, agora=AGORA))
+    sem_tomador = rps_exemplo()
+    sem_tomador.tomador.cpf_cnpj = ""
+    sem_tomador.tomador.razao_social = ""
+    assert validar_xsd(gerar_envio(PRESTADOR, [sem_tomador], lote="1", producao=False, agora=AGORA))
+
+
+def test_xsd_acusa_erro():
+    from nfse_itaborai.xsd import disponivel, validar_xsd
+    if not disponivel():
+        pytest.skip("lxml não instalado")
+    xml = gerar_envio(PRESTADOR, [rps_exemplo()], lote="1", producao=False, agora=AGORA)
+    with pytest.raises(ErroValidacao) as e:
+        validar_xsd(xml.replace("<ItemListaServico>17.19<", "<ItemListaServico>17.19.01<"))
+    assert "ItemListaServico" in e.value.erros[0]
+
+
+def test_le_retorno_real_do_webservice():
+    real = (Path(__file__).parent / "dados" / "retorno_nfse_real.xml").read_text(encoding="utf-8")
+    resp = cliente.interpretar_emissao("", 200, real)
+    assert resp.sucesso, resp.erros
+    n = resp.notas[0]
+    assert n.numero_nfse == "99003740"
+    assert n.numero_rps == "3385"
+    assert n.codigo_verificacao == "6feec6225bc4a78ca1f4524208bf477a"
+    assert n.link.startswith("https://prefeituradeitaborai.online/2via_online.php?sid=")
