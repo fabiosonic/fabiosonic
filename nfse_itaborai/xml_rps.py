@@ -141,7 +141,7 @@ def gerar_xml_rps(rps: Rps) -> str:
                   + _tag("ValorCOFINS", dec(r.valor_cofins))
                   + _tag("AliquotaCSLL", dec(r.aliquota_csll))
                   + _tag("ValorCSLL", dec(r.valor_csll))
-                  + _tag("BaseCalculoINSS", dec(rps.base_calculo))
+                  + _tag("BaseCalculoINSS", dec(rps.base_calculo if r.valor_inss else 0))
                   + _tag("AliquotaINSS", dec(r.aliquota_inss))
                   + _tag("ValorINSS", dec(r.valor_inss))
                   + _tag("AliquotaIR", dec(r.aliquota_ir))
