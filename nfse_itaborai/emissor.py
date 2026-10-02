@@ -107,10 +107,41 @@ def ler_env(caminho: Path | None = None) -> dict:
     return valores
 
 
+def empresa_adicional() -> bool:
+    """A empresa em uso é uma das cadastradas depois (pasta empresas/<CNPJ>)?"""
+    try:
+        raiz().resolve().relative_to((BASE / "empresas").resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def env(chave: str, padrao: str = "") -> str:
-    """Valor de configuração da empresa em uso: o .env dela prevalece; sem ele, a variável de ambiente."""
+    """Valor de configuração da empresa em uso, do .env dela. Só a empresa original aceita, na falta do .env,
+    variáveis de ambiente do computador — empresas adicionais nunca herdam credenciais de fora da pasta delas."""
     v = ler_env().get(chave)
-    return v if v not in (None, "") else os.environ.get(chave, padrao)
+    if v not in (None, ""):
+        return v
+    return padrao if empresa_adicional() else os.environ.get(chave, padrao)
+
+
+def arquivo_da_empresa(caminho: str | Path, rotulo: str = "arquivo") -> Path:
+    """Arquivo sensível (certificado, chave do banco) só vale se estiver dentro da pasta da empresa em uso."""
+    p = Path(os.path.expanduser(str(caminho or "").strip().strip('"')))
+    if not str(caminho or "").strip():
+        raise ErroConfiguracao(f"Selecione o {rotulo} em Configurações.")
+    if not p.is_absolute():
+        p = raiz() / p
+    p = p.resolve()
+    propria = raiz().resolve()
+    outras = (BASE / "empresas").resolve()
+    dentro = p.is_relative_to(propria) and (empresa_adicional() or not p.is_relative_to(outras))
+    if not dentro:
+        raise ErroConfiguracao(f"O {rotulo} precisa estar guardado nesta empresa: selecione-o pelo botão em "
+                               "Configurações (ele é copiado só para a pasta desta empresa).")
+    if not p.exists():
+        raise ErroConfiguracao(f"{rotulo.capitalize()} não encontrado: {p.name}. Selecione-o de novo em Configurações.")
+    return p
 
 
 def carregar_env(caminho: Path | None = None) -> None:

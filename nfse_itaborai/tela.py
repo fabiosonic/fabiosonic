@@ -102,7 +102,9 @@ ROTAS = {
     "log": lambda c: db.linhas("SELECT * FROM log ORDER BY id DESC LIMIT 200"),
     "robo/rodar": lambda c: automacao.rodar(forcar=True),
     "config": lambda c: config.publico(),
-    "config/salvar": lambda c: config.salvar_da_tela(c),
+    "config/salvar": lambda c: (empresas.verificar_exclusividade(c), config.salvar_da_tela(c))[1],
+    "certificado/enviar": lambda c: empresas.enviar_certificado(str(c.get("arquivo", "")), str(c.get("senha", ""))),
+    "inter/arquivo": lambda c: empresas.enviar_arquivo_inter(str(c.get("tipo", "")), str(c.get("arquivo", ""))),
     # emissão
     "emitir": lambda c: _emitir_item(c),
     "lote": lambda c: [_emitir_item(i) for i in _sem_duplicadas(c.get("itens", []))],

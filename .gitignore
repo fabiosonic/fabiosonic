@@ -6,3 +6,5 @@ __pycache__/
 .pytest_cache/
 resultado_teste.txt
 exemplos/rps_teste_homologacao.json
+/empresas/
+/empresas.json

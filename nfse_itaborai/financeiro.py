@@ -171,6 +171,45 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
     return novos
 
 
+def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
+    """13º honorário: em novembro e dezembro, cobra o honorário mensal de cada contrato em parcelas
+    (padrão 50% em 30/11 e 50% em 20/12). Gera a parcela a partir do mês dela; idempotente."""
+    em = em or hoje()
+    d = config.carregar()["decimo_terceiro"]
+    if not d.get("ativo"):
+        return []
+    novos = []
+    with db.conexao() as con:
+        for n, parc in enumerate(d["parcelas"], 1):
+            mes, dia = (int(x) for x in str(parc["vencimento"]).split("/")[::-1])  # "30/11" -> 11, 30
+            if em.month < mes or em.month > 12 or not float(parc["percentual"]):
+                continue
+            comp = f"{em.year}-{mes:02d}"
+            venc = dia_no_mes(em.year, mes, dia)
+            if em > venc:  # não cria parcela já vencida (evita multa/juros de surpresa se o sistema ficou parado)
+                continue
+            for k in con.execute("SELECT * FROM contratos WHERE ativo=1 AND confirmado=1").fetchall():
+                if k["inicio"] > comp or (k["fim"] and k["fim"] < comp):
+                    continue
+                origem = f"13o:{k['id']}:{em.year}:{n}"
+                if con.execute("SELECT 1 FROM titulos WHERE origem=?", (origem,)).fetchone():
+                    continue
+                valor = int((Decimal(k["valor_cent"]) * Decimal(str(parc["percentual"])) / 100)
+                            .quantize(Decimal("1"), ROUND_HALF_UP))
+                total = len(d["parcelas"])
+                desc = f"{d.get('descricao') or '13º HONORÁRIO'} {em.year}" + (f" - PARCELA {n}/{total}" if total > 1 else "")
+                emitir = k["emitir_nfse"] and d.get("emitir_nfse", True)
+                cur = con.execute(
+                    "INSERT INTO titulos (cpf_cnpj, cliente_nome, competencia, descricao, valor_cent, vencimento,"
+                    " nfse_status, criado_em, origem) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), comp, desc[:190], valor, venc.isoformat(),
+                     "pendente" if emitir else "nao_emitir", db.agora(), origem))
+                novos.append(cur.lastrowid)
+    if novos:
+        db.registrar("13o", f"{len(novos)} parcela(s) do 13º honorário gerada(s)")
+    return novos
+
+
 def criar_titulo(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", competencia: str = "",
                  emitir_nfse: bool = True) -> int:
     doc = clientes._digitos(cpf_cnpj)

@@ -103,14 +103,10 @@ def carregar_certificado(cfg: dict | None = None) -> Certificado:
     except ImportError as ex:  # pragma: no cover
         raise ErroCertificado("Instale o pacote 'cryptography' (pip install cryptography).") from ex
     c = configuracao(cfg)
-    caminho = os.path.expanduser(c.get("certificado_pfx", "").strip().strip('"'))
-    if not caminho:
-        raise ErroCertificado("Informe o certificado A1 (.pfx) em Configurações > Emissão.")
-    arq = Path(caminho)
-    if not arq.is_absolute():
-        arq = emissor.RAIZ / arq
-    if not arq.exists():
-        raise ErroCertificado(f"Certificado não encontrado: {arq}")
+    try:
+        arq = emissor.arquivo_da_empresa(c.get("certificado_pfx", ""), "certificado A1 (.pfx)")
+    except emissor.ErroConfiguracao as ex:
+        raise ErroCertificado(str(ex)) from ex
     senha = (c.get("certificado_senha") or "").encode()
     try:
         chave, cert, cadeia = pkcs12.load_key_and_certificates(arq.read_bytes(), senha or None)

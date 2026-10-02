@@ -182,3 +182,92 @@ def salvar_servico(d: dict) -> dict:
     if not config.carregar()["emissao"].get("servico_revisado", True):
         config.salvar({"emissao": {"servico_revisado": True}})
     return atual
+
+
+# ---------------------------------------------------------------- isolamento de credenciais
+
+EXCLUSIVOS = {  # (seção, campo) da configuração que nunca pode ser igual ao de outra empresa
+    ("cobranca", "inter_client_id"): "credencial da API do Banco Inter",
+    ("empresa", "pix_chave"): "chave PIX",
+    ("smtp", "usuario"): "conta de e-mail de envio",
+}
+PASTA_CERT = Path("dados") / "certificados"
+
+
+def _outras() -> list[tuple[dict, Path]]:
+    propria = emissor.raiz().resolve()
+    return [(e, pasta(e)) for e in _ler()["empresas"] if pasta(e).resolve() != propria]
+
+
+def _cfg_de(p: Path) -> dict:
+    try:
+        return json.loads((p / "dados" / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _digest(arq: Path) -> str:
+    import hashlib
+    return hashlib.sha256(arq.read_bytes()).hexdigest() if arq.is_file() else ""
+
+
+def verificar_exclusividade(novo: dict | None = None, arquivo: bytes | None = None) -> None:
+    """Recusa credenciais (API, PIX, e-mail, certificados) já usadas por outra empresa cadastrada."""
+    import hashlib
+    dig = hashlib.sha256(arquivo).hexdigest() if arquivo else ""
+    for e, p in _outras():
+        cfg = _cfg_de(p)
+        for (sec, campo), rotulo in EXCLUSIVOS.items():
+            v = str((novo or {}).get(sec, {}).get(campo, "") or "").strip().lower()
+            if v and v != SEGREDO and v == str(cfg.get(sec, {}).get(campo, "") or "").strip().lower():
+                raise ValueError(f"Esta {rotulo} já pertence à empresa {e['nome']}. Os dados de uma empresa "
+                                 "não podem ser usados por outra.")
+        if dig and any(_digest(a) == dig for a in (p / PASTA_CERT).glob("*")):
+            raise ValueError(f"Este arquivo já está cadastrado na empresa {e['nome']}. Certificados e chaves "
+                             "não podem ser compartilhados entre empresas.")
+
+
+def _guardar(nome: str, conteudo: bytes) -> str:
+    destino = emissor.raiz() / PASTA_CERT
+    destino.mkdir(parents=True, exist_ok=True)
+    (destino / nome).write_bytes(conteudo)
+    return str(PASTA_CERT / nome).replace("\\", "/")
+
+
+def enviar_certificado(arquivo_b64: str, senha: str) -> dict:
+    """Recebe o .pfx pela tela, confere a senha e o CNPJ e guarda só na pasta desta empresa."""
+    import base64
+    from cryptography.hazmat.primitives.serialization import pkcs12
+    from . import config, nacional
+    dados = base64.b64decode(arquivo_b64.split(",")[-1] or b"")
+    try:
+        _, cert, _ = pkcs12.load_key_and_certificates(dados, senha.encode() or None)
+    except ValueError as ex:
+        raise ValueError("Senha incorreta ou arquivo que não é um certificado A1 (.pfx).") from ex
+    from cryptography.x509.oid import NameOID
+    cn = (cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME) or [None])[0]
+    m = re.search(r":(\d{14})\b", cn.value if cn else "")
+    cnpj = so_digitos(emissor.env("ITABORAI_CNPJ"))
+    if m and cnpj and m.group(1)[:8] != cnpj[:8]:
+        raise ValueError(f"Este certificado é do CNPJ {m.group(1)}, mas a empresa em uso é {cnpj}.")
+    verificar_exclusividade(arquivo=dados)
+    rel = _guardar("certificado-a1.pfx", dados)
+    config.salvar({"emissao": {"certificado_pfx": rel, "certificado_senha": senha}})
+    return nacional.info_certificado()
+
+
+def enviar_arquivo_inter(tipo: str, arquivo_b64: str) -> dict:
+    """Recebe o .crt ou o .key da integração do Inter e guarda só na pasta desta empresa."""
+    import base64
+    from . import config
+    if tipo not in ("crt", "key"):
+        raise ValueError("Tipo de arquivo inválido.")
+    dados = base64.b64decode(arquivo_b64.split(",")[-1] or b"")
+    marca = b"PRIVATE KEY" if tipo == "key" else b"CERTIFICATE"
+    if marca not in dados:
+        raise ValueError("Arquivo inválido: selecione o " + (".key (chave privada)" if tipo == "key" else ".crt (certificado)")
+                         + " gerado na integração do Inter.")
+    verificar_exclusividade(arquivo=dados)
+    rel = _guardar(f"inter.{tipo}", dados)
+    config.salvar({"cobranca": {"inter_certificado" if tipo == "crt" else "inter_chave": rel}})
+    return {"ok": True, "arquivo": rel}

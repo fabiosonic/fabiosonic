@@ -254,6 +254,13 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
           cursor: pointer; background: var(--superficie2); color: var(--texto); flex-direction: row; font-weight: 400; }
 .soltar:hover, .soltar.sobre { border-color: var(--primaria); background: var(--primaria-suave); }
 .soltar .ic { width: 26px; height: 26px; color: var(--primaria); }
+.soltar.mini { padding: 10px 12px; gap: 10px; }
+.soltar.mini .ic { width: 20px; height: 20px; }
+.campos h3.bloco { grid-column: 1 / -1; margin: 10px 0 -4px; font-size: 13px; font-weight: 650; color: var(--texto2);
+                   text-transform: uppercase; letter-spacing: .04em; border-top: 1px solid var(--grade); padding-top: 14px; }
+.campos h3.bloco:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.cert-box { display: grid; grid-template-columns: 2fr 1fr auto; gap: 14px; align-items: end; }
+@media (max-width: 760px) { .cert-box { grid-template-columns: 1fr; } }
 .soltar small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; }
 
 /* checklist de implantação */

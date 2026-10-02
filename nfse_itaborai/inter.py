@@ -16,14 +16,12 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import ssl
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime
-from pathlib import Path
 
 from . import clientes, config, emissor
 
@@ -69,14 +67,10 @@ def _base(c: dict) -> str:
 
 
 def _arquivo(caminho: str, rotulo: str) -> str:
-    p = Path(os.path.expanduser(str(caminho or "").strip().strip('"')))
-    if not str(caminho or "").strip():
-        raise ErroInter(f"Informe o {rotulo} do Inter em Configurações › Cobrança.")
-    if not p.is_absolute():
-        p = emissor.RAIZ / p
-    if not p.exists():
-        raise ErroInter(f"{rotulo.capitalize()} do Inter não encontrado: {p}")
-    return str(p)
+    try:
+        return str(emissor.arquivo_da_empresa(caminho, f"{rotulo} do Inter"))
+    except emissor.ErroConfiguracao as ex:
+        raise ErroInter(str(ex)) from ex
 
 
 def _contexto(c: dict) -> ssl.SSLContext:
@@ -118,7 +112,7 @@ def token(cfg: dict | None = None) -> str:
     if not configurado(cfg):
         raise ErroInter("Banco Inter não configurado: informe client_id, client_secret, certificado (.crt) e "
                         "chave (.key) em Configurações › Cobrança.")
-    chave = (_base(c), c["inter_client_id"])
+    chave = (str(emissor.raiz()), _base(c), c["inter_client_id"])  # token nunca é reaproveitado entre empresas
     t = _TOKEN.get(chave)
     if t and t[1] > time.time() + 60:
         return t[0]

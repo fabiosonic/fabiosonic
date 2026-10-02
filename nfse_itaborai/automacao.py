@@ -84,6 +84,9 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     etapa("titulos_gerados", auto["gerar_titulos"] and em.day >= int(cfg["financeiro"]["dia_geracao"]),
           lambda: len(financeiro.gerar_titulos(em=em)))
 
+    etapa("decimo_terceiro", auto["gerar_titulos"] and cfg["decimo_terceiro"].get("ativo"),
+          lambda: len(financeiro.gerar_decimo_terceiro(em)))
+
     def nfse():
         if not emissor.em_producao():
             return "ambiente de homologação: o robô só emite NFS-e em produção"

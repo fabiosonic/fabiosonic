@@ -236,6 +236,16 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
 
 # ---------------------------------------------------------------- régua
 
+def etapas_da_regua(dias: int, cob: dict) -> list[int]:
+    """Etapas fixas da régua + cobrança recorrente dos atrasados: a partir de N dias do vencimento original,
+    repete a cada X dias enquanto o título estiver em aberto."""
+    etapas = set(int(e) for e in cob["regua_dias"])
+    inicio, intervalo = int(cob.get("recorrente_apos_dias") or 0), int(cob.get("recorrente_a_cada_dias") or 0)
+    if cob.get("recorrente_ativa", True) and intervalo > 0 and inicio > 0:
+        etapas.update(range(inicio, max(dias, inicio) + 1, intervalo))
+    return sorted(etapas)
+
+
 def etapa_devida(dias: int, etapas: list[int], enviadas: set[int]) -> int | None:
     """Etapa mais recente já alcançada e ainda não enviada (tolerância de 2 dias, sem disparar etapas velhas)."""
     candidatas = [e for e in sorted(etapas) if e <= dias and dias - e <= 2 and e not in enviadas]
@@ -256,7 +266,7 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                 continue
             enviadas = {e["etapa"] for e in db.linhas(
                 "SELECT etapa FROM eventos_cobranca WHERE titulo_id=? AND canal=?", (t["id"], canal))}
-            etapa = etapa_devida(dias, cob["regua_dias"], enviadas)
+            etapa = etapa_devida(dias, etapas_da_regua(dias, cob), enviadas)
             if etapa is None:
                 continue
             assunto, texto = mensagem(t, etapa, cfg, em)

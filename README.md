@@ -152,6 +152,20 @@ na correção.
 - **Fechamento mensal automático:** no dia configurado o robô gera o relatório gerencial do mês anterior, salva em
   `Downloads\Relatorios financeiros` e envia ao dono por e-mail.
 
+## 13º honorário
+
+Com a opção ligada (Configurações › 13º honorário), o robô cobra o honorário mensal de cada contrato ativo em
+parcelas: por padrão, **50% com vencimento em 30/11 e 50% em 20/12**. Percentuais, datas, descrição e emissão de
+NFS-e são ajustáveis, e as parcelas somam 100%. Cada parcela vira uma conta a receber com NFS-e e boleto e
+entra na régua de cobrança. A parcela de novembro é gerada em novembro e a de dezembro em dezembro, sem
+duplicar. Se o sistema ficar parado até depois do vencimento de uma parcela, ela não é criada já vencida.
+
+## Cobrança recorrente dos atrasados
+
+Além das etapas fixas da régua, o título em atraso é cobrado de novo periodicamente até ser pago: a partir de
+**N dias** do vencimento original (padrão 5), repete **a cada X dias** (padrão 7). As duas opções ficam em
+Configurações › Cobrança.
+
 ## Várias empresas
 
 O sistema atende quantas empresas você quiser: a Moraes & Oliveira e as empresas para as quais você emite nota e
@@ -167,6 +181,13 @@ controla o financeiro.
   não for revisado.
 - **Robô:** a cada execução processa todas as empresas, uma de cada vez, cada uma com seus dados. A tela pode
   estar aberta em qualquer empresa enquanto isso.
+- **Nada é compartilhado entre empresas:**
+  - certificado A1 e arquivos `.crt`/`.key` do Inter são enviados pelo botão em Configurações e ficam guardados
+    só na pasta da empresa (`dados/certificados`); um arquivo fora dela é recusado;
+  - o mesmo certificado, chave PIX, credencial do Inter ou e-mail de envio não pode ser cadastrado em duas
+    empresas;
+  - empresas adicionais nunca herdam variáveis do computador;
+  - o acesso ao banco (token) é sempre separado por empresa.
 - **Proteções:**
   - a nota sai com o município de prestação da empresa emissora;
   - cada empresa tem a própria pasta de extratos;
@@ -304,7 +325,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 119 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 127 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

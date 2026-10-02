@@ -29,6 +29,9 @@ PADRAO = {
         "multa_pct": 2.0,
         "juros_mes_pct": 1.0,
         "regua_dias": [-3, 0, 1, 5, 15, 30],
+        "recorrente_ativa": True,   # cobrança recorrente dos atrasados (além das etapas fixas da régua)
+        "recorrente_apos_dias": 5,  # começa N dias após o vencimento original
+        "recorrente_a_cada_dias": 7,  # e repete a cada X dias enquanto não pagar
         "regua_email": True,
         "regua_whatsapp": True,
         "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado
@@ -45,6 +48,12 @@ PADRAO = {
         "contas_bancarias": [],     # contas (banco-agência-conta) dos extratos desta empresa; preenchida no 1º OFX
         "categorias_despesa": ["Aluguel", "Folha", "Pró-labore", "Impostos", "Sistemas", "Energia/Internet",
                                "Contador/Assessoria", "Marketing", "Bancárias", "Outras"],
+    },
+    "decimo_terceiro": {            # 13º honorário: cobrado de cada contrato ativo no fim do ano
+        "ativo": True,
+        "parcelas": [{"percentual": 50, "vencimento": "30/11"}, {"percentual": 50, "vencimento": "20/12"}],
+        "emitir_nfse": True,
+        "descricao": "13º HONORÁRIO",
     },
     "pastas": {
         "xml_nfse": "~/Downloads/nfse/MORAES OLIVEIRA CONTABILIDADE LTDA",  # XML das notas já emitidas
