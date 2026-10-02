@@ -132,7 +132,7 @@ PAGINAS.painel = async el => {
 
 function resumoRobo(r) {
   if (!r.executado) return `<p>${esc(r.motivo || "Nada executado.")}</p>`;
-  const nomes = { importacao_xml: "XML das notas (clientes, notas externas, contratos)", contatos_completados: "Contatos completados pela Receita",
+  const nomes = { importacao_xml: "XML das notas (clientes, notas externas, contratos)", 
     despesas_recorrentes: "Despesas recorrentes lançadas", titulos_gerados: "Títulos gerados (contratos)", nfse: "NFS-e",
     cobrancas_criadas: "Cobranças (PIX/boleto) criadas", baixas_banco: "Boletos pagos baixados (Inter)", boletos_pdf: "PDFs de boletos salvos", extratos: "Extratos importados",
     regua: "Régua de cobrança", resumo: "Resumo diário por e-mail", backup: "Backup" };
@@ -256,6 +256,7 @@ async function cobrar(id) {
   const r = await api("titulo/cobrar", { id });
   modal(`<h2>Cobrança</h2>${r.email ? `<div class="msg ok">E-mail enviado para ${esc(r.email)}</div>` : '<div class="msg">E-mail não enviado (cliente sem e-mail ou SMTP não configurado).</div>'}
     ${r.whatsapp ? `<p><a class="btn" href="${esc(r.whatsapp)}" target="_blank">Abrir no WhatsApp</a></p>` : '<p class="sub">Cliente sem telefone para WhatsApp.</p>'}
+    ${r.pdf ? `<p class="sub">PDF do boleto para anexar no WhatsApp: ${esc(r.pdf)} <button class="btn min sec" onclick="api('boletos/abrir_pasta')">Abrir pasta</button> <a class="btn min sec" href="/boleto/${id}.pdf" target="_blank">Ver PDF</a></p>` : ""}
     <label>Mensagem<textarea rows="12" id="txt">${esc(r.texto)}</textarea></label>
     <p><button class="btn sec" onclick="navigator.clipboard.writeText($('#txt').value);aviso('Copiado')">Copiar texto</button> <button class="btn sec" onclick="fechar()">Fechar</button></p>`);
 }
@@ -321,7 +322,7 @@ PAGINAS.cobranca = async el => {
   <div class="card"><h2>Régua automática</h2><p>Etapas (dias em relação ao vencimento): <b>${c.regua_dias.map(d => d < 0 ? d : d == 0 ? "0 (vencimento)" : "+" + d).join(" · ")}</b> —
     e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? "<b>ligado</b>" : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
     <a href="#" onclick="ir('config');return false">Alterar</a></p></div>
-  <div class="card"><h2>WhatsApp para enviar (${fila.length})</h2><p class="sub">${ST.config.whatsapp.provedor == "link" ? "Envio por link: clique em “Enviar” para abrir a conversa com a mensagem pronta. Para envio 100% automático, configure Z-API ou Evolution API em Configurações." : "Envio automático ligado (" + esc(ST.config.whatsapp.provedor) + "). Aqui aparecem só mensagens antigas pendentes."}</p>
+  <div class="card"><h2>WhatsApp para enviar (${fila.length})</h2><p class="sub">Clique em “Enviar” para abrir a conversa com a mensagem pronta (linha digitável e PIX). O PDF do boleto está na pasta de boletos para anexar.</p>
     ${tabela([{ t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
       { t: "Etapa", f: e => e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias` },
       { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔")}</div>
@@ -410,7 +411,7 @@ PAGINAS.relatorios = async el => {
 
 // ---------------------------------------------------------------- clientes
 PAGINAS.clientes = async el => {
-  el.innerHTML = `<h1>Clientes</h1><div class="card"><div class="barra"><label>CNPJ / CPF<input id="c_doc" placeholder="só números"></label><button class="btn sec" id="bc">Buscar na Receita</button></div>
+  el.innerHTML = `<h1>Clientes</h1><div class="card"><div class="barra"><label>CNPJ / CPF<input id="c_doc" placeholder="só números"></label></div>
     <div class="campos" id="fcli"><label class="inteiro">Razão social / nome<input name="razao_social"></label>
     <label>Tipo logradouro<input name="tipo_logradouro" placeholder="RUA"></label><label>Logradouro<input name="logradouro"></label><label>Número<input name="numero"></label>
     <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label>CEP<input name="cep"></label>
@@ -428,7 +429,6 @@ PAGINAS.clientes = async el => {
     $$("[data-ed]").forEach(b => b.onclick = () => { preencher(ST.clientes.find(c => c.cpf_cnpj == b.dataset.ed)); scrollTo(0, 0); });
     $$("[data-ex]").forEach(b => b.onclick = async () => { if (confirm("Excluir do cadastro?")) { await api("cliente/excluir", { cpf_cnpj: b.dataset.ex }); await carregarEstado(); desenhar(); } }); };
   $("#c_f").oninput = desenhar; desenhar();
-  $("#bc").onclick = async () => { const r = await api("cnpj", { cnpj: $("#c_doc").value }); preencher(r); aviso("Dados da Receita preenchidos. Confira e salve."); };
   $("#lc").onclick = () => preencher({});
   $("#sc").onclick = async () => { const f = form($("#fcli")), e = {}; END.forEach(k => { e[k] = f[k]; delete f[k]; });
     await api("cliente/salvar", { ...f, cpf_cnpj: $("#c_doc").value, endereco: e }); aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
@@ -453,14 +453,9 @@ PAGINAS.config = async el => {
     ${sl("emissao", "reg_esp_trib", "Regime especial", [["0", "Nenhum"], ["1", "Ato cooperado"], ["2", "Estimativa"], ["3", "ME municipal"], ["4", "Notário/registrador"], ["5", "Autônomo"], ["6", "Soc. de profissionais"]])}
     ${ck("emissao", "informar_ibscbs", "Informar IBS/CBS (cIndOp/cClassTrib do serviço padrão)")}${ck("emissao", "informar_im", "Informar inscrição municipal")}</div>
     <p><button class="btn sec" id="teste_cert">Testar certificado e conexão</button> <span class="sub">Salve antes de testar.</span></p><div id="cert_res"></div></div>
-  <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "enriquecer_contatos", "Completar e-mail/telefone pela Receita")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}</div>
+  <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}</div>
     <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail para o resumo diário")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
-    <p><button class="btn sec" id="imp_xml">Ler XML agora</button> <button class="btn sec" id="imp_cont">Completar contatos agora</button> <button class="btn sec" id="env_res">Enviar resumo agora</button></p></div>
-  <div class="card"><h2>WhatsApp</h2><div class="campos">
-    <label>Envio<select data-s="whatsapp" data-k="provedor">${[["link", "Link wa.me (1 clique por mensagem)"], ["zapi", "Z-API (automático)"], ["evolution", "Evolution API (automático)"]].map(([v, t]) => `<option value="${v}" ${c.whatsapp.provedor == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-    ${tx("whatsapp", "zapi_instancia", "Z-API: instância")}${tx("whatsapp", "zapi_token", "Z-API: token", "password")}${tx("whatsapp", "zapi_client_token", "Z-API: client token", "password")}
-    ${tx("whatsapp", "evolution_url", "Evolution: URL")}${tx("whatsapp", "evolution_instancia", "Evolution: instância")}${tx("whatsapp", "evolution_apikey", "Evolution: apikey", "password")}</div>
-    <p><button class="btn sec" id="teste_zap">Enviar WhatsApp de teste</button></p></div>
+    <p><button class="btn sec" id="imp_xml">Ler XML agora</button> <button class="btn sec" id="env_res">Enviar resumo agora</button></p></div>
   <div class="card"><h2>Regras de despesa do extrato</h2><p class="sub">Uma por linha: PALAVRA = Categoria. Débito cujo histórico contém a palavra entra nessa categoria.</p>
     <textarea id="regras" rows="6">${esc(c.regras_despesa.map(([p, k]) => `${p.trim()} = ${k}`).join("\n"))}</textarea></div>
   <div class="card"><h2>Empresa e PIX</h2><div class="campos">${tx("empresa", "nome", "Nome no PIX")}${tx("empresa", "pix_chave", "Chave PIX que recebe")}${tx("empresa", "pix_cidade", "Cidade (PIX)")}${tx("empresa", "whatsapp", "WhatsApp do escritório")}${tx("empresa", "assinatura", "Assinatura das mensagens")}</div></div>
@@ -478,7 +473,7 @@ PAGINAS.config = async el => {
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}
     ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
   $("#salvar").onclick = async () => {
-    const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, whatsapp: {}, resumo: {}, emissao: {} };
+    const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, resumo: {}, emissao: {} };
     novo.regras_despesa = $("#regras").value.split("\n").map(l => l.split("=")).filter(x => x.length == 2 && x[0].trim()).map(([p, k]) => [p.trim().toUpperCase() + (p.trim().length <= 3 ? " " : ""), k.trim()]);
     $$("[data-s]").forEach(i => { let v = i.type == "checkbox" ? i.checked : i.value;
       if (["regua_dias"].includes(i.dataset.k)) v = v.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -495,9 +490,7 @@ PAGINAS.config = async el => {
     } catch (e) { $("#cert_res").innerHTML = ""; }
   };
   $("#teste_inter").onclick = async () => { const r = await api("inter/testar"); aviso(r.mensagem || "OK", 6000); };
-  $("#teste_zap").onclick = async () => { const t = prompt("Enviar teste para qual WhatsApp (com DDD)?"); if (!t) return; await api("whatsapp/testar", { telefone: t }); aviso("WhatsApp de teste enviado ✔"); };
   $("#imp_xml").onclick = async () => { aviso("Lendo XML…"); const r = await api("importacao/xml"); aviso(`XML: ${JSON.stringify(r)}`, 8000); await carregarEstado(); };
-  $("#imp_cont").onclick = async () => { aviso("Consultando a Receita…"); const r = await api("importacao/contatos", { limite: 50 }); aviso(`${r.atualizados} cliente(s) com contato completado ✔`, 6000); await carregarEstado(); };
   $("#env_res").onclick = async () => { const r = await api("resumo/enviar"); aviso("Resumo: " + r.resultado, 6000); };
   $("#teste_email").onclick = async () => { const p = prompt("Enviar teste para qual e-mail?"); if (!p) return; await api("email/testar", { para: p }); aviso("E-mail de teste enviado ✔"); };
 };

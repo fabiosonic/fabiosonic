@@ -112,7 +112,7 @@ def banco(base, monkeypatch):  # noqa: F811
                                 "inter_certificado": str(pasta / "inter.crt"), "inter_chave": str(pasta / "inter.key"),
                                 "inter_url": f"https://127.0.0.1:{srv.server_address[1]}",
                                 "inter_ca": str(pasta / "srv.pem")},
-                   "pastas": {"boletos": str(pasta / "Boletos")}, "automacao": {"enriquecer_contatos": False},
+                   "pastas": {"boletos": str(pasta / "Boletos")},
                    "smtp": {"host": "smtp.teste", "usuario": "x", "senha": "y", "remetente": "esc@x.com"}})
     FakeSMTP.enviados = []
     monkeypatch.setattr(cobranca.smtplib, "SMTP", FakeSMTP)
@@ -224,3 +224,15 @@ def test_config_antiga_migra_para_inter(tmp_path, monkeypatch):
     assert c["provedor"] == "inter" and c["multa_pct"] == 3 and "asaas_api_key" not in c
     config.salvar({"cobranca": {"provedor": "pix"}})                  # escolha posterior do usuário é respeitada
     assert config.carregar()["cobranca"]["provedor"] == "pix"
+
+
+def test_config_antiga_perde_whatsapp_por_api_e_consulta_receita(tmp_path, monkeypatch):
+    from nfse_itaborai import emissor
+    monkeypatch.setattr(emissor, "RAIZ", tmp_path)
+    (tmp_path / "dados").mkdir()
+    (tmp_path / "dados" / "config.json").write_text(json.dumps(
+        {"whatsapp": {"provedor": "zapi", "zapi_token": "T"}, "automacao": {"enriquecer_contatos": True}}),
+        encoding="utf-8")
+    c = config.carregar()
+    assert "whatsapp" not in c and "enriquecer_contatos" not in c["automacao"]
+    assert "zapi" not in (tmp_path / "dados" / "config.json").read_text(encoding="utf-8")

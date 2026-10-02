@@ -1,6 +1,6 @@
 """Robô financeiro: rotina idempotente que pode rodar a cada hora (tela aberta) e 1x/dia (Agendador do Windows).
 
-Ordem: backup → XML (clientes, notas externas, contratos detectados) → contatos pela Receita
+Ordem: backup → XML (clientes, notas externas, contratos detectados)
        → despesas recorrentes → títulos do mês (contratos) → NFS-e → cobrança (boleto Inter / PIX)
        → baixa automática (Inter) → extratos OFX da pasta → régua de cobrança → resumo diário por e-mail.
 Cada etapa é isolada: uma falha não impede as demais e fica registrada no log.
@@ -66,7 +66,6 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
 
     etapa("backup", auto["backup"], lambda: str(db.backup()))
     etapa("importacao_xml", auto.get("importar_xml"), lambda: importacao.importar_xml(em))
-    etapa("contatos_completados", auto.get("enriquecer_contatos"), importacao.enriquecer_contatos)
     etapa("despesas_recorrentes", auto["despesas_recorrentes"], lambda: financeiro.gerar_despesas_recorrentes(em))
     etapa("titulos_gerados", auto["gerar_titulos"] and em.day >= int(cfg["financeiro"]["dia_geracao"]),
           lambda: len(financeiro.gerar_titulos(em=em)))

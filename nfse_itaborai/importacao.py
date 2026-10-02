@@ -1,9 +1,8 @@
-"""Entradas automáticas do robô: XML de NFS-e, extratos OFX, contatos da Receita e resumo diário.
+"""Entradas automáticas do robô: XML de NFS-e, extratos OFX e resumo diário.
 
 - XML (pasta configurada): atualiza clientes; notas emitidas FORA do sistema (Nitrus, portal) a partir do
   início do financeiro viram contas a receber; padrões mensais viram contratos sugeridos (confirmação única).
 - Extratos: todo .ofx novo na pasta de extratos é importado e conciliado.
-- Contatos: clientes sem e-mail/telefone são completados pela BrasilAPI (dados públicos da Receita).
 """
 
 from __future__ import annotations
@@ -187,44 +186,6 @@ def importar_extratos() -> dict:
             con.execute("INSERT OR REPLACE INTO arquivos_processados (caminho, mtime, quando) VALUES (?,?,?)",
                         (str(arq), mtime, db.agora()))
     return total
-
-
-# ---------------------------------------------------------------- contatos
-
-def enriquecer_contatos(limite: int = 25) -> int:
-    """Completa e-mail/telefone (e endereço vazio) pela BrasilAPI; tenta cada CNPJ uma vez por mês."""
-    lst = clientes.listar()
-    hoje = financeiro.hoje().isoformat()
-    mes_passado = (financeiro.hoje() - timedelta(days=30)).isoformat()
-    atualizados = consultas = 0
-    for c in lst:
-        if consultas >= limite:
-            break
-        if len(c["cpf_cnpj"]) != 14 or (c.get("email") and c.get("telefone")) \
-                or c.get("contato_consultado_em", "") > mes_passado:
-            continue
-        consultas += 1
-        c["contato_consultado_em"] = hoje
-        try:
-            r = clientes.consultar_cnpj(c["cpf_cnpj"])
-        except ValueError:
-            continue
-        except OSError:
-            break                                       # sem internet / limite da API: tenta na próxima rodada
-        mudou = False
-        for campo in ("email", "telefone"):
-            if not c.get(campo) and r.get(campo):
-                c[campo] = r[campo]
-                mudou = True
-        end = c.setdefault("endereco", {})
-        for k, v in r["endereco"].items():
-            if not end.get(k) and v:
-                end[k] = v
-        atualizados += mudou
-    clientes._gravar(lst)
-    if atualizados:
-        db.registrar("contatos", f"{atualizados} cliente(s) com contato completado pela Receita")
-    return atualizados
 
 
 # ---------------------------------------------------------------- resumo diário

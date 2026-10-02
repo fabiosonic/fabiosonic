@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 import pytest
@@ -68,17 +67,6 @@ def test_importacao_ignora_notas_de_outro_prestador(pasta):
     xmls.mkdir()
     (xmls / "a.xml").write_text(NACIONAL, encoding="utf-8")
     assert clientes.importar_xmls(xmls, "11111111000111")["xml_lidos"] == 0
-
-
-def test_brasilapi_convertida():
-    c = clientes.de_brasilapi({"cnpj": "54399432000146", "razao_social": "ESPACO CULTIVAR FONOAUDIOLOGIA LTDA",
-                               "descricao_tipo_de_logradouro": "RUA", "logradouro": "FREI CANECA", "numero": "441",
-                               "bairro": "ESTACIO", "codigo_municipio_ibge": 3304557, "uf": "RJ",
-                               "cep": "20211020", "ddd_telefone_1": "2199999999", "email": "X@Y.COM"})
-    assert c["endereco"] == {"tipo_logradouro": "RUA", "logradouro": "FREI CANECA", "numero": "441",
-                             "complemento": "", "bairro": "ESTACIO", "codigo_municipio": "3304557", "uf": "RJ",
-                             "cep": "20211020", "cidade": ""}
-    assert c["email"] == "x@y.com"
 
 
 def test_montar_rps_usa_cadastro_e_servico_padrao(pasta):

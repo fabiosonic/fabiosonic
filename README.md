@@ -35,8 +35,8 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
    - o sistema **abre sozinho ao ligar o computador**;
    - cria um atalho na área de trabalho.
 3. No primeiro acesso, em **Configurações**:
-   - informe a chave PIX, o e-mail (SMTP) e o e-mail que recebe o **resumo diário**;
-   - opcionalmente, configure o WhatsApp automático (Z-API ou Evolution API).
+   - informe as credenciais do **Banco Inter**, a chave PIX, o e-mail (SMTP) e o e-mail que recebe o
+     **resumo diário**.
 4. Em **Contratos**, clique em **Confirmar todos** os contratos que o robô detectou nas suas notas.
 
 Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são mantidos.
@@ -61,10 +61,9 @@ Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são ma
 | Etapa | Automação |
 |---|---|
 | XML das notas | Lê a pasta de XML: atualiza clientes; notas emitidas **fora do sistema** (Nitrus, portal) viram contas a receber; cliente com nota de mesmo valor em 3 dos últimos 4 meses vira **contrato detectado**. |
-| Contatos | Completa e-mail e telefone dos clientes pela Receita (BrasilAPI). |
 | Recorrência | Gera os títulos dos contratos confirmados (contrato detectado só cobra depois de confirmado, em um clique). |
 | NFS-e | Emite as notas pendentes (só em produção). Falha de rede volta para a fila; recusa da prefeitura vai para revisão. Cada título é reservado antes do envio, o que impede emissão em dobro. |
-| Cobrança | Cria o PIX/boleto e roda a régua por e-mail e WhatsApp (automático com Z-API ou Evolution). |
+| Cobrança | Registra o boleto com PIX no Inter, salva o PDF e roda a régua: e-mail automático com o PDF anexado e fila de WhatsApp com a mensagem pronta (um clique). |
 | Baixas | Banco Inter (consulta de cada boleto pela API) e **extratos .ofx que aparecerem na pasta Downloads**, importados sozinhos. |
 | Despesas | Débitos do extrato sem conta a pagar viram despesa paga, classificada por regra ("DAS" vai para Impostos, "TARIFA" para Bancárias...). |
 | Resumo | E-mail diário para você: recebidos, atrasos, NFS-e com erro e contratos a confirmar. |
@@ -136,6 +135,31 @@ Cada envio grava em `saida\AAAA-MM\RPS_<n>\`:
 O número do RPS só avança quando ele vira NFS-e. Se o RPS for rejeitado, o mesmo número é reaproveitado
 na correção.
 
+## Sem dependência de terceiros
+
+O sistema conversa **somente** com os canais oficiais:
+- a Prefeitura de Itaboraí (NFS-e municipal);
+- o Sefin/ADN (NFS-e Nacional);
+- o Banco Inter (boletos e PIX);
+- o servidor de e-mail do próprio escritório.
+
+Nenhum sistema de cobrança, WhatsApp por API ou consulta de cadastro de terceiros é usado. O ACBr serviu só
+de referência de leiaute, e nada dele é executado.
+
+Ideias estudadas nos sistemas de mercado e reproduzidas com código próprio:
+
+| Ideia | Inspirada em | Como ficou aqui |
+|---|---|---|
+| Régua de cobrança antes e depois do vencimento | Asaas, Conta Azul, Omie | Dias configuráveis (-3, 0, +1, +5, +15, +30), e-mail com PDF e fila de WhatsApp |
+| Recorrência com reajuste anual | sistemas de assinatura e de escritório contábil | Contratos com mês e % de reajuste, títulos gerados no dia configurado |
+| Detecção de contratos pelo histórico | Nibo, Acessórias | Mesmo valor em 3 dos últimos 4 meses vira contrato sugerido |
+| Conciliação bancária automática | Conta Azul, Granatum | OFX da pasta, casamento por txid, nome/CNPJ e valor, e despesas classificadas por regra |
+| Multa e juros pro rata | boletos bancários | 2% + 1% a.m. calculados no dia, também na mensagem de cobrança |
+| Score de pagador e aging | ERPs financeiros | Pontuação por atraso médio e títulos vencidos; faixas de vencimento |
+| DRE e fluxo de caixa com DAS estimado | Nibo, Conta Azul | Alíquota efetiva do Anexo III pelo RBT12, com ISS fixo fora do DAS |
+| Resumo diário para o dono | Omie, Nibo | E-mail com recebidos, atrasos, NFS-e com erro e contratos a confirmar |
+| Robô que trabalha sozinho | todos | Rotina a cada hora com trava contra execução dupla e backup diário |
+
 ## Boletos (Banco Inter)
 
 Os boletos são registrados **direto no Banco Inter**, pela API oficial de Cobrança (v3), com autenticação pelo
@@ -154,16 +178,14 @@ certificado da integração. Não há nenhum sistema de cobrança intermediário
 - **pasta:** o **PDF** é salvo em `Downloads\Boletos\AAAA-MM\<vencimento> - <cliente> - titulo N.pdf`. Ao lado
   dele fica um **.txt** com a linha digitável e o PIX copia e cola;
 - **envio ao cliente:** o e-mail da régua e o botão **Cobrar** vão com o PDF anexado, a linha digitável e o PIX.
-  Com WhatsApp automático (Z-API ou Evolution), o PDF vai como documento. No modo link (wa.me) vão a linha
-  digitável e o PIX, e o PDF fica na pasta para anexar;
+  No WhatsApp, um clique abre a conversa com a linha digitável e o PIX; o PDF fica na pasta para anexar;
 - **baixa:** o robô consulta o Inter e baixa os boletos pagos, com a data e o valor recebidos;
 - **cancelamento:** cancelar um título (ou a NFS-e dele) cancela também o boleto no banco;
 - **na tela Contas a receber:** o botão **⬇ PDFs dos boletos** salva os que faltam e abre a pasta. Em cada
   título, o botão **Boleto PDF** abre o boleto.
 
 O Inter exige endereço completo do pagador, incluindo cidade e UF. A cidade é preenchida pelo código IBGE (a
-tabela dos municípios da carteira vem no sistema; os demais são consultados uma vez no IBGE), ou digitada no
-cadastro. Se faltar algum dado, aquele boleto aparece no log do robô e os demais seguem normalmente.
+tabela dos municípios da carteira vem no sistema) ou digitada no campo Cidade do cadastro. Se faltar algum dado, aquele boleto aparece no log do robô e os demais seguem normalmente.
 
 O Inter não gera página pública de pagamento: o que vai ao cliente é o PDF, a linha digitável e o PIX.
 
@@ -244,7 +266,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 106 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 103 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

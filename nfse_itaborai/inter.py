@@ -33,8 +33,8 @@ ESCOPO = "boleto-cobranca.read boleto-cobranca.write"
 PAGOS = {"RECEBIDO", "MARCADO_RECEBIDO"}
 BAIXADOS = {"CANCELADO", "EXPIRADO"}
 
-# Municípios da carteira (código IBGE → nome). O Inter exige o nome da cidade do pagador; os demais são
-# completados pelo cadastro do cliente (campo Cidade) ou consultados uma vez no IBGE e guardados.
+# Municípios da carteira (código IBGE → nome). O Inter exige o nome da cidade do pagador; para outros
+# municípios, preencha o campo Cidade no cadastro do cliente.
 MUNICIPIOS = {
     "3300209": "Araruama", "3301702": "Duque de Caxias", "3301900": "Itaboraí", "3302700": "Maricá",
     "3303302": "Niterói", "3303906": "Petrópolis", "3304557": "Rio de Janeiro", "3304904": "São Gonçalo",
@@ -149,21 +149,7 @@ def cidade(cli: dict) -> str:
     cod = clientes._digitos(e.get("codigo_municipio"))
     if cod in MUNICIPIOS:
         return MUNICIPIOS[cod]
-    cache = emissor.RAIZ / "dados" / "municipios.json"
-    nomes = json.loads(cache.read_text(encoding="utf-8")) if cache.exists() else {}
-    if cod in nomes:
-        return nomes[cod]
-    try:  # serviço oficial do IBGE, consultado uma única vez por município
-        with urllib.request.urlopen(f"https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{cod}",
-                                    timeout=15, context=ssl.create_default_context()) as r:
-            nome = json.loads(r.read().decode()).get("nome", "")
-    except (OSError, ValueError):
-        nome = ""
-    if nome:
-        nomes[cod] = nome
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps(nomes, ensure_ascii=False, indent=1), encoding="utf-8")
-    return nome
+    return ""
 
 
 def pagador(cpf_cnpj: str) -> dict:

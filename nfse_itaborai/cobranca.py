@@ -2,8 +2,8 @@
 
 Nenhum intermediário: o boleto é registrado direto no Inter (conta do escritório) e o PIX "copia e cola"
 próprio sai da chave PIX da empresa. Régua padrão (dias em relação ao vencimento): -3, 0, +1, +5, +15, +30.
-E-mail sai sozinho (SMTP) com o PDF do boleto anexado. WhatsApp: envio automático (Z-API/Evolution, com o PDF)
-ou fila com o texto pronto e um clique para abrir a conversa.
+E-mail sai sozinho (SMTP do próprio escritório) com o PDF do boleto anexado. WhatsApp: fila com o texto pronto
+e um clique para abrir a conversa (wa.me), sem serviço intermediário.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from datetime import date
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, inter, pix, whatsapp
+from . import clientes, config, db, emissor, financeiro, inter, pix
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -183,7 +183,7 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
     if t["cobranca_link"]:
         linhas.append(f"Boleto/PIX: {t['cobranca_link']}")
     if t.get("banco_id"):
-        linhas.append("Boleto em PDF: enviado em anexo (e-mail/WhatsApp).")
+        linhas.append("Boleto em PDF: segue em anexo.")
     if t["linha_digitavel"]:
         linhas.append(f"Linha digitável: {t['linha_digitavel']}")
     if t["pix_copia_cola"]:
@@ -273,17 +273,6 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             elif not cli.get("telefone"):
                 status, det = "sem_contato", "cliente sem telefone"
                 res["sem_contato"] += 1
-            elif whatsapp.automatico(cfg):
-                try:
-                    whatsapp.enviar(cli["telefone"], texto, cfg)
-                    pdf_ = _pdf_boleto(t, cfg)
-                    if pdf_:
-                        whatsapp.enviar_pdf(cli["telefone"], pdf_, cfg)
-                    status, det = "enviado", whatsapp.numero(cli["telefone"])
-                    res["whatsapp"] += 1
-                except Exception as ex:  # noqa: BLE001
-                    status, det = "erro", str(ex)[:300]
-                    res["erros"] += 1
             else:
                 status, det = "pendente", link_whatsapp(cli["telefone"], texto)
                 res["whatsapp"] += 1
@@ -318,17 +307,11 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     dias = (financeiro.hoje() - date.fromisoformat(t["vencimento"])).days
     assunto, texto = mensagem(t, max(dias, -1) if dias < 0 else dias, cfg)
     cli = clientes.obter(t["cpf_cnpj"]) or {}
-    out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "whatsapp_enviado": False, "email": "",
+    out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "email": "",
            "texto": texto}
     if cli.get("email") and cfg["smtp"].get("host"):
         pdf_ = _pdf_boleto(t, cfg)
         enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [])
         out["email"] = cli["email"]
-    if cli.get("telefone") and whatsapp.automatico(cfg):
-        whatsapp.enviar(cli["telefone"], texto, cfg)
-        pdf_ = _pdf_boleto(t, cfg)
-        if pdf_:
-            whatsapp.enviar_pdf(cli["telefone"], pdf_, cfg)
-        out["whatsapp_enviado"] = True
     out["pdf"] = t.get("boleto_pdf") or (_pdf_boleto(t, cfg) if t.get("banco_id") else "")
     return out

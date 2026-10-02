@@ -1,7 +1,6 @@
 """Cadastro de clientes (tomadores): dados/clientes.json, fora do Git.
 
 - CRUD simples por CPF/CNPJ;
-- consulta de CNPJ na BrasilAPI (dados públicos da Receita Federal) para preencher endereço;
 - importação a partir de XMLs de NFS-e já emitidas (padrão nacional e retorno do webservice).
 """
 
@@ -9,16 +8,12 @@ from __future__ import annotations
 
 import json
 import re
-import ssl
-import urllib.error
-import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from . import emissor
 from .modelos import Endereco, Tomador
 
-URL_BRASILAPI = "https://brasilapi.com.br/api/cnpj/v1/{}"
 TIPOS_LOGRADOURO = ("AVENIDA", "AV", "RUA", "R", "TRAVESSA", "TV", "RODOVIA", "ROD", "ESTRADA", "EST",
                     "PRACA", "PCA", "ALAMEDA", "AL", "LARGO", "LGO", "VIA", "BECO", "VILA", "VL")
 UF_POR_IBGE = {"11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO", "21": "MA",
@@ -126,40 +121,7 @@ def para_dict_tomador(c: dict) -> dict:
         | {"endereco": dict(c.get("endereco", {}))}
 
 
-# ---------------------------------------------------------------- BrasilAPI
-
-def consultar_cnpj(cnpj: str, timeout: int = 20) -> dict:
-    """Busca razão social e endereço do CNPJ na BrasilAPI (base pública da Receita Federal)."""
-    doc = _digitos(cnpj)
-    if len(doc) != 14:
-        raise ValueError("A consulta automática funciona só para CNPJ (14 dígitos).")
-    req = urllib.request.Request(URL_BRASILAPI.format(doc), headers={"User-Agent": "emissor-nfse-itaborai"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context()) as r:
-            d = json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raise ValueError(f"CNPJ não encontrado na Receita (HTTP {e.code}).") from e
-    return de_brasilapi(d)
-
-
-def de_brasilapi(d: dict) -> dict:
-    fone = _digitos(d.get("ddd_telefone_1"))
-    return normalizar({
-        "cpf_cnpj": d.get("cnpj", ""),
-        "razao_social": d.get("razao_social", ""),
-        "email": (d.get("email") or "").lower(),
-        "telefone": fone,
-        "endereco": {
-            "tipo_logradouro": d.get("descricao_tipo_de_logradouro") or "",
-            "logradouro": d.get("logradouro", ""), "numero": d.get("numero", ""),
-            "complemento": d.get("complemento", ""), "bairro": d.get("bairro", ""),
-            "codigo_municipio": str(d.get("codigo_municipio_ibge") or ""), "uf": d.get("uf", ""),
-            "cep": d.get("cep", ""), "cidade": (d.get("municipio") or "").title(),
-        },
-    })
-
-
-# ---------------------------------------------------------------- importação de XMLs
+# ---------------------------------------------------------------- XML de NFS-e
 
 def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]

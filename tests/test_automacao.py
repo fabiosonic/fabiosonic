@@ -1,15 +1,11 @@
-import json
 import os
-import threading
 import time
 from datetime import date
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
 
-from nfse_itaborai import (automacao, clientes, cobranca, conciliacao, config, db, financeiro, importacao, lote,
-                           whatsapp)
+from nfse_itaborai import automacao, cobranca, conciliacao, config, db, financeiro, importacao, lote
 from test_emissor import Simulador, ambiente  # noqa: F401  (fixture)
 from test_financeiro import CLI_A, CLI_B, base  # noqa: F401  (fixtures)
 
@@ -31,9 +27,7 @@ def auto(base, tmp_path, monkeypatch):  # noqa: F811
     xmls, extratos = tmp_path / "xmls", tmp_path / "extratos"
     xmls.mkdir()
     extratos.mkdir()
-    config.salvar({"pastas": {"xml_nfse": str(xmls), "extratos": str(extratos)},
-                   "automacao": {"enriquecer_contatos": False}})
-    monkeypatch.setattr(clientes, "consultar_cnpj", lambda c: pytest.fail("não deveria consultar a Receita"))
+    config.salvar({"pastas": {"xml_nfse": str(xmls), "extratos": str(extratos)}})
     return xmls, extratos
 
 
@@ -127,19 +121,6 @@ def test_despesas_do_extrato_desligado(auto):
 
 # ---------------------------------------------------------------- contatos, resumo, reenvio
 
-def test_completa_contato_pela_receita(auto, monkeypatch):
-    config.salvar({"automacao": {"enriquecer_contatos": True}})
-    consultas = []
-    monkeypatch.setattr(clientes, "consultar_cnpj", lambda c: consultas.append(c) or {
-        "email": "contato@cultivar.com", "telefone": "2133334444", "endereco": {"complemento": "SALA 2"}})
-    assert importacao.enriquecer_contatos() == 1
-    c = clientes.obter(CLI_B["cpf_cnpj"])
-    assert c["email"] == "contato@cultivar.com" and c["telefone"] == "2133334444"
-    assert c["endereco"]["complemento"] == "SALA 2" and c["endereco"]["numero"] == "435"
-    assert consultas == [CLI_B["cpf_cnpj"]]                            # CLI_A já tinha contato
-    assert importacao.enriquecer_contatos() == 0 and len(consultas) == 1   # não repete no mesmo mês
-
-
 def test_resumo_diario_uma_vez_por_dia(auto, monkeypatch):
     enviados = []
     monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None: enviados.append((para, texto)))
@@ -160,61 +141,6 @@ def test_falha_de_rede_fica_pendente_para_nova_tentativa(auto, monkeypatch):
 
 
 # ---------------------------------------------------------------- WhatsApp automático
-
-class FakeZap(BaseHTTPRequestHandler):
-    recebidos: list = []
-
-    def do_POST(self):  # noqa: N802
-        corpo = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        FakeZap.recebidos.append((self.path, {k.lower(): v for k, v in self.headers.items()}, corpo))
-        b = b'{"zaapId":"1"}'
-        self.send_response(200)
-        self.send_header("Content-Length", str(len(b)))
-        self.end_headers()
-        self.wfile.write(b)
-
-    def log_message(self, *a):
-        pass
-
-
-@pytest.fixture
-def zap():
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), FakeZap)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    FakeZap.recebidos = []
-    yield f"http://127.0.0.1:{srv.server_address[1]}"
-    srv.shutdown()
-
-
-def test_zapi_e_evolution(auto, zap):
-    config.salvar({"whatsapp": {"provedor": "zapi", "zapi_instancia": "INST", "zapi_token": "TOK",
-                                "zapi_client_token": "CT", "zapi_url": zap}})
-    assert whatsapp.automatico()
-    whatsapp.enviar("(21) 98888-7777", "oi")
-    path, cab, corpo = FakeZap.recebidos[-1]
-    assert path == "/instances/INST/token/TOK/send-text" and cab["client-token"] == "CT"
-    assert corpo == {"phone": "5521988887777", "message": "oi"}
-    config.salvar({"whatsapp": {"provedor": "evolution", "evolution_url": zap + "/", "evolution_instancia": "escritorio",
-                                "evolution_apikey": "K"}})
-    whatsapp.enviar("5521988887777", "ola")
-    path, cab, corpo = FakeZap.recebidos[-1]
-    assert path == "/message/sendText/escritorio" and cab["apikey"] == "K"
-    assert corpo == {"number": "5521988887777", "text": "ola"}
-
-
-def test_regua_envia_whatsapp_automatico(auto, zap, monkeypatch):
-    monkeypatch.setattr(cobranca, "enviar_email", lambda *a, **k: None)
-    config.salvar({"whatsapp": {"provedor": "zapi", "zapi_instancia": "I", "zapi_token": "T", "zapi_url": zap}})
-    financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-10-05", emitir_nfse=False)
-    r = cobranca.rodar_regua(date(2026, 10, 2))
-    assert r["whatsapp"] == 1 and len(FakeZap.recebidos) == 1
-    assert FakeZap.recebidos[0][2]["message"].startswith("Olá, RPS CONSULTORIA")
-    assert cobranca.fila_whatsapp() == []                               # nada para clicar
-    ev = db.linhas("SELECT status FROM eventos_cobranca WHERE canal='whatsapp'")
-    assert ev == [{"status": "enviado"}]
-
-
-# ---------------------------------------------------------------- robô completo
 
 def test_robo_com_todas_as_etapas(auto, monkeypatch):
     xmls, extratos = auto

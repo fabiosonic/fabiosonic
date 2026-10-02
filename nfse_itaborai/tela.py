@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro, importacao,
-               inter, lote, nacional, relatorios, whatsapp)
+               inter, lote, nacional, relatorios)
 from .validacao import ErroValidacao
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -104,7 +104,6 @@ ROTAS = {
     "inter/testar": lambda c: inter.testar(),
     "boletos/abrir_pasta": lambda c: _abrir_pasta(cobranca.pasta_boletos()),
     # clientes
-    "cnpj": lambda c: clientes.consultar_cnpj(str(c.get("cnpj", ""))),
     "cliente/salvar": lambda c: clientes.salvar(c),
     "cliente/excluir": lambda c: {"excluido": clientes.excluir(str(c.get("cpf_cnpj", "")))},
     # contas a receber
@@ -126,12 +125,7 @@ ROTAS = {
     "contratos/historico": lambda c: {"criados": financeiro.contratos_do_historico(c.get("dia_vencimento") or None)},
     "contratos/confirmar": lambda c: {"confirmados": importacao.confirmar_contratos(c.get("ids") or None)},
     "importacao/xml": lambda c: importacao.importar_xml(),
-    "importacao/contatos": lambda c: {"atualizados": importacao.enriquecer_contatos(int(c.get("limite") or 25))},
     "resumo/enviar": lambda c: {"resultado": importacao.resumo_diario({}, forcar=True)},
-    "whatsapp/testar": lambda c: (whatsapp.enviar(str(c.get("telefone", "")), "Teste do sistema financeiro: "
-                                                  "WhatsApp automático funcionando."), {"ok": True})[1],
-    "recorrencia/gerar": lambda c: {"gerados": len(financeiro.gerar_titulos(c.get("competencia") or None))},
-    # cobrança
     "whatsapp/fila": lambda c: cobranca.fila_whatsapp(),
     "whatsapp/feito": lambda c: (cobranca.marcar_whatsapp_feito(_id(c)), {"ok": True})[1],
     "regua/rodar": lambda c: cobranca.rodar_regua(),

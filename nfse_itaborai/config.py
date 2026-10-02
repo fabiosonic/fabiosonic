@@ -62,11 +62,6 @@ PADRAO = {
         "informar_im": False,       # IM só quando o município tem cadastro no Sistema Nacional
         "informar_ibscbs": True,    # grupo IBS/CBS (LC 214/2025) com cIndOp/cClassTrib do serviço padrão
     },
-    "whatsapp": {
-        "provedor": "link",         # link (1 clique) | zapi | evolution (envio automático)
-        "zapi_instancia": "", "zapi_token": "", "zapi_client_token": "",
-        "evolution_url": "", "evolution_instancia": "", "evolution_apikey": "",
-    },
     "resumo": {"email_dono": "", "ultimo_envio": ""},
     "regras_despesa": [             # palavra no histórico do extrato -> categoria
         ["DAS", "Impostos"], ["DARF", "Impostos"], ["GPS", "Impostos"], ["FGTS", "Folha"], ["SIMPLES", "Impostos"],
@@ -79,7 +74,6 @@ PADRAO = {
     "automacao": {
         "ativa": True,              # liga o robô (só emite NFS-e em produção)
         "importar_xml": True,       # clientes, contratos detectados e notas emitidas fora do sistema
-        "enriquecer_contatos": True,  # completa e-mail/telefone pela Receita (BrasilAPI)
         "importar_extratos": True,  # importa .ofx novos da pasta de extratos
         "despesas_do_extrato": True,  # débitos sem conta a pagar viram despesa paga, classificada por regra
         "resumo_diario": True,      # e-mail diário com o resumo para o dono
@@ -95,9 +89,7 @@ PADRAO = {
 }
 
 
-SEGREDOS = (("smtp", "senha"), ("cobranca", "inter_client_secret"), ("whatsapp", "zapi_token"),
-            ("whatsapp", "zapi_client_token"), ("whatsapp", "evolution_apikey"),
-            ("emissao", "certificado_senha"))
+SEGREDOS = (("smtp", "senha"), ("cobranca", "inter_client_secret"), ("emissao", "certificado_senha"))
 
 
 def _arquivo():
@@ -127,6 +119,10 @@ def carregar() -> dict:
                 cob.pop(k)
             cob["migrado_inter"] = True
             salvo["cobranca"] = cob
+            arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
+        # sem serviços de terceiros: remove configurações antigas de WhatsApp por API e consulta à Receita
+        removidos = [salvo.pop("whatsapp", None), salvo.get("automacao", {}).pop("enriquecer_contatos", None)]
+        if any(r is not None for r in removidos):
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
         _mesclar(cfg, salvo)
     return cfg
