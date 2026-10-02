@@ -62,8 +62,9 @@ async function ir(p) {
   $$("nav a").forEach(a => a.classList.toggle("on", a.dataset.p == p));
   $("#conteudo").innerHTML = '<div class="vazio">Carregando…</div>';
   try { await PAGINAS[p]($("#conteudo")); } catch (e) { console.error(e); }
-  history.replaceState(null, "", "#" + p);
+  if (location.hash != "#" + p) history.pushState(null, "", "#" + p);
 }
+window.addEventListener("popstate", () => { const h = location.hash.slice(1); if (h in PAGINAS && h != PAG) ir(h); });
 $$("nav a").forEach(a => a.onclick = () => ir(a.dataset.p));
 
 // ---------------------------------------------------------------- painel
@@ -115,7 +116,7 @@ function montarGrafico(alvo, serie, specs, opts = {}) {
   if (window.ResizeObserver) new ResizeObserver(desenhar).observe(g);
 }
 PAGINAS.painel = async el => {
-  const p = await api("painel");
+  const [p, sd] = await Promise.all([api("painel"), api("saude")]);
   const al = [], A = (sev, icone, html) => al.push({ sev, icone, html });
   if (p.contratos_a_confirmar) A("info", "contratos", `<b>${p.contratos_a_confirmar}</b> contrato(s) recorrente(s) detectado(s) nas suas notas — <a href="#" onclick="ir('contratos');return false">conferir</a> ou <a href="#" onclick="confirmarTodos();return false"><b>confirmar todos</b></a>`);
   if (p.sem_nfse) A("alerta", "nota", `<b>${p.sem_nfse}</b> título(s) sem NFS-e válida — <a href="#" onclick="ir('receber');return false">ver</a>`);
@@ -127,6 +128,9 @@ PAGINAS.painel = async el => {
   const robo = ST.config.automacao.ativa ? `<span class="selo bom">Robô ligado</span><span>${p.ultima_execucao_robo ? "última execução " + dt(p.ultima_execucao_robo.slice(0, 10)) + " às " + p.ultima_execucao_robo.slice(11, 16) : "ainda não executou"}</span>` : `<span class="selo critico">Robô desligado</span>`;
   const kpi = (cls, icone, rot, val, sub = "") => `<div class="kpi ${cls}"><div class="r">${ic(icone)}${rot}</div><div class="v">${val}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
   el.innerHTML = `<h1>Painel <span class="titulo-sub">${robo}</span><span class="acoes"><button class="btn sec" id="robo">${ic("play")}Rodar robô agora</button></span></h1>
+  ${sd.completo ? "" : `<details class="card checklist" ${sd.erros ? "open" : ""}><summary><span class="ck-tit">${ic(sd.erros ? "alerta" : "ok")}<b>Implantação e saúde do sistema</b><span class="sub">${sd.ok} de ${sd.total} itens em ordem${sd.erros ? ` · ${sd.erros} impedem a automação completa` : ""}</span></span><span class="ck-barra"><span style="width:${sd.ok / sd.total * 100}%"></span></span></summary>
+    <ul>${sd.itens.filter(i => !i.ok).sort((a, b) => (a.nivel == "erro" ? 0 : 1) - (b.nivel == "erro" ? 0 : 1)).map(i => `<li class="ck-${i.ok ? "ok" : i.nivel}">${ic(i.ok ? "ok" : i.nivel == "erro" ? "bloqueio" : "alerta")}<div><b>${esc(i.titulo)}</b>${i.ok ? "" : `<div class="sub">${esc(i.detalhe)} <a href="#" onclick="ir('${i.pagina}');return false">resolver</a></div>`}</div></li>`).join("")}</ul>
+    <p class="ck-feitos">${ic("ok")}Em ordem: ${sd.itens.filter(i => i.ok).map(i => esc(i.titulo)).join(" · ") || "nenhum item ainda"}</p></details>`}
   <div class="kpis">
     ${kpi("destaque", "nota", `Faturado em ${mes(p.competencia)}`, brl(p.faturado_mes), "por competência")}
     ${kpi("destaque", "receber", "Recebido no mês", brl(p.recebido_mes), "pagamentos baixados")}
@@ -408,7 +412,7 @@ function cabImpressao(titulo, periodo) {
 }
 PAGINAS.relatorios = async el => {
   const abas = [["indicadores", "Indicadores"], ["dre", "DRE"], ["fluxo", "Fluxo de caixa"], ["livro", "Livro caixa"],
-    ["aging", "Inadimplência"], ["clientes", "Por cliente"], ["log", "Log do sistema"]];
+    ["aging", "Inadimplência"], ["clientes", "Por cliente"], ["fechamento", "Fechamento mensal"], ["log", "Log do sistema"]];
   if (!abas.some(([k]) => k == ABA_REL)) ABA_REL = "indicadores";
   el.innerHTML = `<h1>Relatórios <span class="acoes"><a class="btn sec" href="/export/titulos.csv">${ic("download")}Contas a receber (CSV)</a><button class="btn sec" onclick="window.print()">${ic("imprimir")}Imprimir / PDF</button></span></h1>
     <div class="abas">${abas.map(([k, t]) => `<button data-a="${k}" class="${k == ABA_REL ? "on" : ""}">${t}</button>`).join("")}</div><div id="rel"><div class="card"><div class="vazio">Carregando…</div></div></div>`;
@@ -474,6 +478,14 @@ PAGINAS.relatorios = async el => {
     r.innerHTML = cabImpressao("Análise por cliente", "Últimos 12 meses") + `<div class="card"><p class="sub">Score de pagamento: 100 = paga sempre em dia; cai com a média de dias de atraso e com títulos vencidos em aberto.</p>` + tabela([{ t: "Cliente", f: c => esc(c.cliente) }, { t: "Faturado 12m", n: 1, f: c => num(c.faturado_12m) },
       { t: "Recebido", n: 1, f: c => num(c.recebido_total) }, { t: "Em aberto", n: 1, f: c => num(c.em_aberto) }, { t: "Atrasado (atualizado)", n: 1, f: c => c.atrasado ? num(c.atrasado) : "" },
       { t: "Atraso médio", n: 1, f: c => c.media_atraso + " d" }, { t: "Score", n: 1, f: c => `${c.score} ${selo(c.faixa)}` }], l) + `</div>`;
+  } else if (ABA_REL == "fechamento") {
+    const meses = []; const h = new Date(hojeISO() + "T12:00"); for (let k = 1; k <= 12; k++) { const d = new Date(h.getFullYear(), h.getMonth() - k, 1); meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
+    const c = ST.config;
+    r.innerHTML = `<div class="card"><h2>${ic("relatorios")}Fechamento mensal automático</h2>
+      <p class="sub">Todo dia ${c.resumo.dia_fechamento || 3}, o robô gera o relatório gerencial do mês anterior (DRE do mês e acumulada, indicadores, inadimplência e maiores devedores), salva em <b>${esc(c.pastas.relatorios || "")}</b> e envia ao dono${c.resumo.email_dono ? ` (${esc(c.resumo.email_dono)})` : " (informe o e-mail em Configurações)"}. ${c.resumo.ultimo_fechamento ? "Último: " + mes(c.resumo.ultimo_fechamento) + "." : ""}</p>
+      <p><button class="btn" id="fech">${ic("play")}Gerar e enviar o do mês passado agora</button> <button class="btn sec" onclick="api('relatorios/abrir_pasta')">${ic("download")}Abrir pasta</button></p>
+      ${tabela([{ t: "Competência", f: m => mes(m) }, { t: "", f: m => `<a class="btn min sec" href="/fechamento/${m}.html" target="_blank">Abrir relatório</a>` }], meses)}</div>`;
+    $("#fech").onclick = async () => { const x = await api("fechamento/gerar"); aviso(x.resultado, 6000); await carregarEstado(); };
   } else {
     const l = await api("log");
     r.innerHTML = `<div class="card">${tabela([{ t: "Quando", f: x => esc(x.quando) }, { t: "Tipo", f: x => esc(x.tipo) }, { t: "Mensagem", f: x => esc(x.mensagem) }], l)}</div>`;
@@ -529,8 +541,8 @@ PAGINAS.config = async el => {
     ${sl("emissao", "reg_esp_trib", "Regime especial", [["0", "Nenhum"], ["1", "Ato cooperado"], ["2", "Estimativa"], ["3", "ME municipal"], ["4", "Notário/registrador"], ["5", "Autônomo"], ["6", "Soc. de profissionais"]])}
     ${ck("emissao", "informar_ibscbs", "Informar IBS/CBS (cIndOp/cClassTrib do serviço padrão)")}${ck("emissao", "informar_im", "Informar inscrição municipal")}</div>
     <p><button class="btn sec" id="teste_cert">Testar certificado e conexão</button> <span class="sub">Salve antes de testar.</span></p><div id="cert_res"></div></div>
-  <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}</div>
-    <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail para o resumo diário")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
+  <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}${ck("automacao", "fechamento_mensal", "Fechamento mensal automático")}</div>
+    <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail do dono (resumo e fechamento)")}${tx("resumo", "dia_fechamento", "Dia do fechamento mensal", "number")}${tx("pastas", "relatorios", "Pasta dos relatórios")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
     <p><button class="btn sec" id="imp_xml">Ler XML agora</button> <button class="btn sec" id="env_res">Enviar resumo agora</button></p></div>
   <div class="card"><h2>Regras de despesa do extrato</h2><p class="sub">Uma por linha: PALAVRA = Categoria. Débito cujo histórico contém a palavra entra nessa categoria.</p>
     <textarea id="regras" rows="6">${esc(c.regras_despesa.map(([p, k]) => `${p.trim()} = ${k}`).join("\n"))}</textarea></div>
@@ -547,14 +559,14 @@ PAGINAS.config = async el => {
   <div class="card"><h2>E-mail (SMTP)</h2><p class="sub">Gmail: servidor smtp.gmail.com, porta 587, e uma “senha de app” da conta Google.</p><div class="campos">${tx("smtp", "host", "Servidor")}${tx("smtp", "porta", "Porta", "number")}${tx("smtp", "usuario", "Usuário")}${tx("smtp", "senha", "Senha", "password")}${tx("smtp", "remetente", "Remetente")}${tx("smtp", "copia_para", "Cópia oculta para")}${ck("smtp", "ssl", "SSL direto (porta 465)")}</div>
     <p><button class="btn sec" id="teste_email">Enviar e-mail de teste</button></p></div>
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}
-    ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
+    ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "iss_fixo_mensal", "ISS fixo por mês (R$, para a DRE)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
   $("#salvar").onclick = async () => {
     const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, resumo: {}, emissao: {} };
     novo.regras_despesa = $("#regras").value.split("\n").map(l => l.split("=")).filter(x => x.length == 2 && x[0].trim()).map(([p, k]) => [p.trim().toUpperCase() + (p.trim().length <= 3 ? " " : ""), k.trim()]);
     $$("[data-s]").forEach(i => { let v = i.type == "checkbox" ? i.checked : i.value;
       if (["regua_dias"].includes(i.dataset.k)) v = v.split(/[,;\s]+/).filter(Boolean).map(Number);
       else if (i.dataset.k == "categorias_despesa") v = v.split(",").map(s => s.trim()).filter(Boolean);
-      else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct"].includes(i.dataset.k)) v = valorNum(v);
+      else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct", "iss_fixo_mensal"].includes(i.dataset.k)) v = valorNum(v);
       else if (i.type == "number") v = Number(v);
       novo[i.dataset.s][i.dataset.k] = v; });
     await api("config/salvar", novo); await carregarEstado(); aviso("Configurações salvas ✔");

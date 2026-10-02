@@ -202,7 +202,8 @@ def link_whatsapp(telefone: str, texto: str) -> str:
     return f"https://wa.me/{d}?text={urllib.parse.quote(texto)}" if d else ""
 
 
-def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, anexos: list[str] | None = None) -> None:
+def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, anexos: list[str] | None = None,
+                 html: str = "") -> None:
     cfg = cfg or config.carregar()
     s = cfg["smtp"]
     if not s.get("host"):
@@ -214,6 +215,8 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
         msg["Bcc"] = s["copia_para"]
     msg["Subject"] = assunto
     msg.set_content(texto)
+    if html:
+        msg.add_alternative(html, subtype="html")
     for caminho in anexos or []:
         msg.add_attachment(Path(caminho).read_bytes(), maintype="application", subtype="pdf",
                            filename=Path(caminho).name)

@@ -235,6 +235,20 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
 .lista { margin: 0; padding-left: 18px; columns: 2; column-gap: 24px; font-size: 13.5px; }
 .lista li { margin-bottom: 4px; break-inside: avoid; }
 
+/* checklist de implantação */
+.checklist summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0; color: var(--texto); }
+.checklist summary::-webkit-details-marker { display: none; }
+.ck-tit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ck-tit .ic { color: var(--alerta); }
+.ck-barra { flex: 1; min-width: 160px; height: 8px; border-radius: 999px; background: var(--grade); overflow: hidden; }
+.ck-barra span { display: block; height: 100%; background: var(--bom); border-radius: 999px; }
+.checklist ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+.checklist li { display: flex; gap: 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--borda); background: var(--superficie2); font-size: 13.5px; }
+.checklist li .ic { margin-top: 1px; }
+.checklist li.ck-ok .ic { color: var(--bom); } .checklist li.ck-aviso .ic { color: var(--alerta); } .checklist li.ck-erro .ic { color: var(--critico); }
+.ck-feitos { margin: 12px 0 0; font-size: 13px; color: var(--texto2); display: flex; gap: 8px; align-items: flex-start; }
+.ck-feitos .ic { color: var(--bom); }
+
 /* DRE */
 .dre table { font-size: 12.5px; }
 .dre th:first-child, .dre td:first-child { position: sticky; left: 0; background: var(--superficie); z-index: 1; min-width: 270px; }

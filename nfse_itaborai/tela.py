@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
-               inter, lote, nacional, relatorios)
+               inter, lote, nacional, relatorios, saude)
 from .validacao import ErroValidacao
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -154,6 +154,10 @@ ROTAS = {
     "rel/fluxo": lambda c: relatorios.fluxo_caixa(dias=int(c.get("dias") or 90)),
     "rel/dre": lambda c: contabil.dre(int(c.get("ano") or financeiro.hoje().year)),
     "rel/indicadores": lambda c: contabil.indicadores(),
+    "saude": lambda c: saude.checklist(),
+    "fechamento/gerar": lambda c: {"resultado": saude.fechamento_mensal(forcar=True),
+                                   "arquivo": str(saude.pasta_relatorios())},
+    "relatorios/abrir_pasta": lambda c: _abrir_pasta(saude.pasta_relatorios()),
     "rel/fluxo_mensal": lambda c: contabil.fluxo_mensal(),
     "rel/livro_caixa": lambda c: contabil.livro_caixa(str(c.get("inicio") or financeiro.hoje().replace(day=1).isoformat()),
                                                       str(c.get("fim") or financeiro.hoje().isoformat())),
@@ -217,6 +221,9 @@ class _Handler(BaseHTTPRequestHandler):
         if caminho == "/export/titulos.csv":
             return self._responder(200, relatorios.csv_titulos().encode("utf-8"), "text/csv; charset=utf-8",
                                    {"Content-Disposition": 'attachment; filename="contas_a_receber.csv"'})
+        f = re.fullmatch(r"/fechamento/(\d{4}-\d{2})\.html", caminho)
+        if f:
+            return self._responder(200, saude.relatorio_mensal_html(f.group(1)).encode("utf-8"), "text/html; charset=utf-8")
         m = re.fullmatch(r"/boleto/(\d+)\.pdf", caminho)
         if m:
             r = tratar("titulo/boleto", {"id": int(m.group(1))})

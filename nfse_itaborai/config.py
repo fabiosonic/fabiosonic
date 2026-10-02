@@ -48,6 +48,7 @@ PADRAO = {
     "pastas": {
         "xml_nfse": "~/Downloads/nfse/MORAES OLIVEIRA CONTABILIDADE LTDA",  # XML das notas já emitidas
         "extratos": "~/Downloads",  # o robô importa todo .ofx novo que aparecer aqui
+        "relatorios": "~/Downloads/Relatorios financeiros",  # fechamentos mensais em HTML (abrir/imprimir/PDF)
         "boletos": "~/Downloads/Boletos",  # PDF + dados de pagamento de cada boleto, em subpastas AAAA-MM
     },
     "emissao": {
@@ -63,7 +64,7 @@ PADRAO = {
         "informar_im": False,       # IM só quando o município tem cadastro no Sistema Nacional
         "informar_ibscbs": True,    # grupo IBS/CBS (LC 214/2025) com cIndOp/cClassTrib do serviço padrão
     },
-    "resumo": {"email_dono": "", "ultimo_envio": ""},
+    "resumo": {"email_dono": "", "ultimo_envio": "", "dia_fechamento": 3, "ultimo_fechamento": ""},
     "regras_despesa": [             # palavra no histórico do extrato -> categoria
         ["DAS", "Impostos"], ["DARF", "Impostos"], ["GPS", "Impostos"], ["FGTS", "Folha"], ["SIMPLES", "Impostos"],
         ["TARIFA", "Bancárias"], ["TAR ", "Bancárias"], ["IOF", "Bancárias"], ["PACOTE", "Bancárias"],
@@ -78,6 +79,7 @@ PADRAO = {
         "importar_extratos": True,  # importa .ofx novos da pasta de extratos
         "despesas_do_extrato": True,  # débitos sem conta a pagar viram despesa paga, classificada por regra
         "resumo_diario": True,      # e-mail diário com o resumo para o dono
+        "fechamento_mensal": True,  # relatório gerencial do mês anterior (DRE, indicadores, aging), salvo e enviado
         "gerar_titulos": True,
         "emitir_nfse": True,
         "criar_cobranca": True,
