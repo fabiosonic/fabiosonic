@@ -53,22 +53,57 @@ def test_padrao_da_empresa_vale_para_contratos(base):  # noqa: F811
     assert db.linhas("SELECT COUNT(*) n FROM titulos WHERE nfse_status='apos_pagamento'")[0]["n"] == 1
 
 
-def test_repetir_todo_mes_cria_contrato_com_as_mesmas_escolhas(base):  # noqa: F811
-    r = tratar("emitir", {"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "1.200,00", "vencimento": "2026-10-15",
-                          "apos_pagamento": True, "cobrar": True, "recorrente": True, "recorrente_ate": "2027-03"})
-    assert r["sucesso"] and r["contrato_id"]
-    k = next(c for c in financeiro.listar_contratos() if c["id"] == r["contrato_id"])
-    assert (k["inicio"], k["fim"], k["dia_vencimento"], k["valor_cent"]) == ("2026-11", "2027-03", 15, 120000)
-    assert k["nfse_quando"] == "pagamento" and k["cobrar"] == 1
-    assert financeiro.gerar_titulos("2026-10") == []                       # o mês atual não é cobrado em dobro
-    novo = financeiro.obter_titulo(financeiro.gerar_titulos("2026-11")[0])
-    assert novo["nfse_status"] == "apos_pagamento" and novo["vencimento"] == "2026-11-15" and novo["cobrar"] == 1
-    assert financeiro.gerar_titulos("2027-04") == []                       # depois do fim, para
-
-
-def test_contrato_sem_cobranca_com_nota_na_hora(base):  # noqa: F811
-    config.salvar({"emissao": {"nfse_apos_pagamento": True}})            # padrão da empresa: após pagamento
+def test_regra_geral_e_regra_da_recorrencia_do_cliente(base):  # noqa: F811
+    config.salvar({"emissao": {"nfse_quando": "baixa"}})                 # regra geral: nota na baixa
+    r = tratar("emitir", {"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "100"})
+    assert r["aguardando_pagamento"] and financeiro.obter_titulo(r["titulo_id"])["nfse_status"] == "apos_pagamento"
+    # a recorrência do cliente com regra própria vale primeiro
     k = tratar("contrato/salvar", {"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "90", "inicio": "2026-01",
-                                   "nfse_quando": "agora", "cobrar": False})
+                                   "nfse_quando": "geracao"})
+    r = tratar("emitir", {"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "100"})
+    assert r["sucesso"] and r["nfse"] and financeiro.obter_titulo(r["titulo_id"])["nfse_status"] == "emitida"
+    # "apenas lançar": conta a receber sem nota
+    tratar("contrato/salvar", {"id": k["id"], "cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "90", "inicio": "2026-01",
+                               "nfse_quando": "lancar"})
+    r = tratar("emitir", {"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "100"})
+    assert r["sem_nota"] and financeiro.obter_titulo(r["titulo_id"])["nfse_status"] == "nao_emitir"
     t = financeiro.obter_titulo(financeiro.gerar_titulos("2026-12")[0])
-    assert k["cobrar"] == 0 and t["nfse_status"] == "pendente" and t["cobrar"] == 0
+    assert t["nfse_status"] == "nao_emitir"
+    # "não emitir e não lançar": a recorrência não gera nada
+    tratar("contrato/salvar", {"id": k["id"], "cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "90", "inicio": "2026-01",
+                               "nfse_quando": "nada"})
+    assert financeiro.gerar_titulos("2027-01") == []
+
+
+def test_aba_recorrencia_traz_todos_os_clientes_com_valores(base):  # noqa: F811
+    from nfse_itaborai import clientes
+    lst = clientes.listar()
+    for c in lst:
+        c.update({"ultimo_valor": "350.00", "ultima_data": "2026-09-20"} if c["cpf_cnpj"] == CLI_A["cpf_cnpj"] else {})
+    clientes._gravar(lst)
+    r = tratar("recorrencia", {})
+    assert r["preenchidos"] == 1 and tratar("recorrencia", {})["preenchidos"] == 0          # idempotente
+    a = next(l for l in r["linhas"] if l["cpf_cnpj"] == CLI_A["cpf_cnpj"])
+    b = next(l for l in r["linhas"] if l["cpf_cnpj"] != CLI_A["cpf_cnpj"])
+    assert a["valor_cent"] == 35000 and not a["repetir"] and a["inicio"] == "2026-10" and a["id"]
+    assert b["id"] is None and b["valor_cent"] == 0
+    assert financeiro.gerar_titulos("2026-10") == []                     # a confirmar: ninguém é cobrado
+    tratar("recorrencia/salvar", {"linhas": [{"id": a["id"], "cpf_cnpj": a["cpf_cnpj"], "valor": "380,00",
+                                              "dia_vencimento": 15, "nfse_quando": "baixa", "cobrar": True,
+                                              "repetir": True},
+                                             {"id": None, "cpf_cnpj": b["cpf_cnpj"], "valor": "120", "dia_vencimento": 5,
+                                              "nfse_quando": "", "cobrar": False, "repetir": True}]})
+    ts = {financeiro.obter_titulo(i)["cpf_cnpj"]: financeiro.obter_titulo(i) for i in financeiro.gerar_titulos("2026-11")}
+    assert ts[CLI_A["cpf_cnpj"]]["valor_cent"] == 38000 and ts[CLI_A["cpf_cnpj"]]["nfse_status"] == "apos_pagamento"
+    assert ts[CLI_A["cpf_cnpj"]]["vencimento"] == "2026-11-15"
+    assert ts[b["cpf_cnpj"]]["cobrar"] == 0 and ts[b["cpf_cnpj"]]["nfse_status"] == "pendente"
+
+
+def test_nota_sem_cobranca_e_importada_nao_entram_em_a_receber(base):  # noqa: F811
+    from nfse_itaborai import relatorios
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "1130", vencimento="2026-09-01", cobrar=False)
+    financeiro.atualizar_titulo(tid, nfse_status="emitida")
+    p = relatorios.painel(date(2026, 10, 2))
+    assert p["a_receber"] == 0 and p["atrasado"] == 0
+    assert [t["id"] for t in financeiro.listar_titulos("sem_cobranca")] == [tid]
+    assert financeiro.listar_titulos("a_receber") == []

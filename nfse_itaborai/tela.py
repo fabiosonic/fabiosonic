@@ -38,12 +38,12 @@ def _emitir_item(it: dict) -> dict:
         r = financeiro.emitir_avulsa(str(it.get("cpf_cnpj", "")), it.get("valor", 0), str(it.get("descricao", "")),
                                      str(it.get("vencimento", "")), servico_id=str(it.get("servico_id", "")),
                                      cobrar=it.get("cobrar", True) is not False,
-                                     apos_pagamento=bool(it.get("apos_pagamento")),
+                                     regra=str(it.get("regra") or ("baixa" if it.get("apos_pagamento") else "")),
                                      recorrente=bool(it.get("recorrente")), recorrente_ate=str(it.get("recorrente_ate") or ""))
     except (ValueError, ErroValidacao, emissor.ErroConfiguracao) as ex:
         return base | {"sucesso": False, "erros": getattr(ex, "erros", None) or [str(ex)]}
     return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "rps", "nfse", "link", "titulo_id",
-                                         "canal", "chave", "aguardando_pagamento", "boleto",
+                                         "canal", "chave", "aguardando_pagamento", "sem_nota", "boleto",
                                          "contrato_id")}
 
 
@@ -132,7 +132,8 @@ ROTAS = {
     "empresa/credenciais/salvar": lambda c: empresas.salvar_credenciais(c),
     "servico/salvar": lambda c: empresas.salvar_servico(c),
     "estado": lambda c: {"versao": __version__, "empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
-                         "servicos": servicos.listar(),
+                         "servicos": servicos.listar(), "regra_geral": financeiro.regra_geral(),
+                         "regras_nfse": financeiro.regras_por_cliente(), "regras_nomes": financeiro.REGRAS_NFSE,
                          "producao": emissor.em_producao(), "config": config.publico(),
                          "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
@@ -172,6 +173,10 @@ ROTAS = {
     "contratos": lambda c: financeiro.listar_contratos(),
     "contrato/salvar": lambda c: financeiro.salvar_contrato(c),
     "contrato/excluir": lambda c: (financeiro.excluir_contrato(_id(c)), {"ok": True})[1],
+    "recorrencia": lambda c: {"preenchidos": financeiro.preencher_recorrencia(), "linhas": financeiro.lista_recorrencia(),
+                              "regra_geral": financeiro.regra_geral(), "regras": financeiro.REGRAS_NFSE},
+    "recorrencia/salvar": lambda c: financeiro.salvar_recorrencia(c.get("linhas") or []),
+    "recorrencia/gerar": lambda c: {"gerados": len(financeiro.gerar_titulos(str(c.get("competencia") or "") or None))},
     "contratos/historico": lambda c: {"criados": financeiro.contratos_do_historico(c.get("dia_vencimento") or None)},
     "contratos/confirmar": lambda c: {"confirmados": importacao.confirmar_contratos(c.get("ids") or None)},
     "importacao/xml": lambda c: importacao.importar_xml(),

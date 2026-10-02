@@ -74,7 +74,11 @@ PADRAO = {
         "reg_esp_trib": "6",        # 0 nenhum | 6 sociedade de profissionais (confirmar no cadastro municipal)
         "informar_im": False,       # IM só quando o município tem cadastro no Sistema Nacional
         "informar_ibscbs": True,    # grupo IBS/CBS (LC 214/2025) com cIndOp/cClassTrib do serviço padrão
-        "nfse_apos_pagamento": False,  # True: gera o boleto primeiro e emite a NFS-e quando o pagamento entrar
+        # regra geral da NFS-e (a recorrência do cliente pode ter regra própria, que vale primeiro):
+        # geracao = emite ao gerar o contas a receber | baixa = emite ao dar baixa (pagamento confirmado)
+        # lancar = só lança o contas a receber, sem NFS-e | nada = não emite e não lança (recorrência)
+        "nfse_quando": "",
+        "nfse_apos_pagamento": False,  # legado: equivale a nfse_quando = "baixa"
     },
     "resumo": {"email_dono": "", "ultimo_envio": "", "dia_fechamento": 3, "ultimo_fechamento": ""},
     "regras_despesa": [             # palavra no histórico do extrato -> categoria

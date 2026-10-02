@@ -52,11 +52,8 @@ def checklist(em: date | None = None) -> dict:
          "Sem SMTP, a régua de cobrança e o resumo diário não são enviados.", "config")
     item("dono", bool(cfg["resumo"].get("email_dono")), "E-mail do dono para resumos",
          "Informe o e-mail que recebe o resumo diário e o fechamento mensal.", "config", "aviso")
-    pend = db.linhas("SELECT COUNT(*) n FROM contratos WHERE ativo=1 AND confirmado=0")[0]["n"]
-    item("contratos", pend == 0, "Contratos detectados confirmados",
-         f"{pend} contrato(s) detectado(s) aguardam confirmação para entrar na recorrência.", "contratos", "aviso")
     lst = clientes.listar()
-    ativos = {t["cpf_cnpj"] for t in db.linhas("SELECT DISTINCT cpf_cnpj FROM titulos WHERE status='aberto'")}
+    ativos = {t["cpf_cnpj"] for t in db.linhas("SELECT DISTINCT cpf_cnpj FROM titulos WHERE status='aberto' AND cobrar=1")}
     sem_contato = [c for c in lst if c["cpf_cnpj"] in ativos and not c.get("email") and not c.get("telefone")]
     item("contato", not sem_contato, "Clientes com contato para cobrança",
          f"{len(sem_contato)} cliente(s) com título em aberto sem e-mail nem telefone: "

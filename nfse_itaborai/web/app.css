@@ -380,3 +380,7 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
 .faturar p.sub { margin: 0; }
 .faturar .rec-ate { display: flex; align-items: center; gap: 8px; } .faturar .rec-ate input { width: auto; }
 label.btn { display: inline-flex; flex-direction: row; align-items: center; cursor: pointer; vertical-align: middle; font-size: 14px; font-weight: 600; color: var(--texto); }
+.faturar .regra-nfse { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 14px; } .faturar .regra-nfse .ic { margin-top: 2px; flex: none; }
+.recor td:nth-child(2) { min-width: 200px; }
+.recor td { padding-left: 8px; padding-right: 8px; }
+.recor td .acoes-linha { flex-wrap: nowrap; }

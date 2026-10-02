@@ -61,6 +61,8 @@ def encargos(titulo: dict, em: date | None = None) -> dict:
 def situacao(titulo: dict, em: date | None = None) -> str:
     if titulo["status"] != "aberto":
         return titulo["status"]
+    if titulo.get("cobrar", 1) == 0:
+        return "sem_cobranca"   # nota/lançamento sem cobrança: não é cobrado, não entra em atraso nem na régua
     return "atrasado" if date.fromisoformat(titulo["vencimento"]) < (em or hoje()) else "aberto"
 
 
@@ -100,8 +102,10 @@ def salvar_contrato(d: dict) -> dict:
         "observacao": d.get("observacao", ""),
         "cobrar": 0 if d.get("cobrar", True) in (False, 0, "0", "false") else 1,
         # '' = padrão da empresa | agora = emite ao gerar o título | pagamento = emite quando o cliente pagar
-        "nfse_quando": d.get("nfse_quando") if d.get("nfse_quando") in ("agora", "pagamento") else "",
+        "nfse_quando": _regra(d.get("nfse_quando")),
     }
+    if "confirmado" in d:
+        reg["confirmado"] = 0 if d["confirmado"] in (False, 0, "0", "false") else 1
     if reg["valor_cent"] <= 0:
         raise ValueError("Valor do contrato deve ser maior que zero.")
     if not 1 <= reg["dia_vencimento"] <= 31:
@@ -137,10 +141,114 @@ def contratos_do_historico(dia_vencimento: int | None = None) -> int:
     return criados
 
 
+def _mes_seguinte(comp: str) -> str:
+    ano, mes = _mes(comp)
+    return f"{ano + mes // 12}-{mes % 12 + 1:02d}"
+
+
+def preencher_recorrencia() -> int:
+    """Põe na recorrência todo cliente que ainda não tem, com o valor da última nota, como 'a confirmar'.
+    Nada é cobrado até o usuário marcar 'Repetir todo mês' (confirmado)."""
+    com_contrato = {c["cpf_cnpj"] for c in db.linhas("SELECT cpf_cnpj FROM contratos")}
+    criados = 0
+    for c in clientes.listar():
+        if c["cpf_cnpj"] in com_contrato or cent(c.get("ultimo_valor") or 0) <= 0:
+            continue
+        base = (c.get("ultima_data") or hoje().isoformat())[:7]   # o mês da última nota já está faturado
+        salvar_contrato({"cpf_cnpj": c["cpf_cnpj"], "valor": c["ultimo_valor"], "servico_id": c.get("servico_id") or "",
+                         "inicio": _mes_seguinte(base),
+                         "confirmado": False, "observacao": "Valor da última nota (a confirmar)"})
+        criados += 1
+    if criados:
+        db.registrar("recorrencia", f"{criados} cliente(s) colocados na recorrência a confirmar")
+    return criados
+
+
+def lista_recorrencia() -> list[dict]:
+    """Uma linha por recorrência e uma linha para cada cliente ainda sem recorrência."""
+    geral = regra_geral()
+    lst = listar_contratos()
+    com = {k["cpf_cnpj"] for k in lst}
+    linhas = [k | {"repetir": bool(k["ativo"] and k["confirmado"]), "regra": regra_do_contrato(k, geral)}
+              for k in lst if k["ativo"]]
+    for c in clientes.listar():
+        if c["cpf_cnpj"] not in com:
+            linhas.append({"id": None, "cpf_cnpj": c["cpf_cnpj"], "cliente_nome": c["razao_social"], "valor_cent": 0,
+                           "dia_vencimento": int(config.carregar()["financeiro"]["dia_vencimento_padrao"]),
+                           "servico_id": "", "nfse_quando": "", "cobrar": 1, "repetir": False, "regra": geral,
+                           "ativo": 1, "confirmado": 0, "inicio": "", "fim": ""})
+    return sorted(linhas, key=lambda x: (not x["repetir"], x["cliente_nome"].upper()))
+
+
+def salvar_recorrencia(linhas: list[dict]) -> dict:
+    """Grava as linhas alteradas na aba Recorrência. 'repetir' = entra na cobrança mensal (confirmado)."""
+    atuais = {k["id"]: k for k in db.linhas("SELECT * FROM contratos")}
+    salvos = 0
+    for l in linhas:
+        valor = l.get("valor_cent") if "valor_cent" in l else cent(l.get("valor") or 0)
+        dados = {"servico_id": l.get("servico_id") or "", "nfse_quando": l.get("nfse_quando") or "",
+                 "cobrar": l.get("cobrar", True), "confirmado": bool(l.get("repetir")),
+                 "dia_vencimento": l.get("dia_vencimento"), "valor_cent": valor}
+        if l.get("id") and int(l["id"]) in atuais:
+            k = atuais[int(l["id"])]
+            if dados["confirmado"] and not k["confirmado"] and k["inicio"] < competencia_de(hoje()):
+                dados["inicio"] = competencia_de(hoje())   # confirmou agora: cobra a partir deste mês
+            salvar_contrato({**k, "descricao": k["descricao"] if k.get("servico_id") == dados["servico_id"] else "",
+                             **dados, "id": k["id"]})
+        elif valor > 0:
+            salvar_contrato({"cpf_cnpj": l["cpf_cnpj"], **dados, "inicio": competencia_de(hoje())})
+        else:
+            continue
+        salvos += 1
+    return {"salvos": salvos}
+
+
 # ---------------------------------------------------------------- títulos (contas a receber)
 
 def _nome(doc: str) -> str:
     return (clientes.obter(doc) or {}).get("razao_social", doc)
+
+
+REGRAS_NFSE = {"geracao": "Emitir NFS-e na geração do contas a receber",
+               "baixa": "Emitir NFS-e ao efetuar a baixa do contas a receber",
+               "lancar": "Apenas lançar o contas a receber, sem emitir NFS-e",
+               "nada": "Não emitir NFS-e e não lançar (recorrência parada)"}
+_LEGADO = {"agora": "geracao", "pagamento": "baixa"}
+
+
+def _regra(valor) -> str:
+    v = _LEGADO.get(str(valor or ""), str(valor or ""))
+    return v if v in REGRAS_NFSE else ""
+
+
+def regra_geral(cfg: dict | None = None) -> str:
+    e = (cfg or config.carregar())["emissao"]
+    return _regra(e.get("nfse_quando")) or ("baixa" if e.get("nfse_apos_pagamento") else "geracao")
+
+
+def regra_do_contrato(k: dict, geral: str | None = None) -> str:
+    """A regra da recorrência do cliente vale primeiro; sem regra própria, vale a geral."""
+    if not k.get("emitir_nfse", 1):
+        return "lancar"
+    return _regra(k.get("nfse_quando")) or geral or regra_geral()
+
+
+def regra_do_cliente(cpf_cnpj: str, geral: str | None = None) -> str:
+    doc = clientes._digitos(cpf_cnpj)
+    ks = db.linhas("SELECT * FROM contratos WHERE cpf_cnpj=? AND ativo=1 ORDER BY confirmado DESC, id", (doc,))
+    return regra_do_contrato(ks[0], geral) if ks else (geral or regra_geral())
+
+
+def regras_por_cliente() -> dict:
+    geral = regra_geral()
+    out = {}
+    for k in db.linhas("SELECT * FROM contratos WHERE ativo=1 ORDER BY confirmado, id DESC"):
+        out[k["cpf_cnpj"]] = regra_do_contrato(k, geral)
+    return out
+
+
+def _status_da_regra(regra: str) -> str:
+    return {"baixa": "apos_pagamento", "lancar": "nao_emitir"}.get(regra, "pendente")
 
 
 def status_nfse_inicial(emitir: bool, apos_pagamento: bool | None = None) -> str:
@@ -148,13 +256,9 @@ def status_nfse_inicial(emitir: bool, apos_pagamento: bool | None = None) -> str
     if not emitir:
         return "nao_emitir"
     if apos_pagamento is None:
-        apos_pagamento = bool(config.carregar()["emissao"].get("nfse_apos_pagamento"))
+        r = regra_geral()
+        return _status_da_regra(r if r != "nada" else "lancar")
     return "apos_pagamento" if apos_pagamento else "pendente"
-
-
-def _apos_pagamento(contrato: dict) -> bool | None:
-    q = contrato.get("nfse_quando") or ""
-    return None if not q else q == "pagamento"
 
 
 def gerar_titulos(competencia: str | None = None, em: date | None = None) -> list[int]:
@@ -163,10 +267,14 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
     comp = competencia or competencia_de(em)
     ano, mes = _mes(comp)
     novos = []
+    geral = regra_geral()
     with db.conexao() as con:
         for k in con.execute("SELECT * FROM contratos WHERE ativo=1 AND confirmado=1").fetchall():
             k = dict(k)
             if comp < k["inicio"] or (k["fim"] and comp > k["fim"]):
+                continue
+            regra = regra_do_contrato(k, geral)
+            if regra == "nada":
                 continue
             if k["mes_reajuste"] == mes and k["reajuste_pct"] and k["ultimo_reajuste"] < ano \
                     and k["inicio"] < f"{ano}-{mes:02d}":
@@ -182,8 +290,7 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
                 " vencimento, nfse_status, criado_em, servico_id, cobrar) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), k["id"], comp, k["descricao"], k["valor_cent"],
                  dia_no_mes(ano, mes, k["dia_vencimento"]).isoformat(),
-                 status_nfse_inicial(k["emitir_nfse"], _apos_pagamento(k)), db.agora(), k.get("servico_id") or "",
-                 k.get("cobrar", 1)))
+                 _status_da_regra(regra), db.agora(), k.get("servico_id") or "", k.get("cobrar", 1)))
             if cur.rowcount:
                 novos.append(cur.lastrowid)
     if novos:
@@ -219,12 +326,15 @@ def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
                             .quantize(Decimal("1"), ROUND_HALF_UP))
                 total = len(d["parcelas"])
                 desc = f"{d.get('descricao') or '13º HONORÁRIO'} {em.year}" + (f" - PARCELA {n}/{total}" if total > 1 else "")
-                emitir = k["emitir_nfse"] and d.get("emitir_nfse", True)
+                regra = regra_do_contrato(k)
+                if regra == "nada":
+                    continue
+                emitir = d.get("emitir_nfse", True) and regra != "lancar"
                 cur = con.execute(
                     "INSERT INTO titulos (cpf_cnpj, cliente_nome, competencia, descricao, valor_cent, vencimento,"
                     " nfse_status, criado_em, origem, servico_id, cobrar) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), comp, desc[:190], valor, venc.isoformat(),
-                     status_nfse_inicial(emitir, _apos_pagamento(k)), db.agora(), origem, k["servico_id"] or "",
+                     _status_da_regra(regra) if emitir else "nao_emitir", db.agora(), origem, k["servico_id"] or "",
                      k.get("cobrar", 1)))
                 novos.append(cur.lastrowid)
     if novos:
@@ -271,7 +381,9 @@ def listar_titulos(filtro: str = "todos", cpf_cnpj: str = "", competencia: str =
     if filtro in ("aberto", "atrasado", "pago", "cancelado"):
         lst = [t for t in lst if t["situacao"] == filtro]
     elif filtro == "a_receber":
-        lst = [t for t in lst if t["status"] == "aberto"]
+        lst = [t for t in lst if t["situacao"] in ("aberto", "atrasado")]
+    elif filtro == "sem_cobranca":
+        lst = [t for t in lst if t["situacao"] == "sem_cobranca"]
     elif filtro == "sem_nfse":
         lst = [t for t in lst if t["nfse_status"] in ("pendente", "erro", "teste", "emitindo")
                and t["status"] != "cancelado"]
@@ -352,9 +464,16 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
 
 
 def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", url: str | None = None,
-                  servico_id: str = "", cobrar: bool = True, apos_pagamento: bool = False,
-                  recorrente: bool = False, recorrente_ate: str = "") -> dict:
-    r = _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, apos_pagamento)
+                  servico_id: str = "", cobrar: bool = True, apos_pagamento: bool | None = None,
+                  recorrente: bool = False, recorrente_ate: str = "", regra: str = "") -> dict:
+    """Aba 'Emitir nota'. A regra da NFS-e vem da recorrência do cliente (se tiver regra própria) ou da regra
+    geral das Configurações; 'regra'/'apos_pagamento' só forçam uma regra quando informados."""
+    regra = _regra(regra) or ({True: "baixa", False: "geracao"}.get(apos_pagamento) if apos_pagamento is not None
+                              else regra_do_cliente(cpf_cnpj))
+    if regra == "nada":
+        regra = "lancar"
+    apos_pagamento = regra == "baixa"
+    r = _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, regra)
     if recorrente:
         t = obter_titulo(r["titulo_id"])
         if t["status"] == "cancelado":
@@ -372,15 +491,15 @@ def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "
     return r
 
 
-def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, apos_pagamento) -> dict:
-    """Fluxo da aba 'Emitir nota': cria a conta a receber e emite a NFS-e dela com o serviço escolhido.
+def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, regra) -> dict:
+    """Cria a conta a receber e, conforme a regra, emite a NFS-e agora, só na baixa, ou não emite.
 
-    cobrar=False: só a conta a receber (sem boleto/PIX e fora da régua).
-    apos_pagamento=True: gera a cobrança agora e a NFS-e sai sozinha quando o pagamento for confirmado."""
-    if apos_pagamento:
+    cobrar=False: só a conta a receber (sem boleto/PIX e fora da régua)."""
+    if regra in ("baixa", "lancar"):
         tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar,
-                           apos_pagamento=True)
-        r = {"sucesso": True, "aguardando_pagamento": True, "erros": [], "alertas": [], "titulo_id": tid}
+                           emitir_nfse=regra == "baixa", apos_pagamento=regra == "baixa")
+        r = {"sucesso": True, "aguardando_pagamento": regra == "baixa", "sem_nota": regra == "lancar",
+             "erros": [], "alertas": [], "titulo_id": tid}
         if cobrar and config.carregar()["cobranca"]["provedor"] != "nenhum":
             from . import cobranca
             try:
@@ -389,7 +508,8 @@ def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cob
                 r["link"] = t.get("cobranca_link", "")
             except Exception as ex:  # noqa: BLE001 — o robô cria a cobrança na próxima rodada
                 r["alertas"].append(f"Cobrança não criada agora ({ex}); o robô tenta de novo.")
-        db.registrar("faturamento", f"Título {tid}: cobrança gerada, NFS-e após o pagamento")
+        db.registrar("faturamento", f"Título {tid}: " + ("NFS-e após o pagamento" if regra == "baixa"
+                                                          else "lançado sem NFS-e"))
         return r | {"titulo": obter_titulo(tid)}
     tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar)
     r = emitir_nfse_titulo(tid, url=url)

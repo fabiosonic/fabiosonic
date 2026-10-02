@@ -146,6 +146,11 @@ def _migrar(con: sqlite3.Connection) -> None:
         for nome, tipo in colunas.items():
             if nome not in existentes:
                 con.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
+    if con.execute("PRAGMA user_version").fetchone()[0] < 2:
+        # notas emitidas fora do sistema (importadas dos XML) não geram cobrança: só faturamento
+        con.execute("UPDATE titulos SET cobrar=0 WHERE origem='importado' AND banco_id='' AND status='aberto'")
+        con.execute("PRAGMA user_version=2")
+        con.commit()
 
 
 def agora() -> str:

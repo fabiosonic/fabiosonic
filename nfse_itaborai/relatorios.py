@@ -68,11 +68,11 @@ def painel(em: date | None = None) -> dict:
     ts = _titulos(em)
     comp = financeiro.competencia_de(em)
     mes_ini = em.replace(day=1).isoformat()
-    abertos = [t for t in ts if t["status"] == "aberto"]
+    abertos = [t for t in ts if t["situacao"] in ("aberto", "atrasado")]   # sem cobrança não entra
     atrasados = [t for t in abertos if t["situacao"] == "atrasado"]
     recebido_mes = sum(t["valor_pago_cent"] for t in ts if t["status"] == "pago" and t["data_pagamento"] >= mes_ini)
     faturado_mes = sum(t["valor_cent"] for t in ts if t["competencia"] == comp)
-    vencido_total = sum(t["valor_cent"] for t in ts if t["vencimento"] < em.isoformat())
+    vencido_total = sum(t["valor_cent"] for t in ts if t["vencimento"] < em.isoformat() and t.get("cobrar", 1))
     vencido_aberto = sum(t["valor_cent"] for t in atrasados)
     contratos = db.linhas("SELECT valor_cent FROM contratos WHERE ativo=1 AND confirmado=1")
     a_confirmar = db.linhas("SELECT COUNT(*) n FROM contratos WHERE ativo=1 AND confirmado=0")[0]["n"]
@@ -115,7 +115,7 @@ def aging(em: date | None = None) -> dict:
     faixas = {"a_vencer": 0, "1_30": 0, "31_60": 0, "61_90": 0, "90_mais": 0}
     por_cliente: dict[str, dict] = defaultdict(lambda: dict.fromkeys(faixas, 0))
     for t in _titulos(em):
-        if t["status"] != "aberto":
+        if t["situacao"] not in ("aberto", "atrasado"):
             continue
         d = t["dias_atraso"]
         f = "a_vencer" if d <= 0 else "1_30" if d <= 30 else "31_60" if d <= 60 else "61_90" if d <= 90 else "90_mais"
@@ -136,7 +136,7 @@ def por_cliente(em: date | None = None) -> list[dict]:
         lst.append({"cpf_cnpj": doc, "cliente": ts[-1]["cliente_nome"],
                     "faturado_12m": sum(t["valor_cent"] for t in ts if t["competencia"] in doze),
                     "recebido_total": sum(t["valor_pago_cent"] for t in ts if t["status"] == "pago"),
-                    "em_aberto": sum(t["valor_cent"] for t in ts if t["status"] == "aberto"),
+                    "em_aberto": sum(t["valor_cent"] for t in ts if t["situacao"] in ("aberto", "atrasado")),
                     "atrasado": sum(t["total_cent"] for t in ts if t["situacao"] == "atrasado"),
                     **score_cliente(ts)})
     return sorted(lst, key=lambda x: -x["faturado_12m"])
@@ -154,7 +154,7 @@ def fluxo_caixa(em: date | None = None, dias: int = 90) -> list[dict]:
         return (d - timedelta(days=d.weekday())).isoformat()
 
     corte = em - timedelta(days=60)  # atraso acima de 60 dias não entra na previsão de caixa
-    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto'"):
+    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND cobrar=1"):
         v = date.fromisoformat(t["vencimento"])
         if corte <= v <= fim:
             entradas[semana(v)] += t["valor_cent"]
