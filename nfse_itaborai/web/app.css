@@ -374,3 +374,9 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
   .acoes-linha { flex-wrap: wrap; justify-content: flex-end; }
 }
 .migra p { overflow-wrap: anywhere; }
+
+.faturar { margin: 14px 0 6px; padding: 12px 14px; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie2); display: grid; gap: 8px; }
+.faturar .opc-nfse { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+.faturar p.sub { margin: 0; }
+.faturar .rec-ate { display: flex; align-items: center; gap: 8px; } .faturar .rec-ate input { width: auto; }
+label.btn { display: inline-flex; flex-direction: row; align-items: center; cursor: pointer; vertical-align: middle; font-size: 14px; font-weight: 600; color: var(--texto); }

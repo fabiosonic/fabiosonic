@@ -71,7 +71,7 @@ def enriquecer(t: dict, em: date | None = None) -> dict:
 # ---------------------------------------------------------------- contratos
 
 CAMPOS_CONTRATO = ("cpf_cnpj", "descricao", "valor_cent", "dia_vencimento", "inicio", "fim", "ativo",
-                   "emitir_nfse", "mes_reajuste", "reajuste_pct", "observacao")
+                   "emitir_nfse", "mes_reajuste", "reajuste_pct", "observacao", "cobrar", "nfse_quando")
 
 
 def listar_contratos() -> list[dict]:
@@ -98,6 +98,9 @@ def salvar_contrato(d: dict) -> dict:
         "mes_reajuste": int(d.get("mes_reajuste") or 0),
         "reajuste_pct": float(str(d.get("reajuste_pct") or 0).replace(",", ".")),
         "observacao": d.get("observacao", ""),
+        "cobrar": 0 if d.get("cobrar", True) in (False, 0, "0", "false") else 1,
+        # '' = padrão da empresa | agora = emite ao gerar o título | pagamento = emite quando o cliente pagar
+        "nfse_quando": d.get("nfse_quando") if d.get("nfse_quando") in ("agora", "pagamento") else "",
     }
     if reg["valor_cent"] <= 0:
         raise ValueError("Valor do contrato deve ser maior que zero.")
@@ -140,6 +143,20 @@ def _nome(doc: str) -> str:
     return (clientes.obter(doc) or {}).get("razao_social", doc)
 
 
+def status_nfse_inicial(emitir: bool, apos_pagamento: bool | None = None) -> str:
+    """pendente = emite já; apos_pagamento = emite sozinha quando o pagamento for confirmado; nao_emitir."""
+    if not emitir:
+        return "nao_emitir"
+    if apos_pagamento is None:
+        apos_pagamento = bool(config.carregar()["emissao"].get("nfse_apos_pagamento"))
+    return "apos_pagamento" if apos_pagamento else "pendente"
+
+
+def _apos_pagamento(contrato: dict) -> bool | None:
+    q = contrato.get("nfse_quando") or ""
+    return None if not q else q == "pagamento"
+
+
 def gerar_titulos(competencia: str | None = None, em: date | None = None) -> list[int]:
     """Recorrência: cria o título do mês para cada contrato ativo (idempotente). Aplica reajuste anual."""
     em = em or hoje()
@@ -162,10 +179,11 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
                 k["valor_cent"] = novo
             cur = con.execute(
                 "INSERT OR IGNORE INTO titulos (cpf_cnpj, cliente_nome, contrato_id, competencia, descricao, valor_cent,"
-                " vencimento, nfse_status, criado_em, servico_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                " vencimento, nfse_status, criado_em, servico_id, cobrar) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), k["id"], comp, k["descricao"], k["valor_cent"],
                  dia_no_mes(ano, mes, k["dia_vencimento"]).isoformat(),
-                 "pendente" if k["emitir_nfse"] else "nao_emitir", db.agora(), k.get("servico_id") or ""))
+                 status_nfse_inicial(k["emitir_nfse"], _apos_pagamento(k)), db.agora(), k.get("servico_id") or "",
+                 k.get("cobrar", 1)))
             if cur.rowcount:
                 novos.append(cur.lastrowid)
     if novos:
@@ -191,6 +209,7 @@ def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
             if em > venc:  # não cria parcela já vencida (evita multa/juros de surpresa se o sistema ficou parado)
                 continue
             for k in con.execute("SELECT * FROM contratos WHERE ativo=1 AND confirmado=1").fetchall():
+                k = dict(k)
                 if k["inicio"] > comp or (k["fim"] and k["fim"] < comp):
                     continue
                 origem = f"13o:{k['id']}:{em.year}:{n}"
@@ -203,9 +222,10 @@ def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
                 emitir = k["emitir_nfse"] and d.get("emitir_nfse", True)
                 cur = con.execute(
                     "INSERT INTO titulos (cpf_cnpj, cliente_nome, competencia, descricao, valor_cent, vencimento,"
-                    " nfse_status, criado_em, origem, servico_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    " nfse_status, criado_em, origem, servico_id, cobrar) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), comp, desc[:190], valor, venc.isoformat(),
-                     "pendente" if emitir else "nao_emitir", db.agora(), origem, k["servico_id"] or ""))
+                     status_nfse_inicial(emitir, _apos_pagamento(k)), db.agora(), origem, k["servico_id"] or "",
+                     k.get("cobrar", 1)))
                 novos.append(cur.lastrowid)
     if novos:
         db.registrar("13o", f"{len(novos)} parcela(s) do 13º honorário gerada(s)")
@@ -213,7 +233,8 @@ def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
 
 
 def criar_titulo(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", competencia: str = "",
-                 emitir_nfse: bool = True, servico_id: str = "") -> int:
+                 emitir_nfse: bool = True, servico_id: str = "", cobrar: bool = True,
+                 apos_pagamento: bool | None = False) -> int:
     doc = clientes._digitos(cpf_cnpj)
     if not clientes.obter(doc):
         raise ValueError("Cliente não cadastrado.")
@@ -223,10 +244,11 @@ def criar_titulo(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = ""
     with db.conexao() as con:
         cur = con.execute(
             "INSERT INTO titulos (cpf_cnpj, cliente_nome, competencia, descricao, valor_cent, vencimento, nfse_status,"
-            " criado_em, servico_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            " criado_em, servico_id, cobrar) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (doc, _nome(doc), competencia or competencia_de(hoje()),
              (descricao or servicos.obter(servico_id)["descricao"])
-             .strip()[:190], cent(valor), venc, "pendente" if emitir_nfse else "nao_emitir", db.agora(), servico_id or ""))
+             .strip()[:190], cent(valor), venc, status_nfse_inicial(emitir_nfse, apos_pagamento), db.agora(), servico_id or "",
+             int(bool(cobrar))))
         return cur.lastrowid
 
 
@@ -271,6 +293,14 @@ def baixar(tid: int, data: str = "", valor=None, forma: str = "manual") -> dict:
     atualizar_titulo(tid, status="pago", data_pagamento=data or hoje().isoformat(), valor_pago_cent=pago,
                      forma_pagamento=forma)
     db.registrar("baixa", f"Título {tid} ({t['cliente_nome']}) pago R$ {reais(pago)} via {forma}")
+    if t["nfse_status"] == "apos_pagamento":
+        # nota só depois do pagamento: liberou agora; em produção emite já (o robô repete se a prefeitura falhar)
+        atualizar_titulo(tid, nfse_status="pendente")
+        if emissor.em_producao():
+            try:
+                emitir_nfse_titulo(tid)
+            except Exception as ex:  # noqa: BLE001 — a baixa vale mesmo se a emissão falhar; o robô tenta de novo
+                db.registrar("nfse", f"Título {tid}: emissão após o pagamento ficou pendente ({ex})")
     return obter_titulo(tid)
 
 
@@ -322,9 +352,46 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
 
 
 def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", url: str | None = None,
-                  servico_id: str = "") -> dict:
-    """Fluxo da aba 'Emitir nota': cria a conta a receber e emite a NFS-e dela com o serviço escolhido."""
-    tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id)
+                  servico_id: str = "", cobrar: bool = True, apos_pagamento: bool = False,
+                  recorrente: bool = False, recorrente_ate: str = "") -> dict:
+    r = _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, apos_pagamento)
+    if recorrente:
+        t = obter_titulo(r["titulo_id"])
+        if t["status"] == "cancelado":
+            r.setdefault("alertas", []).append("Repetição mensal não criada: a nota não foi emitida ou foi só um "
+                                               "teste em homologação.")
+        else:
+            ano, mes = _mes(t["competencia"])
+            inicio = f"{ano + mes // 12}-{mes % 12 + 1:02d}"    # o mês atual já está faturado
+            k = salvar_contrato({"cpf_cnpj": t["cpf_cnpj"], "valor_cent": t["valor_cent"], "descricao": t["descricao"],
+                                 "servico_id": t.get("servico_id") or "", "dia_vencimento": int(t["vencimento"][8:10]),
+                                 "inicio": inicio, "fim": recorrente_ate or "", "cobrar": cobrar,
+                                 "nfse_quando": "pagamento" if apos_pagamento else "agora"})
+            r["contrato_id"] = k["id"]
+            db.registrar("contrato", f"Contrato {k['id']} criado pela emissão (todo mês a partir de {inicio})")
+    return r
+
+
+def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, apos_pagamento) -> dict:
+    """Fluxo da aba 'Emitir nota': cria a conta a receber e emite a NFS-e dela com o serviço escolhido.
+
+    cobrar=False: só a conta a receber (sem boleto/PIX e fora da régua).
+    apos_pagamento=True: gera a cobrança agora e a NFS-e sai sozinha quando o pagamento for confirmado."""
+    if apos_pagamento:
+        tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar,
+                           apos_pagamento=True)
+        r = {"sucesso": True, "aguardando_pagamento": True, "erros": [], "alertas": [], "titulo_id": tid}
+        if cobrar and config.carregar()["cobranca"]["provedor"] != "nenhum":
+            from . import cobranca
+            try:
+                t = cobranca.preparar_pagamento(tid)
+                r["boleto"] = bool(t.get("banco_id"))
+                r["link"] = t.get("cobranca_link", "")
+            except Exception as ex:  # noqa: BLE001 — o robô cria a cobrança na próxima rodada
+                r["alertas"].append(f"Cobrança não criada agora ({ex}); o robô tenta de novo.")
+        db.registrar("faturamento", f"Título {tid}: cobrança gerada, NFS-e após o pagamento")
+        return r | {"titulo": obter_titulo(tid)}
+    tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar)
     r = emitir_nfse_titulo(tid, url=url)
     if not r["sucesso"]:
         cancelar_titulo(tid, "NFS-e não emitida")

@@ -235,6 +235,34 @@ controla o financeiro.
     extrato nunca seja conciliado na empresa errada.
 
 
+## Faturamento: cobrança, nota após o pagamento e repetição mensal
+
+Na tela **Emitir nota** (e no lote, no título avulso e nos contratos) há três escolhas:
+
+- **Gerar cobrança:** marcado, cria o boleto/PIX, envia ao cliente e põe na régua de cobrança. Desmarcado, lança
+  só a conta a receber (sem boleto/PIX e fora da régua): a baixa é manual ou pela conciliação do extrato.
+- **Nota fiscal — emitir agora ou quando o cliente pagar:** em "quando o cliente pagar", o boleto sai primeiro e,
+  quando o Inter (ou o extrato/baixa manual) confirmar o pagamento, o sistema dá a baixa e emite a NFS-e sozinho.
+  Se a prefeitura/Sefin estiver fora do ar nessa hora, o título fica pendente e o robô emite na próxima rodada.
+  O padrão de cada empresa fica em Configurações › Emissão ("Cobrar primeiro e emitir a NFS-e só após o
+  pagamento") e vale também para contratos e 13º.
+- **Repetir todo mês:** cria um contrato recorrente com as mesmas escolhas (valor, serviço, dia de vencimento,
+  cobrança e momento da nota), a partir do mês seguinte e, se quiser, até um mês final. Edite em Contratos.
+
+## Backup e restauração
+
+Em Configurações › "Backup e restauração":
+
+- **O que entra:** tudo da empresa — banco (cópia consistente), clientes, configurações, serviços, numeração,
+  credenciais (.env), certificados e os XML das notas. Um .zip por empresa, em `dados/backup` da própria empresa.
+- **Automático:** o robô faz um por dia (guarda os 30 últimos). "Fazer backup agora" faz na hora.
+- **Cópia extra:** informe uma segunda pasta (pendrive, HD externo, pasta sincronizada com a nuvem); cada backup
+  é copiado também para lá, numa subpasta com o CNPJ da empresa.
+- **Restaurar:** pela lista (botão Restaurar) ou "Restaurar de um arquivo…" (computador novo: se a empresa do
+  backup ainda não existir, ela é cadastrada). Proteções: antes de restaurar faz backup do estado atual; backup
+  de uma empresa nunca é restaurado em outra; a numeração do RPS/DPS nunca volta atrás; o ambiente
+  (homologação/produção) não muda; .zip com caminhos fora do padrão é recusado.
+
 ## Serviços (atividades) de cada empresa
 
 Uma empresa pode prestar mais de uma atividade (ex.: contabilidade, consultoria, treinamento), cada uma com o
@@ -380,7 +408,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 142 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 152 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

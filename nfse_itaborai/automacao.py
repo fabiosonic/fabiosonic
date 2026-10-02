@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import date
 
-from . import cobranca, config, db, emissor, financeiro, importacao, importador, inter, saude
+from . import backup, cobranca, config, db, emissor, financeiro, importacao, importador, inter, saude
 
 
 TRAVA_MAX_SEG = 2 * 3600
@@ -78,7 +78,7 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
             res[nome] = f"erro: {ex}"
             db.registrar("robo_erro", f"{nome}: {ex}")
 
-    etapa("backup", auto["backup"], lambda: str(db.backup()))
+    etapa("backup", auto["backup"], lambda: (db.backup(), backup.automatico())[1])
     etapa("caixa_xml", auto.get("importar_xml"), importador.importar_automatico)
     etapa("importacao_xml", auto.get("importar_xml"), lambda: importacao.importar_xml(em))
     etapa("despesas_recorrentes", auto["despesas_recorrentes"], lambda: financeiro.gerar_despesas_recorrentes(em))
@@ -93,7 +93,8 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
             return "ambiente de homologação: o robô só emite NFS-e em produção"
         ok = erro = 0
         for t in financeiro.listar_titulos("sem_nfse", em=em):
-            if t["nfse_status"] not in ("pendente", "teste") or t["status"] != "aberto":
+            pago_aguardando = t["status"] == "pago" and t["nfse_status"] == "pendente"   # nota após o pagamento
+            if not pago_aguardando and (t["nfse_status"] not in ("pendente", "teste") or t["status"] != "aberto"):
                 continue                      # erros ficam para revisão humana, sem reenvio infinito
             r = financeiro.emitir_nfse_titulo(t["id"], url=url)
             ok, erro = ok + bool(r["sucesso"]), erro + (not r["sucesso"])
@@ -103,7 +104,7 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     def cobrancas():
         n, erros = 0, []
         boleto = cfg["cobranca"]["provedor"] == "inter" and inter.configurado(cfg)
-        sql = "SELECT * FROM titulos WHERE status='aberto' AND banco_id=''" + ("" if boleto else " AND pix_copia_cola=''")
+        sql = "SELECT * FROM titulos WHERE status='aberto' AND cobrar=1 AND banco_id=''" + ("" if boleto else " AND pix_copia_cola=''")
         for t in db.linhas(sql):
             if t["nfse_status"] in ("pendente", "erro", "teste"):
                 continue                      # cobra junto com a nota válida

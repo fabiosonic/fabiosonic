@@ -38,7 +38,7 @@ function fechar() { $("#modal").hidden = true; }
 $("#modal").addEventListener("click", e => { if (e.target.id == "modal") fechar(); });
 function selo(sit) {
   const m = { pago: ["bom", "Pago"], aberto: ["neutro", "Em aberto"], atrasado: ["critico", "Atrasado"], cancelado: ["neutro", "Cancelado"],
-    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], emitindo: ["serio", "Em emissão — conferir no portal"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"],
+    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], emitindo: ["serio", "Em emissão — conferir no portal"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"], apos_pagamento: ["neutro", "Após o pagamento"],
     bom: ["bom", "Bom"], "atenção": ["alerta", "Atenção"], risco: ["critico", "Risco"], enviado: ["bom", "Enviado"], feito: ["bom", "Feito"],
     sem_contato: ["alerta", "Sem contato"] };
   const [c, t] = m[sit] || ["neutro", sit];
@@ -53,6 +53,27 @@ function servPadrao() { return (ST.servicos || []).find(s => s.padrao) || ST.pad
 function servDe(id) { return (ST.servicos || []).find(s => s.id == id) || servPadrao(); }
 function opcoesServ(sel, vazio) {
   return (vazio ? `<option value="">${esc(vazio)}</option>` : "") + (ST.servicos || []).map(s => `<option value="${esc(s.id)}" ${s.id == sel ? "selected" : ""}>${esc(s.nome)}${s.padrao ? " (padrão)" : ""} — item ${esc(s.item_lista_servico || "?")}</option>`).join("");
+}
+function nfseAposPagamento() { return !!((ST.config || {}).emissao || {}).nfse_apos_pagamento; }
+function blocoFaturar(p) {
+  return `<div class="faturar"><label class="chk"><input type="checkbox" id="${p}_cobrar" checked> <b>Gerar cobrança</b> <span class="sub">— boleto/PIX enviado ao cliente e régua de cobrança</span></label>
+    <div class="opc-nfse" role="radiogroup" aria-label="Quando emitir a nota fiscal"><span class="sub">Nota fiscal:</span>
+      <label class="chk"><input type="radio" name="${p}_quando" value="agora" ${nfseAposPagamento() ? "" : "checked"}> Emitir agora</label>
+      <label class="chk"><input type="radio" name="${p}_quando" value="pagamento" ${nfseAposPagamento() ? "checked" : ""}> Emitir automaticamente quando o cliente pagar</label></div>
+    <div class="opc-nfse"><label class="chk"><input type="checkbox" id="${p}_rec"> <b>Repetir todo mês</b> <span class="sub">— cria um contrato recorrente com estas mesmas escolhas, a partir do mês seguinte</span></label>
+      <label class="rec-ate" hidden>Até (opcional)<input type="month" id="${p}_ate"></label></div>
+    <p class="sub" id="${p}_dica"></p></div>`;
+}
+function opcoesFaturar(p) { return { cobrar: $(`#${p}_cobrar`).checked, apos_pagamento: ($(`[name=${p}_quando]:checked`) || {}).value == "pagamento",
+  recorrente: $(`#${p}_rec`).checked, recorrente_ate: $(`#${p}_rec`).checked ? $(`#${p}_ate`).value : "" }; }
+function ligarFaturar(p, botao, rotAgora = "Emitir nota", rotDepois = "Gerar cobrança") {
+  const atualizar = () => { const o = opcoesFaturar(p);
+    $(botao).textContent = o.apos_pagamento ? rotDepois : rotAgora;
+    $(`#${p}_dica`).textContent = o.apos_pagamento ? (o.cobrar ? "Gera o boleto agora. Quando o Inter (ou o extrato) confirmar o pagamento, o sistema dá a baixa e emite a NFS-e sozinho." : "Sem boleto: a NFS-e sai quando você der a baixa do pagamento (manual ou pela conciliação do extrato).")
+      : o.cobrar ? "Emite a nota agora e gera a conta a receber com boleto/PIX, que entra na régua de cobrança." : "Emite a nota e lança só a conta a receber: sem boleto/PIX e fora da régua de cobrança.";
+    $(`#${p}_rec`).closest(".opc-nfse").querySelector(".rec-ate").hidden = !o.recorrente;
+    if (o.recorrente) $(`#${p}_dica`).textContent += " Todo mês, no mesmo dia de vencimento, o robô repete este faturamento (veja e edite em Contratos)."; };
+  $$(`#${p}_cobrar, [name=${p}_quando], #${p}_rec`).forEach(i => i.onchange = atualizar); atualizar();
 }
 function opcoesClientes() { return ST.clientes.map(c => `<option value="${esc(c.razao_social)} — ${fmtDoc(c.cpf_cnpj)}">`).join(""); }
 function docDe(txt) { const m = String(txt).match(/(\d[\d./-]{10,})\s*$/); return m ? m[1].replace(/\D/g, "") : String(txt).replace(/\D/g, ""); }
@@ -210,6 +231,8 @@ function resumoRobo(r) {
 
 // ---------------------------------------------------------------- emitir / lote
 function linhaRes(r) {
+  if (r.contrato_id) r.alertas = [...(r.alertas || []), "Repetição mensal ativada: contrato nº " + r.contrato_id + " (veja em Contratos)."];
+  if (r.sucesso && r.aguardando_pagamento) return `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · ${r.boleto ? "boleto gerado" : "conta a receber criada"}${r.link && r.link.startsWith("http") ? ` · <a href="${esc(r.link)}" target="_blank">abrir cobrança</a>` : ""} · a NFS-e será emitida automaticamente quando o pagamento for confirmado${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`;
   return r.sucesso ? `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · NFS-e <b>${esc(r.nfse)}</b> · ${r.canal == "nacional" ? "Nacional · chave " + esc(r.chave) : "RPS " + esc(r.rps)}${r.link && r.link.startsWith("http") ? ` · <a href="${esc(r.link)}" target="_blank">abrir nota</a>` : ""}${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`
     : `<div class="msg erro"><span class="t">✖ ${esc(r.cliente)} — ${esc(r.valor)}</span>${(r.erros || []).map(e => `<div>${esc(e)}</div>`).join("")}</div>`;
 }
@@ -221,8 +244,10 @@ PAGINAS.emitir = async el => {
     <label class="inteiro">Serviço (atividade)<select id="e_serv">${opcoesServ(servPadrao().id)}</select></label>
     <label class="inteiro">Descrição<input id="e_desc" maxlength="190" value="${esc(servPadrao().descricao || "")}"></label></div>
     <datalist id="dl_cli">${opcoesClientes()}</datalist>
-    <p class="sub">A nota gera automaticamente a conta a receber com o PIX/boleto e entra na régua de cobrança.<br>Emitindo por: <b>${nomeCanal()}</b> — troque em <a href="#config">Configurações › Emissão</a>.</p>
+    ${blocoFaturar("e")}
+    <p class="sub">Emitindo por: <b>${nomeCanal()}</b> — troque em <a href="#config">Configurações › Emissão</a>.</p>
     <button class="btn" id="e_btn">Emitir nota</button><div id="e_res"></div></div>`;
+  ligarFaturar("e", "#e_btn");
   const trocaServ = id => { $("#e_serv").value = servDe(id).id; $("#e_desc").value = servDe(id).descricao || ""; };
   $("#e_serv").onchange = () => trocaServ($("#e_serv").value);
   $("#e_cli").oninput = () => { const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)); if (c && c.ultimo_valor && !$("#e_valor").value) $("#e_valor").value = Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -231,9 +256,11 @@ PAGINAS.emitir = async el => {
     const doc = docDe($("#e_cli").value), cli = ST.clientes.find(c => c.cpf_cnpj == doc);
     if (!cli) return aviso("Escolha um cliente da lista (ou cadastre em Clientes).");
     const v = $("#e_valor").value.trim(); if (!valorNum(v)) return aviso("Informe o valor.");
-    if (!confirm(`${ST.producao ? "EMITIR NOTA VÁLIDA" : "Teste em homologação"} — ${nomeCanal()}\n\n${cli.razao_social}\nServiço: ${servDe($("#e_serv").value).nome}\nR$ ${v}`)) return;
+    const fat = opcoesFaturar("e");
+    if (!confirm((fat.apos_pagamento ? `GERAR COBRANÇA — a NFS-e sai sozinha quando o pagamento for confirmado` : `${ST.producao ? "EMITIR NOTA VÁLIDA" : "Teste em homologação"} — ${nomeCanal()}`)
+      + `\n\n${cli.razao_social}\nServiço: ${servDe($("#e_serv").value).nome}\nR$ ${v}\nCobrança: ${fat.cobrar ? "sim (boleto/PIX + régua)" : "não"}${fat.recorrente ? "\nRepetir todo mês" + (fat.recorrente_ate ? " até " + mes(fat.recorrente_ate) : " (sem fim)") : ""}`)) return;
     $("#e_btn").disabled = true; $("#e_res").innerHTML = '<div class="msg">Enviando…</div>';
-    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
+    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value, ...fat }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
     finally { $("#e_btn").disabled = false; }
   };
 };
@@ -241,6 +268,7 @@ PAGINAS.lote = async el => {
   el.innerHTML = `<h1>Emitir em lote</h1><div class="card"><div class="barra"><label>Filtrar<input id="l_f" placeholder="nome ou CNPJ"></label>
     <label>Serviço<select id="l_serv">${opcoesServ("", "Serviço habitual de cada cliente")}</select></label>
     <label style="flex:1">Descrição para todas<input id="l_desc" maxlength="190" placeholder="em branco = descrição do serviço de cada cliente"></label></div>
+    ${blocoFaturar("l")}
     <p class="sub">Marque os clientes. O valor vem da última nota — ajuste se precisar. Cada nota já gera a conta a receber.</p>
     <div id="l_tab"></div><p><button class="btn" id="l_btn">Emitir selecionadas</button> <span id="l_tot" class="sub"></span></p><div id="l_res"></div></div>`;
   const desenhar = () => { const f = $("#l_f").value.toLowerCase().replace(/[./-]/g, "");
@@ -250,14 +278,15 @@ PAGINAS.lote = async el => {
       { t: "Última nota", f: c => dt(c.ultima_data) }], ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)));
     $("#l_todos") && ($("#l_todos").onclick = e => { $$(".lc").forEach(x => x.checked = e.target.checked); somar(); });
     $$(".lc,.lv").forEach(x => x.oninput = x.onchange = somar); somar(); };
-  const sel = () => $$(".lc:checked").map(x => ({ cpf_cnpj: x.dataset.doc, valor: $(`.lv[data-doc="${x.dataset.doc}"]`).value, descricao: $("#l_desc").value, servico_id: $("#l_serv").value || (ST.clientes.find(c => c.cpf_cnpj == x.dataset.doc) || {}).servico_id || "" }));
+  const sel = () => $$(".lc:checked").map(x => ({ cpf_cnpj: x.dataset.doc, valor: $(`.lv[data-doc="${x.dataset.doc}"]`).value, descricao: $("#l_desc").value, servico_id: $("#l_serv").value || (ST.clientes.find(c => c.cpf_cnpj == x.dataset.doc) || {}).servico_id || "", ...opcoesFaturar("l") }));
   const somar = () => { const s = sel(); $("#l_tot").textContent = s.length ? `${s.length} nota(s) · total ${brl(Math.round(s.reduce((a, b) => a + valorNum(b.valor), 0) * 100))}` : ""; };
+  ligarFaturar("l", "#l_btn", "Emitir selecionadas", "Gerar cobranças selecionadas");
   $("#l_serv").onchange = () => { $("#l_desc").value = $("#l_serv").value ? servDe($("#l_serv").value).descricao || "" : ""; };
   $("#l_f").oninput = desenhar; desenhar();
   $("#l_btn").onclick = async () => {
     const itens = sel(); if (!itens.length) return aviso("Marque ao menos um cliente.");
     if (itens.some(i => !valorNum(i.valor))) return aviso("Há cliente marcado sem valor.");
-    if (!confirm(`${ST.producao ? "EMITIR " + itens.length + " NOTAS VÁLIDAS" : "Teste em homologação de " + itens.length + " notas"} — ${nomeCanal()}\n${$("#l_tot").textContent}`)) return;
+    if (!confirm(`${opcoesFaturar("l").apos_pagamento ? "GERAR " + itens.length + " COBRANÇA(S) — NFS-e após o pagamento" : ST.producao ? "EMITIR " + itens.length + " NOTAS VÁLIDAS" : "Teste em homologação de " + itens.length + " notas"} — ${nomeCanal()}\n${$("#l_tot").textContent}`)) return;
     $("#l_btn").disabled = true; $("#l_res").innerHTML = '<div class="msg">Enviando, aguarde…</div>';
     try { const r = await api("lote", { itens }); $("#l_res").innerHTML = `<div class="msg"><b>${r.filter(x => x.sucesso).length} de ${r.length} emitida(s).</b></div>` + r.map(linhaRes).join(""); }
     finally { $("#l_btn").disabled = false; }
@@ -344,10 +373,11 @@ function novoTitulo() {
     <label>Valor (R$)<input name="valor"></label><label>Vencimento<input type="date" name="vencimento"></label><label>Competência<input type="month" name="competencia"></label>
     <label class="inteiro">Serviço<select name="servico_id">${opcoesServ("", "Serviço habitual do cliente")}</select></label>
     <label class="inteiro">Descrição<input name="descricao" placeholder="em branco = descrição do serviço"></label>
-    <label class="chk"><input type="checkbox" name="emitir_nfse" checked> Emitir NFS-e agora</label></div>
+    <label>Nota fiscal<select name="nfse"><option value="agora" ${nfseAposPagamento() ? "" : "selected"}>Emitir agora</option><option value="pagamento" ${nfseAposPagamento() ? "selected" : ""}>Emitir quando o cliente pagar</option><option value="nao">Não emitir</option></select></label>
+    <label class="chk"><input type="checkbox" name="cobrar" checked> Gerar cobrança (boleto/PIX e régua)</label></div>
     <p><button class="btn" id="ok">Salvar</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
   $("#ok").onclick = async () => { const f = form($("#fn")); f.cpf_cnpj = docDe(f.cliente); const r = await api("titulo/novo", f); fechar();
-    aviso(r.sucesso ? "Título criado ✔" : "Título criado, mas a NFS-e falhou: " + (r.erros || []).join("; "), 7000); ir(PAG); };
+    aviso(!r.sucesso ? "Título criado, mas a NFS-e falhou: " + (r.erros || []).join("; ") : f.nfse == "pagamento" ? "Título criado ✔ A NFS-e sai quando o pagamento for confirmado." : "Título criado ✔", 7000); ir(PAG); };
 }
 
 // ---------------------------------------------------------------- contratos
@@ -360,7 +390,8 @@ PAGINAS.contratos = async el => {
   <div class="card"><p class="sub">Todo mês, no dia configurado, o robô gera a conta a receber de cada contrato, emite a NFS-e, cria o PIX/boleto e coloca na régua de cobrança. Reajuste anual automático no mês escolhido.</p>
   ${tabela([{ t: "Cliente", f: c => `${esc(c.cliente_nome)}<div class="sub">${esc(c.descricao)}</div>` }, { t: "Valor", n: 1, f: c => num(c.valor_cent) }, { t: "Vence dia", f: c => c.dia_vencimento },
     { t: "Vigência", f: c => `${mes(c.inicio)} → ${c.fim ? mes(c.fim) : "sem fim"}` }, { t: "Reajuste", f: c => c.mes_reajuste ? `${c.reajuste_pct}% em ${String(c.mes_reajuste).padStart(2, "0")}` : "—" },
-    { t: "NFS-e", f: c => c.emitir_nfse ? "automática" : "não emite" }, { t: "Situação", f: c => !c.ativo ? selo("cancelado").replace("Cancelado", "Encerrado") : c.confirmado ? selo("bom").replace("Bom", "Ativo") : selo("pendente").replace("Pendente", "A confirmar") + ` <button class="btn min" onclick="confirmarUm(${c.id})">Confirmar</button>` },
+    { t: "NFS-e", f: c => !c.emitir_nfse ? "não emite" : c.nfse_quando == "pagamento" || (!c.nfse_quando && nfseAposPagamento()) ? "após o pagamento" : "automática" },
+    { t: "Cobrança", f: c => c.cobrar === 0 ? "sem cobrança" : "boleto/PIX" }, { t: "Situação", f: c => !c.ativo ? selo("cancelado").replace("Cancelado", "Encerrado") : c.confirmado ? selo("bom").replace("Bom", "Ativo") : selo("pendente").replace("Pendente", "A confirmar") + ` <button class="btn min" onclick="confirmarUm(${c.id})">Confirmar</button>` },
     { t: "", f: c => `<div class="acoes-linha"><button class="btn min sec" onclick='editarContrato(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Editar</button>${c.ativo ? ` <button class="btn min sec" onclick="encerrar(${c.id})">Encerrar</button>` : ""}</div>` }], lst, "Nenhum contrato. Use “Criar a partir do histórico” para montar a carteira em um clique.")}</div>`;
   $("#nc").onclick = () => editarContrato({});
   $("#hist").onclick = async () => { const d = prompt("Dia de vencimento para os contratos criados:", ST.config.financeiro.dia_vencimento_padrao); if (d === null) return;
@@ -385,6 +416,8 @@ function editarContrato(c) {
     <label>Mês do reajuste<select name="mes_reajuste">${["Sem reajuste", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"].map((m, i) => `<option value="${i}" ${i == (c.mes_reajuste || 0) ? "selected" : ""}>${m}</option>`).join("")}</select></label>
     <label>Reajuste (%)<input name="reajuste_pct" value="${c.reajuste_pct || ""}" placeholder="ex.: 4,5 (IPCA)"></label>
     <label class="chk"><input type="checkbox" name="emitir_nfse" ${c.emitir_nfse === 0 ? "" : "checked"}> Emitir NFS-e automaticamente</label>
+    <label>Quando emitir a NFS-e<select name="nfse_quando">${[["", "Padrão da empresa"], ["agora", "Ao gerar o título do mês"], ["pagamento", "Quando o cliente pagar"]].map(([v, t]) => `<option value="${v}" ${(c.nfse_quando || "") == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    <label class="chk"><input type="checkbox" name="cobrar" ${c.cobrar === 0 ? "" : "checked"}> Gerar cobrança (boleto/PIX e régua)</label>
     <label class="chk"><input type="checkbox" name="ativo" ${c.ativo === 0 ? "" : "checked"}> Ativo</label></div>
     <p><button class="btn" id="ok">Salvar</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
   $("#fc_serv").onchange = e => { if (e.target.value) $("#fc [name=descricao]").value = servDe(e.target.value).descricao || ""; };
@@ -659,6 +692,28 @@ function editarServico(s) {
     const r = await api("servico/salvar", d); if (r.erro) return; fechar(); aviso("Serviço salvo ✔"); recarregarServicos(); };
 }
 
+// ---------------------------------------------------------------- backup
+async function listarBackups() {
+  const el = $("#bk_lista"); if (!el) return;
+  const r = await api("backup/listar");
+  const mot = { manual: "Manual", automatico: "Automático (robô)", antes_da_restauracao: "Antes de uma restauração", arquivo: "Enviado de arquivo" };
+  el.innerHTML = tabela([{ t: "Backup", f: b => `<b>${esc(b.criado_em ? dtHora(b.criado_em) : b.nome)}</b><div class="sub">${esc(b.nome)}</div>` },
+    { t: "Tipo", f: b => esc(mot[b.motivo] || b.motivo || "—") }, { t: "Tamanho", n: 1, f: b => tamanho(b.tamanho) },
+    { t: "", f: b => `<div class="acoes-linha"><a class="btn min sec" href="/backup/${encodeURIComponent(b.nome)}" download>${ic("download")}Baixar</a>${b.valido ? ` <button class="btn min sec" type="button" data-bk="${esc(b.nome)}">Restaurar</button>` : ""}</div>` }],
+    r.backups.slice(0, 15), "Nenhum backup ainda. Clique em “Fazer backup agora”.") + (r.backups.length > 15 ? `<p class="sub">Mostrando os 15 mais recentes de ${r.backups.length}. Todos estão em ${esc(r.pasta)}.</p>` : "");
+  $$("[data-bk]", el).forEach(b => b.onclick = async () => {
+    const x = r.backups.find(k => k.nome == b.dataset.bk);
+    if (!confirm(`Restaurar o backup de ${dtHora(x.criado_em)}?\n\nTudo desta empresa (financeiro, clientes, configurações) volta ao estado desse dia. Antes, o estado atual é salvo num backup automático.`)) return;
+    aviso("Restaurando…", 60000); await posRestauracao(await api("backup/restaurar", { nome: x.nome })); });
+}
+function tamanho(n) { return n < 1048576 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / 1048576).toFixed(1).replace(".", ",") + " MB"; }
+function dtHora(s) { const [d, h] = String(s).split(" "); return dt(d) + (h ? " " + h.slice(0, 5) : ""); }
+async function posRestauracao(r) {
+  await carregarEstado();
+  aviso(`Backup de ${dtHora(r.criado_em)} restaurado ✔${r.empresa_nome ? " na empresa " + r.empresa_nome : ""}. O estado anterior ficou salvo em ${r.backup_anterior || "—"}.`, 12000);
+  ir(PAG);
+}
+
 // ---------------------------------------------------------------- configurações
 PAGINAS.config = async el => {
   const [c, cred] = await Promise.all([api("config"), api("empresa/credenciais")]);
@@ -669,6 +724,12 @@ PAGINAS.config = async el => {
   el.innerHTML = `<h1>Configurações <span class="acoes"><button class="btn" id="salvar">Salvar tudo</button></span></h1>
   <div class="card"><h2>${ic("download")}Versão anterior</h2><p class="sub">Traz da instalação antiga deste computador o que ainda estiver vazio aqui: e-mail de envio, Banco Inter, chave PIX, certificado, clientes, financeiro e outras empresas.</p>
     <p><button class="btn sec" id="busca_ant">Procurar versão anterior</button></p><div id="migra_cfg"></div></div>
+  <div class="card"><h2>${ic("download")}Backup e restauração</h2><p class="sub">O backup guarda tudo desta empresa (financeiro, clientes, configurações, serviços, numeração, certificados e XML das notas) num arquivo .zip. O robô faz um por dia (guarda os 30 últimos); você pode fazer um agora a qualquer momento. Para proteger contra perda do computador, informe uma segunda pasta (pendrive, HD externo ou pasta sincronizada com a nuvem).</p>
+    <div class="campos">${tx("pastas", "backup_copia", "Cópia extra dos backups em (pasta)", "text", 'placeholder="ex.: E:\\Backup ou G:\\Meu Drive\\Backup"')}</div>
+    <p><button class="btn" id="bk_criar" type="button">${ic("download")}Fazer backup agora</button> <button class="btn sec" id="bk_pasta" type="button">Abrir a pasta dos backups</button>
+      <label class="btn sec"><input type="file" id="bk_arq" accept=".zip" hidden>Restaurar de um arquivo…</label></p>
+    <p class="sub">Restaurar volta a empresa ao estado do backup. Antes, o sistema faz um backup do estado atual (dá para desfazer). A numeração do RPS/DPS nunca volta atrás e o ambiente (homologação/produção) não muda. Backup de uma empresa nunca é restaurado em outra.</p>
+    <div id="bk_lista"><div class="vazio">Carregando…</div></div></div>
   <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
@@ -687,7 +748,7 @@ PAGINAS.config = async el => {
     ${sl("emissao", "op_simp_nac", "Situação no Simples Nacional", [["1", "Não optante"], ["2", "MEI"], ["3", "ME/EPP"]])}
     ${sl("emissao", "reg_ap_trib_sn", "Apuração no Simples", [["1", "Tudo no DAS"], ["2", "ISS fora do DAS (fixo)"], ["3", "Tudo fora do DAS"]])}
     ${sl("emissao", "reg_esp_trib", "Regime especial", [["0", "Nenhum"], ["1", "Ato cooperado"], ["2", "Estimativa"], ["3", "ME municipal"], ["4", "Notário/registrador"], ["5", "Autônomo"], ["6", "Soc. de profissionais"]])}
-    ${ck("emissao", "informar_ibscbs", "Informar IBS/CBS (cIndOp/cClassTrib do serviço padrão)")}${ck("emissao", "informar_im", "Informar inscrição municipal")}</div>
+    ${ck("emissao", "informar_ibscbs", "Informar IBS/CBS (cIndOp/cClassTrib do serviço padrão)")}${ck("emissao", "informar_im", "Informar inscrição municipal")}${ck("emissao", "nfse_apos_pagamento", "<b>Cobrar primeiro e emitir a NFS-e só após o pagamento</b> (padrão desta empresa: boleto sai antes, a nota é emitida sozinha quando o pagamento é confirmado — vale também para contratos e 13º)")}</div>
     <p><button class="btn sec" id="teste_cert">Salvar e testar certificado e conexão</button></p><div id="cert_res"></div></div>
   <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}${ck("automacao", "fechamento_mensal", "Fechamento mensal automático")}</div>
     <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail do dono (resumo e fechamento)")}${tx("resumo", "dia_fechamento", "Dia do fechamento mensal", "number")}${tx("pastas", "relatorios", "Pasta dos relatórios")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
@@ -734,6 +795,14 @@ PAGINAS.config = async el => {
   };
   $("#salvar").onclick = async () => { if (await salvarTudo()) aviso("Configurações salvas ✔"); };
   $("#novo_serv").onclick = () => editarServico({}); ligarServicos();
+  listarBackups();
+  $("#bk_criar").onclick = async () => { if (!await salvarTudo()) return; aviso("Gerando o backup…", 30000); const r = await api("backup/criar");
+    aviso(`Backup criado ✔ ${r.nome} (${tamanho(r.tamanho)})${r.copia ? " · cópia em " + r.copia : ""}`, 8000); listarBackups(); };
+  $("#bk_pasta").onclick = () => api("backup/abrir_pasta");
+  $("#bk_arq").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    if (!confirm(`Restaurar o backup ${f.name}?\n\nOs dados da empresa dona deste backup voltam ao estado dele. Antes disso, o estado atual é salvo num backup automático.`)) return;
+    aviso("Restaurando…", 60000); const b64 = await new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
+    const r = await api("backup/restaurar_arquivo", { arquivo: b64 }); await posRestauracao(r); };
   $("#cert_arq").onchange = e => { const f = e.target.files[0]; if (f) { $("#cert_nome").textContent = "Selecionado: " + f.name + " — informe a senha e clique em Salvar certificado"; $("#cert_senha").focus(); } };
   const lerB64 = f => new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
   $("#cert_salvar").onclick = async () => {

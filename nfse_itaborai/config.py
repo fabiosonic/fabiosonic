@@ -59,7 +59,8 @@ PADRAO = {
         "xml_nfse": "",             # vazio = IMPORTAR XML/importados/<CNPJ> (dentro da pasta do sistema)
         "extratos": "~/Downloads",  # o robô importa todo .ofx novo que aparecer aqui
         "relatorios": "~/Downloads/Relatorios financeiros",  # fechamentos mensais em HTML (abrir/imprimir/PDF)
-        "boletos": "~/Downloads/Boletos",  # PDF + dados de pagamento de cada boleto, em subpastas AAAA-MM
+        "boletos": "~/Downloads/Boletos",
+        "backup_copia": "",  # segunda cópia dos backups (pendrive, HD externo, pasta sincronizada); vazio = só local  # PDF + dados de pagamento de cada boleto, em subpastas AAAA-MM
     },
     "emissao": {
         "canal": "municipal",       # municipal (webservice de Itaboraí) | nacional (Emissor Nacional, nfse.gov.br)
@@ -73,6 +74,7 @@ PADRAO = {
         "reg_esp_trib": "6",        # 0 nenhum | 6 sociedade de profissionais (confirmar no cadastro municipal)
         "informar_im": False,       # IM só quando o município tem cadastro no Sistema Nacional
         "informar_ibscbs": True,    # grupo IBS/CBS (LC 214/2025) com cIndOp/cClassTrib do serviço padrão
+        "nfse_apos_pagamento": False,  # True: gera o boleto primeiro e emite a NFS-e quando o pagamento entrar
     },
     "resumo": {"email_dono": "", "ultimo_envio": "", "dia_fechamento": 3, "ultimo_fechamento": ""},
     "regras_despesa": [             # palavra no histórico do extrato -> categoria

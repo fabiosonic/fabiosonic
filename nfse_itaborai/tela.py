@@ -11,7 +11,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (automacao, backup, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -36,11 +36,15 @@ def _emitir_item(it: dict) -> dict:
             "valor": str(it.get("valor"))}
     try:
         r = financeiro.emitir_avulsa(str(it.get("cpf_cnpj", "")), it.get("valor", 0), str(it.get("descricao", "")),
-                                     str(it.get("vencimento", "")), servico_id=str(it.get("servico_id", "")))
+                                     str(it.get("vencimento", "")), servico_id=str(it.get("servico_id", "")),
+                                     cobrar=it.get("cobrar", True) is not False,
+                                     apos_pagamento=bool(it.get("apos_pagamento")),
+                                     recorrente=bool(it.get("recorrente")), recorrente_ate=str(it.get("recorrente_ate") or ""))
     except (ValueError, ErroValidacao, emissor.ErroConfiguracao) as ex:
         return base | {"sucesso": False, "erros": getattr(ex, "erros", None) or [str(ex)]}
     return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "rps", "nfse", "link", "titulo_id",
-                                         "canal", "chave")}
+                                         "canal", "chave", "aguardando_pagamento", "boleto",
+                                         "contrato_id")}
 
 
 def _cancelar_nfse_titulo(tid: int, justificativa: str) -> dict:
@@ -79,6 +83,24 @@ def _cancelar_titulo(tid: int, motivo: str) -> dict:
     return {"ok": True}
 
 
+def _restaurar_arquivo(c: dict) -> dict:
+    """Backup enviado pela tela: volta para a empresa dona dele (cadastra a empresa se ainda não existir)."""
+    dados = backup.decodificar(str(c.get("arquivo", "")))
+    m = backup.manifesto_de_bytes(dados)
+    lst = empresas.listar()
+    dona = next((e for e in lst if m.get("cnpj") and e.get("cnpj") == m["cnpj"]), None)
+    if not dona:
+        principal = next(e for e in lst if e["pasta"] == ".")
+        if not m.get("cnpj") or not principal.get("cnpj"):
+            dona = principal if not principal.get("cnpj") else empresas.ativa()
+        else:   # computador novo: cadastra a empresa do backup e restaura nela
+            empresas.criar({"nome": m.get("empresa") or m["cnpj"], "cnpj": m["cnpj"]})
+            dona = next(e for e in empresas.listar() if e["cnpj"] == m["cnpj"])
+    with emissor.usar_empresa(empresas.pasta(dona)):   # o arquivo só é gravado na pasta da empresa dona
+        r = backup.restaurar(backup.receber(dados))
+    return r | {"empresa_id": dona["id"], "empresa_nome": dona.get("nome", "")}
+
+
 def _abrir_pasta(p: Path) -> dict:
     """Abre a pasta no Explorer (o servidor roda no próprio computador do escritório)."""
     p.mkdir(parents=True, exist_ok=True)
@@ -98,6 +120,12 @@ ROTAS = {
     "servicos": lambda c: servicos.listar(),
     "servico/excluir": lambda c: (servicos.excluir(str(c.get("id", ""))), {"ok": True})[1],
     "importador/abrir_pasta": lambda c: _abrir_pasta(importador.caixa()),
+    "backup/listar": lambda c: {"backups": backup.listar(), "pasta": str(backup.pasta_backups()),
+                                "copia": config.carregar()["pastas"].get("backup_copia", "")},
+    "backup/criar": lambda c: backup.criar("manual"),
+    "backup/restaurar": lambda c: backup.restaurar(backup.arquivo(str(c.get("nome", "")))),
+    "backup/restaurar_arquivo": _restaurar_arquivo,
+    "backup/abrir_pasta": lambda c: _abrir_pasta(backup.pasta_backups()),
     "empresa/criar": lambda c: (empresas.criar(c), {"empresas": empresas.listar()})[1],
     "empresa/ativar": lambda c: (empresas.ativar(str(c.get("id", ""))), {"ok": True})[1],
     "empresa/credenciais": lambda c: empresas.credenciais(),
@@ -193,10 +221,12 @@ def _sem_duplicadas(itens: list[dict]) -> list[dict]:
 
 
 def _novo_titulo(c: dict) -> dict:
+    nfse = c.get("nfse") or ("agora" if c.get("emitir_nfse") else "nao")   # agora | pagamento | nao
     tid = financeiro.criar_titulo(c.get("cpf_cnpj", ""), c.get("valor"), c.get("descricao", ""),
-                                  c.get("vencimento", ""), c.get("competencia", ""), bool(c.get("emitir_nfse")),
-                                  servico_id=str(c.get("servico_id", "")))
-    if c.get("emitir_nfse"):
+                                  c.get("vencimento", ""), c.get("competencia", ""), nfse != "nao",
+                                  servico_id=str(c.get("servico_id", "")), cobrar=c.get("cobrar", True) is not False,
+                                  apos_pagamento=nfse == "pagamento")
+    if nfse == "agora":
         return financeiro.emitir_nfse_titulo(tid) | {"titulo_id": tid}
     return {"sucesso": True, "titulo_id": tid}
 
@@ -246,6 +276,14 @@ class _Handler(BaseHTTPRequestHandler):
         f = re.fullmatch(r"/fechamento/(\d{4}-\d{2})\.html", caminho)
         if f:
             return self._responder(200, saude.relatorio_mensal_html(f.group(1)).encode("utf-8"), "text/html; charset=utf-8")
+        b = re.fullmatch(r"/backup/([\w.-]+\.zip)", caminho)
+        if b:
+            try:
+                arq = backup.arquivo(b.group(1))
+            except ValueError as ex:
+                return self._responder(404, str(ex).encode("utf-8"), "text/plain; charset=utf-8")
+            return self._responder(200, arq.read_bytes(), "application/zip",
+                                   {"Content-Disposition": f'attachment; filename="{arq.name}"'})
         m = re.fullmatch(r"/boleto/(\d+)\.pdf", caminho)
         if m:
             r = tratar("titulo/boleto", {"id": int(m.group(1))})
