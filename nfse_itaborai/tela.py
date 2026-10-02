@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
-               empresas, inter, lote, nacional, relatorios, saude)
+               empresas, importador, inter, lote, nacional, relatorios, saude)
 from . import __version__
 from .validacao import ErroValidacao
 
@@ -90,6 +90,10 @@ def _abrir_pasta(p: Path) -> dict:
 ROTAS = {
     # gerais
     "empresas": lambda c: empresas.listar(),
+    "importador/analisar": lambda c: importador.analisar(),
+    "importador/importar": lambda c: importador.importar(str(c.get("empresa_id", "")), str(c.get("cnpj", "")),
+                                                         c.get("servico") or None),
+    "importador/abrir_pasta": lambda c: _abrir_pasta(importador.caixa()),
     "empresa/criar": lambda c: (empresas.criar(c), {"empresas": empresas.listar()})[1],
     "empresa/ativar": lambda c: (empresas.ativar(str(c.get("id", ""))), {"ok": True})[1],
     "empresa/credenciais": lambda c: empresas.credenciais(),
@@ -296,6 +300,7 @@ def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
         raise SystemExit("Nenhuma porta livre entre 8765 e 8784.")
     porta = srv.server_address[1]
     empresas.aplicar_ativa()
+    importador.caixa()  # cria a pasta IMPORTAR XML dentro da pasta do sistema
     url = f"http://127.0.0.1:{porta}"
     print(f"Sistema versão {__version__} em {url} (deixe esta janela aberta; Ctrl+C para sair)")
     if robo:

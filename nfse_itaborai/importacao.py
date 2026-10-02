@@ -151,9 +151,14 @@ def importar_titulos_externos(notas: list[dict]) -> int:
 
 def importar_xml(em: date | None = None) -> dict:
     cfg = config.carregar()
-    if not str(cfg["pastas"].get("xml_nfse") or "").strip():
+    from . import importador
+    cnpj = emissor.so_digitos(emissor.env("ITABORAI_CNPJ"))
+    if str(cfg["pastas"].get("xml_nfse") or "").strip():
+        pasta = _pasta(cfg["pastas"]["xml_nfse"])
+    elif cnpj:
+        pasta = importador.arquivo_da_empresa(cnpj)
+    else:
         return {"pasta": "não configurada"}
-    pasta = _pasta(cfg["pastas"]["xml_nfse"])
     if not pasta.exists():
         return {"pasta": "não encontrada"}
     cnpj = emissor.prestador_do_ambiente().cnpj

@@ -56,7 +56,7 @@ PADRAO = {
         "descricao": "13º HONORÁRIO",
     },
     "pastas": {
-        "xml_nfse": "~/Downloads/nfse/MORAES OLIVEIRA CONTABILIDADE LTDA",  # XML das notas já emitidas
+        "xml_nfse": "",             # vazio = IMPORTAR XML/importados/<CNPJ> (dentro da pasta do sistema)
         "extratos": "~/Downloads",  # o robô importa todo .ofx novo que aparecer aqui
         "relatorios": "~/Downloads/Relatorios financeiros",  # fechamentos mensais em HTML (abrir/imprimir/PDF)
         "boletos": "~/Downloads/Boletos",  # PDF + dados de pagamento de cada boleto, em subpastas AAAA-MM
@@ -132,6 +132,10 @@ def carregar() -> dict:
                 cob.pop(k)
             cob["migrado_inter"] = True
             salvo["cobranca"] = cob
+            arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
+        # XML das notas: passa a ser lido da pasta do sistema (IMPORTAR XML), não mais de Downloads
+        if "downloads" in str(salvo.get("pastas", {}).get("xml_nfse", "")).lower():
+            salvo["pastas"]["xml_nfse"] = ""
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
         # sem serviços de terceiros: remove configurações antigas de WhatsApp por API e consulta à Receita
         removidos = [salvo.pop("whatsapp", None), salvo.get("automacao", {}).pop("enriquecer_contatos", None)]

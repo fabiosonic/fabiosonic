@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import date
 
-from . import cobranca, config, db, emissor, financeiro, importacao, inter, saude
+from . import cobranca, config, db, emissor, financeiro, importacao, importador, inter, saude
 
 
 TRAVA_MAX_SEG = 2 * 3600
@@ -79,6 +79,7 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
             db.registrar("robo_erro", f"{nome}: {ex}")
 
     etapa("backup", auto["backup"], lambda: str(db.backup()))
+    etapa("caixa_xml", auto.get("importar_xml"), importador.importar_automatico)
     etapa("importacao_xml", auto.get("importar_xml"), lambda: importacao.importar_xml(em))
     etapa("despesas_recorrentes", auto["despesas_recorrentes"], lambda: financeiro.gerar_despesas_recorrentes(em))
     etapa("titulos_gerados", auto["gerar_titulos"] and em.day >= int(cfg["financeiro"]["dia_geracao"]),

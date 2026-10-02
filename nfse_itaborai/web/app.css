@@ -263,6 +263,14 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
 @media (max-width: 760px) { .cert-box { grid-template-columns: 1fr; } }
 .soltar small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; }
 
+.imp-grupo { border: 1px solid var(--borda); border-radius: 12px; padding: 14px 16px; margin-top: 12px; background: var(--superficie2); }
+.imp-cab { display: flex; gap: 16px; align-items: end; justify-content: space-between; flex-wrap: wrap; }
+.imp-cab > div:first-child span { display: block; }
+.imp-cab label { min-width: 320px; }
+.imp-padroes { margin-top: 12px; }
+.imp-padroes summary { list-style: none; margin-bottom: 10px; }
+.imp-padroes summary::-webkit-details-marker { display: none; }
+
 /* checklist de implantação */
 .checklist summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0; color: var(--texto); }
 .checklist summary::-webkit-details-marker { display: none; }

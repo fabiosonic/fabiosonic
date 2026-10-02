@@ -50,7 +50,7 @@ async function carregarEstado() {
   $("#empresa").innerHTML = `<span class="selo-marca">${esc(ini)}</span><span class="marca-txt">${esc(nome)}<small>${ST.empresas.length > 1 ? `${ST.empresas.length} empresas · trocar` : "Financeiro · NFS-e"}</small></span><svg class="ic seta"><use href="#i-contratos"/></svg>`;
   document.title = `${nome} · Financeiro e NFS-e`;
 }
-async function trocarEmpresa() {
+async function trocarEmpresa(pre) {
   const l = await api("empresas");
   modal(`<h2>${ic("clientes")}Empresas</h2><p class="sub">Cada empresa tem seus próprios clientes, notas, financeiro, credenciais e configurações. O robô trabalha para todas.</p>
     <div class="lista-empresas">${l.map(e => `<button class="emp ${e.ativa ? "on" : ""}" data-id="${esc(e.id)}"><b>${esc(e.nome)}</b><span>CNPJ ${fmtDoc(e.cnpj || "")} · ${e.producao ? "produção" : "homologação"}</span>${e.ativa ? '<span class="selo bom">em uso</span>' : ""}</button>`).join("")}</div>
@@ -61,6 +61,7 @@ async function trocarEmpresa() {
       <label>Optante do Simples<select name="simples"><option value="S">Sim</option><option value="N">Não</option></select></label></div>
       <p><button class="btn" id="criar_emp">Cadastrar e usar</button></p></details>
     <p><button class="btn sec" onclick="fechar()">Fechar</button></p>`);
+  if (pre) { $(".nova-emp").open = true; $("#f_emp [name=nome]").value = pre.nome || ""; $("#f_emp [name=cnpj]").value = fmtDoc(pre.cnpj || ""); }
   $$(".emp").forEach(b => b.onclick = async () => { await api("empresa/ativar", { id: b.dataset.id }); fechar(); await carregarEstado(); ir(PAG); aviso("Empresa em uso: " + b.querySelector("b").textContent); });
   $("#criar_emp").onclick = async () => { await api("empresa/criar", form($("#f_emp"))); fechar(); await carregarEstado(); ir("config"); aviso("Empresa cadastrada. Complete as configurações e o serviço padrão.", 7000); };
 }
@@ -522,7 +523,7 @@ function barrasH(itens) {
 
 // ---------------------------------------------------------------- clientes
 PAGINAS.clientes = async el => {
-  el.innerHTML = `<h1>Clientes</h1><div class="card"><div class="barra"><label>CNPJ / CPF<input id="c_doc" placeholder="só números"></label></div>
+  el.innerHTML = `<h1>Clientes <span class="acoes"><button class="btn" id="imp_xml">${ic("download")}Importar clientes dos XML</button></span></h1><div id="imp_area"></div><div class="card"><div class="barra"><label>CNPJ / CPF<input id="c_doc" placeholder="só números"></label></div>
     <div class="campos" id="fcli"><label class="inteiro">Razão social / nome<input name="razao_social"></label>
     <label>Tipo logradouro<input name="tipo_logradouro" placeholder="RUA"></label><label>Logradouro<input name="logradouro"></label><label>Número<input name="numero"></label>
     <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label>CEP<input name="cep"></label>
@@ -541,9 +542,38 @@ PAGINAS.clientes = async el => {
     $$("[data-ex]").forEach(b => b.onclick = async () => { if (confirm("Excluir do cadastro?")) { await api("cliente/excluir", { cpf_cnpj: b.dataset.ex }); await carregarEstado(); desenhar(); } }); };
   $("#c_f").oninput = desenhar; desenhar();
   $("#lc").onclick = () => preencher({});
+  $("#imp_xml").onclick = () => importarXml($("#imp_area"));
   $("#sc").onclick = async () => { const f = form($("#fcli")), e = {}; END.forEach(k => { e[k] = f[k]; delete f[k]; });
     await api("cliente/salvar", { ...f, cpf_cnpj: $("#c_doc").value, endereco: e }); aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
 };
+
+async function importarXml(area) {
+  area.innerHTML = '<div class="card"><div class="vazio">Lendo a pasta IMPORTAR XML…</div></div>';
+  const a = await api("importador/analisar");
+  const rot = { descricao: "Descrição", item_lista_servico: "Item LC 116", codigo_desdobro: "Desdobro", codigo_nbs: "NBS", cnae: "CNAE",
+    aliquota_iss: "Alíquota ISS (%)", tipo_tributacao: "Tipo de tributação", iss_retido: "ISS retido (1/2)", indicador_operacao: "IBS/CBS cIndOp", classificacao_tributaria: "IBS/CBS cClassTrib" };
+  const opcoes = sel => a.empresas.map(e => `<option value="${esc(e.id)}" ${e.id == sel ? "selected" : ""}>${esc(e.nome)} — ${fmtDoc(e.cnpj)}</option>`).join("");
+  area.innerHTML = `<div class="card"><h2>${ic("download")}Importar clientes dos XML</h2>
+    <p class="sub">Coloque os XML (ou ZIP) das notas emitidas na pasta <b>${esc(a.pasta)}</b>, de qualquer empresa. Cada nota é ligada à empresa que a emitiu (CNPJ do prestador): os clientes de uma empresa nunca vão para outra. Depois de importados, os arquivos ficam guardados em “importados”, separados por empresa. O robô também importa sozinho as notas novas que você colocar na pasta.</p>
+    <p><button class="btn sec" onclick="api('importador/abrir_pasta')">${ic("download")}Abrir a pasta</button> <button class="btn sec" id="imp_reler">Ler a pasta de novo</button></p>
+    ${a.grupos.length ? "" : '<div class="vazio">Nenhum XML novo na pasta.</div>'}
+    ${a.grupos.map((g, j) => `<div class="imp-grupo" data-j="${j}"><div class="imp-cab"><div><b>${esc(g.nome || "Prestador sem nome")}</b><span class="sub">CNPJ ${fmtDoc(g.cnpj)} · ${g.notas} nota(s) · ${g.clientes} cliente(s), ${g.clientes_novos} novo(s)</span></div>
+      ${g.empresa_id ? `<label>Cadastrar os clientes na empresa<select class="imp-emp">${opcoes(g.empresa_id)}</select></label>` : `<div class="msg erro">Nenhuma empresa cadastrada com este CNPJ. <a href="#" class="imp-nova">Cadastrar esta empresa</a> e depois leia a pasta de novo.</div>`}</div>
+      ${g.empresa_id ? `<details class="imp-padroes" open><summary><label class="chk"><input type="checkbox" class="imp-usar" checked> Usar estes padrões para emitir as notas desta empresa (serviço padrão)</label></summary>
+        <div class="campos">${Object.entries(rot).map(([k, t]) => `<label class="${k == "descricao" ? "inteiro" : ""}">${t}<input data-pad="${k}" value="${esc(g.padroes[k] || "")}"></label>`).join("")}</div>
+        <p class="sub">Detectados nas notas (valor mais frequente). Confira com o cadastro municipal antes de emitir.</p></details>
+        <p><button class="btn imp-ok">${ic("ok")}Importar ${g.clientes} cliente(s)</button></p>` : ""}</div>`).join("")}</div>`;
+  $("#imp_reler").onclick = () => importarXml(area);
+  $$(".imp-grupo", area).forEach(div => { const g = a.grupos[div.dataset.j], b = $(".imp-ok", div), nv = $(".imp-nova", div);
+    if (nv) nv.onclick = e => { e.preventDefault(); trocarEmpresa({ nome: g.nome, cnpj: g.cnpj }); };
+    if (!b) return;
+    b.onclick = async () => {
+      const serv = {}; if ($(".imp-usar", div).checked) $$("[data-pad]", div).forEach(i => serv[i.dataset.pad] = i.value);
+      const r = await api("importador/importar", { empresa_id: $(".imp-emp", div).value, cnpj: g.cnpj, servico: $(".imp-usar", div).checked ? serv : null });
+      if (r.erro) return;
+      aviso(`${r.empresa}: ${r.xml} XML importado(s), ${r.clientes_novos} cliente(s) novo(s)${r.padrao_salvo ? " · serviço padrão atualizado" : ""} ✔`, 8000);
+      await carregarEstado(); ir("clientes"); }; });
+}
 
 // ---------------------------------------------------------------- configurações
 PAGINAS.config = async el => {

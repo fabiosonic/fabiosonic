@@ -24,12 +24,5 @@ if exist "%INICIO%" (
 )
 powershell -NoProfile -Command "$p=[Environment]::GetFolderPath('Desktop')+'\Sistema Financeiro NFS-e.lnk'; if (Test-Path $p) { $s=(New-Object -ComObject WScript.Shell).CreateShortcut($p); $s.TargetPath='%~dp0INICIAR.bat'; $s.WorkingDirectory='%~dp0'; $s.Save() }" >nul 2>nul
 if not exist ".env" python -m nfse_itaborai configurar
-rem Atualiza o cadastro de clientes com os XML das notas ja emitidas (pasta configuravel no .env)
-set "XMLS=%USERPROFILE%\Downloads\nfse\MORAES OLIVEIRA CONTABILIDADE LTDA"
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do if /i "%%a"=="ITABORAI_PASTA_XML" set "XMLS=%%b"
-if exist "%XMLS%" (
-  echo Atualizando clientes a partir de %XMLS% ...
-  python -m nfse_itaborai importar-clientes "%XMLS%"
-)
 python -m nfse_itaborai tela
 pause

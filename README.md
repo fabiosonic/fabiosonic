@@ -164,6 +164,23 @@ na correção.
 - **Fechamento mensal automático:** no dia configurado o robô gera o relatório gerencial do mês anterior, salva em
   `Downloads\Relatorios financeiros` e envia ao dono por e-mail.
 
+## Importar clientes dos XML
+
+1. Coloque os XML (ou ZIP) das notas já emitidas na pasta **IMPORTAR XML**, dentro da pasta do sistema. Pode
+   misturar notas de várias empresas. O `IMPORTAR_CLIENTES.bat` abre essa pasta.
+2. No sistema, em **Clientes › Importar clientes dos XML**:
+   - as notas aparecem agrupadas pela empresa que as emitiu (CNPJ do prestador);
+   - para cada grupo aparecem a empresa de destino, quantos clientes são novos e os **padrões para emitir a nota**
+     detectados nos XML: item da LC 116, desdobro, NBS, alíquota, descrição e IBS/CBS;
+   - revise os padrões e clique em **Importar**.
+3. Regras da importação:
+   - os clientes só entram na empresa que emitiu as notas, nunca em outra;
+   - se o prestador ainda não estiver cadastrado, o link "Cadastrar esta empresa" abre o cadastro já preenchido.
+4. Depois de importados, os arquivos vão para `IMPORTAR XML\importados\<CNPJ>`. Essa passa a ser a pasta de
+   XML daquela empresa para o robô (notas emitidas fora do sistema e contratos detectados).
+5. O robô também importa sozinho os clientes das notas novas que aparecerem na pasta, cada uma na sua empresa.
+   Os padrões da nota só mudam quando você confirma na tela.
+
 ## 13º honorário
 
 Com a opção ligada (Configurações › 13º honorário), o robô cobra o honorário mensal de cada contrato ativo em
@@ -337,7 +354,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 128 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 132 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
