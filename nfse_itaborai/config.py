@@ -26,6 +26,7 @@ PADRAO = {
         "regua_dias": [-3, 0, 1, 5, 15, 30],
         "regua_email": True,
         "regua_whatsapp": True,
+        "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado
         "bloquear_apos_dias": 60,   # alerta de cliente para suspensão/negociação
     },
     "financeiro": {
@@ -41,6 +42,7 @@ PADRAO = {
     "pastas": {
         "xml_nfse": "~/Downloads/nfse/MORAES OLIVEIRA CONTABILIDADE LTDA",  # XML das notas já emitidas
         "extratos": "~/Downloads",  # o robô importa todo .ofx novo que aparecer aqui
+        "boletos": "~/Downloads/Boletos",  # PDFs dos boletos (Asaas), em subpastas AAAA-MM
     },
     "emissao": {
         "canal": "municipal",       # municipal (webservice de Itaboraí) | nacional (Emissor Nacional, nfse.gov.br)
@@ -79,6 +81,7 @@ PADRAO = {
         "gerar_titulos": True,
         "emitir_nfse": True,
         "criar_cobranca": True,
+        "baixar_boletos": True,     # salva o PDF de cada boleto na pasta de boletos
         "regua": True,
         "sincronizar_asaas": True,
         "despesas_recorrentes": True,

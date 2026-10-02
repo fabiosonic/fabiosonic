@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
+import re
 import webbrowser
 from dataclasses import asdict
 from datetime import date
@@ -67,6 +69,14 @@ def _cancelar_avulso(c: dict):
     return emissor.cancelar(numero, just, producao=emissor.em_producao())
 
 
+def _abrir_pasta(p: Path) -> dict:
+    """Abre a pasta no Explorer (o servidor roda no próprio computador do escritório)."""
+    p.mkdir(parents=True, exist_ok=True)
+    if hasattr(os, "startfile"):
+        os.startfile(p)  # noqa: S606 — só no Windows
+    return {"pasta": str(p)}
+
+
 ROTAS = {
     # gerais
     "estado": lambda c: {"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
@@ -84,6 +94,9 @@ ROTAS = {
     "conferir": lambda c: _conferir(c),
     "cancelar": lambda c: _resultado(_cancelar_avulso(c), "Cancelamento processado", "Cancelamento não processado"),
     "nacional/testar": lambda c: nacional.testar_conexao(),
+    "titulo/boleto": lambda c: {"arquivo": cobranca.baixar_boleto(_id(c), refazer=bool(c.get("refazer")))},
+    "boletos/baixar": lambda c: cobranca.baixar_boletos(str(c.get("competencia", ""))),
+    "boletos/abrir_pasta": lambda c: _abrir_pasta(cobranca.pasta_boletos()),
     # clientes
     "cnpj": lambda c: clientes.consultar_cnpj(str(c.get("cnpj", ""))),
     "cliente/salvar": lambda c: clientes.salvar(c),
@@ -196,6 +209,14 @@ class _Handler(BaseHTTPRequestHandler):
         if caminho == "/export/titulos.csv":
             return self._responder(200, relatorios.csv_titulos().encode("utf-8"), "text/csv; charset=utf-8",
                                    {"Content-Disposition": 'attachment; filename="contas_a_receber.csv"'})
+        m = re.fullmatch(r"/boleto/(\d+)\.pdf", caminho)
+        if m:
+            r = tratar("titulo/boleto", {"id": int(m.group(1))})
+            if not r.get("arquivo"):
+                return self._responder(404, (r.get("erro") or "boleto indisponível").encode("utf-8"),
+                                       "text/plain; charset=utf-8")
+            return self._responder(200, Path(r["arquivo"]).read_bytes(), "application/pdf",
+                                   {"Content-Disposition": f'inline; filename="boleto_{m.group(1)}.pdf"'})
         nome = "index.html" if caminho in ("/", "") else caminho.lstrip("/")
         arq = (WEB / nome).resolve()
         if WEB not in arq.parents or not arq.is_file():

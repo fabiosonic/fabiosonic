@@ -135,6 +135,19 @@ Cada envio grava em `saida\AAAA-MM\RPS_<n>\`:
 O número do RPS só avança quando ele vira NFS-e. Se o RPS for rejeitado, o mesmo número é reaproveitado
 na correção.
 
+## Boletos em PDF
+
+Com o meio de cobrança **Asaas** (Configurações › Cobrança), cada título vira uma cobrança com boleto e PIX.
+O sistema então:
+- **envia o boleto ao cliente**: o e-mail da régua e o botão **Cobrar** levam o PDF anexado, além do link da
+  fatura, do link do PDF, da linha digitável e do PIX copia e cola. No WhatsApp vão os links;
+- **salva o PDF** em `Downloads\Boletos\AAAA-MM\<vencimento> - <cliente> - titulo N.pdf`. O robô faz
+  isso sozinho a cada execução, e a pasta pode ser trocada em Configurações › Cobrança;
+- na tela **Contas a receber**, o botão **⬇ PDFs dos boletos** baixa os que faltam (da competência filtrada,
+  ou de todas) e abre a pasta. Em cada título, o botão **Boleto PDF** abre o boleto.
+
+No modo **PIX copia e cola** (sem Asaas) não existe boleto registrado em banco: a mensagem leva só o PIX.
+
 ## Emissão pelo Emissor Nacional (nfse.gov.br)
 
 Em **Configurações › Emissão da NFS-e** você escolhe o canal:
@@ -212,7 +225,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 100 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 104 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
@@ -224,6 +237,7 @@ São 100 testes, que cobrem o emissor (municipal e nacional), o financeiro e as 
 - a trava de produção;
 - o canal nacional: DPS no XSD v1.01, assinatura, adulteração detectada, certificado com senha errada ou de
   outro CNPJ, e emissão e cancelamento contra um **Sefin simulado com TLS mútuo**;
+- os PDFs dos boletos: pasta por competência, anexo no e-mail e robô;
 - a tela.
 
 ## Limitações conhecidas

@@ -7,13 +7,16 @@ para abrir a conversa (envio automático por WhatsApp exige API paga; o link evi
 
 from __future__ import annotations
 
+import os
+import re
 import smtplib
 import ssl
 import urllib.parse
 from datetime import date
 from email.message import EmailMessage
+from pathlib import Path
 
-from . import asaas, clientes, config, db, financeiro, pix, whatsapp
+from . import asaas, clientes, config, db, emissor, financeiro, pix, whatsapp
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -33,6 +36,68 @@ def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
             emp["pix_chave"], t["valor_cent"], emp["nome"], emp["pix_cidade"], f"T{t['id']}",
             f"NFSE {t['nfse_numero']}" if t["nfse_numero"] else ""))
     return financeiro.obter_titulo(tid)
+
+
+# ---------------------------------------------------------------- PDF dos boletos
+
+def pasta_boletos(cfg: dict | None = None) -> Path:
+    cfg = cfg or config.carregar()
+    p = Path(os.path.expanduser(cfg["pastas"].get("boletos") or "~/Downloads/Boletos"))
+    return p if p.is_absolute() else emissor.RAIZ / p
+
+
+def _nome_arquivo(t: dict) -> str:
+    nome = re.sub(r'[\\/:*?"<>|]+', " ", t["cliente_nome"]).strip()[:60].strip()
+    return f"{t['vencimento']} - {nome} - titulo {t['id']}.pdf"
+
+
+def baixar_boleto(tid: int, cfg: dict | None = None, refazer: bool = False) -> str:
+    """Salva o PDF do boleto do título (Asaas) em <pasta de boletos>/AAAA-MM/ e devolve o caminho."""
+    cfg = cfg or config.carregar()
+    t = financeiro.obter_titulo(tid)
+    if t.get("boleto_pdf") and Path(t["boleto_pdf"]).exists() and not refazer:
+        return t["boleto_pdf"]
+    if not t["asaas_id"]:
+        raise RuntimeError("Este título não tem boleto: o boleto em PDF é gerado pelo Asaas "
+                           "(Configurações › Cobrança › Asaas). No modo PIX vai só o copia e cola.")
+    url = t.get("boleto_url") or asaas.url_boleto(t["asaas_id"], cfg)
+    if not url:
+        raise RuntimeError("O Asaas ainda não disponibilizou o boleto desta cobrança.")
+    destino = pasta_boletos(cfg) / t["competencia"] / _nome_arquivo(t)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_bytes(asaas.baixar_pdf(url))
+    financeiro.atualizar_titulo(tid, boleto_url=url, boleto_pdf=str(destino))
+    return str(destino)
+
+
+def baixar_boletos(competencia: str = "", cfg: dict | None = None) -> dict:
+    """Baixa os PDFs que faltam dos títulos em aberto com boleto (opcionalmente de uma competência)."""
+    cfg = cfg or config.carregar()
+    sql = "SELECT id FROM titulos WHERE status='aberto' AND asaas_id!=''"
+    params: tuple = ()
+    if competencia:
+        sql, params = sql + " AND competencia=?", (competencia,)
+    res = {"baixados": 0, "ja_existiam": 0, "erros": [], "pasta": str(pasta_boletos(cfg))}
+    for (tid,) in ((r["id"],) for r in db.linhas(sql, params)):
+        t = financeiro.obter_titulo(tid)
+        if t.get("boleto_pdf") and Path(t["boleto_pdf"]).exists():
+            res["ja_existiam"] += 1
+            continue
+        try:
+            baixar_boleto(tid, cfg)
+            res["baixados"] += 1
+        except Exception as ex:  # noqa: BLE001 — segue para os próximos
+            res["erros"].append(f"{t['cliente_nome']}: {ex}")
+    return res
+
+
+def _anexo_boleto(t: dict, cfg: dict) -> list[str]:
+    if not (cfg["cobranca"].get("anexar_boleto", True) and t.get("asaas_id")):
+        return []
+    try:
+        return [baixar_boleto(t["id"], cfg)]
+    except Exception:  # noqa: BLE001 — sem o PDF o e-mail sai com o link
+        return []
 
 
 def sincronizar_asaas(cfg: dict | None = None) -> int:
@@ -80,6 +145,8 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
         linhas.append(f"NFS-e nº {t['nfse_numero']}" + (f": {t['nfse_link']}" if t["nfse_link"].startswith("http") else ""))
     if t["cobranca_link"]:
         linhas.append(f"Boleto/PIX: {t['cobranca_link']}")
+    if t.get("boleto_url"):
+        linhas.append(f"Boleto em PDF: {t['boleto_url']}")
     if t["linha_digitavel"]:
         linhas.append(f"Linha digitável: {t['linha_digitavel']}")
     if t["pix_copia_cola"]:
@@ -98,7 +165,7 @@ def link_whatsapp(telefone: str, texto: str) -> str:
     return f"https://wa.me/{d}?text={urllib.parse.quote(texto)}" if d else ""
 
 
-def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None) -> None:
+def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, anexos: list[str] | None = None) -> None:
     cfg = cfg or config.carregar()
     s = cfg["smtp"]
     if not s.get("host"):
@@ -110,6 +177,9 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None) -
         msg["Bcc"] = s["copia_para"]
     msg["Subject"] = assunto
     msg.set_content(texto)
+    for caminho in anexos or []:
+        msg.add_attachment(Path(caminho).read_bytes(), maintype="application", subtype="pdf",
+                           filename=Path(caminho).name)
     porta = int(s.get("porta") or 587)
     if s.get("ssl") or porta == 465:
         with smtplib.SMTP_SSL(s["host"], porta, context=ssl.create_default_context(), timeout=30) as srv:
@@ -156,7 +226,7 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                     res["sem_contato"] += 1
                 else:
                     try:
-                        enviar_email(cli["email"], assunto, texto, cfg)
+                        enviar_email(cli["email"], assunto, texto, cfg, _anexo_boleto(t, cfg))
                         status, det = "enviado", cli["email"]
                         res["email"] += 1
                     except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
@@ -210,7 +280,7 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "whatsapp_enviado": False, "email": "",
            "texto": texto}
     if cli.get("email") and cfg["smtp"].get("host"):
-        enviar_email(cli["email"], assunto, texto, cfg)
+        enviar_email(cli["email"], assunto, texto, cfg, _anexo_boleto(t, cfg))
         out["email"] = cli["email"]
     if cli.get("telefone") and whatsapp.automatico(cfg):
         whatsapp.enviar(cli["telefone"], texto, cfg)

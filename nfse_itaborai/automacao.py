@@ -94,6 +94,8 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     etapa("cobrancas_criadas", auto["criar_cobranca"] and cfg["cobranca"]["provedor"] != "nenhum", cobrancas)
     etapa("baixas_asaas", auto["sincronizar_asaas"] and cfg["cobranca"]["provedor"] == "asaas",
           lambda: cobranca.sincronizar_asaas(cfg))
+    etapa("boletos_pdf", auto.get("baixar_boletos", True) and cfg["cobranca"]["provedor"] == "asaas",
+          lambda: cobranca.baixar_boletos(cfg=cfg))
     etapa("extratos", auto.get("importar_extratos"), importacao.importar_extratos)
     etapa("regua", auto["regua"], lambda: cobranca.rodar_regua(em, cfg))
     etapa("resumo", auto.get("resumo_diario"), lambda: importacao.resumo_diario(res, em))

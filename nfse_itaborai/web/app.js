@@ -196,7 +196,7 @@ PAGINAS.receber = async el => {
   const comp = (el._comp ?? "");
   const lst = await api("titulos", { filtro: FILTRO_REC, competencia: comp });
   const soma = lst.reduce((a, t) => a + (t.status == "aberto" ? t.total_cent : t.status == "pago" ? t.valor_pago_cent : 0), 0);
-  el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">+ Título avulso</button><a class="btn sec" href="/export/titulos.csv">⬇ Exportar CSV</a></span></h1>
+  el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">+ Título avulso</button><button class="btn sec" id="pdf_bol">⬇ PDFs dos boletos</button> <a class="btn sec" href="/export/titulos.csv">⬇ Exportar CSV</a></span></h1>
   <div class="card"><div class="abas">${[["a_receber", "A receber"], ["atrasado", "Atrasados"], ["pago", "Pagos"], ["sem_nfse", "Sem NFS-e"], ["cancelado", "Cancelados"], ["todos", "Todos"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_REC ? "on" : ""}">${t}</button>`).join("")}
     <label style="flex-direction:row;align-items:center;gap:6px;margin-left:auto">Competência <input type="month" id="r_comp" value="${comp}" style="width:160px"></label></div>
     <p class="sub">${lst.length} título(s) · ${brl(soma)}</p>
@@ -211,12 +211,19 @@ PAGINAS.receber = async el => {
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_REC = b.dataset.f; ir("receber"); });
   $("#r_comp").onchange = e => { el._comp = e.target.value; ir("receber"); };
   $("#novo_t").onclick = novoTitulo;
+  $("#pdf_bol").onclick = async () => {
+    aviso("Baixando os PDFs dos boletos…", 20000);
+    const r = await api("boletos/baixar", { competencia: comp });
+    aviso(`${r.baixados} PDF(s) baixado(s), ${r.ja_existiam} já estavam na pasta${r.erros.length ? `, ${r.erros.length} com erro: ${r.erros.join("; ")}` : ""}. Pasta: ${r.pasta}`, 12000);
+    if (r.baixados + r.ja_existiam) api("boletos/abrir_pasta");
+  };
 };
 function acoesTitulo(t) {
   const b = [];
   if (t.status == "aberto") {
     b.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
     b.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
+    if (t.asaas_id) b.push(`<a class="btn min sec" href="/boleto/${t.id}.pdf" target="_blank">Boleto PDF</a>`);
     if (["pendente", "erro", "teste"].includes(t.nfse_status)) b.push(`<button class="btn min sec" onclick="emitirTitulo(${t.id})">Emitir NFS-e</button>`);
     b.push(`<button class="btn min sec" onclick="cancelarTitulo(${t.id},'${t.nfse_status}')">Cancelar</button>`);
   }
@@ -435,7 +442,7 @@ PAGINAS.config = async el => {
   const tx = (s, k, t, tipo = "text", extra = "") => `<label>${t}<input type="${tipo}" data-s="${s}" data-k="${k}" value="${esc(Array.isArray(c[s][k]) ? c[s][k].join(", ") : c[s][k])}" ${extra}></label>`;
   el.innerHTML = `<h1>Configurações <span class="acoes"><button class="btn" id="salvar">Salvar tudo</button></span></h1>
   <div class="card"><h2>🤖 Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
-    <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}
+    <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_asaas", "Baixa automática (Asaas)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
   <div class="card"><h2>🧾 Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
     <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -461,7 +468,7 @@ PAGINAS.config = async el => {
     <label>Meio de cobrança<select data-s="cobranca" data-k="provedor">${[["pix", "PIX copia e cola (sem tarifa, baixa pelo extrato)"], ["asaas", "Asaas: boleto + PIX com baixa automática"], ["nenhum", "Nenhum"]].map(([v, t]) => `<option value="${v}" ${c.cobranca.provedor == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     ${tx("cobranca", "asaas_api_key", "Chave API Asaas", "password")}${ck("cobranca", "asaas_sandbox", "Asaas em sandbox (teste)")}
     ${tx("cobranca", "multa_pct", "Multa (%)")}${tx("cobranca", "juros_mes_pct", "Juros ao mês (%)")}${tx("cobranca", "regua_dias", "Régua (dias, ex.: -3, 0, 1, 5, 15, 30)")}
-    ${ck("cobranca", "regua_email", "Régua por e-mail (automático)")}${ck("cobranca", "regua_whatsapp", "Régua por WhatsApp (fila com 1 clique)")}${tx("cobranca", "bloquear_apos_dias", "Alerta de atraso crítico após (dias)", "number")}</div></div>
+    ${ck("cobranca", "regua_email", "Régua por e-mail (automático)")}${ck("cobranca", "regua_whatsapp", "Régua por WhatsApp (fila com 1 clique)")}${ck("cobranca", "anexar_boleto", "Anexar o PDF do boleto no e-mail")}${tx("pastas", "boletos", "Pasta dos PDFs dos boletos")}${tx("cobranca", "bloquear_apos_dias", "Alerta de atraso crítico após (dias)", "number")}</div></div>
   <div class="card"><h2>E-mail (SMTP)</h2><p class="sub">Gmail: servidor smtp.gmail.com, porta 587, e uma “senha de app” da conta Google.</p><div class="campos">${tx("smtp", "host", "Servidor")}${tx("smtp", "porta", "Porta", "number")}${tx("smtp", "usuario", "Usuário")}${tx("smtp", "senha", "Senha", "password")}${tx("smtp", "remetente", "Remetente")}${tx("smtp", "copia_para", "Cópia oculta para")}${ck("smtp", "ssl", "SSL direto (porta 465)")}</div>
     <p><button class="btn sec" id="teste_email">Enviar e-mail de teste</button></p></div>
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}

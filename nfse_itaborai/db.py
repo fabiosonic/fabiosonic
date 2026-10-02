@@ -133,7 +133,8 @@ def conexao():
 MIGRACOES = {
     "contratos": {"confirmado": "INTEGER NOT NULL DEFAULT 1", "origem": "TEXT DEFAULT 'manual'"},
     "titulos": {"origem": "TEXT DEFAULT 'sistema'", "nfse_canal": "TEXT DEFAULT 'municipal'",
-                "nfse_chave": "TEXT DEFAULT ''"},
+                "nfse_chave": "TEXT DEFAULT ''", "boleto_url": "TEXT DEFAULT ''",
+                "boleto_pdf": "TEXT DEFAULT ''"},
 }
 
 

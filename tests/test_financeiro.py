@@ -133,7 +133,7 @@ def test_baixa_estorno_e_cancelamento(base):
 
 def test_regua_envia_email_e_enfileira_whatsapp_sem_repetir(base, monkeypatch):
     enviados = []
-    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None: enviados.append((para, assunto, texto)))
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None: enviados.append((para, assunto, texto)))
     a = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-09-25", emitir_nfse=False)
     b = financeiro.criar_titulo(CLI_B["cpf_cnpj"], "300", vencimento="2026-09-25", emitir_nfse=False)
     cobranca.preparar_pagamento(a)
@@ -173,6 +173,13 @@ class FakeAsaas(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):  # noqa: N802
+        if self.path.startswith("/b/pdf/"):  # link público do boleto (sem token)
+            corpo = b"%PDF-1.4 boleto " + self.path.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", str(len(corpo)))
+            self.end_headers()
+            return self.wfile.write(corpo)
         assert self.headers["access_token"] == "chave-teste"
         if self.path.startswith("/customers"):
             return self._json({"data": []})
@@ -190,7 +197,9 @@ class FakeAsaas(BaseHTTPRequestHandler):
             assert corpo["cpfCnpj"] == "32396063000103"
             return self._json({"id": "cus_1"})
         assert corpo["customer"] == "cus_1" and corpo["billingType"] == "UNDEFINED" and corpo["fine"] == {"value": 2.0}
-        return self._json({"id": "pay_" + corpo["externalReference"].split("-")[1], "invoiceUrl": "https://asaas/i/1"})
+        pid = "pay_" + corpo["externalReference"].split("-")[1]
+        host = f"http://127.0.0.1:{self.server.server_address[1]}"
+        return self._json({"id": pid, "invoiceUrl": "https://asaas/i/1", "bankSlipUrl": f"{host}/b/pdf/{pid}"})
 
     def log_message(self, *a):
         pass
@@ -284,7 +293,7 @@ def test_despesas_recorrentes(base):
 
 def test_robo_ponta_a_ponta(base, monkeypatch):
     enviados = []
-    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None: enviados.append(assunto))
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None: enviados.append(assunto))
     config.salvar({"automacao": {"ativa": True}})
     financeiro.salvar_contrato({"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "374,40", "inicio": "2026-10", "dia_vencimento": 5})
     r = automacao.rodar(date(2026, 10, 2))

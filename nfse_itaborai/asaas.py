@@ -82,7 +82,7 @@ def criar_cobranca(titulo: dict, cfg: dict | None = None) -> dict:
         linha = _req("GET", f"/payments/{p['id']}/identificationField", cfg=cfg)
     except ErroAsaas:
         pass
-    return {"asaas_id": p["id"], "cobranca_link": p.get("invoiceUrl", ""),
+    return {"asaas_id": p["id"], "cobranca_link": p.get("invoiceUrl", ""), "boleto_url": p.get("bankSlipUrl") or "",
             "pix_copia_cola": pix.get("payload", ""), "linha_digitavel": linha.get("identificationField", "")}
 
 
@@ -91,6 +91,23 @@ def consultar(asaas_id: str, cfg: dict | None = None) -> dict:
     return {"status": p.get("status", ""), "pago": p.get("status") in PAGOS,
             "data_pagamento": p.get("clientPaymentDate") or p.get("paymentDate") or "",
             "valor_pago": p.get("value", 0)}
+
+
+def url_boleto(asaas_id: str, cfg: dict | None = None) -> str:
+    """Link do PDF do boleto (bankSlipUrl) de uma cobrança já criada."""
+    return _req("GET", f"/payments/{asaas_id}", cfg=cfg).get("bankSlipUrl") or ""
+
+
+def baixar_pdf(url: str) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "emissor-nfse-itaborai"})
+    try:
+        with urllib.request.urlopen(req, timeout=60, context=ssl.create_default_context()) as r:
+            dados = r.read()
+    except urllib.error.HTTPError as e:
+        raise ErroAsaas(f"PDF do boleto: HTTP {e.code}") from e
+    if not dados.startswith(b"%PDF"):
+        raise ErroAsaas("O Asaas não devolveu um PDF (boleto ainda não registrado?).")
+    return dados
 
 
 def cancelar(asaas_id: str, cfg: dict | None = None) -> None:
