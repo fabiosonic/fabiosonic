@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import smtplib
+from email.utils import formataddr
 import ssl
 import urllib.parse
 from datetime import date
@@ -209,7 +210,10 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
     if not s.get("host"):
         raise RuntimeError("SMTP não configurado.")
     msg = EmailMessage()
-    msg["From"] = s.get("remetente") or s.get("usuario")
+    usuario = str(s.get("usuario") or "").strip()
+    remetente = str(s.get("remetente") or "").strip()
+    # "MORAES" sozinho não é endereço: vira o nome de exibição do e-mail do usuário (MORAES <usuario@...>)
+    msg["From"] = remetente if "@" in remetente else formataddr((remetente, usuario)) if remetente else usuario
     msg["To"] = para
     if s.get("copia_para"):
         msg["Bcc"] = s["copia_para"]
@@ -221,17 +225,37 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
         msg.add_attachment(Path(caminho).read_bytes(), maintype="application", subtype="pdf",
                            filename=Path(caminho).name)
     porta = int(s.get("porta") or 587)
+    host = str(s["host"]).strip()
     if s.get("ssl") or porta == 465:
-        with smtplib.SMTP_SSL(s["host"], porta, context=ssl.create_default_context(), timeout=30) as srv:
-            if s.get("usuario"):
-                srv.login(s["usuario"], s["senha"])
+        with smtplib.SMTP_SSL(host, porta, context=ssl.create_default_context(), timeout=30) as srv:
+            _autenticar(srv, usuario, str(s.get("senha") or ""), host, porta)
             srv.send_message(msg)
     else:
-        with smtplib.SMTP(s["host"], porta, timeout=30) as srv:
+        with smtplib.SMTP(host, porta, timeout=30) as srv:
             srv.starttls(context=ssl.create_default_context())
-            if s.get("usuario"):
-                srv.login(s["usuario"], s["senha"])
+            _autenticar(srv, usuario, str(s.get("senha") or ""), host, porta)
             srv.send_message(msg)
+
+
+def _autenticar(srv, usuario: str, senha: str, host: str, porta: int) -> None:
+    """Login no SMTP. Tenta também a senha sem espaços nas pontas (comum ao colar) e explica a recusa."""
+    if not usuario:
+        return
+    if not senha:
+        raise RuntimeError("Senha do e-mail não informada: preencha a senha em Configurações › E-mail (SMTP) e salve.")
+    erro = None
+    for tentativa in dict.fromkeys((senha, senha.strip())):
+        try:
+            srv.login(usuario, tentativa)
+            return
+        except smtplib.SMTPAuthenticationError as ex:
+            erro = ex
+    resposta = erro.smtp_error.decode(errors="replace") if isinstance(erro.smtp_error, bytes) else str(erro.smtp_error)
+    raise RuntimeError(
+        f"O servidor {host} recusou o usuário/senha ({erro.smtp_code} {resposta}). Confira: (1) usuário = o e-mail "
+        f"completo ({usuario}); (2) a senha é a da caixa de e-mail (a mesma do webmail) — se a conta tiver "
+        f"verificação em duas etapas, use uma senha de aplicativo; (3) no painel do provedor, o envio autenticado "
+        f"(SMTP) está liberado para a conta; (4) se continuar, teste a porta 465 com “SSL direto”.") from erro
 
 
 # ---------------------------------------------------------------- régua

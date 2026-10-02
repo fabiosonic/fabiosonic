@@ -688,7 +688,7 @@ PAGINAS.config = async el => {
     ${sl("emissao", "reg_ap_trib_sn", "Apuração no Simples", [["1", "Tudo no DAS"], ["2", "ISS fora do DAS (fixo)"], ["3", "Tudo fora do DAS"]])}
     ${sl("emissao", "reg_esp_trib", "Regime especial", [["0", "Nenhum"], ["1", "Ato cooperado"], ["2", "Estimativa"], ["3", "ME municipal"], ["4", "Notário/registrador"], ["5", "Autônomo"], ["6", "Soc. de profissionais"]])}
     ${ck("emissao", "informar_ibscbs", "Informar IBS/CBS (cIndOp/cClassTrib do serviço padrão)")}${ck("emissao", "informar_im", "Informar inscrição municipal")}</div>
-    <p><button class="btn sec" id="teste_cert">Testar certificado e conexão</button> <span class="sub">Salve antes de testar.</span></p><div id="cert_res"></div></div>
+    <p><button class="btn sec" id="teste_cert">Salvar e testar certificado e conexão</button></p><div id="cert_res"></div></div>
   <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}${ck("automacao", "fechamento_mensal", "Fechamento mensal automático")}</div>
     <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail do dono (resumo e fechamento)")}${tx("resumo", "dia_fechamento", "Dia do fechamento mensal", "number")}${tx("pastas", "relatorios", "Pasta dos relatórios")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
     <p><button class="btn sec" id="imp_xml">Ler XML agora</button> <button class="btn sec" id="env_res">Enviar resumo agora</button></p></div>
@@ -704,16 +704,16 @@ PAGINAS.config = async el => {
     ${ck("cobranca", "regua_email", "Régua por e-mail (automático)")}${ck("cobranca", "regua_whatsapp", "Régua por WhatsApp (fila com 1 clique)")}${ck("cobranca", "anexar_boleto", "Anexar o PDF do boleto no e-mail")}${tx("pastas", "boletos", "Pasta dos PDFs dos boletos")}${tx("cobranca", "bloquear_apos_dias", "Alerta de atraso crítico após (dias)", "number")}
     <h3 class="bloco">Cobrança recorrente dos atrasados</h3>${ck("cobranca", "recorrente_ativa", "<b>Cobrar atrasados de forma recorrente</b>")}${tx("cobranca", "recorrente_apos_dias", "Começar após quantos dias de atraso", "number", 'min="1"')}${tx("cobranca", "recorrente_a_cada_dias", "Repetir a cada quantos dias", "number", 'min="1"')}</div></div>
   <div class="card"><h2>Banco Inter — como obter as credenciais</h2><p class="sub">No Internet Banking PJ do Inter: <b>Soluções para sua empresa › Nova integração</b>, marque os escopos <b>Emissão e cancelamento de boletos</b> e <b>Consulta de boletos</b>. Baixe o certificado (.crt) e a chave (.key), copie client_id e client_secret para cá, salve e teste. Os boletos são registrados direto na conta do escritório, com PIX no próprio boleto; o sistema dá a baixa sozinho quando o cliente paga.</p>
-    <p><button class="btn sec" id="teste_inter">Testar conexão com o Inter</button></p></div>
+    <p><button class="btn sec" id="teste_inter">Salvar e testar conexão com o Inter</button></p></div>
   <div class="card"><h2>E-mail (SMTP)</h2><p class="sub">Gmail: servidor smtp.gmail.com, porta 587, e uma “senha de app” da conta Google.</p><div class="campos">${tx("smtp", "host", "Servidor")}${tx("smtp", "porta", "Porta", "number")}${tx("smtp", "usuario", "Usuário")}${tx("smtp", "senha", "Senha", "password")}${tx("smtp", "remetente", "Remetente")}${tx("smtp", "copia_para", "Cópia oculta para")}${ck("smtp", "ssl", "SSL direto (porta 465)")}</div>
-    <p><button class="btn sec" id="teste_email">Enviar e-mail de teste</button></p></div>
+    <p><button class="btn sec" id="teste_email">Salvar e enviar e-mail de teste</button></p></div>
   <div class="card"><h2>${ic("contratos")}13º honorário</h2><p class="sub">Em novembro e dezembro, cobra o honorário mensal de cada contrato ativo em parcelas, com NFS-e e boleto, entrando na régua de cobrança.</p>
     <div class="campos">${ck("decimo_terceiro", "ativo", "<b>Cobrar 13º honorário</b>")}${ck("decimo_terceiro", "emitir_nfse", "Emitir NFS-e das parcelas")}
     <label>Descrição na nota<input data-s="decimo_terceiro" data-k="descricao" value="${esc(c.decimo_terceiro.descricao || "")}"></label>
     ${c.decimo_terceiro.parcelas.map((p, j) => `<label>Parcela ${j + 1}: % do honorário<input data-p13="${j}" data-c="percentual" value="${esc(p.percentual)}"></label><label>Parcela ${j + 1}: vencimento (dd/mm)<input data-p13="${j}" data-c="vencimento" value="${esc(p.vencimento)}" placeholder="30/11"></label>`).join("")}</div></div>
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}
     ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "iss_fixo_mensal", "ISS fixo por mês (R$, para a DRE)")}${tx("financeiro", "contas_bancarias", "Contas bancárias desta empresa (banco-agência-conta)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
-  $("#salvar").onclick = async () => {
+  const salvarTudo = async () => {
     const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, resumo: {}, emissao: {}, decimo_terceiro: {} };
     const p13 = c.decimo_terceiro.parcelas.map(p => ({ ...p }));
     $$("[data-p13]").forEach(i => { p13[+i.dataset.p13][i.dataset.c] = i.dataset.c == "percentual" ? valorNum(i.value) : i.value.trim(); });
@@ -730,8 +730,9 @@ PAGINAS.config = async el => {
     const cred = {};
     $$("[data-cred]").forEach(i => cred[i.dataset.cred] = i.value);
     await api("config/salvar", novo); await api("empresa/credenciais/salvar", cred);
-    await carregarEstado(); aviso("Configurações salvas ✔");
+    await carregarEstado(); return true;
   };
+  $("#salvar").onclick = async () => { if (await salvarTudo()) aviso("Configurações salvas ✔"); };
   $("#novo_serv").onclick = () => editarServico({}); ligarServicos();
   $("#cert_arq").onchange = e => { const f = e.target.files[0]; if (f) { $("#cert_nome").textContent = "Selecionado: " + f.name + " — informe a senha e clique em Salvar certificado"; $("#cert_senha").focus(); } };
   const lerB64 = f => new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
@@ -744,16 +745,18 @@ PAGINAS.config = async el => {
   $$(".inter_arq").forEach(i => i.onchange = async e => { const f = e.target.files[0]; if (!f) return;
     await api("inter/arquivo", { tipo: i.dataset.t, arquivo: await lerB64(f) }); aviso(`Arquivo .${i.dataset.t} do Inter guardado nesta empresa ✔`); ir("config"); });
   $("#busca_ant").onclick = () => { $("#migra_cfg").innerHTML = '<div class="msg">Procurando…</div>'; mostrarMigracao($("#migra_cfg"), true); };
-  $("#teste_cert").onclick = async () => {
+  $("#teste_cert").onclick = async () => { if (!await salvarTudo()) return;
     $("#cert_res").innerHTML = '<div class="msg">Abrindo o certificado e consultando o ADN…</div>';
     try { const r = await api("nacional/testar");
       $("#cert_res").innerHTML = `<div class="msg ${r.conexao && !r.vencido ? "ok" : "erro"}"><b>${esc(r.titular)}</b> — CNPJ ${fmtDoc(r.cnpj || "")} — válido até ${r.validade} (${r.dias_restantes} dias)<br>${esc(r.mensagem)}${r.convenio ? "<br>Convênio do município: " + esc(JSON.stringify(r.convenio)) : ""}</div>`;
     } catch (e) { $("#cert_res").innerHTML = ""; }
   };
-  $("#teste_inter").onclick = async () => { const r = await api("inter/testar"); aviso(r.mensagem || "OK", 6000); };
+  $("#teste_inter").onclick = async () => { if (!await salvarTudo()) return; const r = await api("inter/testar"); aviso(r.mensagem || "OK", 6000); };
   $("#imp_xml").onclick = async () => { aviso("Lendo XML…"); const r = await api("importacao/xml"); aviso(`XML: ${JSON.stringify(r)}`, 8000); await carregarEstado(); };
   $("#env_res").onclick = async () => { const r = await api("resumo/enviar"); aviso("Resumo: " + r.resultado, 6000); };
-  $("#teste_email").onclick = async () => { const p = prompt("Enviar teste para qual e-mail?"); if (!p) return; await api("email/testar", { para: p }); aviso("E-mail de teste enviado ✔"); };
+  $("#teste_email").onclick = async () => { const p = prompt("Enviar teste para qual e-mail?", (c.resumo || {}).email_dono || ""); if (!p) return;
+    if (!await salvarTudo()) return; aviso("Configurações salvas. Enviando o e-mail de teste…", 20000);
+    await api("email/testar", { para: p }); aviso("E-mail de teste enviado ✔ Confira a caixa de entrada (e o spam).", 7000); };
 };
 
 // ---------------------------------------------------------------- início

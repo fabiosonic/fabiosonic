@@ -380,7 +380,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 140 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 142 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
