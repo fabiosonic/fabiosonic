@@ -96,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--porta", type=int, default=8765)
 
     a = ap.parse_args(argv)
+    from . import empresas
+    empresas.aplicar_ativa()
     try:
         if a.cmd == "conferir":
             rps = emissor.rps_de_dict(json.loads(a.arquivo.read_text(encoding="utf-8")))
@@ -121,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.cmd == "robo":
             from . import automacao
-            r = automacao.rodar()
+            r = automacao.rodar_todas()
             print(json.dumps(r, ensure_ascii=False, indent=2, default=str))
             return 0
         if a.cmd == "tela":

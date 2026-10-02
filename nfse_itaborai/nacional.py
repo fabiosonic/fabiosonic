@@ -444,10 +444,10 @@ def _avancar_dps(numero: int) -> None:
 
 def prestador() -> Prestador:
     emissor.carregar_env()
-    cnpj = so_digitos(os.environ.get("ITABORAI_CNPJ", ""))
+    cnpj = so_digitos(emissor.env("ITABORAI_CNPJ"))
     if not cnpj:
         raise emissor.ErroConfiguracao("Configure ITABORAI_CNPJ no arquivo .env.")
-    return Prestador(cnpj=cnpj, inscricao_municipal=so_digitos(os.environ.get("ITABORAI_IM", "")),
+    return Prestador(cnpj=cnpj, inscricao_municipal=so_digitos(emissor.env("ITABORAI_IM")),
                      chave_webservice="")
 
 

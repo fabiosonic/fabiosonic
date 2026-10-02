@@ -45,6 +45,24 @@ async function carregarEstado() {
   b.innerHTML = `<span class="ponto"></span><span><b>${ST.producao ? "Produção" : "Homologação"}</b><small>${ST.producao ? "Notas com validade fiscal" : "Teste, sem validade"} · ${nomeCanal(true)}</small></span>`;
   b.className = "amb " + (ST.producao ? "prod" : "hom");
   b.title = "Clique para trocar o ambiente";
+  const e = ST.empresa || {}, nome = (e.nome || "Empresa").trim();
+  const ini = nome.split(/\s+/).filter(w => w.length > 2 && !/^(ltda|me|epp|eireli|s\/a|de|da|do|e)$/i.test(w)).slice(0, 2).map(w => w[0]).join("").toUpperCase() || nome.slice(0, 2).toUpperCase();
+  $("#empresa").innerHTML = `<span class="selo-marca">${esc(ini)}</span><span class="marca-txt">${esc(nome)}<small>${ST.empresas.length > 1 ? `${ST.empresas.length} empresas · trocar` : "Financeiro · NFS-e"}</small></span><svg class="ic seta"><use href="#i-contratos"/></svg>`;
+  document.title = `${nome} · Financeiro e NFS-e`;
+}
+async function trocarEmpresa() {
+  const l = await api("empresas");
+  modal(`<h2>${ic("clientes")}Empresas</h2><p class="sub">Cada empresa tem seus próprios clientes, notas, financeiro, credenciais e configurações. O robô trabalha para todas.</p>
+    <div class="lista-empresas">${l.map(e => `<button class="emp ${e.ativa ? "on" : ""}" data-id="${esc(e.id)}"><b>${esc(e.nome)}</b><span>CNPJ ${fmtDoc(e.cnpj || "")} · ${e.producao ? "produção" : "homologação"}</span>${e.ativa ? '<span class="selo bom">em uso</span>' : ""}</button>`).join("")}</div>
+    <details class="nova-emp"><summary class="btn sec">${ic("mais")}Nova empresa</summary>
+      <div class="campos" id="f_emp" style="margin-top:14px"><label class="inteiro">Razão social<input name="nome"></label><label>CNPJ<input name="cnpj"></label>
+      <label>Inscrição municipal<input name="im"></label><label>Canal da NFS-e<select name="canal"><option value="municipal">Itaboraí (webservice)</option><option value="nacional">Nacional (nfse.gov.br)</option></select></label>
+      <label>Chave do webservice (Itaboraí)<input name="chave" type="password"></label><label>Município emissor (IBGE)<input name="municipio" value="3301900"></label>
+      <label>Optante do Simples<select name="simples"><option value="S">Sim</option><option value="N">Não</option></select></label></div>
+      <p><button class="btn" id="criar_emp">Cadastrar e usar</button></p></details>
+    <p><button class="btn sec" onclick="fechar()">Fechar</button></p>`);
+  $$(".emp").forEach(b => b.onclick = async () => { await api("empresa/ativar", { id: b.dataset.id }); fechar(); await carregarEstado(); ir(PAG); aviso("Empresa em uso: " + b.querySelector("b").textContent); });
+  $("#criar_emp").onclick = async () => { await api("empresa/criar", form($("#f_emp"))); fechar(); await carregarEstado(); ir("config"); aviso("Empresa cadastrada. Complete as configurações e o serviço padrão.", 7000); };
 }
 $("#amb").onclick = async () => {
   const p = !ST.producao;
@@ -105,6 +123,7 @@ function montarGrafico(alvo, serie, specs, opts = {}) {
   alvo.innerHTML = `<div class="legenda">${specs.map(e => `<span><i class="${e.linha ? "linha" : ""}" style="background:var(${e.cor})"></i>${e.rot}</span>`).join("")}${opts.legendaExtra || ""}</div>
     <div class="grafico"></div><details><summary>Ver tabela</summary>${tabela([{ t: "Período", f: p => esc(opts.nome(p)) }, ...specs.map(e => ({ t: e.rot, n: 1, f: p => num(p[e.k]) }))], serie)}</details>`;
   const g = $(".grafico", alvo);
+  if (!serie.some(p => specs.some(e => p[e.k]))) { g.innerHTML = '<div class="vazio">Sem movimento no período ainda.</div>'; return; }
   const desenhar = () => { const w = Math.round(g.clientWidth); if (!w || w == g._w) return; g._w = w;
     g.innerHTML = svgGrafico(serie, specs, w, opts); const d = $(".dica", g);
     $$(".alvo", g).forEach(r => {
@@ -524,7 +543,10 @@ PAGINAS.clientes = async el => {
 
 // ---------------------------------------------------------------- configurações
 PAGINAS.config = async el => {
-  const c = await api("config");
+  const [c, cred] = await Promise.all([api("config"), api("empresa/credenciais")]);
+  const sp = ST.padrao || {};
+  const cr = (k, t, tipo = "text") => `<label>${t}<input type="${tipo}" data-cred="${k}" value="${esc(cred[k] || "")}"></label>`;
+  const sv = (k, t) => `<label>${t}<input data-serv="${k}" value="${esc(sp[k] ?? "")}"></label>`;
   const ck = (s, k, t) => `<label class="chk"><input type="checkbox" data-s="${s}" data-k="${k}" ${c[s][k] ? "checked" : ""}> ${t}</label>`;
   const sl = (s, k, t, ops) => `<label>${t}<select data-s="${s}" data-k="${k}">${ops.map(([v, x]) => `<option value="${v}" ${String(c[s][k]) == v ? "selected" : ""}>${x}</option>`).join("")}</select></label>`;
   const tx = (s, k, t, tipo = "text", extra = "") => `<label>${t}<input type="${tipo}" data-s="${s}" data-k="${k}" value="${esc(Array.isArray(c[s][k]) ? c[s][k].join(", ") : c[s][k])}" ${extra}></label>`;
@@ -532,6 +554,13 @@ PAGINAS.config = async el => {
   <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
+  <div class="card"><h2>${ic("clientes")}Empresa emissora e credenciais</h2><p class="sub">Dados da empresa em uso (${esc((ST.empresa || {}).nome || "")}). Ficam só neste computador, no arquivo .env da empresa.</p>
+    <div class="campos">${cr("cnpj", "CNPJ")}${cr("im", "Inscrição municipal")}${cr("ie", "Inscrição estadual")}${cr("chave", "Chave do webservice (Itaboraí)", "password")}${cr("proximo_rps", "Próximo RPS", "number")}
+    <label>Optante do Simples<select data-cred="simples"><option value="S" ${cred.simples != "N" ? "selected" : ""}>Sim</option><option value="N" ${cred.simples == "N" ? "selected" : ""}>Não</option></select></label></div></div>
+  <div class="card"><h2>${ic("nota")}Serviço padrão das notas</h2><p class="sub">Usado em toda emissão desta empresa (avulsa, lote e recorrência). Confira com o cadastro municipal e a Tabela IBS x CBS.</p>
+    <div class="campos"><label class="inteiro">Descrição padrão<input data-serv="descricao" value="${esc(sp.descricao || "")}"></label>${sv("item_lista_servico", "Item LC 116 (ex.: 17.19)")}${sv("codigo_desdobro", "Desdobro nacional (6 dígitos)")}${sv("codigo_nbs", "NBS (9 dígitos)")}${sv("cnae", "CNAE")}
+    ${sv("aliquota_iss", "Alíquota ISS (%)")}${sv("tipo_tributacao", "Tipo de tributação (4 = Simples)")}${sv("iss_retido", "ISS retido (1 sim / 2 não)")}${sv("indicador_operacao", "IBS/CBS: cIndOp")}${sv("classificacao_tributaria", "IBS/CBS: cClassTrib")}${sv("ibpt_percentual", "Carga tributária IBPT (%)")}
+    <label class="inteiro">Observações na nota<input data-serv="observacoes" value="${esc(sp.observacoes || "")}"></label></div></div>
   <div class="card"><h2>${ic("nota")}Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
     <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     ${tx("emissao", "certificado_pfx", "Certificado A1 (.pfx)", "text", 'placeholder="C:\\Users\\...\\certificado.pfx"')}${tx("emissao", "certificado_senha", "Senha do certificado", "password")}
@@ -569,7 +598,11 @@ PAGINAS.config = async el => {
       else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct", "iss_fixo_mensal"].includes(i.dataset.k)) v = valorNum(v);
       else if (i.type == "number") v = Number(v);
       novo[i.dataset.s][i.dataset.k] = v; });
-    await api("config/salvar", novo); await carregarEstado(); aviso("Configurações salvas ✔");
+    const cred = {}, serv = {};
+    $$("[data-cred]").forEach(i => cred[i.dataset.cred] = i.value);
+    $$("[data-serv]").forEach(i => serv[i.dataset.serv] = i.value.trim());
+    await api("config/salvar", novo); await api("empresa/credenciais/salvar", cred); await api("servico/salvar", serv);
+    await carregarEstado(); aviso("Configurações salvas ✔");
   };
   $("#teste_cert").onclick = async () => {
     $("#cert_res").innerHTML = '<div class="msg">Abrindo o certificado e consultando o ADN…</div>';

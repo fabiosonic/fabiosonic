@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
-               inter, lote, nacional, relatorios, saude)
+               empresas, inter, lote, nacional, relatorios, saude)
 from .validacao import ErroValidacao
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -67,7 +67,7 @@ def _cancelar_avulso(c: dict):
 
 def _cnpj_prestador() -> str:
     emissor.carregar_env()
-    return emissor.so_digitos(os.environ.get("ITABORAI_CNPJ", ""))
+    return emissor.so_digitos(emissor.env("ITABORAI_CNPJ"))
 
 
 def _cancelar_titulo(tid: int, motivo: str) -> dict:
@@ -88,7 +88,13 @@ def _abrir_pasta(p: Path) -> dict:
 
 ROTAS = {
     # gerais
-    "estado": lambda c: {"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
+    "empresas": lambda c: empresas.listar(),
+    "empresa/criar": lambda c: (empresas.criar(c), {"empresas": empresas.listar()})[1],
+    "empresa/ativar": lambda c: (empresas.ativar(str(c.get("id", ""))), {"ok": True})[1],
+    "empresa/credenciais": lambda c: empresas.credenciais(),
+    "empresa/credenciais/salvar": lambda c: empresas.salvar_credenciais(c),
+    "servico/salvar": lambda c: empresas.salvar_servico(c),
+    "estado": lambda c: {"empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
                          "producao": emissor.em_producao(), "config": config.publico(),
                          "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
@@ -255,6 +261,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
     srv = ThreadingHTTPServer(("127.0.0.1", porta), _Handler)
+    empresas.aplicar_ativa()
     url = f"http://127.0.0.1:{porta}"
     print(f"Sistema em {url} (deixe esta janela aberta; Ctrl+C para sair)")
     if robo:

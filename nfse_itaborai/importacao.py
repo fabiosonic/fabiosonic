@@ -151,6 +151,8 @@ def importar_titulos_externos(notas: list[dict]) -> int:
 
 def importar_xml(em: date | None = None) -> dict:
     cfg = config.carregar()
+    if not str(cfg["pastas"].get("xml_nfse") or "").strip():
+        return {"pasta": "não configurada"}
     pasta = _pasta(cfg["pastas"]["xml_nfse"])
     if not pasta.exists():
         return {"pasta": "não encontrada"}
@@ -164,11 +166,15 @@ def importar_xml(em: date | None = None) -> dict:
 # ---------------------------------------------------------------- extratos
 
 def importar_extratos() -> dict:
-    pasta = _pasta(config.carregar()["pastas"]["extratos"])
+    cfg = config.carregar()
+    if not str(cfg["pastas"].get("extratos") or "").strip():
+        return {"pasta": "não configurada"}
+    pasta = _pasta(cfg["pastas"]["extratos"])
     if not pasta.exists():
         return {"pasta": "não encontrada"}
     feitos = {r["caminho"]: r["mtime"] for r in db.linhas("SELECT * FROM arquivos_processados")}
     total = {"arquivos": 0, "titulos": 0, "despesas": 0}
+    ignorados = 0
     for arq in sorted(list(pasta.glob("*.ofx")) + list(pasta.glob("*.OFX"))):
         mtime = arq.stat().st_mtime
         if feitos.get(str(arq)) == mtime:
@@ -178,6 +184,14 @@ def importar_extratos() -> dict:
             texto = conteudo.decode("utf-8")
         except UnicodeDecodeError:
             texto = conteudo.decode("cp1252", errors="replace")
+        conta = conciliacao.conta_ofx(texto)
+        contas = cfg["financeiro"].get("contas_bancarias") or []
+        if conta and contas and conta not in contas:
+            ignorados += 1      # extrato de outra conta (outra empresa ou conta não vinculada): não concilia aqui
+            continue
+        if conta and not contas:
+            config.salvar({"financeiro": {"contas_bancarias": [conta]}})
+            cfg = config.carregar()
         r = conciliacao.importar(texto)
         total["arquivos"] += 1
         total["titulos"] += r["titulos"]
@@ -185,6 +199,8 @@ def importar_extratos() -> dict:
         with db.conexao() as con:
             con.execute("INSERT OR REPLACE INTO arquivos_processados (caminho, mtime, quando) VALUES (?,?,?)",
                         (str(arq), mtime, db.agora()))
+    if ignorados:
+        total["outras_contas"] = ignorados
     return total
 
 

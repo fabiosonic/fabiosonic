@@ -23,9 +23,14 @@ def checklist(em: date | None = None) -> dict:
         itens.append({"id": id_, "ok": bool(ok), "titulo": titulo, "detalhe": "" if ok else detalhe,
                       "pagina": pagina, "nivel": nivel})
 
-    faltando = [k for k in ("ITABORAI_CNPJ", "ITABORAI_IM", "ITABORAI_CHAVE") if not os.environ.get(k)]
-    item("prefeitura", not faltando, "Credenciais da prefeitura",
-         "Falta no arquivo .env: " + ", ".join(faltando), "config")
+    nac = cfg["emissao"].get("canal") == "nacional"
+    exigidas = ("ITABORAI_CNPJ",) if nac else ("ITABORAI_CNPJ", "ITABORAI_IM", "ITABORAI_CHAVE")
+    nomes = {"ITABORAI_CNPJ": "CNPJ", "ITABORAI_IM": "inscrição municipal", "ITABORAI_CHAVE": "chave do webservice"}
+    faltando = [nomes[k] for k in exigidas if not emissor.env(k)]
+    item("prefeitura", not faltando, "Dados da empresa emissora" if nac else "Credenciais da prefeitura",
+         "Falta informar: " + ", ".join(faltando), "config")
+    item("servico", cfg["emissao"].get("servico_revisado", True), "Serviço padrão revisado",
+         "Empresa nova: confira item da lista, desdobro, NBS, alíquota e IBS/CBS do serviço padrão.", "config")
     item("producao", emissor.em_producao(), "Emissão em produção",
          "O sistema está em homologação: as notas não têm validade e o robô não emite.", "painel", "aviso")
     if cfg["emissao"].get("canal") == "nacional":

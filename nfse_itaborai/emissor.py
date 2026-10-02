@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -17,38 +19,118 @@ from .xsd import validar_xsd
 from .xml_rps import gerar_cancelamento, gerar_envio, so_digitos
 
 FUSO = timezone(timedelta(hours=-3), "Brasilia")  # sem horário de verão desde 2019
-RAIZ = Path(os.environ.get("ITABORAI_PASTA", Path.cwd()))
+BASE = Path(os.environ.get("ITABORAI_PASTA", Path.cwd()))
+
+
+class _Raiz:
+    """Pasta da empresa em uso. Multiempresa: cada empresa tem sua pasta (.env, dados/, saida/).
+
+    A tela usa a empresa ativa (global); o robô processa cada empresa num contexto próprio da thread
+    (usar_empresa), sem interferir na empresa aberta na tela.
+    """
+
+    def __init__(self, base: Path):
+        self.ativa = base
+        self._local = threading.local()
+
+    def atual(self) -> Path:
+        return getattr(self._local, "pasta", None) or self.ativa
+
+    def __truediv__(self, outro):
+        return self.atual() / outro
+
+    def __fspath__(self):
+        return str(self.atual())
+
+    def __str__(self):
+        return str(self.atual())
+
+    def __repr__(self):
+        return f"RAIZ({self.atual()})"
+
+    def __getattr__(self, nome):
+        return getattr(self.atual(), nome)
+
+
+RAIZ = _Raiz(BASE)
+
+
+def raiz() -> Path:
+    """Pasta da empresa em uso (aceita RAIZ substituída por um Path nos testes)."""
+    return RAIZ.atual() if isinstance(RAIZ, _Raiz) else Path(RAIZ)
+
+
+@contextmanager
+def usar_empresa(pasta: Path):
+    """Executa o bloco com a pasta de outra empresa nesta thread (robô multiempresa)."""
+    if not isinstance(RAIZ, _Raiz):
+        yield
+        return
+    anterior = getattr(RAIZ._local, "pasta", None)
+    RAIZ._local.pasta = Path(pasta)
+    try:
+        yield
+    finally:
+        RAIZ._local.pasta = anterior
+
+
+def definir_ativa(pasta: Path) -> None:
+    if isinstance(RAIZ, _Raiz):
+        RAIZ.ativa = Path(pasta)
 
 
 class ErroConfiguracao(Exception):
     pass
 
 
-def carregar_env(caminho: Path | None = None) -> None:
-    """Lê um arquivo .env simples (CHAVE=valor) sem sobrescrever variáveis já definidas."""
-    caminho = caminho or RAIZ / ".env"
-    if not caminho.exists():
-        return
+_ENV_CACHE: dict = {}
+
+
+def ler_env(caminho: Path | None = None) -> dict:
+    """Conteúdo do .env da empresa em uso (CHAVE=valor), com cache pela data de modificação."""
+    caminho = Path(caminho or raiz() / ".env")
+    try:
+        mtime = caminho.stat().st_mtime
+    except OSError:
+        return {}
+    chave = str(caminho)
+    if chave in _ENV_CACHE and _ENV_CACHE[chave][0] == mtime:
+        return _ENV_CACHE[chave][1]
+    valores = {}
     for linha in caminho.read_text(encoding="utf-8").splitlines():
         linha = linha.strip()
         if not linha or linha.startswith("#") or "=" not in linha:
             continue
         k, v = linha.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+        valores[k.strip()] = v.strip().strip('"').strip("'")
+    _ENV_CACHE[chave] = (mtime, valores)
+    return valores
+
+
+def env(chave: str, padrao: str = "") -> str:
+    """Valor de configuração da empresa em uso: o .env dela prevalece; sem ele, a variável de ambiente."""
+    v = ler_env().get(chave)
+    return v if v not in (None, "") else os.environ.get(chave, padrao)
+
+
+def carregar_env(caminho: Path | None = None) -> None:
+    """Compatibilidade: as credenciais são lidas por env(), sem copiar para o ambiente do processo
+    (senão uma empresa herdaria as credenciais de outra)."""
+    ler_env(caminho)
 
 
 def prestador_do_ambiente() -> Prestador:
     carregar_env()
-    faltando = [k for k in ("ITABORAI_CNPJ", "ITABORAI_IM", "ITABORAI_CHAVE") if not os.environ.get(k)]
+    faltando = [k for k in ("ITABORAI_CNPJ", "ITABORAI_IM", "ITABORAI_CHAVE") if not env(k)]
     if faltando:
         raise ErroConfiguracao("Configure no arquivo .env: " + ", ".join(faltando) + " (veja .env.exemplo).")
     return Prestador(
-        cnpj=so_digitos(os.environ["ITABORAI_CNPJ"]),
-        inscricao_municipal=so_digitos(os.environ["ITABORAI_IM"]),
-        chave_webservice=os.environ["ITABORAI_CHAVE"].strip(),
-        inscricao_estadual=os.environ.get("ITABORAI_IE", ""),
-        optante_simples=os.environ.get("ITABORAI_SIMPLES", "S").upper().startswith("S"),
-        incentivo_fiscal=os.environ.get("ITABORAI_INCENTIVO", "N").upper().startswith("S"),
+        cnpj=so_digitos(env("ITABORAI_CNPJ")),
+        inscricao_municipal=so_digitos(env("ITABORAI_IM")),
+        chave_webservice=env("ITABORAI_CHAVE").strip(),
+        inscricao_estadual=env("ITABORAI_IE", ""),
+        optante_simples=env("ITABORAI_SIMPLES", "S").upper().startswith("S"),
+        incentivo_fiscal=env("ITABORAI_INCENTIVO", "N").upper().startswith("S"),
     )
 
 
@@ -57,9 +139,9 @@ def producao_autorizada(pedido_producao: bool) -> bool:
     if not pedido_producao:
         return False
     carregar_env()
-    if os.environ.get("ITABORAI_AMBIENTE", "").lower() != "producao":
+    if env("ITABORAI_AMBIENTE", "").lower() != "producao":
         raise ErroConfiguracao("Para emitir em produção defina ITABORAI_AMBIENTE=producao no .env.")
-    if os.environ.get("ITABORAI_CIENTE_IRREVERSIVEL", "").upper() != "SIM":
+    if env("ITABORAI_CIENTE_IRREVERSIVEL", "").upper() != "SIM":
         raise ErroConfiguracao(
             "A prefeitura avisa: iniciada a emissão via webservice, a emissão manual deixa de ser "
             "possível (irreversível). Se está ciente, defina ITABORAI_CIENTE_IRREVERSIVEL=SIM no .env.")
@@ -75,8 +157,8 @@ def _arquivo_sequencia() -> Path:
 def _ler_sequencia() -> dict:
     """Usa o maior valor entre o .env e o controle local, para que ajustes no .env valham."""
     carregar_env()
-    seq = {"proximo_rps": int(os.environ.get("ITABORAI_PROXIMO_RPS", "1")),
-           "proximo_lote": int(os.environ.get("ITABORAI_PROXIMO_LOTE", "1"))}
+    seq = {"proximo_rps": int(env("ITABORAI_PROXIMO_RPS", "1")),
+           "proximo_lote": int(env("ITABORAI_PROXIMO_LOTE", "1"))}
     arq = _arquivo_sequencia()
     if arq.exists():
         salvo = json.loads(arq.read_text(encoding="utf-8"))
@@ -262,8 +344,8 @@ def cancelar(numero_nfse: str, justificativa: str, producao: bool = False,
 
 def em_producao() -> bool:
     carregar_env()
-    return (os.environ.get("ITABORAI_AMBIENTE", "").lower() == "producao"
-            and os.environ.get("ITABORAI_CIENTE_IRREVERSIVEL", "").upper() == "SIM")
+    return (env("ITABORAI_AMBIENTE", "").lower() == "producao"
+            and env("ITABORAI_CIENTE_IRREVERSIVEL", "").upper() == "SIM")
 
 
 def definir_ambiente(producao: bool) -> None:
@@ -280,4 +362,3 @@ def definir_ambiente(producao: bool) -> None:
             feitas.add(chave)
     linhas += [f"{k}={v}" for k, v in valores.items() if k not in feitas]
     arq.write_text("\n".join(linhas) + "\n", encoding="utf-8")
-    os.environ.update(valores)

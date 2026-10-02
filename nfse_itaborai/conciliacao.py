@@ -36,6 +36,12 @@ def ler_ofx(conteudo: str) -> list[dict]:
     return movs
 
 
+def conta_ofx(conteudo: str) -> str:
+    """Identificação da conta do extrato (banco + agência + conta), para não misturar empresas."""
+    tag = lambda n: (re.search(rf"<{n}>([^<\r\n]*)", conteudo, re.I) or [None, ""])[1].strip()  # noqa: E731
+    return "-".join(x for x in (tag("BANKID"), tag("BRANCHID"), tag("ACCTID")) if x)
+
+
 def importar(conteudo: str) -> dict:
     movs = ler_ofx(conteudo)
     novos = 0

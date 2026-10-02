@@ -47,6 +47,20 @@ def rodar(em: date | None = None, forcar: bool = False, url: str | None = None) 
         return _rodar(em, forcar, url)
 
 
+def rodar_todas(em: date | None = None, forcar: bool = False) -> dict:
+    """Multiempresa: roda a rotina de cada empresa cadastrada, cada uma com a sua pasta (dados e credenciais)."""
+    from . import empresas
+    res = {}
+    for e in empresas.listar():
+        with emissor.usar_empresa(empresas.pasta(e)):
+            try:
+                res[e["nome"]] = rodar(em, forcar)
+            except Exception as ex:  # noqa: BLE001 — uma empresa com problema não para as outras
+                db.registrar("robo_erro", str(ex))
+                res[e["nome"]] = {"executado": False, "motivo": f"erro: {ex}"}
+    return res
+
+
 def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None) -> dict:
     em = em or financeiro.hoje()
     cfg = config.carregar()
@@ -122,7 +136,7 @@ def iniciar_em_segundo_plano(intervalo_min: int = 60) -> None:
     def laco():
         while True:
             try:
-                rodar()
+                rodar_todas()
             except Exception as ex:  # noqa: BLE001
                 db.registrar("robo_erro", str(ex))
             time.sleep(intervalo_min * 60)

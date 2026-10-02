@@ -135,6 +135,27 @@ Cada envio grava em `saida\AAAA-MM\RPS_<n>\`:
 O número do RPS só avança quando ele vira NFS-e. Se o RPS for rejeitado, o mesmo número é reaproveitado
 na correção.
 
+## Várias empresas
+
+O sistema atende quantas empresas você quiser: a Moraes & Oliveira e as empresas para as quais você emite nota e
+controla o financeiro.
+
+- **Trocar ou cadastrar:** clique no nome da empresa, no topo do menu. Na nova empresa informe razão social, CNPJ
+  (validado), inscrição municipal, canal da NFS-e (Itaboraí ou Nacional) e município.
+- **Tudo separado:** cada empresa tem o seu `.env` (credenciais), banco de dados, clientes, contas a receber e a
+  pagar, configurações, numeração de RPS/DPS, notas emitidas, boletos e relatórios. A empresa original continua na
+  pasta do sistema, sem mover nada; as novas ficam em `empresas/<CNPJ>/`.
+- **Configuração pela tela:** em Configurações, os cartões "Empresa emissora e credenciais" e "Serviço padrão das
+  notas" valem para a empresa em uso. O checklist do painel avisa enquanto o serviço padrão de uma empresa nova
+  não for revisado.
+- **Robô:** a cada execução processa todas as empresas, uma de cada vez, cada uma com seus dados. A tela pode
+  estar aberta em qualquer empresa enquanto isso.
+- **Proteções:**
+  - a nota sai com o município de prestação da empresa emissora;
+  - cada empresa tem a própria pasta de extratos;
+  - o sistema memoriza a conta bancária do primeiro extrato e ignora extratos de outra conta, para que um
+    extrato nunca seja conciliado na empresa errada.
+
 ## Sem dependência de terceiros
 
 O sistema conversa **somente** com os canais oficiais:
@@ -266,7 +287,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 103 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 118 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

@@ -36,7 +36,14 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "")
                              "observacoes")},
         "valor_total_tributos": str(ibpt),
         "tomador": clientes.para_dict_tomador(cli),
+        # local da prestação e do recolhimento: município da empresa emissora (multiempresa)
+        "local_prestacao": _municipio(), "local_recolhimento": _municipio(),
     }
+
+
+def _municipio() -> str:
+    from . import config
+    return clientes._digitos(config.carregar()["emissao"].get("municipio_emissor")) or "3301900"
 
 
 def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False, url: str | None = None,
