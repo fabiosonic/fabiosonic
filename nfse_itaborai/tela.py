@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
-               empresas, importador, inter, lote, nacional, relatorios, saude)
+               empresas, importador, inter, lote, migracao, nacional, relatorios, saude)
 from . import __version__
 from .validacao import ErroValidacao
 
@@ -90,6 +90,8 @@ def _abrir_pasta(p: Path) -> dict:
 ROTAS = {
     # gerais
     "empresas": lambda c: empresas.listar(),
+    "migracao/procurar": lambda c: migracao.procurar(),
+    "migracao/importar": lambda c: migracao.importar(str(c.get("pasta", ""))),
     "importador/analisar": lambda c: importador.analisar(),
     "importador/importar": lambda c: importador.importar(str(c.get("empresa_id", "")), str(c.get("cnpj", "")),
                                                          c.get("servico") or None),

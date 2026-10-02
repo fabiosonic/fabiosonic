@@ -52,6 +52,17 @@ Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são ma
      dele;
    - se a porta 8765 continuar ocupada, abre em outra porta livre.
 4. A versão aparece no canto inferior do menu (ex.: v3.0.0).
+5. Se a versão nova foi para outra pasta, o painel mostra "Versão anterior encontrada" (há também o botão em
+   Configurações › Versão anterior).
+   - O que é trazido: e-mail de envio, Banco Inter, chave PIX, e-mail do dono, certificado (copiado para dentro da
+     empresa), clientes que faltam, o financeiro (se o atual estiver vazio), a numeração (pelo maior valor) e as
+     outras empresas.
+   - Só entra o que estiver vazio aqui; o que você já preencheu na versão nova prevalece.
+   - A produção nunca é ligada por cópia.
+   - A pasta antiga não é alterada.
+
+**Cores:** o botão "Tema" no menu alterna entre automático (segue o Windows), claro e escuro. A escolha fica
+guardada no navegador.
 
 ## O sistema
 
@@ -354,7 +365,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 132 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 135 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

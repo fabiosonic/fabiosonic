@@ -84,6 +84,10 @@ nav a .ic { opacity: .85; }
 nav a:hover { background: rgba(255, 255, 255, .06); color: #fff; }
 nav a.on { background: var(--menu2); color: var(--menu-ativo); font-weight: 600; box-shadow: inset 3px 0 0 #5b8cff; }
 nav a.on .ic { opacity: 1; color: #8fb0ff; }
+.tema { margin: 0 12px; padding: 8px 12px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+        font: inherit; font-size: 13px; border: 1px solid rgba(255, 255, 255, .08); background: transparent; color: var(--menu-txt); }
+.tema:hover { background: rgba(255, 255, 255, .06); color: #fff; }
+.card.migra { border-color: var(--primaria); background: var(--primaria-suave); }
 .amb { margin: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px;
        text-align: left; font: inherit; border: 1px solid rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .04); color: #fff; }
 .amb:hover { background: rgba(255, 255, 255, .08); }

@@ -9,6 +9,19 @@ const dt = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4
 const mes = c => c ? `${c.slice(5, 7)}/${c.slice(0, 4)}` : "";
 const fmtDoc = d => !d ? "" : d.length == 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 const valorNum = s => { s = String(s ?? "").trim(); if (s.includes(",")) s = s.replace(/\./g, "").replace(",", "."); return Number(s) || 0; };
+// tema: automático (segue o Windows), claro ou escuro — preferência guardada neste navegador
+const TEMAS = [["", "automático"], ["light", "claro"], ["dark", "escuro"]];
+function aplicarTema(t) {
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  const b = document.getElementById("tema"); if (b) b.querySelector("span").textContent = "Tema: " + TEMAS.find(x => x[0] == t)[1];
+}
+let TEMA = ""; try { TEMA = localStorage.getItem("tema") || ""; } catch (e) { /* sem armazenamento: automático */ }
+aplicarTema(TEMA);
+document.getElementById("tema").onclick = () => {
+  TEMA = TEMAS[(TEMAS.findIndex(x => x[0] == TEMA) + 1) % TEMAS.length][0];
+  try { localStorage.setItem("tema", TEMA); } catch (e) { /* ignora */ }
+  aplicarTema(TEMA); if (PAG == "painel" || PAG == "relatorios") ir(PAG);
+};
 const ic = n => `<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 let ST = { clientes: [], padrao: {}, producao: false, config: {} };
@@ -148,6 +161,7 @@ PAGINAS.painel = async el => {
   const robo = ST.config.automacao.ativa ? `<span class="selo bom">Robô ligado</span><span>${p.ultima_execucao_robo ? "última execução " + dt(p.ultima_execucao_robo.slice(0, 10)) + " às " + p.ultima_execucao_robo.slice(11, 16) : "ainda não executou"}</span>` : `<span class="selo critico">Robô desligado</span>`;
   const kpi = (cls, icone, rot, val, sub = "") => `<div class="kpi ${cls}"><div class="r">${ic(icone)}${rot}</div><div class="v">${val}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
   el.innerHTML = `<h1>Painel <span class="titulo-sub">${robo}</span><span class="acoes"><button class="btn sec" id="robo">${ic("play")}Rodar robô agora</button></span></h1>
+  <div id="migra"></div>
   ${sd.completo ? "" : `<details class="card checklist" ${sd.erros ? "open" : ""}><summary><span class="ck-tit">${ic(sd.erros ? "alerta" : "ok")}<b>Implantação e saúde do sistema</b><span class="sub">${sd.ok} de ${sd.total} itens em ordem${sd.erros ? ` · ${sd.erros} impedem a automação completa` : ""}</span></span><span class="ck-barra"><span style="width:${sd.ok / sd.total * 100}%"></span></span></summary>
     <ul>${sd.itens.filter(i => !i.ok).sort((a, b) => (a.nivel == "erro" ? 0 : 1) - (b.nivel == "erro" ? 0 : 1)).map(i => `<li class="ck-${i.ok ? "ok" : i.nivel}">${ic(i.ok ? "ok" : i.nivel == "erro" ? "bloqueio" : "alerta")}<div><b>${esc(i.titulo)}</b>${i.ok ? "" : `<div class="sub">${esc(i.detalhe)} <a href="#" onclick="ir('${i.pagina}');return false">resolver</a></div>`}</div></li>`).join("")}</ul>
     <p class="ck-feitos">${ic("ok")}Em ordem: ${sd.itens.filter(i => i.ok).map(i => esc(i.titulo)).join(" · ") || "nenhum item ainda"}</p></details>`}
@@ -170,6 +184,7 @@ PAGINAS.painel = async el => {
     <div class="card"><h2>${ic("bloqueio")}Maiores devedores</h2>${tabela([{ t: "Cliente", f: x => esc(x.cliente) }, { t: "Valor atualizado", n: 1, f: x => brl(x.valor) }], p.maiores_devedores, "Ninguém em atraso.")}</div>
     <div class="card"><h2>${ic("relogio")}Vencem nos próximos 7 dias</h2>${tabela([{ t: "Cliente", f: t => esc(t.cliente_nome) }, { t: "Vencimento", f: t => dt(t.vencimento) }, { t: "Valor", n: 1, f: t => brl(t.valor_cent) }, { t: "NFS-e", f: t => selo(t.nfse_status) }], p.proximos_7_dias, "Nenhum vencimento na semana.")}</div>
   </div>`;
+  if (!sd.completo) mostrarMigracao($("#migra"));
   montarGrafico($("#g_painel"), p.serie, [{ k: "faturado", rot: "Faturado (competência)", cor: "--serie-1" }, { k: "recebido", rot: "Recebido", cor: "--serie-2" }], { aria: "Faturado e recebido nos últimos 12 meses" });
   $("#robo").onclick = async ev => {
     if (!confirm(`Rodar o robô agora?\n\nEle gera os títulos dos contratos, ${ST.producao ? "EMITE AS NFS-e VÁLIDAS pendentes" : "não emite NFS-e (homologação)"}, cria PIX/boleto, envia a régua de cobrança e confere pagamentos.`)) return;
@@ -575,6 +590,19 @@ async function importarXml(area) {
       await carregarEstado(); ir("clientes"); }; });
 }
 
+async function mostrarMigracao(alvo, sempre) {
+  let l; try { l = await api("migracao/procurar"); } catch (e) { return; }
+  if (!alvo) return;
+  if (!l.length) { if (sempre) alvo.innerHTML = '<div class="msg">Nenhuma versão anterior com dados foi encontrada nas pastas Downloads, Documentos e Área de Trabalho.</div>'; return; }
+  alvo.innerHTML = l.map((v, j) => `<div class="card migra"><h2>${ic("download")}Versão anterior encontrada</h2>
+    <p class="sub">Em <b>${esc(v.pasta)}</b> há: ${Object.keys(v.itens).map(esc).join(" · ")}. Copio para cá só o que ainda está vazio nesta versão; a pasta antiga não é alterada. ${v.ambiente_producao ? "A versão antiga estava em produção: confirme a produção aqui pelo botão do ambiente." : ""}</p>
+    <button class="btn" data-j="${j}">${ic("ok")}Trazer para esta versão</button></div>`).join("");
+  $$(".migra .btn", alvo).forEach(b => b.onclick = async () => {
+    const r = await api("migracao/importar", { pasta: l[b.dataset.j].pasta });
+    aviso(r.importado.length ? "Trazido da versão anterior: " + r.importado.join(", ") : "Nada novo para trazer.", 9000);
+    await carregarEstado(); ir(PAG); });
+}
+
 // ---------------------------------------------------------------- configurações
 PAGINAS.config = async el => {
   const [c, cred] = await Promise.all([api("config"), api("empresa/credenciais")]);
@@ -585,6 +613,8 @@ PAGINAS.config = async el => {
   const sl = (s, k, t, ops) => `<label>${t}<select data-s="${s}" data-k="${k}">${ops.map(([v, x]) => `<option value="${v}" ${String(c[s][k]) == v ? "selected" : ""}>${x}</option>`).join("")}</select></label>`;
   const tx = (s, k, t, tipo = "text", extra = "") => `<label>${t}<input type="${tipo}" data-s="${s}" data-k="${k}" value="${esc(Array.isArray(c[s][k]) ? c[s][k].join(", ") : c[s][k])}" ${extra}></label>`;
   el.innerHTML = `<h1>Configurações <span class="acoes"><button class="btn" id="salvar">Salvar tudo</button></span></h1>
+  <div class="card"><h2>${ic("download")}Versão anterior</h2><p class="sub">Traz da instalação antiga deste computador o que ainda estiver vazio aqui: e-mail de envio, Banco Inter, chave PIX, certificado, clientes, financeiro e outras empresas.</p>
+    <p><button class="btn sec" id="busca_ant">Procurar versão anterior</button></p><div id="migra_cfg"></div></div>
   <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
@@ -660,6 +690,7 @@ PAGINAS.config = async el => {
     $("#cert_senha").value = ""; $("#cert_nome").textContent = "Certificado A1 cadastrado nesta empresa — clique para trocar"; };
   $$(".inter_arq").forEach(i => i.onchange = async e => { const f = e.target.files[0]; if (!f) return;
     await api("inter/arquivo", { tipo: i.dataset.t, arquivo: await lerB64(f) }); aviso(`Arquivo .${i.dataset.t} do Inter guardado nesta empresa ✔`); ir("config"); });
+  $("#busca_ant").onclick = () => { $("#migra_cfg").innerHTML = '<div class="msg">Procurando…</div>'; mostrarMigracao($("#migra_cfg"), true); };
   $("#teste_cert").onclick = async () => {
     $("#cert_res").innerHTML = '<div class="msg">Abrindo o certificado e consultando o ADN…</div>';
     try { const r = await api("nacional/testar");
