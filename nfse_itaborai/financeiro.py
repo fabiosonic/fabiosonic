@@ -58,11 +58,20 @@ def encargos(titulo: dict, em: date | None = None) -> dict:
             "total_cent": titulo["valor_cent"] + int(multa) + int(juros)}
 
 
+# Só está "em cobrança" (a receber, atraso, inadimplência, previsão de caixa) o título com cobrança de fato
+# gerada: boleto registrado ou PIX. Nota emitida sem boleto/PIX é faturamento, não valor a receber cobrado.
+SQL_COBRADO = "cobrar=1 AND (banco_id!='' OR pix_copia_cola!='' OR linha_digitavel!='')"
+
+
+def tem_cobranca(t: dict) -> bool:
+    return bool(t.get("cobrar", 1)) and bool(t.get("banco_id") or t.get("pix_copia_cola") or t.get("linha_digitavel"))
+
+
 def situacao(titulo: dict, em: date | None = None) -> str:
     if titulo["status"] != "aberto":
         return titulo["status"]
-    if titulo.get("cobrar", 1) == 0:
-        return "sem_cobranca"   # nota/lançamento sem cobrança: não é cobrado, não entra em atraso nem na régua
+    if not tem_cobranca(titulo):
+        return "sem_cobranca"   # sem boleto/PIX: não é cobrado, não entra em a receber, atraso nem régua
     return "atrasado" if date.fromisoformat(titulo["vencimento"]) < (em or hoje()) else "aberto"
 
 

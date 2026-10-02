@@ -209,6 +209,7 @@ def test_robo_registra_boletos_e_cadastro_incompleto_nao_trava(banco):
 
 def test_sem_inter_configurado_usa_pix_proprio(base):  # noqa: F811
     tid = _titulo()
+    financeiro.atualizar_titulo(tid, pix_copia_cola="")   # ainda sem cobrança gerada
     t = cobranca.preparar_pagamento(tid)
     assert t["banco_id"] == "" and t["pix_copia_cola"].startswith("000201")
     assert "Inter" in tratar("titulo/boleto", {"id": tid})["erro"]

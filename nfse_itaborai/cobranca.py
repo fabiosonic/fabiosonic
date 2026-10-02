@@ -283,7 +283,7 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
     res = {"email": 0, "whatsapp": 0, "sem_contato": 0, "erros": 0}
     # Só cobra títulos com NFS-e válida, sem nota ou com nota após o pagamento: nunca dispara por nota de teste.
     # Títulos lançados sem cobrança (cobrar=0) ficam fora da régua.
-    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND cobrar=1"
+    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND " + financeiro.SQL_COBRADO +
                        " AND nfse_status IN ('emitida','nao_emitir','apos_pagamento')"):
         dias = (em - date.fromisoformat(t["vencimento"])).days
         cli = clientes.obter(t["cpf_cnpj"]) or {}

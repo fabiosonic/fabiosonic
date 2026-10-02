@@ -245,7 +245,11 @@ controla o financeiro.
 - **Emitir nota:** mostra a regra que será aplicada ao cliente escolhido e pergunta só "Gerar cobrança"
   (boleto/PIX + régua). Sem cobrança, o valor conta como faturado, mas não entra em "a receber", atraso, régua
   ou boletos (aba "Sem cobrança" em Contas a receber). Notas emitidas fora do sistema (importadas dos XML)
-  também entram como faturamento sem cobrança.
+  também entram como faturamento sem cobrança. Só é "a receber" (e entra em atraso, inadimplência, régua e
+  previsão de caixa) o título com cobrança de fato gerada: boleto registrado no Inter ou PIX.
+- **Contas a receber › Mais:** "Tirar da cobrança (manter a nota)" cancela o boleto e tira da régua sem mexer na
+  NFS-e; "Gerar cobrança" faz o caminho inverso. "Cancelar título" com nota emitida pergunta se é só para tirar
+  da cobrança ou se é para cancelar a NFS-e na prefeitura (com justificativa e confirmação).
 - **Aba Recorrência:** todos os clientes, já com o valor da última nota, dia de vencimento, serviço, regra da
   nota e cobrança, editáveis na própria linha. Marque "Repetir todo mês" para o cliente entrar no faturamento
   mensal; quem não estiver marcado nunca é cobrado. "Mais" abre início, fim, reajuste e descrição.
@@ -409,7 +413,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 153 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 155 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

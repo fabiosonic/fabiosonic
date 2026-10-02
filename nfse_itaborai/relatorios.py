@@ -72,7 +72,7 @@ def painel(em: date | None = None) -> dict:
     atrasados = [t for t in abertos if t["situacao"] == "atrasado"]
     recebido_mes = sum(t["valor_pago_cent"] for t in ts if t["status"] == "pago" and t["data_pagamento"] >= mes_ini)
     faturado_mes = sum(t["valor_cent"] for t in ts if t["competencia"] == comp)
-    vencido_total = sum(t["valor_cent"] for t in ts if t["vencimento"] < em.isoformat() and t.get("cobrar", 1))
+    vencido_total = sum(t["valor_cent"] for t in ts if t["vencimento"] < em.isoformat() and (t["status"] == "pago" or financeiro.tem_cobranca(t)))
     vencido_aberto = sum(t["valor_cent"] for t in atrasados)
     contratos = db.linhas("SELECT valor_cent FROM contratos WHERE ativo=1 AND confirmado=1")
     a_confirmar = db.linhas("SELECT COUNT(*) n FROM contratos WHERE ativo=1 AND confirmado=0")[0]["n"]
@@ -154,7 +154,7 @@ def fluxo_caixa(em: date | None = None, dias: int = 90) -> list[dict]:
         return (d - timedelta(days=d.weekday())).isoformat()
 
     corte = em - timedelta(days=60)  # atraso acima de 60 dias não entra na previsão de caixa
-    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND cobrar=1"):
+    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND " + financeiro.SQL_COBRADO):
         v = date.fromisoformat(t["vencimento"])
         if corte <= v <= fim:
             entradas[semana(v)] += t["valor_cent"]

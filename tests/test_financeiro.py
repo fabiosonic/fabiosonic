@@ -27,6 +27,15 @@ def base(ambiente, monkeypatch):  # noqa: F811
     from nfse_itaborai import cliente as cli_http
     orig = cli_http.postar
     monkeypatch.setattr(cli_http, "postar", lambda xml, nome, url_=None, timeout=60, **k: orig(xml, nome, url=url))
+    # nos testes, título com cobrança já nasce com o PIX que o robô geraria (a receber = cobrança de fato gerada)
+    criar = financeiro.criar_titulo
+
+    def criar_com_pix(*a, **k):
+        tid = criar(*a, **k)
+        if k.get("cobrar", True):
+            financeiro.atualizar_titulo(tid, pix_copia_cola=f"PIX-TESTE-{tid}")
+        return tid
+    monkeypatch.setattr(financeiro, "criar_titulo", criar_com_pix)
     return url, pasta
 
 
@@ -39,7 +48,7 @@ def test_cent(entrada, cent):
 
 
 def test_encargos_multa_e_juros_pro_rata(base):
-    t = {"status": "aberto", "vencimento": "2026-09-01", "valor_cent": 100000}
+    t = {"status": "aberto", "vencimento": "2026-09-01", "valor_cent": 100000, "pix_copia_cola": "000201..."}
     e = financeiro.encargos(t, date(2026, 10, 1))      # 30 dias
     assert e == {"dias_atraso": 30, "multa_cent": 2000, "juros_cent": 1000, "total_cent": 103000}
     assert financeiro.encargos(t, date(2026, 9, 1))["total_cent"] == 100000
@@ -196,7 +205,7 @@ def test_painel_aging_clientes_fluxo_dre_csv(base):
     financeiro.salvar_contrato({"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "1000", "inicio": "2026-09", "dia_vencimento": 10})
     financeiro.gerar_titulos("2026-09")
     atrasado = financeiro.listar_titulos()[0]["id"]
-    financeiro.atualizar_titulo(atrasado, nfse_status="emitida")
+    financeiro.atualizar_titulo(atrasado, nfse_status="emitida", pix_copia_cola="000201...")   # cobrança gerada
     pago = financeiro.criar_titulo(CLI_B["cpf_cnpj"], "500", vencimento="2026-09-20", competencia="2026-09", emitir_nfse=False)
     financeiro.baixar(pago, "2026-10-01", "500")
     financeiro.salvar_despesa({"descricao": "Aluguel", "valor": "800", "vencimento": "2026-10-15", "categoria": "Aluguel"})

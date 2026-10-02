@@ -147,9 +147,9 @@ def indicadores(em: date | None = None) -> dict:
 
     ini90 = (em - timedelta(days=90)).isoformat()
     fat90 = sum(t["valor_cent"] for t in validos if t["vencimento"] >= ini90 and t["vencimento"] <= em.isoformat())
-    aberto = sum(t["valor_cent"] for t in ts if t["status"] == "aberto" and t.get("cobrar", 1))
+    aberto = sum(t["valor_cent"] for t in ts if t["status"] == "aberto" and financeiro.tem_cobranca(t))
     dso = round(aberto / (fat90 / 90)) if fat90 else 0
-    vencidos90 = [t for t in ts if ini90 <= t["vencimento"] < em.isoformat() and t.get("cobrar", 1)]
+    vencidos90 = [t for t in ts if ini90 <= t["vencimento"] < em.isoformat() and (t["status"] == "pago" or financeiro.tem_cobranca(t))]
     inad90 = _pct(sum(t["valor_cent"] for t in vencidos90 if t["status"] == "aberto"),
                   sum(t["valor_cent"] for t in vencidos90))
 
@@ -237,7 +237,7 @@ def fluxo_mensal(em: date | None = None, passado: int = 6, futuro: int = 3) -> l
     proj: dict[str, list[int]] = {m: [0, 0] for m in janela}
     mes_de = lambda iso: max(iso[:7], atual)  # noqa: E731 — vencidos em aberto entram no mês corrente
     corte = (em - timedelta(days=60)).isoformat()  # atraso acima de 60 dias não entra na previsão de caixa
-    for t in db.linhas("SELECT vencimento, valor_cent FROM titulos WHERE status='aberto' AND cobrar=1 AND vencimento>=?", (corte,)):
+    for t in db.linhas("SELECT vencimento, valor_cent FROM titulos WHERE status='aberto' AND " + financeiro.SQL_COBRADO + " AND vencimento>=?", (corte,)):
         if mes_de(t["vencimento"]) in proj:
             proj[mes_de(t["vencimento"])][0] += t["valor_cent"]
     geradas = {(t["contrato_id"], t["competencia"]) for t in db.linhas("SELECT contrato_id, competencia FROM titulos")}

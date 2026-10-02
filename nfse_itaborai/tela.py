@@ -75,6 +75,18 @@ def _cnpj_prestador() -> str:
     return emissor.so_digitos(emissor.env("ITABORAI_CNPJ"))
 
 
+def _tirar_da_cobranca(tid: int) -> dict:
+    """A nota continua válida; o título vira só faturamento (cancela o boleto, se houver, e sai da régua)."""
+    t = financeiro.obter_titulo(tid)
+    if t["status"] != "aberto":
+        raise ValueError("Só título em aberto pode sair da cobrança.")
+    if t.get("banco_id"):
+        cobranca.cancelar_boleto(t, "Retirado da cobrança")
+    financeiro.atualizar_titulo(tid, cobrar=0, pix_copia_cola="")
+    db.registrar("cobranca", f"Título {tid} ({t['cliente_nome']}) retirado da cobrança; NFS-e mantida")
+    return {"ok": True}
+
+
 def _cancelar_titulo(tid: int, motivo: str) -> dict:
     t = financeiro.obter_titulo(tid)
     if t["status"] == "aberto":
@@ -164,6 +176,8 @@ ROTAS = {
     "titulo/baixar": lambda c: financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual")),
     "titulo/estornar": lambda c: (financeiro.estornar(_id(c)), {"ok": True})[1],
     "titulo/cancelar": lambda c: _cancelar_titulo(_id(c), c.get("motivo", "")),
+    "titulo/sem_cobranca": lambda c: _tirar_da_cobranca(_id(c)),
+    "titulo/gerar_cobranca": lambda c: (financeiro.atualizar_titulo(_id(c), cobrar=1), cobranca.preparar_pagamento(_id(c)))[1],
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
     "titulo/emitir_nfse": lambda c: financeiro.emitir_nfse_titulo(_id(c)),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),

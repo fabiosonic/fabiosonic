@@ -323,7 +323,9 @@ function acoesTitulo(t) {
   const it = (txt, js) => `<button onclick="this.closest('details').open=false;${js}">${txt}</button>`;
   if (t.status == "aberto") {
     prin.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
-    prin.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
+    if (t.situacao == "sem_cobranca") prin.push(`<button class="btn min sec" onclick="gerarCobranca(${t.id})" title="Gera boleto/PIX e coloca na régua">Gerar cobrança</button>`);
+    else { prin.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
+      mais.push(it(`${ic("bloqueio")}Tirar da cobrança (manter a nota)`, `tirarDaCobranca(${t.id})`)); }
     if (t.banco_id) mais.push(`<a href="/boleto/${t.id}.pdf" target="_blank">${ic("download")}Boleto em PDF</a>`);
     if (["pendente", "erro", "teste"].includes(t.nfse_status)) mais.push(it(`${ic("nota")}Emitir NFS-e`, `emitirTitulo(${t.id})`));
   }
@@ -347,11 +349,31 @@ async function emitirTitulo(id) {
 }
 async function cancelarTitulo(id, nfse) {
   if (nfse == "emitida") {
-    const j = prompt("Esta conta tem NFS-e emitida. Para cancelar a NFS-e (no mesmo canal em que foi emitida) e o título, informe a justificativa (mín. 15 caracteres):");
-    if (!j) return; const r = await api("titulo/cancelar_nfse", { id, justificativa: j });
-    aviso(r.sucesso ? "NFS-e e título cancelados ✔" : "Erro: " + (r.erros || []).join("; "), 7000);
-  } else { const m = prompt("Motivo do cancelamento do título:"); if (m === null) return; await api("titulo/cancelar", { id, motivo: m }); }
-  ir(PAG);
+    modal(`<h2>Cancelar título</h2><p>Esta conta tem <b>NFS-e emitida</b>. O que você quer fazer?</p>
+      <div class="opcoes-cancel"><button class="btn" id="cx_cob">${ic("ok")}Só tirar da cobrança — a nota fiscal continua válida</button>
+      <p class="sub">Cancela o boleto (se houver) e tira da régua e do “a receber”. O valor continua como faturado. Use quando não for cobrar por aqui.</p>
+      <button class="btn sec perigo" id="cx_nfse">${ic("x")}Cancelar a NFS-e na prefeitura e o título</button>
+      <p class="sub">Só quando a nota foi emitida por engano. Pede justificativa e é enviado ao canal em que a nota saiu.</p></div>
+      <p><button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+    $("#cx_cob").onclick = async () => { await api("titulo/sem_cobranca", { id }); fechar(); aviso("Título retirado da cobrança ✔ A NFS-e continua válida.", 6000); ir(PAG); };
+    $("#cx_nfse").onclick = async () => {
+      const j = prompt("Justificativa do cancelamento da NFS-e (mín. 15 caracteres):"); if (!j) return;
+      if (j.trim().length < 15) return aviso("A justificativa precisa ter pelo menos 15 caracteres.");
+      if (!confirm("Confirma o CANCELAMENTO DA NOTA FISCAL na prefeitura? Não dá para desfazer.")) return;
+      const r = await api("titulo/cancelar_nfse", { id, justificativa: j }); fechar();
+      aviso(r.sucesso ? "NFS-e e título cancelados ✔" : "A NFS-e NÃO foi cancelada: " + (r.erros || []).join("; "), 10000); ir(PAG); };
+    return;
+  }
+  const m = prompt("Motivo do cancelamento do título:"); if (m === null) return; await api("titulo/cancelar", { id, motivo: m }); aviso("Título cancelado ✔"); ir(PAG);
+}
+async function tirarDaCobranca(id) {
+  if (!confirm("Tirar este título da cobrança? O boleto (se houver) é cancelado e ele sai da régua e do “a receber”. A NFS-e continua válida.")) return;
+  await api("titulo/sem_cobranca", { id }); aviso("Título retirado da cobrança ✔", 5000); ir(PAG);
+}
+async function gerarCobranca(id) {
+  if (!confirm("Gerar a cobrança (boleto/PIX) deste título e colocá-lo na régua?")) return;
+  const t = await api("titulo/gerar_cobranca", { id });
+  aviso(t.banco_id ? "Boleto gerado ✔" : t.pix_copia_cola ? "PIX gerado ✔ (configure o Inter para boleto)" : "Não foi possível gerar: configure o Banco Inter ou a chave PIX em Configurações.", 8000); ir(PAG);
 }
 async function cobrar(id) {
   const r = await api("titulo/cobrar", { id });

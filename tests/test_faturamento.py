@@ -107,3 +107,30 @@ def test_nota_sem_cobranca_e_importada_nao_entram_em_a_receber(base):  # noqa: F
     assert p["a_receber"] == 0 and p["atrasado"] == 0
     assert [t["id"] for t in financeiro.listar_titulos("sem_cobranca")] == [tid]
     assert financeiro.listar_titulos("a_receber") == []
+
+
+def test_nota_emitida_sem_boleto_gerado_nao_e_conta_a_receber(base):  # noqa: F811
+    """Caso real: notas emitidas (versão anterior marcava cobrar=1), mas nenhum boleto/PIX foi gerado."""
+    from nfse_itaborai import relatorios
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "350", vencimento="2026-10-05")
+    financeiro.atualizar_titulo(tid, nfse_status="emitida", nfse_numero="99003873", pix_copia_cola="")
+    p = relatorios.painel(date(2026, 10, 2))
+    assert p["faturado_mes"] == 35000                       # é faturamento (nota emitida)...
+    assert p["a_receber"] == 0 and p["proximos_7_dias"] == []      # ...mas não é valor em cobrança
+    assert financeiro.listar_titulos("a_receber") == [] and financeiro.obter_titulo(tid)["status"] == "aberto"
+    assert [t["id"] for t in financeiro.listar_titulos("sem_cobranca")] == [tid]
+    financeiro.atualizar_titulo(tid, banco_id="cod-inter", linha_digitavel="0019...")   # boleto registrado
+    assert relatorios.painel(date(2026, 10, 2))["a_receber"] == 35000
+
+
+def test_tirar_da_cobranca_mantem_a_nota_e_gerar_cobranca_volta(base):  # noqa: F811
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "400", vencimento="2026-10-05")
+    financeiro.atualizar_titulo(tid, nfse_status="emitida", nfse_numero="99003875")
+    assert [t["id"] for t in financeiro.listar_titulos("a_receber")] == [tid]
+    tratar("titulo/sem_cobranca", {"id": tid})
+    t = financeiro.obter_titulo(tid)
+    assert t["status"] == "aberto" and t["nfse_status"] == "emitida" and t["cobrar"] == 0
+    assert financeiro.listar_titulos("a_receber") == []
+    t = tratar("titulo/gerar_cobranca", {"id": tid})
+    assert t["cobrar"] == 1 and t["pix_copia_cola"].startswith("000201")
+    assert [x["id"] for x in financeiro.listar_titulos("a_receber")] == [tid]
