@@ -135,6 +135,23 @@ Cada envio grava em `saida\AAAA-MM\RPS_<n>\`:
 O número do RPS só avança quando ele vira NFS-e. Se o RPS for rejeitado, o mesmo número é reaproveitado
 na correção.
 
+## Relatórios contábeis e autonomia
+
+- **Relatórios** (todos com "Imprimir / PDF" no layout contábil, com cabeçalho da empresa):
+  - Indicadores: ponto de equilíbrio, inadimplência de 90 dias, atraso médio ponderado, concentração de clientes,
+    clientes sem faturamento recente.
+  - DRE: no padrão da Lei 6.404/76, art. 187, adaptada ao Simples. Mostra receita bruta, deduções, receita
+    líquida, despesas por grupo, resultado operacional, despesas financeiras e resultado líquido, com 12 meses,
+    total e análise vertical. Valores negativos entre parênteses. O DAS pago e lançado como despesa não é deduzido
+    de novo.
+  - Fluxo de caixa: realizado pelo caixa e projetado. Atrasos acima de 60 dias ficam fora da projeção; sem
+    despesas lançadas, usa a média de 3 meses.
+  - Livro caixa, inadimplência por faixa, análise por cliente e fechamento mensal.
+- **Checklist de implantação e saúde:** aparece no painel e diz o que falta configurar ou corrigir, com o link para
+  resolver.
+- **Fechamento mensal automático:** no dia configurado o robô gera o relatório gerencial do mês anterior, salva em
+  `Downloads\Relatorios financeiros` e envia ao dono por e-mail.
+
 ## Várias empresas
 
 O sistema atende quantas empresas você quiser: a Moraes & Oliveira e as empresas para as quais você emite nota e
@@ -287,7 +304,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 118 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 119 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

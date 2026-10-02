@@ -139,6 +139,7 @@ input::placeholder { color: var(--muted); }
 .campos .inteiro { grid-column: 1 / -1; }
 .chk { flex-direction: row; align-items: center; gap: 9px; color: var(--texto); font-weight: 400; }
 .chk input { width: 16px; height: 16px; min-height: 0; accent-color: var(--primaria); flex: none; }
+input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; min-height: 0; padding: 0; accent-color: var(--primaria); }
 
 /* ------------------------------------------------------------------ botões */
 .btn { font: inherit; font-size: 14px; font-weight: 600; padding: 0 16px; height: 38px; border: 1px solid transparent;
@@ -249,6 +250,12 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
 .lista { margin: 0; padding-left: 18px; columns: 2; column-gap: 24px; font-size: 13.5px; }
 .lista li { margin-bottom: 4px; break-inside: avoid; }
 
+.soltar { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1.5px dashed var(--borda-forte); border-radius: 12px;
+          cursor: pointer; background: var(--superficie2); color: var(--texto); flex-direction: row; font-weight: 400; }
+.soltar:hover, .soltar.sobre { border-color: var(--primaria); background: var(--primaria-suave); }
+.soltar .ic { width: 26px; height: 26px; color: var(--primaria); }
+.soltar small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+
 /* checklist de implantação */
 .checklist summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0; color: var(--texto); }
 .checklist summary::-webkit-details-marker { display: none; }
@@ -323,4 +330,23 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
   nav a.on { box-shadow: inset 0 -3px 0 #5b8cff; }
   main { padding: 16px; }
   .grid2 { grid-template-columns: 1fr; }
+  .btn { white-space: normal; height: auto; min-height: 38px; padding: 8px 14px; text-align: left; }
+  h1 .acoes { margin-left: 0; width: 100%; }
+  .abas { overflow-x: auto; flex-wrap: nowrap; }
+  .abas button { white-space: nowrap; }
+  .lista { columns: 1; }
+  .bh { grid-template-columns: minmax(90px, 38%) 1fr auto; }
+  /* tabelas viram cartões no celular */
+  .tabela:not(.dre) { border: 0; overflow: visible; }
+  .tabela:not(.dre) table, .tabela:not(.dre) tbody, .tabela:not(.dre) tr, .tabela:not(.dre) td { display: block; width: 100%; }
+  .tabela:not(.dre) thead { display: none; }
+  .tabela:not(.dre) tr { border: 1px solid var(--borda); border-radius: 12px; padding: 8px 12px; margin-bottom: 10px; background: var(--superficie); }
+  .tabela:not(.dre) td { border: 0; padding: 5px 0; display: flex; justify-content: space-between; gap: 12px; text-align: right; }
+  .tabela:not(.dre) td::before { content: attr(data-r); color: var(--muted); font-size: 12px; font-weight: 500; text-align: left; flex: none; max-width: 45%; }
+  .tabela:not(.dre) td[data-r=""]::before { display: none; }
+  .tabela:not(.dre) td:first-child { display: block; text-align: left; font-weight: 600; padding-top: 6px; }
+  .tabela:not(.dre) td:first-child::before { display: none; }
+  .tabela:not(.dre) td:first-child .sub { font-weight: 400; }
+  .tabela:not(.dre) tbody tr:hover td { background: transparent; }
+  .acoes-linha { flex-wrap: wrap; justify-content: flex-end; }
 }

@@ -121,3 +121,11 @@ def test_empresa_nova_de_outro_municipio(multi):
     assert {x["id"]: x for x in saude.checklist()["itens"]}["servico"]["ok"]
     empresas.ativar("24875410000144")
     assert lote.montar_rps("32396063000103", "100")["local_prestacao"] == "3301900"   # Moraes segue em Itaboraí
+
+
+def test_importacao_manual_recusa_extrato_de_outra_conta(multi):
+    tratar("conciliacao/importar", {"ofx": OFX.format(conta="12345", fit="1")})
+    r = tratar("conciliacao/importar", {"ofx": OFX.format(conta="99999", fit="2")})
+    assert "não é a desta empresa" in r["erro"]
+    config.salvar({"financeiro": {"contas_bancarias": ["077-0001-12345", "077-0001-99999"]}})
+    assert tratar("conciliacao/importar", {"ofx": OFX.format(conta="99999", fit="3")})["novos"] == 1

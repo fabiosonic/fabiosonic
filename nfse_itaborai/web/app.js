@@ -34,7 +34,7 @@ function selo(sit) {
 function tabela(cols, linhas, vazio = "Nada por aqui.") {
   if (!linhas.length) return `<div class="vazio">${vazio}</div>`;
   return `<div class="tabela"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${c.t}</th>`).join("")}</tr></thead><tbody>${
-    linhas.map(l => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}">${c.f(l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    linhas.map(l => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}" data-r="${esc(String(c.t).replace(/<[^>]*>/g, ""))}">${c.f(l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 function opcoesClientes() { return ST.clientes.map(c => `<option value="${esc(c.razao_social)} — ${fmtDoc(c.cpf_cnpj)}">`).join(""); }
 function docDe(txt) { const m = String(txt).match(/(\d[\d./-]{10,})\s*$/); return m ? m[1].replace(/\D/g, "") : String(txt).replace(/\D/g, ""); }
@@ -333,7 +333,7 @@ PAGINAS.contratos = async el => {
   ${tabela([{ t: "Cliente", f: c => `${esc(c.cliente_nome)}<div class="sub">${esc(c.descricao)}</div>` }, { t: "Valor", n: 1, f: c => num(c.valor_cent) }, { t: "Vence dia", f: c => c.dia_vencimento },
     { t: "Vigência", f: c => `${mes(c.inicio)} → ${c.fim ? mes(c.fim) : "sem fim"}` }, { t: "Reajuste", f: c => c.mes_reajuste ? `${c.reajuste_pct}% em ${String(c.mes_reajuste).padStart(2, "0")}` : "—" },
     { t: "NFS-e", f: c => c.emitir_nfse ? "automática" : "não emite" }, { t: "Situação", f: c => !c.ativo ? selo("cancelado").replace("Cancelado", "Encerrado") : c.confirmado ? selo("bom").replace("Bom", "Ativo") : selo("pendente").replace("Pendente", "A confirmar") + ` <button class="btn min" onclick="confirmarUm(${c.id})">Confirmar</button>` },
-    { t: "", f: c => `<button class="btn min sec" onclick='editarContrato(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Editar</button>${c.ativo ? ` <button class="btn min sec" onclick="encerrar(${c.id})">Encerrar</button>` : ""}` }], lst, "Nenhum contrato. Use “Criar a partir do histórico” para montar a carteira em um clique.")}</div>`;
+    { t: "", f: c => `<div class="acoes-linha"><button class="btn min sec" onclick='editarContrato(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Editar</button>${c.ativo ? ` <button class="btn min sec" onclick="encerrar(${c.id})">Encerrar</button>` : ""}</div>` }], lst, "Nenhum contrato. Use “Criar a partir do histórico” para montar a carteira em um clique.")}</div>`;
   $("#nc").onclick = () => editarContrato({});
   $("#hist").onclick = async () => { const d = prompt("Dia de vencimento para os contratos criados:", ST.config.financeiro.dia_vencimento_padrao); if (d === null) return;
     const r = await api("contratos/historico", { dia_vencimento: Number(d) }); aviso(`${r.criados} contrato(s) criado(s) ✔`); ir("contratos"); };
@@ -409,10 +409,14 @@ PAGINAS.conciliacao = async el => {
   const pend = await api("conciliacao/pendentes");
   el.innerHTML = `<h1>Conciliação bancária</h1>
   <div class="card"><h2>Importar extrato (OFX)</h2><p class="sub">Exporte o extrato em OFX no internet banking e selecione aqui. Os recebimentos são casados com as contas a receber e baixados sozinhos; pagamentos casam com contas a pagar.</p>
-    <input type="file" id="ofx" accept=".ofx,.OFX"><div id="ofx_res"></div></div>
+    <label class="soltar" id="zona"><input type="file" id="ofx" accept=".ofx,.OFX" hidden>${ic("download")}<span><b>Selecione ou arraste o extrato .ofx</b><small>O robô também importa sozinho todo .ofx novo da pasta ${esc(ST.config.pastas.extratos || "")}${(ST.config.financeiro.contas_bancarias || []).length ? ` · conta vinculada: ${esc(ST.config.financeiro.contas_bancarias.join(", "))}` : ""}</small></span></label><div id="ofx_res"></div></div>
   <div class="card"><h2>Lançamentos não conciliados (${pend.length})</h2>
   ${tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) }, { t: "Valor", n: 1, f: m => num(m.valor_cent) },
     { t: "Sugestões", f: m => m.sugestoes.length ? m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(s.cliente.slice(0, 28))} · ${num(s.valor_cent)}</button>`).join(" ") : '<span class="sub">—</span>' }], pend, "Tudo conciliado ✔")}</div>`;
+  const zona = $("#zona");
+  zona.ondragover = e => { e.preventDefault(); zona.classList.add("sobre"); };
+  zona.ondragleave = () => zona.classList.remove("sobre");
+  zona.ondrop = e => { e.preventDefault(); zona.classList.remove("sobre"); if (e.dataTransfer.files[0]) $("#ofx").onchange({ target: { files: e.dataTransfer.files } }); };
   $("#ofx").onchange = async e => { const f = e.target.files[0]; if (!f) return;
     const buf = await f.arrayBuffer(); let txt = new TextDecoder("utf-8").decode(buf); if (txt.includes("�")) txt = new TextDecoder("windows-1252").decode(buf);
     const r = await api("conciliacao/importar", { ofx: txt });
@@ -588,13 +592,13 @@ PAGINAS.config = async el => {
   <div class="card"><h2>E-mail (SMTP)</h2><p class="sub">Gmail: servidor smtp.gmail.com, porta 587, e uma “senha de app” da conta Google.</p><div class="campos">${tx("smtp", "host", "Servidor")}${tx("smtp", "porta", "Porta", "number")}${tx("smtp", "usuario", "Usuário")}${tx("smtp", "senha", "Senha", "password")}${tx("smtp", "remetente", "Remetente")}${tx("smtp", "copia_para", "Cópia oculta para")}${ck("smtp", "ssl", "SSL direto (porta 465)")}</div>
     <p><button class="btn sec" id="teste_email">Enviar e-mail de teste</button></p></div>
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}
-    ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "iss_fixo_mensal", "ISS fixo por mês (R$, para a DRE)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
+    ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "iss_fixo_mensal", "ISS fixo por mês (R$, para a DRE)")}${tx("financeiro", "contas_bancarias", "Contas bancárias desta empresa (banco-agência-conta)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
   $("#salvar").onclick = async () => {
     const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, resumo: {}, emissao: {} };
     novo.regras_despesa = $("#regras").value.split("\n").map(l => l.split("=")).filter(x => x.length == 2 && x[0].trim()).map(([p, k]) => [p.trim().toUpperCase() + (p.trim().length <= 3 ? " " : ""), k.trim()]);
     $$("[data-s]").forEach(i => { let v = i.type == "checkbox" ? i.checked : i.value;
       if (["regua_dias"].includes(i.dataset.k)) v = v.split(/[,;\s]+/).filter(Boolean).map(Number);
-      else if (i.dataset.k == "categorias_despesa") v = v.split(",").map(s => s.trim()).filter(Boolean);
+      else if (["categorias_despesa", "contas_bancarias"].includes(i.dataset.k)) v = v.split(",").map(s => s.trim()).filter(Boolean);
       else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct", "iss_fixo_mensal"].includes(i.dataset.k)) v = valorNum(v);
       else if (i.type == "number") v = Number(v);
       novo[i.dataset.s][i.dataset.k] = v; });

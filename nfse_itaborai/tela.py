@@ -151,7 +151,7 @@ ROTAS = {
     "despesa/pagar": lambda c: (financeiro.pagar_despesa(_id(c), c.get("data", "")), {"ok": True})[1],
     "despesa/excluir": lambda c: (financeiro.excluir_despesa(_id(c)), {"ok": True})[1],
     # conciliação
-    "conciliacao/importar": lambda c: conciliacao.importar(str(c.get("ofx", ""))),
+    "conciliacao/importar": lambda c: importacao.importar_manual(str(c.get("ofx", ""))),
     "conciliacao/pendentes": lambda c: conciliacao.nao_conciliados(),
     "conciliacao/vincular": lambda c: (conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo")), {"ok": True})[1],
     # relatórios

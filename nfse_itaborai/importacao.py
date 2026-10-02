@@ -165,6 +165,26 @@ def importar_xml(em: date | None = None) -> dict:
 
 # ---------------------------------------------------------------- extratos
 
+def conta_da_empresa(texto: str) -> bool:
+    """O extrato é da conta desta empresa? A primeira conta importada fica vinculada à empresa."""
+    conta = conciliacao.conta_ofx(texto)
+    contas = config.carregar()["financeiro"].get("contas_bancarias") or []
+    if not conta or conta in contas:
+        return True
+    if not contas:
+        config.salvar({"financeiro": {"contas_bancarias": [conta]}})
+        return True
+    return False
+
+
+def importar_manual(texto: str) -> dict:
+    if not conta_da_empresa(texto):
+        raise ValueError(f"Este extrato é da conta {conciliacao.conta_ofx(texto)}, que não é a desta empresa "
+                         f"({', '.join(config.carregar()['financeiro']['contas_bancarias'])}). Troque de empresa "
+                         "ou inclua a conta em Configurações.")
+    return conciliacao.importar(texto)
+
+
 def importar_extratos() -> dict:
     cfg = config.carregar()
     if not str(cfg["pastas"].get("extratos") or "").strip():
@@ -184,14 +204,9 @@ def importar_extratos() -> dict:
             texto = conteudo.decode("utf-8")
         except UnicodeDecodeError:
             texto = conteudo.decode("cp1252", errors="replace")
-        conta = conciliacao.conta_ofx(texto)
-        contas = cfg["financeiro"].get("contas_bancarias") or []
-        if conta and contas and conta not in contas:
+        if not conta_da_empresa(texto):
             ignorados += 1      # extrato de outra conta (outra empresa ou conta não vinculada): não concilia aqui
             continue
-        if conta and not contas:
-            config.salvar({"financeiro": {"contas_bancarias": [conta]}})
-            cfg = config.carregar()
         r = conciliacao.importar(texto)
         total["arquivos"] += 1
         total["titulos"] += r["titulos"]
