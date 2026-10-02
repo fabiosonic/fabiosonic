@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (asaas, automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro, importacao,
-               lote, relatorios, whatsapp)
+               lote, nacional, relatorios, whatsapp)
 from .validacao import ErroValidacao
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -37,13 +37,17 @@ def _emitir_item(it: dict) -> dict:
                                      str(it.get("vencimento", "")))
     except (ValueError, ErroValidacao, emissor.ErroConfiguracao) as ex:
         return base | {"sucesso": False, "erros": getattr(ex, "erros", None) or [str(ex)]}
-    return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "rps", "nfse", "link", "titulo_id")}
+    return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "rps", "nfse", "link", "titulo_id",
+                                         "canal", "chave")}
 
 
 def _cancelar_nfse_titulo(tid: int, justificativa: str) -> dict:
     t = financeiro.obter_titulo(tid)
     if t["nfse_status"] == "emitida" and t["nfse_numero"]:
-        resp = emissor.cancelar(t["nfse_numero"], justificativa, producao=emissor.em_producao())
+        if t.get("nfse_canal") == "nacional":
+            resp = nacional.cancelar(t["nfse_chave"], justificativa, producao=emissor.em_producao())
+        else:
+            resp = emissor.cancelar(t["nfse_numero"], justificativa, producao=emissor.em_producao())
         if not resp.sucesso:
             return {"sucesso": False, "erros": resp.erros}
     if t["asaas_id"]:
@@ -55,10 +59,19 @@ def _cancelar_nfse_titulo(tid: int, justificativa: str) -> dict:
     return {"sucesso": True}
 
 
+def _cancelar_avulso(c: dict):
+    """Número curto = NFS-e municipal; chave de 50 caracteres = NFS-e nacional."""
+    numero, just = str(c.get("numero", "")).strip(), str(c.get("justificativa", ""))
+    if len(numero.replace(" ", "")) == 50:
+        return nacional.cancelar(numero, just, producao=emissor.em_producao(), motivo=str(c.get("motivo", "1")))
+    return emissor.cancelar(numero, just, producao=emissor.em_producao())
+
+
 ROTAS = {
     # gerais
     "estado": lambda c: {"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
-                         "producao": emissor.em_producao(), "config": config.publico()},
+                         "producao": emissor.em_producao(), "config": config.publico(),
+                         "canal": nacional.canal()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
     "painel": lambda c: relatorios.painel(),
     "log": lambda c: db.linhas("SELECT * FROM log ORDER BY id DESC LIMIT 200"),
@@ -69,9 +82,8 @@ ROTAS = {
     "emitir": lambda c: _emitir_item(c),
     "lote": lambda c: [_emitir_item(i) for i in _sem_duplicadas(c.get("itens", []))],
     "conferir": lambda c: _conferir(c),
-    "cancelar": lambda c: _resultado(emissor.cancelar(str(c.get("numero", "")), str(c.get("justificativa", "")),
-                                                      producao=emissor.em_producao()),
-                                     "Cancelamento processado", "Cancelamento não processado"),
+    "cancelar": lambda c: _resultado(_cancelar_avulso(c), "Cancelamento processado", "Cancelamento não processado"),
+    "nacional/testar": lambda c: nacional.testar_conexao(),
     # clientes
     "cnpj": lambda c: clientes.consultar_cnpj(str(c.get("cnpj", ""))),
     "cliente/salvar": lambda c: clientes.salvar(c),

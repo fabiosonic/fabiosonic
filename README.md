@@ -135,6 +135,41 @@ Cada envio grava em `saida\AAAA-MM\RPS_<n>\`:
 O número do RPS só avança quando ele vira NFS-e. Se o RPS for rejeitado, o mesmo número é reaproveitado
 na correção.
 
+## Emissão pelo Emissor Nacional (nfse.gov.br)
+
+Em **Configurações › Emissão da NFS-e** você escolhe o canal:
+
+| Canal | Por onde sai | Credencial | Numeração |
+|---|---|---|---|
+| **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
+| **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
+
+A escolha vale para tudo: emissão avulsa, emissão em lote, recorrência e robô. O título guarda o canal e a
+chave de acesso, e **o cancelamento sempre usa o canal em que a nota saiu** (evento 101101 no nacional).
+
+No canal nacional, o sistema:
+1. monta a DPS a partir do mesmo cadastro e do mesmo serviço padrão: cTribNac = desdobro 171901, NBS,
+   regime do Simples (ME/EPP, ISS fora do DAS, sociedade de profissionais), pTotTribSN pela alíquota efetiva
+   do Anexo III e o grupo IBS/CBS (cIndOp 100301, CST 200, cClassTrib 200052);
+2. valida a DPS contra o XSD oficial v1.01 (`schemas/nacional`);
+3. assina `infDPS` (XMLDSig, RSA-SHA256, C14N). A assinatura foi conferida com o validador do Java
+   (javax.xml.crypto);
+4. envia com autenticação mútua TLS, usando o próprio certificado, para
+   `sefin.nfse.gov.br/sefinnacional/nfse`. Em homologação o destino é a **Produção Restrita**;
+5. guarda o XML da NFS-e, a chave de 50 caracteres e o link da consulta pública em
+   `saida/AAAA-MM/DPS_n/`.
+
+Se o Sefin responder que a DPS já existe (E0014), o sistema avança a numeração e reenvia uma vez.
+
+O botão **Testar certificado e conexão** abre o .pfx, mostra titular, CNPJ e validade, e consulta no ADN
+o convênio do município. O certificado precisa ser do mesmo CNPJ do prestador.
+
+> **Atenção (tributário):** a emissão pelo Emissor Nacional só é aceita se o município de Itaboraí permitir
+> esse emissor para o contribuinte. Itaboraí usa sistema próprio (as notas trazem “Amb. Gerador: Sist.
+> Próprio do Município”). Confira o resultado do botão de teste e faça a primeira emissão na Produção
+> Restrita. Retenção de PIS/COFINS ainda não é gerada no canal nacional; para esses casos, use o canal
+> municipal.
+
 ## Validar o XML no portal da prefeitura
 
 Antes do primeiro envio, confira o XML no **validador da prefeitura**:
@@ -173,11 +208,11 @@ manualmente, e isso é irreversível.** Por isso a produção só funciona quand
 ## Testes
 
 ```
-pip install pytest lxml
+pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 89 testes, que cobrem o emissor, o financeiro e as automações:
+São 100 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
@@ -187,6 +222,8 @@ São 89 testes, que cobrem o emissor, o financeiro e as automações:
   recalcula a chave de segurança;
 - a rejeição sem consumir o número do RPS;
 - a trava de produção;
+- o canal nacional: DPS no XSD v1.01, assinatura, adulteração detectada, certificado com senha errada ou de
+  outro CNPJ, e emissão e cancelamento contra um **Sefin simulado com TLS mútuo**;
 - a tela.
 
 ## Limitações conhecidas

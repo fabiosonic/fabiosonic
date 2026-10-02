@@ -7,7 +7,8 @@ dependencies = []
 
 [project.optional-dependencies]
 xsd = ["lxml"]
-teste = ["pytest", "lxml"]
+nacional = ["lxml", "cryptography"]
+teste = ["pytest", "lxml", "cryptography"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

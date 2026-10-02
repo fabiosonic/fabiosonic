@@ -132,7 +132,8 @@ def conexao():
 # Colunas acrescentadas depois da primeira versão (bancos antigos recebem o ALTER TABLE).
 MIGRACOES = {
     "contratos": {"confirmado": "INTEGER NOT NULL DEFAULT 1", "origem": "TEXT DEFAULT 'manual'"},
-    "titulos": {"origem": "TEXT DEFAULT 'sistema'"},
+    "titulos": {"origem": "TEXT DEFAULT 'sistema'", "nfse_canal": "TEXT DEFAULT 'municipal'",
+                "nfse_chave": "TEXT DEFAULT ''"},
 }
 
 

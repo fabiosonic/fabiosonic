@@ -266,7 +266,8 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
         raise
     if r["sucesso"]:
         atualizar_titulo(tid, nfse_status="emitida" if producao else "teste", nfse_numero=r.get("nfse", ""),
-                         nfse_rps=r.get("rps", ""), nfse_link=r.get("link", ""), nfse_erro="")
+                         nfse_rps=r.get("rps", ""), nfse_link=r.get("link", ""), nfse_erro="",
+                         nfse_canal=r.get("canal", "municipal"), nfse_chave=r.get("chave", ""))
     else:
         msg = "; ".join(r.get("erros", []))[:500]
         transitoria = any(x in msg.lower() for x in ("falha de comunicação", "timed out", "tempo esgotado",

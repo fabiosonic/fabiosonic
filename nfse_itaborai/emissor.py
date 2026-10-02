@@ -80,7 +80,8 @@ def _ler_sequencia() -> dict:
     arq = _arquivo_sequencia()
     if arq.exists():
         salvo = json.loads(arq.read_text(encoding="utf-8"))
-        seq = {k: max(v, int(salvo.get(k, 0))) for k, v in seq.items()}
+        # preserva outras numerações do arquivo (ex.: proximo_dps do canal nacional)
+        seq = salvo | {k: max(v, int(salvo.get(k, 0))) for k, v in seq.items()}
     return seq
 
 

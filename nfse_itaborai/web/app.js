@@ -41,7 +41,7 @@ function form(el) { const o = {}; $$("[name]", el).forEach(i => o[i.name] = i.ty
 async function carregarEstado() {
   ST = await api("estado");
   const b = $("#amb");
-  b.textContent = ST.producao ? "● PRODUÇÃO" : "● HOMOLOGAÇÃO (teste)";
+  b.textContent = (ST.producao ? "● PRODUÇÃO" : "● HOMOLOGAÇÃO (teste)") + " · " + nomeCanal(true);
   b.className = "amb " + (ST.producao ? "prod" : "hom");
   b.title = "Clique para trocar o ambiente";
 }
@@ -50,6 +50,8 @@ $("#amb").onclick = async () => {
   if (!confirm(p ? "Ativar PRODUÇÃO? As notas emitidas terão validade fiscal." : "Voltar para HOMOLOGAÇÃO (teste, sem validade)?")) return;
   await api("ambiente", { producao: p }); await carregarEstado(); ir(PAG);
 };
+
+function nomeCanal(curto) { return ST.canal == "nacional" ? (curto ? "Nacional" : "Emissor Nacional (nfse.gov.br)") : (curto ? "Itaboraí" : "Webservice da Prefeitura de Itaboraí"); }
 
 // ---------------------------------------------------------------- navegação
 const PAGINAS = {};
@@ -140,7 +142,7 @@ function resumoRobo(r) {
 
 // ---------------------------------------------------------------- emitir / lote
 function linhaRes(r) {
-  return r.sucesso ? `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · NFS-e <b>${esc(r.nfse)}</b> · RPS ${esc(r.rps)}${r.link && r.link.startsWith("http") ? ` · <a href="${esc(r.link)}" target="_blank">abrir nota</a>` : ""}${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`
+  return r.sucesso ? `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · NFS-e <b>${esc(r.nfse)}</b> · ${r.canal == "nacional" ? "Nacional · chave " + esc(r.chave) : "RPS " + esc(r.rps)}${r.link && r.link.startsWith("http") ? ` · <a href="${esc(r.link)}" target="_blank">abrir nota</a>` : ""}${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`
     : `<div class="msg erro"><span class="t">✖ ${esc(r.cliente)} — ${esc(r.valor)}</span>${(r.erros || []).map(e => `<div>${esc(e)}</div>`).join("")}</div>`;
 }
 PAGINAS.emitir = async el => {
@@ -150,14 +152,14 @@ PAGINAS.emitir = async el => {
     <label>Vencimento<input id="e_venc" type="date"></label>
     <label class="inteiro">Descrição<input id="e_desc" maxlength="190" value="${esc(ST.padrao.descricao)}"></label></div>
     <datalist id="dl_cli">${opcoesClientes()}</datalist>
-    <p class="sub">A nota gera automaticamente a conta a receber com o PIX/boleto e entra na régua de cobrança.</p>
+    <p class="sub">A nota gera automaticamente a conta a receber com o PIX/boleto e entra na régua de cobrança.<br>Emitindo por: <b>${nomeCanal()}</b> — troque em <a href="#config">Configurações › Emissão</a>.</p>
     <button class="btn" id="e_btn">Emitir nota</button><div id="e_res"></div></div>`;
   $("#e_cli").oninput = () => { const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)); if (c && c.ultimo_valor && !$("#e_valor").value) $("#e_valor").value = Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 }); };
   $("#e_btn").onclick = async () => {
     const doc = docDe($("#e_cli").value), cli = ST.clientes.find(c => c.cpf_cnpj == doc);
     if (!cli) return aviso("Escolha um cliente da lista (ou cadastre em Clientes).");
     const v = $("#e_valor").value.trim(); if (!valorNum(v)) return aviso("Informe o valor.");
-    if (!confirm(`${ST.producao ? "EMITIR NOTA VÁLIDA" : "Teste em homologação"}\n\n${cli.razao_social}\nR$ ${v}`)) return;
+    if (!confirm(`${ST.producao ? "EMITIR NOTA VÁLIDA" : "Teste em homologação"} — ${nomeCanal()}\n\n${cli.razao_social}\nR$ ${v}`)) return;
     $("#e_btn").disabled = true; $("#e_res").innerHTML = '<div class="msg">Enviando…</div>';
     try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, vencimento: $("#e_venc").value }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
     finally { $("#e_btn").disabled = false; }
@@ -181,7 +183,7 @@ PAGINAS.lote = async el => {
   $("#l_btn").onclick = async () => {
     const itens = sel(); if (!itens.length) return aviso("Marque ao menos um cliente.");
     if (itens.some(i => !valorNum(i.valor))) return aviso("Há cliente marcado sem valor.");
-    if (!confirm(`${ST.producao ? "EMITIR " + itens.length + " NOTAS VÁLIDAS" : "Teste em homologação de " + itens.length + " notas"}\n${$("#l_tot").textContent}`)) return;
+    if (!confirm(`${ST.producao ? "EMITIR " + itens.length + " NOTAS VÁLIDAS" : "Teste em homologação de " + itens.length + " notas"} — ${nomeCanal()}\n${$("#l_tot").textContent}`)) return;
     $("#l_btn").disabled = true; $("#l_res").innerHTML = '<div class="msg">Enviando, aguarde…</div>';
     try { const r = await api("lote", { itens }); $("#l_res").innerHTML = `<div class="msg"><b>${r.filter(x => x.sucesso).length} de ${r.length} emitida(s).</b></div>` + r.map(linhaRes).join(""); }
     finally { $("#l_btn").disabled = false; }
@@ -237,7 +239,7 @@ async function emitirTitulo(id) {
 }
 async function cancelarTitulo(id, nfse) {
   if (nfse == "emitida") {
-    const j = prompt("Esta conta tem NFS-e emitida. Para cancelar a NFS-e na prefeitura e o título, informe a justificativa (mín. 15 caracteres):");
+    const j = prompt("Esta conta tem NFS-e emitida. Para cancelar a NFS-e (no mesmo canal em que foi emitida) e o título, informe a justificativa (mín. 15 caracteres):");
     if (!j) return; const r = await api("titulo/cancelar_nfse", { id, justificativa: j });
     aviso(r.sucesso ? "NFS-e e título cancelados ✔" : "Erro: " + (r.erros || []).join("; "), 7000);
   } else { const m = prompt("Motivo do cancelamento do título:"); if (m === null) return; await api("titulo/cancelar", { id, motivo: m }); }
@@ -429,11 +431,21 @@ PAGINAS.clientes = async el => {
 PAGINAS.config = async el => {
   const c = await api("config");
   const ck = (s, k, t) => `<label class="chk"><input type="checkbox" data-s="${s}" data-k="${k}" ${c[s][k] ? "checked" : ""}> ${t}</label>`;
+  const sl = (s, k, t, ops) => `<label>${t}<select data-s="${s}" data-k="${k}">${ops.map(([v, x]) => `<option value="${v}" ${String(c[s][k]) == v ? "selected" : ""}>${x}</option>`).join("")}</select></label>`;
   const tx = (s, k, t, tipo = "text", extra = "") => `<label>${t}<input type="${tipo}" data-s="${s}" data-k="${k}" value="${esc(Array.isArray(c[s][k]) ? c[s][k].join(", ") : c[s][k])}" ${extra}></label>`;
   el.innerHTML = `<h1>Configurações <span class="acoes"><button class="btn" id="salvar">Salvar tudo</button></span></h1>
   <div class="card"><h2>🤖 Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_asaas", "Baixa automática (Asaas)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
+  <div class="card"><h2>🧾 Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
+    <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    ${tx("emissao", "certificado_pfx", "Certificado A1 (.pfx)", "text", 'placeholder="C:\\Users\\...\\certificado.pfx"')}${tx("emissao", "certificado_senha", "Senha do certificado", "password")}
+    ${tx("emissao", "serie_dps", "Série da DPS")}${tx("emissao", "proximo_dps", "Próximo nº da DPS", "number")}
+    ${sl("emissao", "op_simp_nac", "Situação no Simples Nacional", [["1", "Não optante"], ["2", "MEI"], ["3", "ME/EPP"]])}
+    ${sl("emissao", "reg_ap_trib_sn", "Apuração no Simples", [["1", "Tudo no DAS"], ["2", "ISS fora do DAS (fixo)"], ["3", "Tudo fora do DAS"]])}
+    ${sl("emissao", "reg_esp_trib", "Regime especial", [["0", "Nenhum"], ["1", "Ato cooperado"], ["2", "Estimativa"], ["3", "ME municipal"], ["4", "Notário/registrador"], ["5", "Autônomo"], ["6", "Soc. de profissionais"]])}
+    ${ck("emissao", "informar_ibscbs", "Informar IBS/CBS (cIndOp/cClassTrib do serviço padrão)")}${ck("emissao", "informar_im", "Informar inscrição municipal")}</div>
+    <p><button class="btn sec" id="teste_cert">Testar certificado e conexão</button> <span class="sub">Salve antes de testar.</span></p><div id="cert_res"></div></div>
   <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "enriquecer_contatos", "Completar e-mail/telefone pela Receita")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}</div>
     <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail para o resumo diário")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
     <p><button class="btn sec" id="imp_xml">Ler XML agora</button> <button class="btn sec" id="imp_cont">Completar contatos agora</button> <button class="btn sec" id="env_res">Enviar resumo agora</button></p></div>
@@ -455,7 +467,7 @@ PAGINAS.config = async el => {
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}
     ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
   $("#salvar").onclick = async () => {
-    const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, whatsapp: {}, resumo: {} };
+    const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, whatsapp: {}, resumo: {}, emissao: {} };
     novo.regras_despesa = $("#regras").value.split("\n").map(l => l.split("=")).filter(x => x.length == 2 && x[0].trim()).map(([p, k]) => [p.trim().toUpperCase() + (p.trim().length <= 3 ? " " : ""), k.trim()]);
     $$("[data-s]").forEach(i => { let v = i.type == "checkbox" ? i.checked : i.value;
       if (["regua_dias"].includes(i.dataset.k)) v = v.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -464,6 +476,12 @@ PAGINAS.config = async el => {
       else if (i.type == "number") v = Number(v);
       novo[i.dataset.s][i.dataset.k] = v; });
     await api("config/salvar", novo); await carregarEstado(); aviso("Configurações salvas ✔");
+  };
+  $("#teste_cert").onclick = async () => {
+    $("#cert_res").innerHTML = '<div class="msg">Abrindo o certificado e consultando o ADN…</div>';
+    try { const r = await api("nacional/testar");
+      $("#cert_res").innerHTML = `<div class="msg ${r.conexao && !r.vencido ? "ok" : "erro"}"><b>${esc(r.titular)}</b> — CNPJ ${fmtDoc(r.cnpj || "")} — válido até ${r.validade} (${r.dias_restantes} dias)<br>${esc(r.mensagem)}${r.convenio ? "<br>Convênio do município: " + esc(JSON.stringify(r.convenio)) : ""}</div>`;
+    } catch (e) { $("#cert_res").innerHTML = ""; }
   };
   $("#teste_zap").onclick = async () => { const t = prompt("Enviar teste para qual WhatsApp (com DDD)?"); if (!t) return; await api("whatsapp/testar", { telefone: t }); aviso("WhatsApp de teste enviado ✔"); };
   $("#imp_xml").onclick = async () => { aviso("Lendo XML…"); const r = await api("importacao/xml"); aviso(`XML: ${JSON.stringify(r)}`, 8000); await carregarEstado(); };

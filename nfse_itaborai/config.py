@@ -42,6 +42,19 @@ PADRAO = {
         "xml_nfse": "~/Downloads/nfse/MORAES OLIVEIRA CONTABILIDADE LTDA",  # XML das notas já emitidas
         "extratos": "~/Downloads",  # o robô importa todo .ofx novo que aparecer aqui
     },
+    "emissao": {
+        "canal": "municipal",       # municipal (webservice de Itaboraí) | nacional (Emissor Nacional, nfse.gov.br)
+        "certificado_pfx": "",      # certificado A1 do escritório (.pfx) — exigido só no canal nacional
+        "certificado_senha": "",
+        "serie_dps": "900",         # série própria das DPS enviadas por este sistema
+        "proximo_dps": 1,           # numeração da DPS (independente do RPS municipal)
+        "municipio_emissor": "3301900",
+        "op_simp_nac": "3",         # 1 não optante | 2 MEI | 3 ME/EPP
+        "reg_ap_trib_sn": "2",      # 1 tudo no DAS | 2 federais no DAS e ISS fora (ISS fixo) | 3 tudo fora
+        "reg_esp_trib": "6",        # 0 nenhum | 6 sociedade de profissionais (confirmar no cadastro municipal)
+        "informar_im": False,       # IM só quando o município tem cadastro no Sistema Nacional
+        "informar_ibscbs": True,    # grupo IBS/CBS (LC 214/2025) com cIndOp/cClassTrib do serviço padrão
+    },
     "whatsapp": {
         "provedor": "link",         # link (1 clique) | zapi | evolution (envio automático)
         "zapi_instancia": "", "zapi_token": "", "zapi_client_token": "",
@@ -75,7 +88,8 @@ PADRAO = {
 
 
 SEGREDOS = (("smtp", "senha"), ("cobranca", "asaas_api_key"), ("whatsapp", "zapi_token"),
-            ("whatsapp", "zapi_client_token"), ("whatsapp", "evolution_apikey"))
+            ("whatsapp", "zapi_client_token"), ("whatsapp", "evolution_apikey"),
+            ("emissao", "certificado_senha"))
 
 
 def _arquivo():

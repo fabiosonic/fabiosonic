@@ -6,7 +6,7 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-from . import clientes, emissor
+from . import clientes, emissor, nacional
 from .validacao import ErroValidacao
 
 ARQ_PADRAO = Path(__file__).resolve().parent.parent / "servico_padrao.json"
@@ -39,13 +39,16 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "")
     }
 
 
-def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False, url: str | None = None) -> dict:
+def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False, url: str | None = None,
+              canal: str | None = None) -> dict:
+    """Emite pelo canal escolhido em Configurações > Emissão: municipal (Itaboraí) ou nacional (nfse.gov.br)."""
+    canal = canal or nacional.canal()
     cli = clientes.obter(cpf_cnpj) or {}
-    base = {"cpf_cnpj": cpf_cnpj, "cliente": cli.get("razao_social", cpf_cnpj), "valor": str(valor)}
+    base = {"cpf_cnpj": cpf_cnpj, "cliente": cli.get("razao_social", cpf_cnpj), "valor": str(valor), "canal": canal}
     try:
         rps = emissor.rps_de_dict(montar_rps(cpf_cnpj, valor, descricao))
         kw = {"url": url} if url else {}
-        resp = emissor.emitir(rps, producao=producao, **kw)
+        resp = (nacional.emitir if canal == "nacional" else emissor.emitir)(rps, producao=producao, **kw)
     except ErroValidacao as ex:
         return base | {"sucesso": False, "erros": ex.erros}
     except (ValueError, emissor.ErroConfiguracao) as ex:
@@ -55,7 +58,8 @@ def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False,
     nota = resp.notas[0] if resp.notas else None
     return base | {"sucesso": resp.sucesso, "erros": resp.erros, "alertas": resp.alertas, "pasta": resp.pasta,
                    "rps": nota.numero_rps if nota else "", "nfse": nota.numero_nfse if nota else "",
-                   "link": nota.link if nota else ""}
+                   "link": nota.link if nota else "",
+                   "chave": nota.codigo_verificacao if nota and canal == "nacional" else ""}
 
 
 def emitir_lote(itens: list[dict], producao: bool = False, url: str | None = None) -> list[dict]:

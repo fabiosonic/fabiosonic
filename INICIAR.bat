@@ -11,7 +11,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-python -c "import lxml" 2>nul || python -m pip install --quiet --disable-pip-version-check lxml
+python -c "import lxml, cryptography" 2>nul || python -m pip install --quiet --disable-pip-version-check lxml cryptography
 if not exist ".env" python -m nfse_itaborai configurar
 rem Atualiza o cadastro de clientes com os XML das notas ja emitidas (pasta configuravel no .env)
 set "XMLS=%USERPROFILE%\Downloads\nfse\MORAES OLIVEIRA CONTABILIDADE LTDA"
