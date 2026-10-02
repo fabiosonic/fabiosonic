@@ -1,20 +1,53 @@
 """Robô financeiro: rotina idempotente que pode rodar a cada hora (tela aberta) e 1x/dia (Agendador do Windows).
 
-Ordem: backup → despesas recorrentes → títulos do mês (contratos) → NFS-e → cobrança (PIX/Asaas)
-       → baixa automática (Asaas) → régua de cobrança.
+Ordem: backup → XML (clientes, notas externas, contratos detectados) → contatos pela Receita
+       → despesas recorrentes → títulos do mês (contratos) → NFS-e → cobrança (PIX/Asaas)
+       → baixa automática (Asaas) → extratos OFX da pasta → régua de cobrança → resumo diário por e-mail.
 Cada etapa é isolada: uma falha não impede as demais e fica registrada no log.
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
 import threading
 import time
 from datetime import date
 
-from . import cobranca, config, db, emissor, financeiro
+from . import cobranca, config, db, emissor, financeiro, importacao
+
+
+TRAVA_MAX_SEG = 2 * 3600
+
+
+@contextlib.contextmanager
+def _trava():
+    """Só um robô por vez (tela aberta + Agendador do Windows podem coincidir)."""
+    arq = db.caminho().parent / "robo.lock"
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    if arq.exists() and time.time() - arq.stat().st_mtime > TRAVA_MAX_SEG:
+        arq.unlink(missing_ok=True)                    # trava abandonada (queda de energia etc.)
+    try:
+        fd = os.open(arq, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        yield False
+        return
+    try:
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        yield True
+    finally:
+        arq.unlink(missing_ok=True)
 
 
 def rodar(em: date | None = None, forcar: bool = False, url: str | None = None) -> dict:
+    with _trava() as livre:
+        if not livre:
+            return {"executado": False, "motivo": "Outra execução do robô está em andamento."}
+        return _rodar(em, forcar, url)
+
+
+def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None) -> dict:
     em = em or financeiro.hoje()
     cfg = config.carregar()
     auto = cfg["automacao"]
@@ -32,6 +65,8 @@ def rodar(em: date | None = None, forcar: bool = False, url: str | None = None) 
             db.registrar("robo_erro", f"{nome}: {ex}")
 
     etapa("backup", auto["backup"], lambda: str(db.backup()))
+    etapa("importacao_xml", auto.get("importar_xml"), lambda: importacao.importar_xml(em))
+    etapa("contatos_completados", auto.get("enriquecer_contatos"), importacao.enriquecer_contatos)
     etapa("despesas_recorrentes", auto["despesas_recorrentes"], lambda: financeiro.gerar_despesas_recorrentes(em))
     etapa("titulos_gerados", auto["gerar_titulos"] and em.day >= int(cfg["financeiro"]["dia_geracao"]),
           lambda: len(financeiro.gerar_titulos(em=em)))
@@ -59,7 +94,9 @@ def rodar(em: date | None = None, forcar: bool = False, url: str | None = None) 
     etapa("cobrancas_criadas", auto["criar_cobranca"] and cfg["cobranca"]["provedor"] != "nenhum", cobrancas)
     etapa("baixas_asaas", auto["sincronizar_asaas"] and cfg["cobranca"]["provedor"] == "asaas",
           lambda: cobranca.sincronizar_asaas(cfg))
+    etapa("extratos", auto.get("importar_extratos"), importacao.importar_extratos)
     etapa("regua", auto["regua"], lambda: cobranca.rodar_regua(em, cfg))
+    etapa("resumo", auto.get("resumo_diario"), lambda: importacao.resumo_diario(res, em))
     db.registrar("robo", f"Rotina executada: { {k: v for k, v in res.items() if k not in ('executado', 'data')} }")
     return res
 

@@ -74,7 +74,8 @@ def painel(em: date | None = None) -> dict:
     faturado_mes = sum(t["valor_cent"] for t in ts if t["competencia"] == comp)
     vencido_total = sum(t["valor_cent"] for t in ts if t["vencimento"] < em.isoformat())
     vencido_aberto = sum(t["valor_cent"] for t in atrasados)
-    contratos = db.linhas("SELECT valor_cent FROM contratos WHERE ativo=1")
+    contratos = db.linhas("SELECT valor_cent FROM contratos WHERE ativo=1 AND confirmado=1")
+    a_confirmar = db.linhas("SELECT COUNT(*) n FROM contratos WHERE ativo=1 AND confirmado=0")[0]["n"]
     mrr = sum(c["valor_cent"] for c in contratos)
     desp_abertas = [d for d in financeiro.listar_despesas("a_pagar", em)]
     r12 = rbt12(em, ts)
@@ -93,7 +94,7 @@ def painel(em: date | None = None) -> dict:
         "a_receber": sum(t["valor_cent"] for t in abertos), "atrasado": vencido_aberto,
         "atrasado_qtd": len(atrasados), "clientes_atrasados": len({t["cpf_cnpj"] for t in atrasados}),
         "inadimplencia_pct": round(vencido_aberto / vencido_total * 100, 1) if vencido_total else 0.0,
-        "mrr": mrr, "contratos_ativos": len(contratos),
+        "mrr": mrr, "contratos_ativos": len(contratos), "contratos_a_confirmar": a_confirmar,
         "ticket_medio": mrr // len(contratos) if contratos else 0,
         "a_pagar": sum(d["valor_cent"] for d in desp_abertas),
         "a_pagar_atrasado": sum(d["valor_cent"] for d in desp_abertas if d["situacao"] == "atrasado"),
@@ -101,6 +102,8 @@ def painel(em: date | None = None) -> dict:
         "rbt12": r12, "aliquota_simples_estimada": aliquota_efetiva_anexo3(r12),
         "sublimite_pct": round(r12 / 3_600_000_00 * 100, 1),
         "serie": serie, "proximos_7_dias": proximos[:10], "criticos": criticos,
+        "ultima_execucao_robo": (db.linhas("SELECT quando FROM log WHERE tipo='robo' ORDER BY id DESC LIMIT 1")
+                                 or [{"quando": ""}])[0]["quando"],
         "maiores_devedores": sorted(
             [{"cliente": n, "valor": sum(t["total_cent"] for t in atrasados if t["cliente_nome"] == n)}
              for n in {t["cliente_nome"] for t in atrasados}], key=lambda x: -x["valor"])[:5],
@@ -155,7 +158,7 @@ def fluxo_caixa(em: date | None = None, dias: int = 90) -> list[dict]:
         if v <= fim:
             entradas[semana(v)] += t["valor_cent"]
     geradas = {(t["contrato_id"], t["competencia"]) for t in db.linhas("SELECT contrato_id, competencia FROM titulos")}
-    for k in db.linhas("SELECT * FROM contratos WHERE ativo=1"):
+    for k in db.linhas("SELECT * FROM contratos WHERE ativo=1 AND confirmado=1"):
         d = em.replace(day=1)
         while d <= fim:
             comp = d.strftime("%Y-%m")

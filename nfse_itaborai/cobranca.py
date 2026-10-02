@@ -13,7 +13,7 @@ import urllib.parse
 from datetime import date
 from email.message import EmailMessage
 
-from . import asaas, clientes, config, db, financeiro, pix
+from . import asaas, clientes, config, db, financeiro, pix, whatsapp
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -162,10 +162,20 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                     except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
                         status, det = "erro", str(ex)[:300]
                         res["erros"] += 1
+            elif not cli.get("telefone"):
+                status, det = "sem_contato", "cliente sem telefone"
+                res["sem_contato"] += 1
+            elif whatsapp.automatico(cfg):
+                try:
+                    whatsapp.enviar(cli["telefone"], texto, cfg)
+                    status, det = "enviado", whatsapp.numero(cli["telefone"])
+                    res["whatsapp"] += 1
+                except Exception as ex:  # noqa: BLE001
+                    status, det = "erro", str(ex)[:300]
+                    res["erros"] += 1
             else:
-                link = link_whatsapp(cli.get("telefone", ""), texto)
-                status, det = ("pendente", link) if link else ("sem_contato", "cliente sem telefone")
-                res["whatsapp" if link else "sem_contato"] += 1
+                status, det = "pendente", link_whatsapp(cli["telefone"], texto)
+                res["whatsapp"] += 1
             with db.conexao() as con:
                 con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
                             " VALUES (?,?,?,?,?,?)", (t["id"], etapa, canal, em.isoformat(), status, det))
@@ -197,8 +207,12 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     dias = (financeiro.hoje() - date.fromisoformat(t["vencimento"])).days
     assunto, texto = mensagem(t, max(dias, -1) if dias < 0 else dias, cfg)
     cli = clientes.obter(t["cpf_cnpj"]) or {}
-    out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "email": "", "texto": texto}
+    out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "whatsapp_enviado": False, "email": "",
+           "texto": texto}
     if cli.get("email") and cfg["smtp"].get("host"):
         enviar_email(cli["email"], assunto, texto, cfg)
         out["email"] = cli["email"]
+    if cli.get("telefone") and whatsapp.automatico(cfg):
+        whatsapp.enviar(cli["telefone"], texto, cfg)
+        out["whatsapp_enviado"] = True
     return out

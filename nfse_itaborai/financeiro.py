@@ -145,7 +145,7 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
     ano, mes = _mes(comp)
     novos = []
     with db.conexao() as con:
-        for k in con.execute("SELECT * FROM contratos WHERE ativo=1").fetchall():
+        for k in con.execute("SELECT * FROM contratos WHERE ativo=1 AND confirmado=1").fetchall():
             k = dict(k)
             if comp < k["inicio"] or (k["fim"] and comp > k["fim"]):
                 continue
@@ -209,7 +209,8 @@ def listar_titulos(filtro: str = "todos", cpf_cnpj: str = "", competencia: str =
     elif filtro == "a_receber":
         lst = [t for t in lst if t["status"] == "aberto"]
     elif filtro == "sem_nfse":
-        lst = [t for t in lst if t["nfse_status"] in ("pendente", "erro", "teste") and t["status"] != "cancelado"]
+        lst = [t for t in lst if t["nfse_status"] in ("pendente", "erro", "teste", "emitindo")
+               and t["status"] != "cancelado"]
     return lst
 
 
@@ -251,13 +252,27 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
     if t["nfse_status"] in ("emitida", "nao_emitir"):
         return {"sucesso": t["nfse_status"] == "emitida", "erros": [] if t["nfse_status"] == "emitida"
                 else ["Título marcado para não emitir NFS-e."], "titulo": t}
+    # Reserva atômica: só um processo (tela, robô da tela ou robô agendado) emite cada título.
+    with db.conexao() as con:
+        reservado = con.execute("UPDATE titulos SET nfse_status='emitindo' WHERE id=? AND nfse_status IN "
+                                "('pendente','teste','erro')", (tid,)).rowcount
+    if not reservado:
+        return {"sucesso": False, "erros": ["NFS-e deste título já está sendo emitida."], "titulo": obter_titulo(tid)}
     producao = emissor.em_producao()
-    r = lote.emitir_um(t["cpf_cnpj"], reais(t["valor_cent"]), t["descricao"], producao=producao, url=url)
+    try:
+        r = lote.emitir_um(t["cpf_cnpj"], reais(t["valor_cent"]), t["descricao"], producao=producao, url=url)
+    except Exception:
+        atualizar_titulo(tid, nfse_status=t["nfse_status"])
+        raise
     if r["sucesso"]:
         atualizar_titulo(tid, nfse_status="emitida" if producao else "teste", nfse_numero=r.get("nfse", ""),
                          nfse_rps=r.get("rps", ""), nfse_link=r.get("link", ""), nfse_erro="")
     else:
-        atualizar_titulo(tid, nfse_status="erro", nfse_erro="; ".join(r.get("erros", []))[:500])
+        msg = "; ".join(r.get("erros", []))[:500]
+        transitoria = any(x in msg.lower() for x in ("falha de comunicação", "timed out", "tempo esgotado",
+                                                     "connection", "temporarily"))
+        # rede/servidor fora do ar: fica pendente e o robô tenta de novo; recusa da prefeitura vai para revisão
+        atualizar_titulo(tid, nfse_status="pendente" if transitoria else "erro", nfse_erro=msg)
     db.registrar("nfse", f"Título {tid} ({t['cliente_nome']}): {'NFS-e ' + r.get('nfse', '') if r['sucesso'] else 'erro'}")
     return r | {"titulo": obter_titulo(tid)}
 

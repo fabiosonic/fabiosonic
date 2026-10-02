@@ -10,8 +10,8 @@ from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (asaas, automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro, lote,
-               relatorios)
+from . import (asaas, automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro, importacao,
+               lote, relatorios, whatsapp)
 from .validacao import ErroValidacao
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -93,6 +93,12 @@ ROTAS = {
     "contrato/salvar": lambda c: financeiro.salvar_contrato(c),
     "contrato/excluir": lambda c: (financeiro.excluir_contrato(_id(c)), {"ok": True})[1],
     "contratos/historico": lambda c: {"criados": financeiro.contratos_do_historico(c.get("dia_vencimento") or None)},
+    "contratos/confirmar": lambda c: {"confirmados": importacao.confirmar_contratos(c.get("ids") or None)},
+    "importacao/xml": lambda c: importacao.importar_xml(),
+    "importacao/contatos": lambda c: {"atualizados": importacao.enriquecer_contatos(int(c.get("limite") or 25))},
+    "resumo/enviar": lambda c: {"resultado": importacao.resumo_diario({}, forcar=True)},
+    "whatsapp/testar": lambda c: (whatsapp.enviar(str(c.get("telefone", "")), "Teste do sistema financeiro: "
+                                                  "WhatsApp automático funcionando."), {"ok": True})[1],
     "recorrencia/gerar": lambda c: {"gerados": len(financeiro.gerar_titulos(c.get("competencia") or None))},
     # cobrança
     "whatsapp/fila": lambda c: cobranca.fila_whatsapp(),

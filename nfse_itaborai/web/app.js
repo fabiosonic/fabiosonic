@@ -24,7 +24,7 @@ function fechar() { $("#modal").hidden = true; }
 $("#modal").addEventListener("click", e => { if (e.target.id == "modal") fechar(); });
 function selo(sit) {
   const m = { pago: ["bom", "Pago"], aberto: ["neutro", "Em aberto"], atrasado: ["critico", "Atrasado"], cancelado: ["neutro", "Cancelado"],
-    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"],
+    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], emitindo: ["serio", "Em emissão — conferir no portal"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"],
     bom: ["bom", "Bom"], "atenção": ["alerta", "Atenção"], risco: ["critico", "Risco"], enviado: ["bom", "Enviado"], feito: ["bom", "Feito"],
     sem_contato: ["alerta", "Sem contato"] };
   const [c, t] = m[sit] || ["neutro", sit];
@@ -101,8 +101,10 @@ PAGINAS.painel = async el => {
   if (p.criticos.length) alertas.push(`⛔ <b>${p.criticos.length}</b> cliente(s) com atraso crítico (≥ ${ST.config.cobranca.bloquear_apos_dias} dias): ${p.criticos.slice(0, 5).map(esc).join(", ")}${p.criticos.length > 5 ? ` e mais ${p.criticos.length - 5} — <a href="#" onclick="ABA_REL='aging';ir('relatorios');return false">ver todos</a>` : ""}`);
   if (p.a_pagar_atrasado) alertas.push(`📤 Contas a pagar vencidas: ${brl(p.a_pagar_atrasado)}`);
   if (p.sublimite_pct >= 80) alertas.push(`⚠ RBT12 em ${p.sublimite_pct}% do sublimite de R$ 3,6 mi do Simples`);
+  if (p.contratos_a_confirmar) alertas.unshift(`🔁 <b>${p.contratos_a_confirmar}</b> contrato(s) recorrente(s) detectado(s) nas suas notas — <a href="#" onclick="ir('contratos');return false">conferir</a> ou <a href="#" onclick="confirmarTodos();return false"><b>confirmar todos</b></a>`);
   if (!ST.config.automacao.ativa) alertas.push(`🤖 O robô financeiro está desligado — <a href="#" onclick="ir('config');return false">ligar em Configurações</a>`);
-  el.innerHTML = `<h1>Painel <span class="acoes"><button class="btn sec" id="robo">🤖 Rodar robô agora</button></span></h1>
+  const robo = ST.config.automacao.ativa ? `<span class="selo bom">Robô ligado</span> <span class="sub">${p.ultima_execucao_robo ? "última execução " + dt(p.ultima_execucao_robo.slice(0, 10)) + " " + p.ultima_execucao_robo.slice(11, 16) : "ainda não executou"}</span>` : `<span class="selo critico">Robô desligado</span>`;
+  el.innerHTML = `<h1>Painel <span style="font-size:13px;font-weight:400">${robo}</span><span class="acoes"><button class="btn sec" id="robo">🤖 Rodar robô agora</button></span></h1>
   <div class="kpis">
     <div class="kpi"><div class="r">Faturado em ${mes(p.competencia)}</div><div class="v">${brl(p.faturado_mes)}</div><div class="s">por competência</div></div>
     <div class="kpi"><div class="r">Recebido no mês</div><div class="v">${brl(p.recebido_mes)}</div></div>
@@ -128,8 +130,10 @@ PAGINAS.painel = async el => {
 
 function resumoRobo(r) {
   if (!r.executado) return `<p>${esc(r.motivo || "Nada executado.")}</p>`;
-  const nomes = { despesas_recorrentes: "Despesas recorrentes lançadas", titulos_gerados: "Títulos gerados (contratos)", nfse: "NFS-e",
-    cobrancas_criadas: "Cobranças (PIX/boleto) criadas", baixas_asaas: "Baixas automáticas (Asaas)", regua: "Régua de cobrança", backup: "Backup" };
+  const nomes = { importacao_xml: "XML das notas (clientes, notas externas, contratos)", contatos_completados: "Contatos completados pela Receita",
+    despesas_recorrentes: "Despesas recorrentes lançadas", titulos_gerados: "Títulos gerados (contratos)", nfse: "NFS-e",
+    cobrancas_criadas: "Cobranças (PIX/boleto) criadas", baixas_asaas: "Baixas automáticas (Asaas)", extratos: "Extratos importados",
+    regua: "Régua de cobrança", resumo: "Resumo diário por e-mail", backup: "Backup" };
   const fmt = v => typeof v == "object" ? Object.entries(v).map(([k, x]) => `${k}: ${x}`).join(" · ") : String(v);
   return `<table>${Object.entries(nomes).filter(([k]) => k in r).map(([k, t]) => `<tr><td>${t}</td><td>${esc(fmt(r[k]))}</td></tr>`).join("")}</table><p></p>`;
 }
@@ -263,13 +267,14 @@ function novoTitulo() {
 // ---------------------------------------------------------------- contratos
 PAGINAS.contratos = async el => {
   const lst = await api("contratos");
-  const ativos = lst.filter(c => c.ativo);
+  const ativos = lst.filter(c => c.ativo && c.confirmado), pend = lst.filter(c => c.ativo && !c.confirmado);
   el.innerHTML = `<h1>Contratos recorrentes <span class="acoes"><button class="btn" id="nc">+ Novo contrato</button><button class="btn sec" id="hist">⚡ Criar a partir do histórico</button><button class="btn sec" id="gerar">Gerar títulos do mês</button></span></h1>
   <div class="kpis"><div class="kpi"><div class="r">Contratos ativos</div><div class="v">${ativos.length}</div></div><div class="kpi"><div class="r">MRR</div><div class="v">${brl(ativos.reduce((a, c) => a + c.valor_cent, 0))}</div></div></div>
+  ${pend.length ? `<div class="card" style="border-color:var(--alerta)"><h2>${pend.length} contrato(s) detectado(s) automaticamente</h2><p>O robô encontrou cobrança mensal de mesmo valor nas suas notas. Confira e confirme: só depois disso eles passam a emitir NFS-e e cobrar. Começam no mês seguinte à última nota, para não cobrar em dobro.</p><button class="btn" onclick="confirmarTodos()">Confirmar todos</button></div>` : ""}
   <div class="card"><p class="sub">Todo mês, no dia configurado, o robô gera a conta a receber de cada contrato, emite a NFS-e, cria o PIX/boleto e coloca na régua de cobrança. Reajuste anual automático no mês escolhido.</p>
   ${tabela([{ t: "Cliente", f: c => `${esc(c.cliente_nome)}<div class="sub">${esc(c.descricao)}</div>` }, { t: "Valor", n: 1, f: c => num(c.valor_cent) }, { t: "Vence dia", f: c => c.dia_vencimento },
     { t: "Vigência", f: c => `${mes(c.inicio)} → ${c.fim ? mes(c.fim) : "sem fim"}` }, { t: "Reajuste", f: c => c.mes_reajuste ? `${c.reajuste_pct}% em ${String(c.mes_reajuste).padStart(2, "0")}` : "—" },
-    { t: "NFS-e", f: c => c.emitir_nfse ? "automática" : "não emite" }, { t: "Situação", f: c => selo(c.ativo ? "bom" : "cancelado").replace("Bom", "Ativo") },
+    { t: "NFS-e", f: c => c.emitir_nfse ? "automática" : "não emite" }, { t: "Situação", f: c => !c.ativo ? selo("cancelado").replace("Cancelado", "Encerrado") : c.confirmado ? selo("bom").replace("Bom", "Ativo") : selo("pendente").replace("Pendente", "A confirmar") + ` <button class="btn min" onclick="confirmarUm(${c.id})">Confirmar</button>` },
     { t: "", f: c => `<button class="btn min sec" onclick='editarContrato(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Editar</button>${c.ativo ? ` <button class="btn min sec" onclick="encerrar(${c.id})">Encerrar</button>` : ""}` }], lst, "Nenhum contrato. Use “Criar a partir do histórico” para montar a carteira em um clique.")}</div>`;
   $("#nc").onclick = () => editarContrato({});
   $("#hist").onclick = async () => { const d = prompt("Dia de vencimento para os contratos criados:", ST.config.financeiro.dia_vencimento_padrao); if (d === null) return;
@@ -277,6 +282,11 @@ PAGINAS.contratos = async el => {
   $("#gerar").onclick = async () => { const c = prompt("Competência (AAAA-MM):", hojeISO().slice(0, 7)); if (!c) return;
     const r = await api("recorrencia/gerar", { competencia: c }); aviso(`${r.gerados} título(s) gerado(s) ✔`); };
 };
+async function confirmarTodos() {
+  if (!confirm("Confirmar todos os contratos detectados? A partir do próximo vencimento o robô passa a emitir a NFS-e e cobrar esses clientes todo mês.")) return;
+  const r = await api("contratos/confirmar", {}); aviso(`${r.confirmados} contrato(s) confirmado(s) ✔`); ir(PAG);
+}
+async function confirmarUm(id) { await api("contratos/confirmar", { ids: [id] }); aviso("Contrato confirmado ✔"); ir("contratos"); }
 function editarContrato(c) {
   const cli = ST.clientes.find(x => x.cpf_cnpj == c.cpf_cnpj);
   modal(`<h2>${c.id ? "Editar" : "Novo"} contrato</h2><div class="campos" id="fc">
@@ -302,7 +312,7 @@ PAGINAS.cobranca = async el => {
   <div class="card"><h2>Régua automática</h2><p>Etapas (dias em relação ao vencimento): <b>${c.regua_dias.map(d => d < 0 ? d : d == 0 ? "0 (vencimento)" : "+" + d).join(" · ")}</b> —
     e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? "<b>ligado</b>" : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
     <a href="#" onclick="ir('config');return false">Alterar</a></p></div>
-  <div class="card"><h2>WhatsApp para enviar (${fila.length})</h2><p class="sub">Clique em “Enviar” para abrir a conversa com a mensagem pronta e depois marque como feito.</p>
+  <div class="card"><h2>WhatsApp para enviar (${fila.length})</h2><p class="sub">${ST.config.whatsapp.provedor == "link" ? "Envio por link: clique em “Enviar” para abrir a conversa com a mensagem pronta. Para envio 100% automático, configure Z-API ou Evolution API em Configurações." : "Envio automático ligado (" + esc(ST.config.whatsapp.provedor) + "). Aqui aparecem só mensagens antigas pendentes."}</p>
     ${tabela([{ t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
       { t: "Etapa", f: e => e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias` },
       { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔")}</div>
@@ -421,9 +431,19 @@ PAGINAS.config = async el => {
   const ck = (s, k, t) => `<label class="chk"><input type="checkbox" data-s="${s}" data-k="${k}" ${c[s][k] ? "checked" : ""}> ${t}</label>`;
   const tx = (s, k, t, tipo = "text", extra = "") => `<label>${t}<input type="${tipo}" data-s="${s}" data-k="${k}" value="${esc(Array.isArray(c[s][k]) ? c[s][k].join(", ") : c[s][k])}" ${extra}></label>`;
   el.innerHTML = `<h1>Configurações <span class="acoes"><button class="btn" id="salvar">Salvar tudo</button></span></h1>
-  <div class="card"><h2>🤖 Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar AGENDAR_ROBO.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
+  <div class="card"><h2>🤖 Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_asaas", "Baixa automática (Asaas)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
+  <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "enriquecer_contatos", "Completar e-mail/telefone pela Receita")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}</div>
+    <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail para o resumo diário")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
+    <p><button class="btn sec" id="imp_xml">Ler XML agora</button> <button class="btn sec" id="imp_cont">Completar contatos agora</button> <button class="btn sec" id="env_res">Enviar resumo agora</button></p></div>
+  <div class="card"><h2>WhatsApp</h2><div class="campos">
+    <label>Envio<select data-s="whatsapp" data-k="provedor">${[["link", "Link wa.me (1 clique por mensagem)"], ["zapi", "Z-API (automático)"], ["evolution", "Evolution API (automático)"]].map(([v, t]) => `<option value="${v}" ${c.whatsapp.provedor == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    ${tx("whatsapp", "zapi_instancia", "Z-API: instância")}${tx("whatsapp", "zapi_token", "Z-API: token", "password")}${tx("whatsapp", "zapi_client_token", "Z-API: client token", "password")}
+    ${tx("whatsapp", "evolution_url", "Evolution: URL")}${tx("whatsapp", "evolution_instancia", "Evolution: instância")}${tx("whatsapp", "evolution_apikey", "Evolution: apikey", "password")}</div>
+    <p><button class="btn sec" id="teste_zap">Enviar WhatsApp de teste</button></p></div>
+  <div class="card"><h2>Regras de despesa do extrato</h2><p class="sub">Uma por linha: PALAVRA = Categoria. Débito cujo histórico contém a palavra entra nessa categoria.</p>
+    <textarea id="regras" rows="6">${esc(c.regras_despesa.map(([p, k]) => `${p.trim()} = ${k}`).join("\n"))}</textarea></div>
   <div class="card"><h2>Empresa e PIX</h2><div class="campos">${tx("empresa", "nome", "Nome no PIX")}${tx("empresa", "pix_chave", "Chave PIX que recebe")}${tx("empresa", "pix_cidade", "Cidade (PIX)")}${tx("empresa", "whatsapp", "WhatsApp do escritório")}${tx("empresa", "assinatura", "Assinatura das mensagens")}</div></div>
   <div class="card"><h2>Cobrança</h2><div class="campos">
     <label>Meio de cobrança<select data-s="cobranca" data-k="provedor">${[["pix", "PIX copia e cola (sem tarifa, baixa pelo extrato)"], ["asaas", "Asaas: boleto + PIX com baixa automática"], ["nenhum", "Nenhum"]].map(([v, t]) => `<option value="${v}" ${c.cobranca.provedor == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -435,7 +455,8 @@ PAGINAS.config = async el => {
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}
     ${tx("financeiro", "aliquota_simples_pct", "Alíquota DAS sem histórico (%)")}${ck("financeiro", "iss_fixo", "ISS fixo fora do DAS (escritório contábil)")}${tx("financeiro", "categorias_despesa", "Categorias de despesa")}</div></div>`;
   $("#salvar").onclick = async () => {
-    const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {} };
+    const novo = { empresa: {}, smtp: {}, cobranca: {}, financeiro: {}, automacao: {}, pastas: {}, whatsapp: {}, resumo: {} };
+    novo.regras_despesa = $("#regras").value.split("\n").map(l => l.split("=")).filter(x => x.length == 2 && x[0].trim()).map(([p, k]) => [p.trim().toUpperCase() + (p.trim().length <= 3 ? " " : ""), k.trim()]);
     $$("[data-s]").forEach(i => { let v = i.type == "checkbox" ? i.checked : i.value;
       if (["regua_dias"].includes(i.dataset.k)) v = v.split(/[,;\s]+/).filter(Boolean).map(Number);
       else if (i.dataset.k == "categorias_despesa") v = v.split(",").map(s => s.trim()).filter(Boolean);
@@ -444,6 +465,10 @@ PAGINAS.config = async el => {
       novo[i.dataset.s][i.dataset.k] = v; });
     await api("config/salvar", novo); await carregarEstado(); aviso("Configurações salvas ✔");
   };
+  $("#teste_zap").onclick = async () => { const t = prompt("Enviar teste para qual WhatsApp (com DDD)?"); if (!t) return; await api("whatsapp/testar", { telefone: t }); aviso("WhatsApp de teste enviado ✔"); };
+  $("#imp_xml").onclick = async () => { aviso("Lendo XML…"); const r = await api("importacao/xml"); aviso(`XML: ${JSON.stringify(r)}`, 8000); await carregarEstado(); };
+  $("#imp_cont").onclick = async () => { aviso("Consultando a Receita…"); const r = await api("importacao/contatos", { limite: 50 }); aviso(`${r.atualizados} cliente(s) com contato completado ✔`, 6000); await carregarEstado(); };
+  $("#env_res").onclick = async () => { const r = await api("resumo/enviar"); aviso("Resumo: " + r.resultado, 6000); };
   $("#teste_email").onclick = async () => { const p = prompt("Enviar teste para qual e-mail?"); if (!p) return; await api("email/testar", { para: p }); aviso("E-mail de teste enviado ✔"); };
 };
 

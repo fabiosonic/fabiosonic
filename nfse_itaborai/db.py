@@ -92,6 +92,11 @@ CREATE TABLE IF NOT EXISTS movimentos (
     despesa_id INTEGER,
     importado_em TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS arquivos_processados (
+    caminho TEXT PRIMARY KEY,
+    mtime REAL NOT NULL,
+    quando TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS log (
     id INTEGER PRIMARY KEY,
     quando TEXT NOT NULL,
@@ -113,6 +118,7 @@ def conexao():
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(ESQUEMA)
+    _migrar(con)
     try:
         yield con
         con.commit()
@@ -121,6 +127,21 @@ def conexao():
         raise
     finally:
         con.close()
+
+
+# Colunas acrescentadas depois da primeira versão (bancos antigos recebem o ALTER TABLE).
+MIGRACOES = {
+    "contratos": {"confirmado": "INTEGER NOT NULL DEFAULT 1", "origem": "TEXT DEFAULT 'manual'"},
+    "titulos": {"origem": "TEXT DEFAULT 'sistema'"},
+}
+
+
+def _migrar(con: sqlite3.Connection) -> None:
+    for tabela, colunas in MIGRACOES.items():
+        existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
+        for nome, tipo in colunas.items():
+            if nome not in existentes:
+                con.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
 
 
 def agora() -> str:

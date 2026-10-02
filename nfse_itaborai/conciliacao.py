@@ -13,7 +13,7 @@ import re
 import unicodedata
 from datetime import date, timedelta
 
-from . import db, financeiro
+from . import config, db, financeiro
 
 
 def _norm(s: str) -> str:
@@ -70,6 +70,14 @@ def _candidatos(m: dict, abertos: list[dict]) -> list[dict]:
     return [t for t in abertos if valor_ok(t) and t["vencimento"] <= limite]
 
 
+def categoria(historico: str) -> str:
+    texto = " " + _norm(historico) + " "
+    for palavra, cat in config.carregar()["regras_despesa"]:
+        if _norm(palavra) in texto:
+            return cat
+    return "Outras"
+
+
 def conciliar() -> dict:
     baixados = pagas = 0
     pendentes = db.linhas("SELECT * FROM movimentos WHERE titulo_id IS NULL AND despesa_id IS NULL ORDER BY data")
@@ -89,9 +97,17 @@ def conciliar() -> dict:
                     if d["valor_cent"] == -m["valor_cent"]]
             if len(desp) == 1:
                 financeiro.pagar_despesa(desp[0]["id"], m["data"])
-                with db.conexao() as con:
-                    con.execute("UPDATE movimentos SET despesa_id=? WHERE id=?", (desp[0]["id"], m["id"]))
-                pagas += 1
+                did = desp[0]["id"]
+            elif not desp and config.carregar()["automacao"].get("despesas_do_extrato"):
+                did = financeiro.salvar_despesa({"descricao": (m["descricao"] or "Débito em conta")[:120],
+                                                 "fornecedor": "extrato", "categoria": categoria(m["descricao"]),
+                                                 "valor": financeiro.reais(-m["valor_cent"]), "vencimento": m["data"]})
+                financeiro.pagar_despesa(did, m["data"])
+            else:
+                continue
+            with db.conexao() as con:
+                con.execute("UPDATE movimentos SET despesa_id=? WHERE id=?", (did, m["id"]))
+            pagas += 1
     return {"titulos": baixados, "despesas": pagas}
 
 

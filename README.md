@@ -30,12 +30,16 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 ## Início rápido (Windows)
 
 1. Descompacte o pacote numa pasta, por exemplo `C:\EmissorItaborai`.
-2. Dê dois cliques em **`INICIAR.bat`**. Ele faz três coisas sozinho:
-   - instala o que faltar;
-   - importa os clientes dos XML em `Downloads\nfse\MORAES OLIVEIRA CONTABILIDADE LTDA`;
-   - abre o sistema no navegador.
-3. (Opcional) Dê dois cliques em **`AGENDAR_ROBO.bat`** para o robô financeiro rodar todo dia às 08:00, mesmo
-   com o sistema fechado.
+2. Dê dois cliques em **`INSTALAR.bat`** (uma única vez). Ele deixa tudo automático:
+   - o robô financeiro roda **de hora em hora** pelo Agendador do Windows, mesmo com o sistema fechado;
+   - o sistema **abre sozinho ao ligar o computador**;
+   - cria um atalho na área de trabalho.
+3. No primeiro acesso, em **Configurações**:
+   - informe a chave PIX, o e-mail (SMTP) e o e-mail que recebe o **resumo diário**;
+   - opcionalmente, configure o WhatsApp automático (Z-API ou Evolution API).
+4. Em **Contratos**, clique em **Confirmar todos** os contratos que o robô detectou nas suas notas.
+
+Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são mantidos.
 
 ## O sistema
 
@@ -51,6 +55,20 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 | **Conciliação** | Importa o extrato OFX do banco. Os recebimentos casam pelo identificador do PIX, pelo nome ou CNPJ do cliente ou pelo valor, e a baixa é automática. Se o mesmo cliente tem vários títulos de mesmo valor, quita o mais antigo. Os pagamentos casam com as contas a pagar. |
 | **Relatórios** | Aging de inadimplência, ranking por cliente com score de pagamento (0–100), fluxo de caixa projetado para 90 dias, DRE gerencial mensal e log do sistema. |
 | **Configurações** | Robô, chave PIX, Asaas, multa e juros, régua, e-mail (SMTP) e categorias de despesa. |
+
+**O que o robô faz sozinho, a cada hora** (vem ligado; cada item pode ser desligado em Configurações):
+
+| Etapa | Automação |
+|---|---|
+| XML das notas | Lê a pasta de XML: atualiza clientes; notas emitidas **fora do sistema** (Nitrus, portal) viram contas a receber; cliente com nota de mesmo valor em 3 dos últimos 4 meses vira **contrato detectado**. |
+| Contatos | Completa e-mail e telefone dos clientes pela Receita (BrasilAPI). |
+| Recorrência | Gera os títulos dos contratos confirmados (contrato detectado só cobra depois de confirmado, em um clique). |
+| NFS-e | Emite as notas pendentes (só em produção). Falha de rede volta para a fila; recusa da prefeitura vai para revisão. Cada título é reservado antes do envio, o que impede emissão em dobro. |
+| Cobrança | Cria o PIX/boleto e roda a régua por e-mail e WhatsApp (automático com Z-API ou Evolution). |
+| Baixas | Asaas (consulta de status) e **extratos .ofx que aparecerem na pasta Downloads**, importados sozinhos. |
+| Despesas | Débitos do extrato sem conta a pagar viram despesa paga, classificada por regra ("DAS" vai para Impostos, "TARIFA" para Bancárias...). |
+| Resumo | E-mail diário para você: recebidos, atrasos, NFS-e com erro e contratos a confirmar. |
+| Segurança | Backup diário do banco e trava para nunca rodar dois robôs ao mesmo tempo. |
 
 **Robô financeiro** (Configurações > Robô ligado). Roda ao abrir o sistema, a cada hora e todo dia pelo
 agendador. Em ordem, ele:
@@ -159,7 +177,7 @@ pip install pytest lxml
 python -m pytest
 ```
 
-São 74 testes, que cobrem o emissor e o financeiro:
+São 89 testes, que cobrem o emissor, o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

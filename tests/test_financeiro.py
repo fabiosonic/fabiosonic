@@ -298,6 +298,7 @@ def test_robo_ponta_a_ponta(base, monkeypatch):
 
 
 def test_robo_desligado_nao_faz_nada(base):
+    config.salvar({"automacao": {"ativa": False}})
     assert automacao.rodar()["executado"] is False
 
 
