@@ -272,6 +272,10 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
 .imp-cab > div:first-child span { display: block; }
 .imp-cab label { min-width: 320px; }
 .imp-padroes { margin-top: 12px; }
+.imp-serv { border: 1px solid var(--borda); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+.imp-serv-cab { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; margin-bottom: 10px; }
+.imp-serv-cab label:not(.chk) { min-width: 240px; flex: 1; }
+.imp-serv-cab .sub { align-self: center; }
 .imp-padroes summary { list-style: none; margin-bottom: 10px; }
 .imp-padroes summary::-webkit-details-marker { display: none; }
 
@@ -282,8 +286,8 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
 .ck-tit .ic { color: var(--alerta); }
 .ck-barra { flex: 1; min-width: 160px; height: 8px; border-radius: 999px; background: var(--grade); overflow: hidden; }
 .ck-barra span { display: block; height: 100%; background: var(--bom); border-radius: 999px; }
-.checklist ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
-.checklist li { display: flex; gap: 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--borda); background: var(--superficie2); font-size: 13.5px; }
+.checklist ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 8px; }
+.checklist li { display: flex; gap: 10px; min-width: 0; overflow-wrap: anywhere; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--borda); background: var(--superficie2); font-size: 13.5px; }
 .checklist li .ic { margin-top: 1px; }
 .checklist li.ck-ok .ic { color: var(--bom); } .checklist li.ck-aviso .ic { color: var(--alerta); } .checklist li.ck-erro .ic { color: var(--critico); }
 .ck-feitos { margin: 12px 0 0; font-size: 13px; color: var(--texto2); display: flex; gap: 8px; align-items: flex-start; }
@@ -369,3 +373,4 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
   .tabela:not(.dre) tbody tr:hover td { background: transparent; }
   .acoes-linha { flex-wrap: wrap; justify-content: flex-end; }
 }
+.migra p { overflow-wrap: anywhere; }

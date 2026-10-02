@@ -216,8 +216,8 @@ controla o financeiro.
 - **Tudo separado:** cada empresa tem o seu `.env` (credenciais), banco de dados, clientes, contas a receber e a
   pagar, configurações, numeração de RPS/DPS, notas emitidas, boletos e relatórios. A empresa original continua na
   pasta do sistema, sem mover nada; as novas ficam em `empresas/<CNPJ>/`.
-- **Configuração pela tela:** em Configurações, os cartões "Empresa emissora e credenciais" e "Serviço padrão das
-  notas" valem para a empresa em uso. O checklist do painel avisa enquanto o serviço padrão de uma empresa nova
+- **Configuração pela tela:** em Configurações, os cartões "Empresa emissora e credenciais" e "Serviços
+  (atividades) da empresa" valem para a empresa em uso. O checklist do painel avisa enquanto o serviço padrão de uma empresa nova
   não for revisado.
 - **Robô:** a cada execução processa todas as empresas, uma de cada vez, cada uma com seus dados. A tela pode
   estar aberta em qualquer empresa enquanto isso.
@@ -233,6 +233,21 @@ controla o financeiro.
   - cada empresa tem a própria pasta de extratos;
   - o sistema memoriza a conta bancária do primeiro extrato e ignora extratos de outra conta, para que um
     extrato nunca seja conciliado na empresa errada.
+
+
+## Serviços (atividades) de cada empresa
+
+Uma empresa pode prestar mais de uma atividade (ex.: contabilidade, consultoria, treinamento), cada uma com o
+próprio item da LC 116, desdobro nacional, NBS, CNAE, alíquota do ISS, tributação, IBS/CBS e descrição da nota.
+
+- **Cadastro manual:** Configurações › "Serviços (atividades) da empresa": novo, editar, tornar padrão, excluir.
+  O serviço antigo (`servico_padrao.json`) vira automaticamente o primeiro serviço e o padrão do catálogo.
+- **Pela importação das notas:** ao ler a pasta `IMPORTAR XML`, cada atividade distinta das notas (mesmo
+  desdobro/item e NBS) aparece separada, com nome sugerido e códigos detectados; marque as que devem ser
+  cadastradas. Cada cliente fica ligado à atividade que mais aparece nas notas dele (serviço habitual).
+- **Na emissão:** Emitir nota, Emitir em lote, título avulso e contratos têm o seletor de serviço. Ao escolher o
+  cliente, o serviço habitual dele vem selecionado e a descrição acompanha o serviço. Os contratos e o 13º
+  honorário usam o serviço do contrato (ou o habitual do cliente) na emissão automática.
 
 ## Sem dependência de terceiros
 
@@ -365,7 +380,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 135 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 140 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

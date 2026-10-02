@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
-               empresas, importador, inter, lote, migracao, nacional, relatorios, saude)
+               empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
 
@@ -36,7 +36,7 @@ def _emitir_item(it: dict) -> dict:
             "valor": str(it.get("valor"))}
     try:
         r = financeiro.emitir_avulsa(str(it.get("cpf_cnpj", "")), it.get("valor", 0), str(it.get("descricao", "")),
-                                     str(it.get("vencimento", "")))
+                                     str(it.get("vencimento", "")), servico_id=str(it.get("servico_id", "")))
     except (ValueError, ErroValidacao, emissor.ErroConfiguracao) as ex:
         return base | {"sucesso": False, "erros": getattr(ex, "erros", None) or [str(ex)]}
     return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "rps", "nfse", "link", "titulo_id",
@@ -94,7 +94,9 @@ ROTAS = {
     "migracao/importar": lambda c: migracao.importar(str(c.get("pasta", ""))),
     "importador/analisar": lambda c: importador.analisar(),
     "importador/importar": lambda c: importador.importar(str(c.get("empresa_id", "")), str(c.get("cnpj", "")),
-                                                         c.get("servico") or None),
+                                                         c.get("servico") or None, c.get("servicos") or None),
+    "servicos": lambda c: servicos.listar(),
+    "servico/excluir": lambda c: (servicos.excluir(str(c.get("id", ""))), {"ok": True})[1],
     "importador/abrir_pasta": lambda c: _abrir_pasta(importador.caixa()),
     "empresa/criar": lambda c: (empresas.criar(c), {"empresas": empresas.listar()})[1],
     "empresa/ativar": lambda c: (empresas.ativar(str(c.get("id", ""))), {"ok": True})[1],
@@ -102,6 +104,7 @@ ROTAS = {
     "empresa/credenciais/salvar": lambda c: empresas.salvar_credenciais(c),
     "servico/salvar": lambda c: empresas.salvar_servico(c),
     "estado": lambda c: {"versao": __version__, "empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
+                         "servicos": servicos.listar(),
                          "producao": emissor.em_producao(), "config": config.publico(),
                          "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
@@ -191,7 +194,8 @@ def _sem_duplicadas(itens: list[dict]) -> list[dict]:
 
 def _novo_titulo(c: dict) -> dict:
     tid = financeiro.criar_titulo(c.get("cpf_cnpj", ""), c.get("valor"), c.get("descricao", ""),
-                                  c.get("vencimento", ""), c.get("competencia", ""), bool(c.get("emitir_nfse")))
+                                  c.get("vencimento", ""), c.get("competencia", ""), bool(c.get("emitir_nfse")),
+                                  servico_id=str(c.get("servico_id", "")))
     if c.get("emitir_nfse"):
         return financeiro.emitir_nfse_titulo(tid) | {"titulo_id": tid}
     return {"sucesso": True, "titulo_id": tid}

@@ -16,7 +16,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from . import clientes, config, db, emissor, empresas
+from . import clientes, config, db, emissor, empresas, servicos
 from .clientes import _achar, _digitos, _local, _texto
 
 NOME_PASTA = "IMPORTAR XML"
@@ -121,17 +121,32 @@ def analisar() -> dict:
     saida = []
     for g in grupos.values():
         emp = cadastradas.get(g["cnpj"])
-        existentes = set()
+        existentes, catalogo = set(), []
         if emp:
             with emissor.usar_empresa(empresas.pasta(emp)):
                 existentes = {c["cpf_cnpj"] for c in clientes.listar()}
+                catalogo = servicos.listar()
         saida.append({"cnpj": g["cnpj"], "nome": g["nome"], "notas": g["notas"],
                       "empresa_id": emp["id"] if emp else "", "empresa_nome": emp["nome"] if emp else "",
                       "clientes": len(g["clientes"]), "clientes_novos": len(g["clientes"] - existentes),
-                      "padroes": padroes(g["servicos"])})
+                      "padroes": padroes(g["servicos"]), "servicos": separar_servicos(g["servicos"], catalogo)})
     return {"pasta": str(caixa()), "zips_descompactados": zips, "invalidos": invalidos,
             "grupos": sorted(saida, key=lambda x: -x["notas"]),
             "empresas": [{"id": e["id"], "nome": e["nome"], "cnpj": e["cnpj"]} for e in cadastradas.values()]}
+
+
+def separar_servicos(lista: list[dict], catalogo: list[dict]) -> list[dict]:
+    """Cada atividade distinta das notas (mesmo desdobro/item e NBS), com os padrões dela e o nome sugerido."""
+    grupos: dict[tuple, list] = {}
+    for s in lista:
+        grupos.setdefault(servicos.assinatura(s), []).append(s)
+    out = []
+    for chave, itens in sorted(grupos.items(), key=lambda x: -len(x[1])):
+        p = padroes(itens)
+        existente = next((c for c in catalogo if servicos.assinatura(c) == chave and any(chave)), None)
+        out.append({"notas": len(itens), "campos": p, "existente_id": existente["id"] if existente else "",
+                    "nome": existente["nome"] if existente else servicos._nome_de(p.get("descricao", ""))})
+    return out
 
 
 def padroes(servicos: list[dict]) -> dict:
@@ -145,7 +160,8 @@ def padroes(servicos: list[dict]) -> dict:
 
 # ---------------------------------------------------------------- importação
 
-def importar(empresa_id: str, cnpj_prestador: str, servico: dict | None = None) -> dict:
+def importar(empresa_id: str, cnpj_prestador: str, servico: dict | None = None,
+             lista_servicos: list[dict] | None = None) -> dict:
     """Importa para a empresa escolhida os clientes das notas emitidas por ela (prestador = CNPJ da empresa)."""
     emp = next((e for e in empresas.listar() if e["id"] == empresa_id), None)
     if not emp:
@@ -171,11 +187,44 @@ def importar(empresa_id: str, cnpj_prestador: str, servico: dict | None = None) 
         r = clientes.importar_xmls(destino, cnpj) if destino.exists() else {"clientes_novos": 0, "clientes_total": 0}
         if servico:
             empresas.salvar_servico({k: str(v).strip() for k, v in servico.items() if k in CAMPOS_SERVICO and str(v).strip()})
+        cadastrados = 0
+        for item in lista_servicos or []:
+            campos = {k: str(v).strip() for k, v in (item.get("campos") or {}).items() if k in CAMPOS_SERVICO}
+            s = servicos.registrar_detectado(campos, str(item.get("nome") or "").strip())
+            if item.get("padrao"):
+                servicos.salvar({**s, "padrao": True})
+            cadastrados += 1
+        ligados = _ligar_clientes_aos_servicos(destino, cnpj) if destino.exists() else 0
         if not str(config.carregar()["pastas"].get("xml_nfse") or "").strip():
             config.salvar({"pastas": {"xml_nfse": str(destino)}})
         db.registrar("importacao", f"{movidos} XML importado(s) da pasta {NOME_PASTA}: {r['clientes_novos']} cliente(s) novo(s)")
     return {"empresa": emp["nome"], "xml": movidos, "clientes_novos": r["clientes_novos"],
-            "clientes_total": r["clientes_total"], "padrao_salvo": bool(servico)}
+            "clientes_total": r["clientes_total"], "padrao_salvo": bool(servico), "servicos": cadastrados,
+            "clientes_com_servico": ligados}
+
+
+def _ligar_clientes_aos_servicos(pasta: Path, cnpj: str) -> int:
+    """Serviço habitual de cada cliente = serviço da nota mais recente dele (só para quem ainda não tem)."""
+    catalogo = {servicos.assinatura(s): s["id"] for s in servicos.listar() if any(servicos.assinatura(s))}
+    if not catalogo:
+        return 0
+    ultimo: dict[str, tuple] = {}
+    for arq in pasta.rglob("*.xml"):
+        raiz = _ler(arq)
+        if raiz is None or _prestador(raiz)[0] != cnpj:
+            continue
+        cli = clientes.cliente_de_xml(ET.tostring(raiz), cnpj)
+        if not cli:
+            continue
+        sid = catalogo.get(servicos.assinatura(servico_de_xml(raiz)))
+        if sid and cli.get("ultima_data", "") >= ultimo.get(cli["cpf_cnpj"], ("",))[0]:
+            ultimo[cli["cpf_cnpj"]] = (cli.get("ultima_data", ""), sid)
+    n = 0
+    for c in clientes.listar():
+        if c["cpf_cnpj"] in ultimo and not c.get("servico_id"):
+            clientes.salvar({**c, "servico_id": ultimo[c["cpf_cnpj"]][1]})
+            n += 1
+    return n
 
 
 def importar_automatico() -> dict:

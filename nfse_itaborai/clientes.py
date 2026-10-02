@@ -66,7 +66,7 @@ def normalizar(c: dict) -> dict:
             "uf": (str(e.get("uf", "")).strip() or UF_POR_IBGE.get(cod[:2], "")).upper(),
             "cep": _digitos(e.get("cep")), "cidade": str(e.get("cidade", "")).strip(),
         },
-        **{k: c[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "observacao") if k in c},
+        **{k: c[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "observacao", "servico_id") if k in c},
     }
 
 

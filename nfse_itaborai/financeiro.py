@@ -6,7 +6,7 @@ import calendar
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from . import clientes, config, db, emissor, lote
+from . import clientes, config, db, emissor, lote, servicos
 
 
 # ---------------------------------------------------------------- utilidades
@@ -86,7 +86,9 @@ def salvar_contrato(d: dict) -> dict:
         raise ValueError("Cliente não cadastrado.")
     reg = {
         "cpf_cnpj": doc,
-        "descricao": (d.get("descricao") or lote.servico_padrao()["descricao"]).strip()[:190],
+        "descricao": (d.get("descricao") or servicos.obter(d.get("servico_id") or clientes.obter(doc).get("servico_id"))
+                      .get("descricao", "")).strip()[:190],
+        "servico_id": servicos.obter(d.get("servico_id"))["id"] if d.get("servico_id") else "",
         "valor_cent": d["valor_cent"] if "valor_cent" in d else cent(d.get("valor")),
         "dia_vencimento": int(d.get("dia_vencimento") or config.carregar()["financeiro"]["dia_vencimento_padrao"]),
         "inicio": d.get("inicio") or competencia_de(hoje()),
@@ -160,10 +162,10 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
                 k["valor_cent"] = novo
             cur = con.execute(
                 "INSERT OR IGNORE INTO titulos (cpf_cnpj, cliente_nome, contrato_id, competencia, descricao, valor_cent,"
-                " vencimento, nfse_status, criado_em) VALUES (?,?,?,?,?,?,?,?,?)",
+                " vencimento, nfse_status, criado_em, servico_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), k["id"], comp, k["descricao"], k["valor_cent"],
                  dia_no_mes(ano, mes, k["dia_vencimento"]).isoformat(),
-                 "pendente" if k["emitir_nfse"] else "nao_emitir", db.agora()))
+                 "pendente" if k["emitir_nfse"] else "nao_emitir", db.agora(), k.get("servico_id") or ""))
             if cur.rowcount:
                 novos.append(cur.lastrowid)
     if novos:
@@ -201,9 +203,9 @@ def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
                 emitir = k["emitir_nfse"] and d.get("emitir_nfse", True)
                 cur = con.execute(
                     "INSERT INTO titulos (cpf_cnpj, cliente_nome, competencia, descricao, valor_cent, vencimento,"
-                    " nfse_status, criado_em, origem) VALUES (?,?,?,?,?,?,?,?,?)",
+                    " nfse_status, criado_em, origem, servico_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), comp, desc[:190], valor, venc.isoformat(),
-                     "pendente" if emitir else "nao_emitir", db.agora(), origem))
+                     "pendente" if emitir else "nao_emitir", db.agora(), origem, k["servico_id"] or ""))
                 novos.append(cur.lastrowid)
     if novos:
         db.registrar("13o", f"{len(novos)} parcela(s) do 13º honorário gerada(s)")
@@ -211,19 +213,20 @@ def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
 
 
 def criar_titulo(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", competencia: str = "",
-                 emitir_nfse: bool = True) -> int:
+                 emitir_nfse: bool = True, servico_id: str = "") -> int:
     doc = clientes._digitos(cpf_cnpj)
     if not clientes.obter(doc):
         raise ValueError("Cliente não cadastrado.")
     fin = config.carregar()["financeiro"]
+    servico_id = servico_id or (clientes.obter(doc) or {}).get("servico_id") or ""
     venc = vencimento or (hoje() + timedelta(days=int(fin["prazo_avulso_dias"]))).isoformat()
     with db.conexao() as con:
         cur = con.execute(
             "INSERT INTO titulos (cpf_cnpj, cliente_nome, competencia, descricao, valor_cent, vencimento, nfse_status,"
-            " criado_em) VALUES (?,?,?,?,?,?,?,?)",
+            " criado_em, servico_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (doc, _nome(doc), competencia or competencia_de(hoje()),
-             (descricao or lote.servico_padrao()["descricao"]).strip()[:190], cent(valor), venc,
-             "pendente" if emitir_nfse else "nao_emitir", db.agora()))
+             (descricao or servicos.obter(servico_id)["descricao"])
+             .strip()[:190], cent(valor), venc, "pendente" if emitir_nfse else "nao_emitir", db.agora(), servico_id or ""))
         return cur.lastrowid
 
 
@@ -299,7 +302,8 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
         return {"sucesso": False, "erros": ["NFS-e deste título já está sendo emitida."], "titulo": obter_titulo(tid)}
     producao = emissor.em_producao()
     try:
-        r = lote.emitir_um(t["cpf_cnpj"], reais(t["valor_cent"]), t["descricao"], producao=producao, url=url)
+        r = lote.emitir_um(t["cpf_cnpj"], reais(t["valor_cent"]), t["descricao"], producao=producao, url=url,
+                           servico_id=t.get("servico_id") or "")
     except Exception:
         atualizar_titulo(tid, nfse_status=t["nfse_status"])
         raise
@@ -317,9 +321,10 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
     return r | {"titulo": obter_titulo(tid)}
 
 
-def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", url: str | None = None) -> dict:
-    """Fluxo da aba 'Emitir nota': cria a conta a receber e emite a NFS-e dela."""
-    tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento)
+def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", url: str | None = None,
+                  servico_id: str = "") -> dict:
+    """Fluxo da aba 'Emitir nota': cria a conta a receber e emite a NFS-e dela com o serviço escolhido."""
+    tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id)
     r = emitir_nfse_titulo(tid, url=url)
     if not r["sucesso"]:
         cancelar_titulo(tid, "NFS-e não emitida")

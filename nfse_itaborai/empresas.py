@@ -170,18 +170,11 @@ def salvar_credenciais(d: dict, destino: Path | None = None) -> dict:
 
 
 def salvar_servico(d: dict) -> dict:
-    """Serviço padrão da empresa em uso (item da lista, NBS, desdobro, alíquota, IBS/CBS, descrição...)."""
-    from . import lote
-    atual = lote.servico_padrao()
-    for k in atual:
-        if k in d:
-            atual[k] = d[k]
-    (emissor.raiz() / "servico_padrao.json").write_text(json.dumps(atual, indent=2, ensure_ascii=False),
-                                                         encoding="utf-8")
-    from . import config
-    if not config.carregar()["emissao"].get("servico_revisado", True):
-        config.salvar({"emissao": {"servico_revisado": True}})
-    return atual
+    """Serviço da empresa em uso: com id/nome altera ou cria um serviço do catálogo; sem, altera o padrão."""
+    from . import servicos
+    if d.get("id") or d.get("nome"):
+        return servicos.salvar(d)
+    return servicos.salvar({**servicos.padrao(), **{k: v for k, v in d.items() if k in servicos.CAMPOS}})
 
 
 # ---------------------------------------------------------------- isolamento de credenciais

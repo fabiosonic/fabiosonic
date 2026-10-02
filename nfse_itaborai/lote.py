@@ -2,32 +2,28 @@
 
 from __future__ import annotations
 
-import json
 from decimal import Decimal
-from pathlib import Path
 
-from . import clientes, emissor, nacional
+from . import clientes, emissor, nacional, servicos
 from .validacao import ErroValidacao
 
-ARQ_PADRAO = Path(__file__).resolve().parent.parent / "servico_padrao.json"
-
-
 def servico_padrao() -> dict:
-    local = emissor.RAIZ / "servico_padrao.json"
-    arq = local if local.exists() else ARQ_PADRAO
-    return json.loads(arq.read_text(encoding="utf-8"))
+    """Serviço padrão da empresa em uso (compatibilidade: o catálogo completo está em servicos.py)."""
+    return servicos.padrao()
 
 
-def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "") -> dict:
-    """Dicionário de RPS pronto para emissor.rps_de_dict, a partir do cadastro e do serviço padrão."""
+def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "", servico_id: str = "") -> dict:
+    """Dicionário de RPS pronto para emissor.rps_de_dict, a partir do cadastro e do serviço escolhido
+    (sem escolha: o serviço habitual do cliente; sem esse: o padrão da empresa)."""
     cli = clientes.obter(cpf_cnpj)
     if not cli:
         raise ValueError(f"Cliente {cpf_cnpj} não está no cadastro.")
-    p = servico_padrao()
+    p = servicos.obter(servico_id or cli.get("servico_id"))
     v = Decimal(str(valor).replace(".", "").replace(",", ".")) if "," in str(valor) else Decimal(str(valor))
     if v <= 0:
         raise ValueError("Valor deve ser maior que zero.")
-    ibpt = (v * Decimal(str(p.get("ibpt_percentual", "0"))) / 100).quantize(Decimal("0.01"))
+    pct = str(p.get("ibpt_percentual") or "0").replace(",", ".")
+    ibpt = (v * Decimal(pct) / 100).quantize(Decimal("0.01"))
     return {
         "numero": "", "competencia": competencia,
         "itens": [{"descricao": (descricao or p["descricao"]).strip(), "quantidade": 1, "valor_unitario": str(v)}],
@@ -47,13 +43,13 @@ def _municipio() -> str:
 
 
 def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False, url: str | None = None,
-              canal: str | None = None) -> dict:
+              canal: str | None = None, servico_id: str = "") -> dict:
     """Emite pelo canal escolhido em Configurações > Emissão: municipal (Itaboraí) ou nacional (nfse.gov.br)."""
     canal = canal or nacional.canal()
     cli = clientes.obter(cpf_cnpj) or {}
     base = {"cpf_cnpj": cpf_cnpj, "cliente": cli.get("razao_social", cpf_cnpj), "valor": str(valor), "canal": canal}
     try:
-        rps = emissor.rps_de_dict(montar_rps(cpf_cnpj, valor, descricao))
+        rps = emissor.rps_de_dict(montar_rps(cpf_cnpj, valor, descricao, servico_id=servico_id))
         kw = {"url": url} if url else {}
         resp = (nacional.emitir if canal == "nacional" else emissor.emitir)(rps, producao=producao, **kw)
     except ErroValidacao as ex:
@@ -81,5 +77,5 @@ def emitir_lote(itens: list[dict], producao: bool = False, url: str | None = Non
             continue
         vistos.add(chave)
         resultado.append(emitir_um(it.get("cpf_cnpj", ""), it.get("valor", 0), it.get("descricao", ""),
-                                   producao=producao, url=url))
+                                   producao=producao, url=url, servico_id=it.get("servico_id", "")))
     return resultado

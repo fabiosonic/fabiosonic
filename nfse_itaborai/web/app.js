@@ -49,6 +49,11 @@ function tabela(cols, linhas, vazio = "Nada por aqui.") {
   return `<div class="tabela"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${c.t}</th>`).join("")}</tr></thead><tbody>${
     linhas.map(l => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}" data-r="${esc(String(c.t).replace(/<[^>]*>/g, ""))}">${c.f(l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
+function servPadrao() { return (ST.servicos || []).find(s => s.padrao) || ST.padrao || {}; }
+function servDe(id) { return (ST.servicos || []).find(s => s.id == id) || servPadrao(); }
+function opcoesServ(sel, vazio) {
+  return (vazio ? `<option value="">${esc(vazio)}</option>` : "") + (ST.servicos || []).map(s => `<option value="${esc(s.id)}" ${s.id == sel ? "selected" : ""}>${esc(s.nome)}${s.padrao ? " (padrão)" : ""} — item ${esc(s.item_lista_servico || "?")}</option>`).join("");
+}
 function opcoesClientes() { return ST.clientes.map(c => `<option value="${esc(c.razao_social)} — ${fmtDoc(c.cpf_cnpj)}">`).join(""); }
 function docDe(txt) { const m = String(txt).match(/(\d[\d./-]{10,})\s*$/); return m ? m[1].replace(/\D/g, "") : String(txt).replace(/\D/g, ""); }
 function form(el) { const o = {}; $$("[name]", el).forEach(i => o[i.name] = i.type == "checkbox" ? i.checked : i.value); return o; }
@@ -213,24 +218,29 @@ PAGINAS.emitir = async el => {
     <label class="inteiro">Cliente<input id="e_cli" list="dl_cli" placeholder="Digite o nome ou CNPJ e escolha"></label>
     <label>Valor (R$)<input id="e_valor" inputmode="decimal" placeholder="0,00"></label>
     <label>Vencimento<input id="e_venc" type="date"></label>
-    <label class="inteiro">Descrição<input id="e_desc" maxlength="190" value="${esc(ST.padrao.descricao)}"></label></div>
+    <label class="inteiro">Serviço (atividade)<select id="e_serv">${opcoesServ(servPadrao().id)}</select></label>
+    <label class="inteiro">Descrição<input id="e_desc" maxlength="190" value="${esc(servPadrao().descricao || "")}"></label></div>
     <datalist id="dl_cli">${opcoesClientes()}</datalist>
     <p class="sub">A nota gera automaticamente a conta a receber com o PIX/boleto e entra na régua de cobrança.<br>Emitindo por: <b>${nomeCanal()}</b> — troque em <a href="#config">Configurações › Emissão</a>.</p>
     <button class="btn" id="e_btn">Emitir nota</button><div id="e_res"></div></div>`;
-  $("#e_cli").oninput = () => { const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)); if (c && c.ultimo_valor && !$("#e_valor").value) $("#e_valor").value = Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 }); };
+  const trocaServ = id => { $("#e_serv").value = servDe(id).id; $("#e_desc").value = servDe(id).descricao || ""; };
+  $("#e_serv").onchange = () => trocaServ($("#e_serv").value);
+  $("#e_cli").oninput = () => { const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)); if (c && c.ultimo_valor && !$("#e_valor").value) $("#e_valor").value = Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+    if (c && c.servico_id) trocaServ(c.servico_id); };
   $("#e_btn").onclick = async () => {
     const doc = docDe($("#e_cli").value), cli = ST.clientes.find(c => c.cpf_cnpj == doc);
     if (!cli) return aviso("Escolha um cliente da lista (ou cadastre em Clientes).");
     const v = $("#e_valor").value.trim(); if (!valorNum(v)) return aviso("Informe o valor.");
-    if (!confirm(`${ST.producao ? "EMITIR NOTA VÁLIDA" : "Teste em homologação"} — ${nomeCanal()}\n\n${cli.razao_social}\nR$ ${v}`)) return;
+    if (!confirm(`${ST.producao ? "EMITIR NOTA VÁLIDA" : "Teste em homologação"} — ${nomeCanal()}\n\n${cli.razao_social}\nServiço: ${servDe($("#e_serv").value).nome}\nR$ ${v}`)) return;
     $("#e_btn").disabled = true; $("#e_res").innerHTML = '<div class="msg">Enviando…</div>';
-    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, vencimento: $("#e_venc").value }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
+    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
     finally { $("#e_btn").disabled = false; }
   };
 };
 PAGINAS.lote = async el => {
   el.innerHTML = `<h1>Emitir em lote</h1><div class="card"><div class="barra"><label>Filtrar<input id="l_f" placeholder="nome ou CNPJ"></label>
-    <label style="flex:1">Descrição para todas<input id="l_desc" maxlength="190" value="${esc(ST.padrao.descricao)}"></label></div>
+    <label>Serviço<select id="l_serv">${opcoesServ("", "Serviço habitual de cada cliente")}</select></label>
+    <label style="flex:1">Descrição para todas<input id="l_desc" maxlength="190" placeholder="em branco = descrição do serviço de cada cliente"></label></div>
     <p class="sub">Marque os clientes. O valor vem da última nota — ajuste se precisar. Cada nota já gera a conta a receber.</p>
     <div id="l_tab"></div><p><button class="btn" id="l_btn">Emitir selecionadas</button> <span id="l_tot" class="sub"></span></p><div id="l_res"></div></div>`;
   const desenhar = () => { const f = $("#l_f").value.toLowerCase().replace(/[./-]/g, "");
@@ -240,8 +250,9 @@ PAGINAS.lote = async el => {
       { t: "Última nota", f: c => dt(c.ultima_data) }], ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)));
     $("#l_todos") && ($("#l_todos").onclick = e => { $$(".lc").forEach(x => x.checked = e.target.checked); somar(); });
     $$(".lc,.lv").forEach(x => x.oninput = x.onchange = somar); somar(); };
-  const sel = () => $$(".lc:checked").map(x => ({ cpf_cnpj: x.dataset.doc, valor: $(`.lv[data-doc="${x.dataset.doc}"]`).value, descricao: $("#l_desc").value }));
+  const sel = () => $$(".lc:checked").map(x => ({ cpf_cnpj: x.dataset.doc, valor: $(`.lv[data-doc="${x.dataset.doc}"]`).value, descricao: $("#l_desc").value, servico_id: $("#l_serv").value || (ST.clientes.find(c => c.cpf_cnpj == x.dataset.doc) || {}).servico_id || "" }));
   const somar = () => { const s = sel(); $("#l_tot").textContent = s.length ? `${s.length} nota(s) · total ${brl(Math.round(s.reduce((a, b) => a + valorNum(b.valor), 0) * 100))}` : ""; };
+  $("#l_serv").onchange = () => { $("#l_desc").value = $("#l_serv").value ? servDe($("#l_serv").value).descricao || "" : ""; };
   $("#l_f").oninput = desenhar; desenhar();
   $("#l_btn").onclick = async () => {
     const itens = sel(); if (!itens.length) return aviso("Marque ao menos um cliente.");
@@ -331,7 +342,8 @@ async function historicoTitulo(id) {
 function novoTitulo() {
   modal(`<h2>Título avulso</h2><div class="campos" id="fn"><label class="inteiro">Cliente<input name="cliente" list="dl_cli2"></label><datalist id="dl_cli2">${opcoesClientes()}</datalist>
     <label>Valor (R$)<input name="valor"></label><label>Vencimento<input type="date" name="vencimento"></label><label>Competência<input type="month" name="competencia"></label>
-    <label class="inteiro">Descrição<input name="descricao" value="${esc(ST.padrao.descricao)}"></label>
+    <label class="inteiro">Serviço<select name="servico_id">${opcoesServ("", "Serviço habitual do cliente")}</select></label>
+    <label class="inteiro">Descrição<input name="descricao" placeholder="em branco = descrição do serviço"></label>
     <label class="chk"><input type="checkbox" name="emitir_nfse" checked> Emitir NFS-e agora</label></div>
     <p><button class="btn" id="ok">Salvar</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
   $("#ok").onclick = async () => { const f = form($("#fn")); f.cpf_cnpj = docDe(f.cliente); const r = await api("titulo/novo", f); fechar();
@@ -365,7 +377,8 @@ function editarContrato(c) {
   const cli = ST.clientes.find(x => x.cpf_cnpj == c.cpf_cnpj);
   modal(`<h2>${c.id ? "Editar" : "Novo"} contrato</h2><div class="campos" id="fc">
     <label class="inteiro">Cliente<input name="cliente" list="dl_cli3" value="${cli ? esc(cli.razao_social + " — " + fmtDoc(cli.cpf_cnpj)) : ""}"></label><datalist id="dl_cli3">${opcoesClientes()}</datalist>
-    <label class="inteiro">Descrição<input name="descricao" value="${esc(c.descricao || ST.padrao.descricao)}"></label>
+    <label class="inteiro">Serviço da nota<select name="servico_id" id="fc_serv">${opcoesServ(c.servico_id || "", "Serviço habitual do cliente")}</select></label>
+    <label class="inteiro">Descrição<input name="descricao" value="${esc(c.descricao || "")}" placeholder="em branco = descrição do serviço"></label>
     <label>Valor mensal (R$)<input name="valor" value="${c.valor_cent ? num(c.valor_cent) : ""}"></label>
     <label>Dia do vencimento<input name="dia_vencimento" type="number" min="1" max="31" value="${c.dia_vencimento || ST.config.financeiro.dia_vencimento_padrao}"></label>
     <label>Início<input name="inicio" type="month" value="${c.inicio || hojeISO().slice(0, 7)}"></label><label>Fim (opcional)<input name="fim" type="month" value="${c.fim || ""}"></label>
@@ -374,6 +387,7 @@ function editarContrato(c) {
     <label class="chk"><input type="checkbox" name="emitir_nfse" ${c.emitir_nfse === 0 ? "" : "checked"}> Emitir NFS-e automaticamente</label>
     <label class="chk"><input type="checkbox" name="ativo" ${c.ativo === 0 ? "" : "checked"}> Ativo</label></div>
     <p><button class="btn" id="ok">Salvar</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#fc_serv").onchange = e => { if (e.target.value) $("#fc [name=descricao]").value = servDe(e.target.value).descricao || ""; };
   $("#ok").onclick = async () => { const f = form($("#fc")); f.cpf_cnpj = docDe(f.cliente); if (c.id) f.id = c.id; await api("contrato/salvar", f); fechar(); aviso("Contrato salvo ✔"); ir("contratos"); };
 }
 async function encerrar(id) { if (confirm("Encerrar este contrato? Ele deixa de gerar cobranças.")) { await api("contrato/excluir", { id }); ir("contratos"); } }
@@ -543,7 +557,8 @@ PAGINAS.clientes = async el => {
     <label>Tipo logradouro<input name="tipo_logradouro" placeholder="RUA"></label><label>Logradouro<input name="logradouro"></label><label>Número<input name="numero"></label>
     <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label>CEP<input name="cep"></label>
     <label>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label>Cód. IBGE município<input name="codigo_municipio"></label><label>UF<input name="uf" maxlength="2"></label>
-    <label>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label></div>
+    <label>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
+    <label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
     <p><button class="btn" id="sc">Salvar cliente</button> <button class="btn sec" id="lc">Novo</button></p></div>
     <div class="card"><div class="barra"><label style="flex:1">Procurar<input id="c_f" placeholder="nome ou CNPJ"></label></div><div id="c_tab"></div></div>`;
   const END = ["tipo_logradouro", "logradouro", "numero", "complemento", "bairro", "cep", "cidade", "codigo_municipio", "uf"];
@@ -574,19 +589,25 @@ async function importarXml(area) {
     ${a.grupos.length ? "" : '<div class="vazio">Nenhum XML novo na pasta.</div>'}
     ${a.grupos.map((g, j) => `<div class="imp-grupo" data-j="${j}"><div class="imp-cab"><div><b>${esc(g.nome || "Prestador sem nome")}</b><span class="sub">CNPJ ${fmtDoc(g.cnpj)} · ${g.notas} nota(s) · ${g.clientes} cliente(s), ${g.clientes_novos} novo(s)</span></div>
       ${g.empresa_id ? `<label>Cadastrar os clientes na empresa<select class="imp-emp">${opcoes(g.empresa_id)}</select></label>` : `<div class="msg erro">Nenhuma empresa cadastrada com este CNPJ. <a href="#" class="imp-nova">Cadastrar esta empresa</a> e depois leia a pasta de novo.</div>`}</div>
-      ${g.empresa_id ? `<details class="imp-padroes" open><summary><label class="chk"><input type="checkbox" class="imp-usar" checked> Usar estes padrões para emitir as notas desta empresa (serviço padrão)</label></summary>
-        <div class="campos">${Object.entries(rot).map(([k, t]) => `<label class="${k == "descricao" ? "inteiro" : ""}">${t}<input data-pad="${k}" value="${esc(g.padroes[k] || "")}"></label>`).join("")}</div>
-        <p class="sub">Detectados nas notas (valor mais frequente). Confira com o cadastro municipal antes de emitir.</p></details>
+      ${g.empresa_id ? `<details class="imp-padroes" open><summary><b>${(g.servicos || []).length} serviço(s) / atividade(s) encontrados nas notas</b> — marque os que devem ficar cadastrados para emitir</summary>
+        ${(g.servicos || []).map((sv, k) => `<div class="imp-serv" data-k="${k}"><div class="imp-serv-cab"><label class="chk"><input type="checkbox" class="imp-sv-usar" ${sv.existente_id ? "" : "checked"}> Cadastrar</label>
+          <label>Nome da atividade<input class="imp-sv-nome" value="${esc(sv.nome)}" maxlength="60"></label>
+          <label class="chk"><input type="radio" name="imp_pad_${j}" class="imp-sv-pad"> Tornar padrão</label>
+          <span class="sub">${sv.notas} nota(s)${sv.existente_id ? " · já cadastrado (completa só o que faltar)" : ""}</span></div>
+          <div class="campos">${Object.entries(rot).map(([c, t]) => `<label class="${c == "descricao" ? "inteiro" : ""}">${t}<input data-pad="${c}" value="${esc(sv.campos[c] || "")}"></label>`).join("")}</div></div>`).join("")}
+        <p class="sub">Códigos detectados nas notas (valor mais frequente de cada atividade). Confira com o cadastro municipal antes de emitir. Cada cliente fica ligado à atividade que mais aparece nas notas dele.</p></details>
         <p><button class="btn imp-ok">${ic("ok")}Importar ${g.clientes} cliente(s)</button></p>` : ""}</div>`).join("")}</div>`;
   $("#imp_reler").onclick = () => importarXml(area);
   $$(".imp-grupo", area).forEach(div => { const g = a.grupos[div.dataset.j], b = $(".imp-ok", div), nv = $(".imp-nova", div);
     if (nv) nv.onclick = e => { e.preventDefault(); trocarEmpresa({ nome: g.nome, cnpj: g.cnpj }); };
     if (!b) return;
     b.onclick = async () => {
-      const serv = {}; if ($(".imp-usar", div).checked) $$("[data-pad]", div).forEach(i => serv[i.dataset.pad] = i.value);
-      const r = await api("importador/importar", { empresa_id: $(".imp-emp", div).value, cnpj: g.cnpj, servico: $(".imp-usar", div).checked ? serv : null });
+      const servicos = $$(".imp-serv", div).filter(x => $(".imp-sv-usar", x).checked).map(x => {
+        const campos = {}; $$("[data-pad]", x).forEach(i => campos[i.dataset.pad] = i.value.trim());
+        return { nome: $(".imp-sv-nome", x).value.trim(), campos, padrao: $(".imp-sv-pad", x).checked }; });
+      const r = await api("importador/importar", { empresa_id: $(".imp-emp", div).value, cnpj: g.cnpj, servicos });
       if (r.erro) return;
-      aviso(`${r.empresa}: ${r.xml} XML importado(s), ${r.clientes_novos} cliente(s) novo(s)${r.padrao_salvo ? " · serviço padrão atualizado" : ""} ✔`, 8000);
+      aviso(`${r.empresa}: ${r.xml} XML importado(s), ${r.clientes_novos} cliente(s) novo(s)${r.servicos ? ` · ${r.servicos} serviço(s) cadastrado(s)` : ""}${r.clientes_com_servico ? ` · ${r.clientes_com_servico} cliente(s) ligados ao serviço habitual` : ""} ✔`, 9000);
       await carregarEstado(); ir("clientes"); }; });
 }
 
@@ -603,12 +624,45 @@ async function mostrarMigracao(alvo, sempre) {
     await carregarEstado(); ir(PAG); });
 }
 
+// ---------------------------------------------------------------- serviços (atividades)
+function tabelaServicos() {
+  return tabela([{ t: "Serviço", f: s => `<b>${esc(s.nome)}</b>${s.padrao ? " " + selo("bom").replace("Bom", "Padrão") : ""}<div class="sub">${esc(s.descricao)}</div>` },
+    { t: "Item LC 116", f: s => esc(s.item_lista_servico) }, { t: "Desdobro / NBS", f: s => `${esc(s.codigo_desdobro || "—")} / ${esc(s.codigo_nbs || "—")}` },
+    { t: "ISS", n: 1, f: s => s.aliquota_iss ? esc(s.aliquota_iss) + "%" : "—" },
+    { t: "", f: s => `<div class="acoes-linha"><button class="btn min sec" type="button" data-sv-ed="${esc(s.id)}">Editar</button>${s.padrao ? "" : ` <button class="btn min sec" type="button" data-sv-pd="${esc(s.id)}">Tornar padrão</button> <button class="btn min sec" type="button" data-sv-ex="${esc(s.id)}" title="Excluir">${ic("x")}</button>`}</div>` }],
+    ST.servicos || [], "Nenhum serviço cadastrado.");
+}
+async function recarregarServicos() {
+  await carregarEstado(); const l = $("#lista_serv"); if (!l) return;
+  l.innerHTML = tabelaServicos(); ligarServicos();
+}
+function ligarServicos() {
+  $$("[data-sv-ed]").forEach(b => b.onclick = () => editarServico(servDe(b.dataset.svEd)));
+  $$("[data-sv-pd]").forEach(b => b.onclick = async () => { const r = await api("servico/salvar", { ...servDe(b.dataset.svPd), padrao: true }); if (r.erro) return; aviso("Serviço padrão alterado ✔"); recarregarServicos(); });
+  $$("[data-sv-ex]").forEach(b => b.onclick = async () => { if (!confirm(`Excluir o serviço ${servDe(b.dataset.svEx).nome}? Clientes e contratos que usavam ele passam a usar o padrão.`)) return;
+    const r = await api("servico/excluir", { id: b.dataset.svEx }); if (r.erro) return; aviso("Serviço excluído ✔"); recarregarServicos(); });
+}
+function editarServico(s) {
+  const base = s.id ? s : { ibpt_percentual: servPadrao().ibpt_percentual || "", tipo_tributacao: servPadrao().tipo_tributacao || "", iss_retido: servPadrao().iss_retido || "2",
+    indicador_operacao: servPadrao().indicador_operacao || "", classificacao_tributaria: servPadrao().classificacao_tributaria || "", cnae: servPadrao().cnae || "" };
+  const f = (k, t, extra = "") => `<label>${t}<input name="${k}" value="${esc(base[k] ?? "")}" ${extra}></label>`;
+  modal(`<h2>${s.id ? "Editar serviço" : "Novo serviço"}</h2><div class="campos" id="fsv">
+    ${f("nome", "Nome da atividade", 'placeholder="ex.: Consultoria" maxlength="60"')}<label class="chk"><input type="checkbox" name="padrao" ${s.padrao ? "checked" : ""}> Serviço padrão da empresa</label>
+    <label class="inteiro">Descrição que vai na nota<input name="descricao" maxlength="190" value="${esc(base.descricao || "")}"></label>
+    ${f("item_lista_servico", "Item LC 116 (ex.: 17.19)")}${f("codigo_desdobro", "Desdobro nacional (6 dígitos)")}${f("codigo_nbs", "NBS (9 dígitos)")}${f("cnae", "CNAE")}
+    ${f("aliquota_iss", "Alíquota ISS (%)")}${f("tipo_tributacao", "Tipo de tributação (4 = Simples)")}${f("iss_retido", "ISS retido (1 sim / 2 não)")}${f("indicador_operacao", "IBS/CBS: cIndOp")}${f("classificacao_tributaria", "IBS/CBS: cClassTrib")}${f("ibpt_percentual", "Carga tributária IBPT (%)")}
+    <label class="inteiro">Observações na nota<input name="observacoes" value="${esc(base.observacoes || "")}"></label></div>
+    <p class="sub">Confira os códigos com o cadastro municipal da empresa e a Tabela IBS x CBS. Item, NBS e alíquota errados geram rejeição da nota.</p>
+    <p><button class="btn" id="ok">Salvar serviço</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#ok").onclick = async () => { const d = form($("#fsv")); if (s.id) d.id = s.id; if (s.padrao) d.padrao = true;
+    if (!d.nome.trim()) return aviso("Dê um nome ao serviço (ex.: Consultoria).");
+    const r = await api("servico/salvar", d); if (r.erro) return; fechar(); aviso("Serviço salvo ✔"); recarregarServicos(); };
+}
+
 // ---------------------------------------------------------------- configurações
 PAGINAS.config = async el => {
   const [c, cred] = await Promise.all([api("config"), api("empresa/credenciais")]);
-  const sp = ST.padrao || {};
   const cr = (k, t, tipo = "text") => `<label>${t}<input type="${tipo}" data-cred="${k}" value="${esc(cred[k] || "")}"></label>`;
-  const sv = (k, t) => `<label>${t}<input data-serv="${k}" value="${esc(sp[k] ?? "")}"></label>`;
   const ck = (s, k, t) => `<label class="chk"><input type="checkbox" data-s="${s}" data-k="${k}" ${c[s][k] ? "checked" : ""}> ${t}</label>`;
   const sl = (s, k, t, ops) => `<label>${t}<select data-s="${s}" data-k="${k}">${ops.map(([v, x]) => `<option value="${v}" ${String(c[s][k]) == v ? "selected" : ""}>${x}</option>`).join("")}</select></label>`;
   const tx = (s, k, t, tipo = "text", extra = "") => `<label>${t}<input type="${tipo}" data-s="${s}" data-k="${k}" value="${esc(Array.isArray(c[s][k]) ? c[s][k].join(", ") : c[s][k])}" ${extra}></label>`;
@@ -621,10 +675,9 @@ PAGINAS.config = async el => {
   <div class="card"><h2>${ic("clientes")}Empresa emissora e credenciais</h2><p class="sub">Dados da empresa em uso (${esc((ST.empresa || {}).nome || "")}). Ficam só neste computador, no arquivo .env da empresa.</p>
     <div class="campos">${cr("cnpj", "CNPJ")}${cr("im", "Inscrição municipal")}${cr("ie", "Inscrição estadual")}${cr("chave", "Chave do webservice (Itaboraí)", "password")}${cr("proximo_rps", "Próximo RPS", "number")}
     <label>Optante do Simples<select data-cred="simples"><option value="S" ${cred.simples != "N" ? "selected" : ""}>Sim</option><option value="N" ${cred.simples == "N" ? "selected" : ""}>Não</option></select></label></div></div>
-  <div class="card"><h2>${ic("nota")}Serviço padrão das notas</h2><p class="sub">Usado em toda emissão desta empresa (avulsa, lote e recorrência). Confira com o cadastro municipal e a Tabela IBS x CBS.</p>
-    <div class="campos"><label class="inteiro">Descrição padrão<input data-serv="descricao" value="${esc(sp.descricao || "")}"></label>${sv("item_lista_servico", "Item LC 116 (ex.: 17.19)")}${sv("codigo_desdobro", "Desdobro nacional (6 dígitos)")}${sv("codigo_nbs", "NBS (9 dígitos)")}${sv("cnae", "CNAE")}
-    ${sv("aliquota_iss", "Alíquota ISS (%)")}${sv("tipo_tributacao", "Tipo de tributação (4 = Simples)")}${sv("iss_retido", "ISS retido (1 sim / 2 não)")}${sv("indicador_operacao", "IBS/CBS: cIndOp")}${sv("classificacao_tributaria", "IBS/CBS: cClassTrib")}${sv("ibpt_percentual", "Carga tributária IBPT (%)")}
-    <label class="inteiro">Observações na nota<input data-serv="observacoes" value="${esc(sp.observacoes || "")}"></label></div></div>
+  <div class="card"><h2>${ic("nota")}Serviços (atividades) da empresa <span class="acoes"><button class="btn min" id="novo_serv" type="button">${ic("mais")}Novo serviço</button></span></h2>
+    <p class="sub">Cada atividade (contabilidade, consultoria, treinamento…) tem o próprio item da LC 116, NBS, alíquota e descrição. Na emissão você escolhe o serviço; o <b>padrão</b> vem selecionado quando o cliente não tem serviço habitual. Os serviços também são criados sozinhos ao importar os XML das notas.</p>
+    <div id="lista_serv">${tabelaServicos()}</div></div>
   <div class="card"><h2>${ic("nota")}Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
     <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <div class="inteiro cert-box"><label class="soltar"><input type="file" id="cert_arq" accept=".pfx,.p12" hidden>${ic("download")}<span><b id="cert_nome">${c.emissao.certificado_pfx ? "Certificado A1 cadastrado nesta empresa — clique para trocar" : "Selecionar certificado digital A1 (.pfx)"}</b><small>O arquivo é copiado só para a pasta desta empresa; nenhuma outra empresa tem acesso.</small></span></label>
@@ -674,12 +727,12 @@ PAGINAS.config = async el => {
       else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct", "iss_fixo_mensal"].includes(i.dataset.k)) v = valorNum(v);
       else if (i.type == "number") v = Number(v);
       novo[i.dataset.s][i.dataset.k] = v; });
-    const cred = {}, serv = {};
+    const cred = {};
     $$("[data-cred]").forEach(i => cred[i.dataset.cred] = i.value);
-    $$("[data-serv]").forEach(i => serv[i.dataset.serv] = i.value.trim());
-    await api("config/salvar", novo); await api("empresa/credenciais/salvar", cred); await api("servico/salvar", serv);
+    await api("config/salvar", novo); await api("empresa/credenciais/salvar", cred);
     await carregarEstado(); aviso("Configurações salvas ✔");
   };
+  $("#novo_serv").onclick = () => editarServico({}); ligarServicos();
   $("#cert_arq").onchange = e => { const f = e.target.files[0]; if (f) { $("#cert_nome").textContent = "Selecionado: " + f.name + " — informe a senha e clique em Salvar certificado"; $("#cert_senha").focus(); } };
   const lerB64 = f => new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
   $("#cert_salvar").onclick = async () => {
