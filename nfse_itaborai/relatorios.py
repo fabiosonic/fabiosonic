@@ -153,9 +153,10 @@ def fluxo_caixa(em: date | None = None, dias: int = 90) -> list[dict]:
         d = max(d, em)
         return (d - timedelta(days=d.weekday())).isoformat()
 
+    corte = em - timedelta(days=60)  # atraso acima de 60 dias não entra na previsão de caixa
     for t in db.linhas("SELECT * FROM titulos WHERE status='aberto'"):
         v = date.fromisoformat(t["vencimento"])
-        if v <= fim:
+        if corte <= v <= fim:
             entradas[semana(v)] += t["valor_cent"]
     geradas = {(t["contrato_id"], t["competencia"]) for t in db.linhas("SELECT contrato_id, competencia FROM titulos")}
     for k in db.linhas("SELECT * FROM contratos WHERE ativo=1 AND confirmado=1"):
@@ -172,32 +173,12 @@ def fluxo_caixa(em: date | None = None, dias: int = 90) -> list[dict]:
         if v <= fim:
             saidas[semana(v)] += dsp["valor_cent"]
     saldo, out = 0, []
-    for s in sorted(set(entradas) | set(saidas)):
+    s0 = date.fromisoformat(semana(em))
+    semanas = {(s0 + timedelta(weeks=k)).isoformat() for k in range((fim - s0).days // 7 + 1)}
+    for s in sorted(semanas | set(entradas) | set(saidas)):
         saldo += entradas[s] - saidas[s]
         out.append({"semana": s, "entradas": entradas[s], "saidas": saidas[s], "saldo_acumulado": saldo})
     return out
-
-
-def dre(ano: int, em: date | None = None) -> dict:
-    """DRE gerencial por mês: receita (competência das notas) − DAS estimado − despesas pagas/lançadas."""
-    em = em or financeiro.hoje()
-    ts = _titulos(em)
-    desp = db.linhas("SELECT * FROM despesas WHERE status!='cancelado' AND substr(vencimento,1,4)=?", (str(ano),))
-    meses = [f"{ano}-{m:02d}" for m in range(1, 13)]
-    cats = sorted({d["categoria"] for d in desp})
-    linhas = []
-    for m in meses:
-        receita = sum(t["valor_cent"] for t in ts if t["competencia"] == m)
-        r12 = rbt12(date(int(m[:4]), int(m[5:]), 1), ts)
-        aliq = aliquota_efetiva_anexo3(r12) if r12 else config.carregar()["financeiro"]["aliquota_simples_pct"]
-        das = round(receita * aliq / 100)
-        por_cat = {c: sum(d["valor_cent"] for d in desp if d["vencimento"][:7] == m and d["categoria"] == c) for c in cats}
-        despesas = sum(por_cat.values())
-        linhas.append({"mes": m, "receita": receita, "aliquota_das": aliq, "das_estimado": das,
-                       "receita_liquida": receita - das, "despesas": despesas, "por_categoria": por_cat,
-                       "resultado": receita - das - despesas})
-    return {"ano": ano, "categorias": cats, "meses": linhas,
-            "total": {k: sum(l[k] for l in linhas) for k in ("receita", "das_estimado", "despesas", "resultado")}}
 
 
 def csv_titulos(em: date | None = None) -> str:

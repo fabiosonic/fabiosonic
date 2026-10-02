@@ -67,35 +67,52 @@ async function ir(p) {
 $$("nav a").forEach(a => a.onclick = () => ir(a.dataset.p));
 
 // ---------------------------------------------------------------- painel
-function grafico(serie, W = 760) {
-  const H = 250, ml = 52, mb = 26, mt = 10, larg = W - ml - 8, alt = H - mt - mb;
-  const max = Math.max(1, ...serie.flatMap(s => [s.faturado, s.recebido]));
-  const passo = Math.pow(10, Math.floor(Math.log10(max / 100))) * 100;
-  const topo = Math.ceil(max / passo / 4) * passo * 4 || 1;
-  const y = v => mt + alt - v / topo * alt, gw = larg / serie.length, bw = Math.min(18, (gw - 10) / 2);
+// Gráfico de barras agrupadas (um eixo, em R$), com linha opcional, meses projetados esmaecidos, dica e tabela.
+// specs: [{ k, rot, cor, linha? }] · opts: { rotulo(p), projetado(p), aria }
+function svgGrafico(serie, specs, W, opts) {
+  const H = 260, ml = 58, mb = 28, mt = 12, larg = W - ml - 10, alt = H - mt - mb;
+  const vals = serie.flatMap(p => specs.map(e => p[e.k] || 0));
+  const max = Math.max(1, ...vals), min = Math.min(0, ...vals);
+  const passo = v => { const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, v) / 100))) * 100; return Math.ceil(v / p / 4) * p * 4 || 1; };
+  const topo = passo(max), fundo = min < 0 ? -passo(-min) : 0, faixa = topo - fundo;
+  const y = v => mt + (topo - v) / faixa * alt, gw = larg / serie.length;
+  const barras = specs.filter(e => !e.linha), bw = Math.max(4, Math.min(18, (gw - 10 - (barras.length - 1) * 2) / barras.length));
+  const fmt = v => v ? (Math.abs(v) >= 100000 ? (v / 100 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mil" : (v / 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })) : "0";
   let s = "";
-  for (let i = 0; i <= 4; i++) { const v = topo / 4 * i; s += `<line class="grade" x1="${ml}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}"/><text class="eixo" x="${ml - 6}" y="${y(v) + 4}" text-anchor="end">${v ? (v / 100 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mil" : "0"}</text>`; }
-  s += `<line class="base" x1="${ml}" x2="${W - 8}" y1="${y(0)}" y2="${y(0)}"/>`;
-  const barra = (x, v, cor, i, k) => { const h = Math.max(0, alt - (y(v) - mt)); const yy = y(v); const r = Math.min(4, h);
-    return `<path d="M${x},${yy + h} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${yy + h} Z" fill="var(${cor})" data-i="${i}" data-k="${k}"/>`; };
+  for (let i = 0; i <= 4; i++) { const v = fundo + faixa / 4 * i; s += `<line class="grade" x1="${ml}" x2="${W - 10}" y1="${y(v)}" y2="${y(v)}"/><text class="eixo" x="${ml - 8}" y="${y(v) + 4}" text-anchor="end">${fmt(v)}</text>`; }
+  serie.forEach((p, i) => { if (opts.projetado && opts.projetado(p)) s += `<rect class="proj" x="${ml + gw * i}" y="${mt}" width="${gw}" height="${alt}"/>`; });
+  s += `<line class="base" x1="${ml}" x2="${W - 10}" y1="${y(0)}" y2="${y(0)}"/>`;
+  const barra = (x, v, cor, esmaecida) => { const yy = Math.min(y(v), y(0)), h = Math.abs(y(v) - y(0)), r = Math.min(4, h); if (!h) return "";
+    const d = v >= 0 ? `M${x},${yy + h} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${yy + h} Z`
+                     : `M${x},${yy} V${yy + h - r} Q${x},${yy + h} ${x + r},${yy + h} H${x + bw - r} Q${x + bw},${yy + h} ${x + bw},${yy + h - r} V${yy} Z`;
+    return `<path d="${d}" fill="var(${cor})"${esmaecida ? ' class="esmaecida"' : ""}/>`; };
   serie.forEach((p, i) => {
-    const x0 = ml + gw * i + (gw - (bw * 2 + 2)) / 2;
-    s += barra(x0, p.faturado, "--serie-1", i, "f") + barra(x0 + bw + 2, p.recebido, "--serie-2", i, "r");
-    s += `<rect x="${ml + gw * i}" y="${mt}" width="${gw}" height="${alt}" fill="transparent" data-i="${i}" class="alvo"/>`;
-    if (gw >= 38 || i % 2 == (serie.length - 1) % 2) s += `<text class="eixo" x="${ml + gw * i + gw / 2}" y="${H - 8}" text-anchor="middle">${p.mes.slice(5)}/${p.mes.slice(2, 4)}</text>`;
+    const x0 = ml + gw * i + (gw - (bw * barras.length + (barras.length - 1) * 2)) / 2, proj = opts.projetado && opts.projetado(p);
+    barras.forEach((e, j) => { s += barra(x0 + j * (bw + 2), p[e.k] || 0, e.cor, proj); });
+    if (gw >= 38 || i % 2 == (serie.length - 1) % 2) s += `<text class="eixo" x="${ml + gw * i + gw / 2}" y="${H - 9}" text-anchor="middle">${esc(opts.rotulo(p))}</text>`;
   });
-  return `<div class="legenda"><span><i style="background:var(--serie-1)"></i>Faturado (competência)</span><span><i style="background:var(--serie-2)"></i>Recebido</span></div>
-    <div class="grafico"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Faturado e recebido nos últimos 12 meses">${s}</svg><div class="dica" hidden></div></div>
-    <details><summary class="sub">Ver tabela</summary>${tabela([{ t: "Mês", f: p => mes(p.mes) }, { t: "Faturado", n: 1, f: p => num(p.faturado) }, { t: "Recebido", n: 1, f: p => num(p.recebido) }], serie)}</details>`;
+  specs.filter(e => e.linha).forEach(e => {
+    const pts = serie.map((p, i) => `${ml + gw * i + gw / 2},${y(p[e.k] || 0)}`);
+    s += `<polyline points="${pts.join(" ")}" fill="none" stroke="var(${e.cor})" stroke-width="2" stroke-linejoin="round"/>`;
+    serie.forEach((p, i) => { s += `<circle cx="${ml + gw * i + gw / 2}" cy="${y(p[e.k] || 0)}" r="4" fill="var(${e.cor})" stroke="var(--superficie)" stroke-width="2"/>`; });
+  });
+  serie.forEach((p, i) => { s += `<rect x="${ml + gw * i}" y="${mt}" width="${gw}" height="${alt}" fill="transparent" data-i="${i}" class="alvo"/>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.aria || "")}">${s}</svg><div class="dica" hidden></div>`;
 }
-function ligarDica(el, serie) {
-  const g = $(".grafico", el); if (!g) return; const d = $(".dica", g);
-  $$(".alvo", g).forEach(r => {
-    r.onmousemove = ev => { const p = serie[r.dataset.i]; const b = g.getBoundingClientRect();
-      d.innerHTML = `<b>${mes(p.mes)}</b><br><i style="background:var(--serie-1)"></i>Faturado ${brl(p.faturado)}<br><i style="background:var(--serie-2)"></i>Recebido ${brl(p.recebido)}`; d.hidden = false;
-      d.style.left = (ev.clientX - b.left) + "px"; d.style.top = (ev.clientY - b.top) + "px"; };
-    r.onmouseleave = () => d.hidden = true;
-  });
+function montarGrafico(alvo, serie, specs, opts = {}) {
+  opts = { rotulo: p => `${p.mes.slice(5)}/${p.mes.slice(2, 4)}`, nome: p => mes(p.mes), ...opts };
+  alvo.innerHTML = `<div class="legenda">${specs.map(e => `<span><i class="${e.linha ? "linha" : ""}" style="background:var(${e.cor})"></i>${e.rot}</span>`).join("")}${opts.legendaExtra || ""}</div>
+    <div class="grafico"></div><details><summary>Ver tabela</summary>${tabela([{ t: "Período", f: p => esc(opts.nome(p)) }, ...specs.map(e => ({ t: e.rot, n: 1, f: p => num(p[e.k]) }))], serie)}</details>`;
+  const g = $(".grafico", alvo);
+  const desenhar = () => { const w = Math.round(g.clientWidth); if (!w || w == g._w) return; g._w = w;
+    g.innerHTML = svgGrafico(serie, specs, w, opts); const d = $(".dica", g);
+    $$(".alvo", g).forEach(r => {
+      r.onmousemove = ev => { const p = serie[r.dataset.i], b = g.getBoundingClientRect();
+        d.innerHTML = `<b>${esc(opts.nome(p))}${opts.projetado && opts.projetado(p) ? " · projetado" : ""}</b>` + specs.map(e => `<br><i style="background:var(${e.cor})"></i>${e.rot} ${brl(p[e.k])}`).join("");
+        d.hidden = false; d.style.left = (ev.clientX - b.left) + "px"; d.style.top = (ev.clientY - b.top) + "px"; };
+      r.onmouseleave = () => d.hidden = true; }); };
+  desenhar();
+  if (window.ResizeObserver) new ResizeObserver(desenhar).observe(g);
 }
 PAGINAS.painel = async el => {
   const p = await api("painel");
@@ -122,20 +139,14 @@ PAGINAS.painel = async el => {
     ${kpi("", "relatorios", "RBT12 (Simples Nacional)", brl(p.rbt12), `DAS estimado ${String(p.aliquota_simples_estimada).replace(".", ",")}% · ${String(p.sublimite_pct).replace(".", ",")}% do sublimite`)}
   </div>
   <div class="grid2">
-    <div class="card"><h2>${ic("relatorios")}Faturado x recebido — últimos 12 meses</h2>${grafico(p.serie)}</div>
+    <div class="card"><h2>${ic("relatorios")}Faturado x recebido — últimos 12 meses</h2><div id="g_painel"></div></div>
     <div class="card"><h2>${ic("alerta")}Alertas</h2>${al.length ? `<ul class="alertas">${al.map(a => `<li class="${a.sev}"><span class="ai">${ic(a.icone)}</span><div class="txt">${a.html}</div></li>`).join("")}</ul>` : `<div class="tudo-ok">${ic("ok")}Tudo em dia</div>`}</div>
   </div>
   <div class="grid2">
     <div class="card"><h2>${ic("bloqueio")}Maiores devedores</h2>${tabela([{ t: "Cliente", f: x => esc(x.cliente) }, { t: "Valor atualizado", n: 1, f: x => brl(x.valor) }], p.maiores_devedores, "Ninguém em atraso.")}</div>
     <div class="card"><h2>${ic("relogio")}Vencem nos próximos 7 dias</h2>${tabela([{ t: "Cliente", f: t => esc(t.cliente_nome) }, { t: "Vencimento", f: t => dt(t.vencimento) }, { t: "Valor", n: 1, f: t => brl(t.valor_cent) }, { t: "NFS-e", f: t => selo(t.nfse_status) }], p.proximos_7_dias, "Nenhum vencimento na semana.")}</div>
   </div>`;
-  // desenha na largura real do cartão e redesenha quando a janela muda (eixo sem distorção)
-  const cartao = $(".grafico", el).closest(".card");
-  const desenharGrafico = () => { const w = Math.round($(".grafico", cartao).clientWidth); if (!w || w == cartao._w) return;
-    cartao._w = w; $(".grafico", cartao).outerHTML = $(".grafico", new DOMParser().parseFromString(grafico(p.serie, w), "text/html")).outerHTML;
-    ligarDica(el, p.serie); };
-  desenharGrafico();
-  if (window.ResizeObserver) new ResizeObserver(desenharGrafico).observe(cartao);
+  montarGrafico($("#g_painel"), p.serie, [{ k: "faturado", rot: "Faturado (competência)", cor: "--serie-1" }, { k: "recebido", rot: "Recebido", cor: "--serie-2" }], { aria: "Faturado e recebido nos últimos 12 meses" });
   $("#robo").onclick = async ev => {
     if (!confirm(`Rodar o robô agora?\n\nEle gera os títulos dos contratos, ${ST.producao ? "EMITE AS NFS-e VÁLIDAS pendentes" : "não emite NFS-e (homologação)"}, cria PIX/boleto, envia a régua de cobrança e confere pagamentos.`)) return;
     const bt = ev.currentTarget; bt.disabled = true; modal('<h2>Robô em execução…</h2><p class="sub">Pode levar alguns minutos se houver muitas notas para emitir. Não feche esta janela.</p>');
@@ -388,40 +399,91 @@ PAGINAS.conciliacao = async el => {
 async function vincular(movimento, titulo) { await api("conciliacao/vincular", { movimento, titulo }); aviso("Conciliado e baixado ✔"); ir("conciliacao"); }
 
 // ---------------------------------------------------------------- relatórios
-let ABA_REL = "aging";
+let ABA_REL = "indicadores";
+const contab = c => { c = Number(c || 0); if (!c) return "–"; const v = num(Math.abs(c)); return c < 0 ? `(${v})` : v; };
+function cabImpressao(titulo, periodo) {
+  const e = ST.config.empresa || {};
+  return `<div class="cab-impressao"><div><b>${esc(e.nome || "")}</b><span>CNPJ ${fmtDoc(ST.cnpj || "")}</span></div>
+    <div class="ci-tit"><b>${esc(titulo)}</b><span>${esc(periodo)}</span></div><div class="ci-data">Emitido em ${dt(hojeISO())}</div></div>`;
+}
 PAGINAS.relatorios = async el => {
-  const abas = [["aging", "Inadimplência (aging)"], ["clientes", "Por cliente"], ["fluxo", "Fluxo de caixa"], ["dre", "DRE gerencial"], ["log", "Log do sistema"]];
-  el.innerHTML = `<h1>Relatórios <span class="acoes"><a class="btn sec" href="/export/titulos.csv">${ic("download")}Contas a receber (CSV)</a><button class="btn sec" onclick="window.print()">${ic("imprimir")}Imprimir</button></span></h1>
-    <div class="abas">${abas.map(([k, t]) => `<button data-a="${k}" class="${k == ABA_REL ? "on" : ""}">${t}</button>`).join("")}</div><div id="rel" class="card"><div class="vazio">Carregando…</div></div>`;
+  const abas = [["indicadores", "Indicadores"], ["dre", "DRE"], ["fluxo", "Fluxo de caixa"], ["livro", "Livro caixa"],
+    ["aging", "Inadimplência"], ["clientes", "Por cliente"], ["log", "Log do sistema"]];
+  if (!abas.some(([k]) => k == ABA_REL)) ABA_REL = "indicadores";
+  el.innerHTML = `<h1>Relatórios <span class="acoes"><a class="btn sec" href="/export/titulos.csv">${ic("download")}Contas a receber (CSV)</a><button class="btn sec" onclick="window.print()">${ic("imprimir")}Imprimir / PDF</button></span></h1>
+    <div class="abas">${abas.map(([k, t]) => `<button data-a="${k}" class="${k == ABA_REL ? "on" : ""}">${t}</button>`).join("")}</div><div id="rel"><div class="card"><div class="vazio">Carregando…</div></div></div>`;
   $$(".abas button", el).forEach(b => b.onclick = () => { ABA_REL = b.dataset.a; ir("relatorios"); });
   const r = $("#rel");
-  if (ABA_REL == "aging") {
-    const a = await api("rel/aging"), f = a.faixas;
-    r.innerHTML = `<div class="kpis">${[["a_vencer", "A vencer"], ["1_30", "1–30 dias"], ["31_60", "31–60 dias"], ["61_90", "61–90 dias"], ["90_mais", "+90 dias"]].map(([k, t]) => `<div class="kpi"><div class="r">${t}</div><div class="v">${brl(f[k])}</div></div>`).join("")}</div>` +
-      tabela([{ t: "Cliente", f: c => esc(c.cliente) }, ...["a_vencer", "1_30", "31_60", "61_90", "90_mais"].map(k => ({ t: k.replace("_", "–").replace("a–vencer", "a vencer").replace("90–mais", "+90"), n: 1, f: c => c[k] ? num(c[k]) : "" }))], a.clientes);
+  if (ABA_REL == "indicadores") {
+    const i = await api("rel/indicadores"), pc = v => String(v).replace(".", ",") + "%";
+    const card = (icone, rot, val, sub, cls = "") => `<div class="kpi ${cls}"><div class="r">${ic(icone)}${rot}</div><div class="v">${val}</div><div class="s">${sub}</div></div>`;
+    const cresc = i.crescimento_pct == null ? "sem base anterior" : `${i.crescimento_pct >= 0 ? "▲" : "▼"} ${pc(Math.abs(i.crescimento_pct))} sobre os 12 meses anteriores`;
+    r.innerHTML = cabImpressao("Indicadores de desempenho", `Posição em ${dt(hojeISO())}`) + `<div class="kpis">
+      ${card("nota", "Faturamento 12 meses", brl(i.faturamento_12m), cresc, "destaque")}
+      ${card("contratos", "Receita recorrente (MRR)", brl(i.mrr), `média faturada ${brl(i.receita_media_mensal)}/mês`, "destaque")}
+      ${card("pagar", "Ponto de equilíbrio mensal", brl(i.ponto_equilibrio), `despesas ${brl(i.despesa_media_mensal)}/mês · folga ${pc(i.folga_equilibrio_pct)}`, i.folga_equilibrio_pct < 10 ? "critico" : "destaque")}
+      ${card("alerta", "Inadimplência (90 dias)", pc(i.inadimplencia_90d), `${i.dias_a_receber} dias de faturamento a receber`, i.inadimplencia_90d > 5 ? "critico" : "destaque")}</div>
+      <div class="kpis secundarios">
+      ${card("relogio", "Atraso médio ponderado", `${String(i.atraso_medio_ponderado).replace(".", ",")} dias`, `${pc(i.recebido_em_dia_pct)} do valor recebido em dia`)}
+      ${card("clientes", "Clientes ativos", i.clientes_ativos, i.clientes_perdidos.length ? `${i.clientes_perdidos.length} sem faturamento nos últimos 2 meses` : "nenhum cliente perdido")}
+      ${card("relatorios", "Concentração (top 5)", pc(i.concentracao_top5), `${i.clientes_classe_a} cliente(s) fazem 80% da receita`)}
+      ${card("receber", "Ticket médio por nota", brl(i.ticket_medio), "últimos 12 meses")}</div>
+      <div class="grid2"><div class="card"><h2>${ic("clientes")}Maiores clientes — participação na receita de 12 meses</h2>${barrasH(i.top_clientes.map(c => ({ rot: c.cliente, v: c.valor, extra: pc(c.pct) })))}</div>
+      <div class="card"><h2>${ic("alerta")}Clientes sem faturamento recente</h2>${i.clientes_perdidos.length ? `<p class="sub">Faturavam entre 3 e 6 meses atrás e não têm nota nos últimos 2 meses. Confirme se houve rescisão ou falta de emissão.</p><ul class="lista">${i.clientes_perdidos.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : `<div class="tudo-ok">${ic("ok")}Nenhum cliente parou de faturar</div>`}</div></div>`;
+  } else if (ABA_REL == "dre") {
+    const ano = el._ano || new Date().getFullYear(), d = await api("rel/dre", { ano }), R = d.resumo, pc = v => String(v).replace(".", ",") + "%";
+    r.innerHTML = cabImpressao("Demonstração do Resultado do Exercício (DRE)", `Exercício de ${ano} · regime de competência · valores em R$`) +
+      `<div class="card"><div class="barra"><label>Exercício<select id="ano">${[0, 1, 2].map(k => new Date().getFullYear() - k).map(a => `<option ${a == ano ? "selected" : ""}>${a}</option>`).join("")}</select></label></div>
+      <div class="kpis">${[["Receita bruta", brl(R.receita_bruta), "nota"], ["Resultado líquido", brl(R.resultado_liquido), "relatorios"], ["Margem líquida", pc(R.margem_liquida), "receber"], ["Carga tributária", pc(R.carga_tributaria), "banco"]]
+        .map(([t, v, i]) => `<div class="kpi"><div class="r">${ic(i)}${t}</div><div class="v">${v}</div></div>`).join("")}</div>
+      <div class="tabela dre"><table><thead><tr><th>Conta</th>${d.meses.map(m => `<th class="n">${mes(m).slice(0, 2)}/${m.slice(2, 4)}</th>`).join("")}<th class="n">Total</th><th class="n">AV %</th></tr></thead>
+      <tbody>${d.linhas.map(l => `<tr class="${l.tipo}"><td style="padding-left:${12 + l.nivel * 0 + (l.tipo == "item" ? 18 : 0)}px">${esc(l.conta)}</td>${l.valores.map(v => `<td class="n">${contab(v)}</td>`).join("")}<td class="n">${contab(l.total)}</td><td class="n">${l.total ? pc(l.av) : ""}</td></tr>`).join("")}</tbody></table></div>
+      <p class="sub nota-rodape">${esc(d.nota)} AV % = análise vertical sobre a receita bruta. Valores entre parênteses são reduções.</p></div>
+      <div class="card"><h2>${ic("relatorios")}Evolução mensal</h2><div id="g_dre"></div></div>`;
+    const ateMes = ano < new Date().getFullYear() ? 12 : ano > new Date().getFullYear() ? 0 : new Date().getMonth() + 1;
+    montarGrafico($("#g_dre"), d.serie.slice(0, ateMes), [{ k: "receita_liquida", rot: "Receita líquida", cor: "--serie-1" }, { k: "despesas", rot: "Despesas", cor: "--serie-2" }, { k: "resultado", rot: "Resultado", cor: "--serie-3", linha: true }], { aria: "Receita líquida, despesas e resultado por mês" });
+    $("#ano").onchange = e => { el._ano = e.target.value; ir("relatorios"); };
+  } else if (ABA_REL == "fluxo") {
+    const [m, sem] = await Promise.all([api("rel/fluxo_mensal"), api("rel/fluxo", { dias: 90 })]);
+    const proj = m.filter(x => x.tipo != "realizado");
+    r.innerHTML = cabImpressao("Fluxo de caixa", "Realizado (6 meses) e projetado (3 meses)") +
+      `<div class="kpis">${proj.map(x => `<div class="kpi ${x.saldo < 0 ? "critico" : "destaque"}"><div class="r">${ic(x.tipo == "atual" ? "relogio" : "relatorios")}${mes(x.mes)} · ${x.tipo == "atual" ? "mês atual" : "projetado"}</div><div class="v">${brl(x.saldo)}</div><div class="s">entradas ${brl(x.entradas)} · saídas ${brl(x.saidas)}${x.saidas_estimadas ? " (média)" : ""}</div></div>`).join("")}</div>
+      <div class="card"><h2>${ic("relatorios")}Entradas x saídas por mês</h2><div id="g_fluxo"></div>
+      <p class="sub">Realizado pelo caixa (pagamentos efetivos). Projeção: títulos em aberto (atrasos acima de 60 dias ficam de fora), contratos ainda não faturados e contas a pagar; sem despesas lançadas para o mês, usa a média dos últimos 3 meses.</p></div>
+      <div class="card"><h2>${ic("relogio")}Próximas semanas</h2>${tabela([{ t: "Semana de", f: s => dt(s.semana) }, { t: "Entradas", n: 1, f: s => num(s.entradas) },
+        { t: "Saídas", n: 1, f: s => num(s.saidas) }, { t: "Saldo acumulado", n: 1, f: s => `<b class="${s.saldo_acumulado < 0 ? "neg" : ""}">${contab(s.saldo_acumulado)}</b>` }], sem, "Nada previsto.")}</div>`;
+    montarGrafico($("#g_fluxo"), m, [{ k: "entradas", rot: "Entradas", cor: "--serie-1" }, { k: "saidas", rot: "Saídas", cor: "--serie-2" }, { k: "saldo", rot: "Saldo do mês", cor: "--serie-3", linha: true }],
+      { projetado: p => p.tipo == "projetado", aria: "Entradas, saídas e saldo por mês", legendaExtra: `<span><i class="proj-leg"></i>Projetado</span>` });
+  } else if (ABA_REL == "livro") {
+    const ini = el._ini || hojeISO().slice(0, 8) + "01", fim = el._fim || hojeISO();
+    const lc = await api("rel/livro_caixa", { inicio: ini, fim });
+    r.innerHTML = cabImpressao("Livro caixa", `De ${dt(ini)} a ${dt(fim)} · regime de caixa`) +
+      `<div class="card"><div class="barra"><label>De<input type="date" id="lc_ini" value="${ini}"></label><label>Até<input type="date" id="lc_fim" value="${fim}"></label></div>
+      <div class="kpis secundarios">${[["Entradas", lc.entradas, "receber"], ["Saídas", lc.saidas, "pagar"], ["Saldo do período", lc.saldo, "banco"]].map(([t, v, i]) => `<div class="kpi"><div class="r">${ic(i)}${t}</div><div class="v">${brl(v)}</div></div>`).join("")}</div>
+      ${tabela([{ t: "Data", f: x => dt(x.data) }, { t: "Histórico", f: x => esc(x.historico) }, { t: "Documento", f: x => `<span class="sub">${esc(x.documento)}</span>` },
+        { t: "Entrada", n: 1, f: x => x.entrada ? num(x.entrada) : "" }, { t: "Saída", n: 1, f: x => x.saida ? num(x.saida) : "" }, { t: "Saldo", n: 1, f: x => contab(x.saldo) }], lc.movimentos, "Nenhuma movimentação no período.")}</div>`;
+    $("#lc_ini").onchange = e => { el._ini = e.target.value; ir("relatorios"); };
+    $("#lc_fim").onchange = e => { el._fim = e.target.value; ir("relatorios"); };
+  } else if (ABA_REL == "aging") {
+    const a = await api("rel/aging"), f = a.faixas, nomes = [["a_vencer", "A vencer"], ["1_30", "1–30 dias"], ["31_60", "31–60 dias"], ["61_90", "61–90 dias"], ["90_mais", "Mais de 90 dias"]];
+    r.innerHTML = cabImpressao("Inadimplência por faixa de atraso (aging)", `Posição em ${dt(hojeISO())}`) +
+      `<div class="kpis">${nomes.map(([k, t], j) => `<div class="kpi ${j >= 3 && f[k] ? "critico" : ""}"><div class="r">${t}</div><div class="v">${brl(f[k])}</div></div>`).join("")}</div>
+      <div class="card">${tabela([{ t: "Cliente", f: c => esc(c.cliente) }, ...nomes.map(([k, t]) => ({ t, n: 1, f: c => c[k] ? num(c[k]) : "" }))], a.clientes)}</div>`;
   } else if (ABA_REL == "clientes") {
     const l = await api("rel/clientes");
-    r.innerHTML = `<p class="sub">Score de pagamento: 100 = paga sempre em dia; cai com a média de dias de atraso e com títulos vencidos em aberto.</p>` + tabela([{ t: "Cliente", f: c => esc(c.cliente) }, { t: "Faturado 12m", n: 1, f: c => num(c.faturado_12m) },
+    r.innerHTML = cabImpressao("Análise por cliente", "Últimos 12 meses") + `<div class="card"><p class="sub">Score de pagamento: 100 = paga sempre em dia; cai com a média de dias de atraso e com títulos vencidos em aberto.</p>` + tabela([{ t: "Cliente", f: c => esc(c.cliente) }, { t: "Faturado 12m", n: 1, f: c => num(c.faturado_12m) },
       { t: "Recebido", n: 1, f: c => num(c.recebido_total) }, { t: "Em aberto", n: 1, f: c => num(c.em_aberto) }, { t: "Atrasado (atualizado)", n: 1, f: c => c.atrasado ? num(c.atrasado) : "" },
-      { t: "Atraso médio", n: 1, f: c => c.media_atraso + " d" }, { t: "Score", n: 1, f: c => `${c.score} ${selo(c.faixa)}` }], l);
-  } else if (ABA_REL == "fluxo") {
-    const l = await api("rel/fluxo", { dias: 90 });
-    r.innerHTML = `<p class="sub">Projeção semanal para 90 dias: títulos em aberto + contratos ainda não faturados − contas a pagar.</p>` + tabela([{ t: "Semana de", f: s => dt(s.semana) }, { t: "Entradas", n: 1, f: s => num(s.entradas) },
-      { t: "Saídas", n: 1, f: s => num(s.saidas) }, { t: "Saldo acumulado", n: 1, f: s => `<b>${num(s.saldo_acumulado)}</b>` }], l);
-  } else if (ABA_REL == "dre") {
-    const ano = el._ano || new Date().getFullYear(); const d = await api("rel/dre", { ano });
-    r.innerHTML = `<div class="barra"><label>Ano<input type="number" id="ano" value="${ano}" style="width:110px"></label></div>
-      <p class="sub">DAS estimado pela alíquota efetiva do Anexo III (RBT12 de cada mês)${ST.config.financeiro.iss_fixo ? ", sem a parcela do ISS (escritório contábil recolhe ISS fixo — LC 123/2006, art. 18, § 22-A)" : ""}.</p>` +
-      tabela([{ t: "Mês", f: m => mes(m.mes) }, { t: "Receita", n: 1, f: m => num(m.receita) }, { t: "DAS est.", n: 1, f: m => `${num(m.das_estimado)}<div class="sub">${String(m.aliquota_das).replace(".", ",")}%</div>` },
-        { t: "Receita líquida", n: 1, f: m => num(m.receita_liquida) }, ...d.categorias.map(c => ({ t: esc(c), n: 1, f: m => m.por_categoria[c] ? num(m.por_categoria[c]) : "" })),
-        { t: "Resultado", n: 1, f: m => `<b>${num(m.resultado)}</b>` }], d.meses) +
-      `<p><b>Ano:</b> receita ${brl(d.total.receita)} · DAS ${brl(d.total.das_estimado)} · despesas ${brl(d.total.despesas)} · resultado <b>${brl(d.total.resultado)}</b></p>`;
-    $("#ano").onchange = e => { el._ano = e.target.value; ir("relatorios"); };
+      { t: "Atraso médio", n: 1, f: c => c.media_atraso + " d" }, { t: "Score", n: 1, f: c => `${c.score} ${selo(c.faixa)}` }], l) + `</div>`;
   } else {
     const l = await api("log");
-    r.innerHTML = tabela([{ t: "Quando", f: x => esc(x.quando) }, { t: "Tipo", f: x => esc(x.tipo) }, { t: "Mensagem", f: x => esc(x.mensagem) }], l);
+    r.innerHTML = `<div class="card">${tabela([{ t: "Quando", f: x => esc(x.quando) }, { t: "Tipo", f: x => esc(x.tipo) }, { t: "Mensagem", f: x => esc(x.mensagem) }], l)}</div>`;
   }
 };
+function barrasH(itens) {
+  if (!itens.length) return '<div class="vazio">Sem dados.</div>';
+  const max = Math.max(...itens.map(x => x.v));
+  return `<div class="barras-h">${itens.map(x => `<div class="bh"><span class="bh-rot" title="${esc(x.rot)}">${esc(x.rot)}</span><span class="bh-trilho"><span class="bh-barra" style="width:${Math.max(1, x.v / max * 100)}%"></span></span><span class="bh-val">${brl(x.v)}<small>${esc(x.extra || "")}</small></span></div>`).join("")}</div>`;
+}
 
 // ---------------------------------------------------------------- clientes
 PAGINAS.clientes = async el => {

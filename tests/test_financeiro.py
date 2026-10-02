@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from nfse_itaborai import (automacao, clientes, cobranca, conciliacao, config, db, financeiro,
+from nfse_itaborai import (automacao, clientes, cobranca, conciliacao, config, contabil, db, financeiro,
                            pix, relatorios)
 from nfse_itaborai.tela import tratar
 from test_emissor import Simulador, ambiente  # noqa: F401  (fixture)
@@ -212,9 +212,9 @@ def test_painel_aging_clientes_fluxo_dre_csv(base):
     fluxo = relatorios.fluxo_caixa(em, 60)
     assert sum(s["entradas"] for s in fluxo) == 100000 + 100000 * 2   # atrasado + out/nov do contrato
     assert sum(s["saidas"] for s in fluxo) == 80000
-    d = relatorios.dre(2026, em)
-    set_ = d["meses"][8]
-    assert set_["receita"] == 150000 and d["categorias"] == ["Aluguel"]
+    d = contabil.dre(2026, em)
+    assert d["linhas"][0]["valores"][8] == 150000
+    assert [l["conta"] for l in d["linhas"] if l["tipo"] == "item" and l["total"] < 0][-1] == "Aluguel"
     assert "RPS CONSULTORIA" in relatorios.csv_titulos(em)
 
 

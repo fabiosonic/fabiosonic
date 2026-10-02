@@ -40,6 +40,7 @@ PADRAO = {
         "inicio_financeiro": "",    # notas externas a partir desta data viram contas a receber (definido no 1º uso)
         "dia_geracao": 1,           # dia do mês em que a recorrência gera os títulos
         "aliquota_simples_pct": 3.99,  # usada só sem histórico; com histórico calcula pelo RBT12 (Anexo III)
+        "iss_fixo_mensal": 0,       # ISS fixo pago à prefeitura por mês (R$), dedução na DRE quando não houver lançamento
         "iss_fixo": True,           # escritório contábil: ISS fixo fora do DAS (LC 123, art. 18, § 22-A)
         "categorias_despesa": ["Aluguel", "Folha", "Pró-labore", "Impostos", "Sistemas", "Energia/Internet",
                                "Contador/Assessoria", "Marketing", "Bancárias", "Outras"],

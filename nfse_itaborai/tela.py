@@ -8,11 +8,10 @@ import os
 import re
 import webbrowser
 from dataclasses import asdict
-from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro, importacao,
+from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                inter, lote, nacional, relatorios)
 from .validacao import ErroValidacao
 
@@ -66,6 +65,11 @@ def _cancelar_avulso(c: dict):
     return emissor.cancelar(numero, just, producao=emissor.em_producao())
 
 
+def _cnpj_prestador() -> str:
+    emissor.carregar_env()
+    return emissor.so_digitos(os.environ.get("ITABORAI_CNPJ", ""))
+
+
 def _cancelar_titulo(tid: int, motivo: str) -> dict:
     t = financeiro.obter_titulo(tid)
     if t["status"] == "aberto":
@@ -86,7 +90,7 @@ ROTAS = {
     # gerais
     "estado": lambda c: {"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
                          "producao": emissor.em_producao(), "config": config.publico(),
-                         "canal": nacional.canal()},
+                         "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
     "painel": lambda c: relatorios.painel(),
     "log": lambda c: db.linhas("SELECT * FROM log ORDER BY id DESC LIMIT 200"),
@@ -148,7 +152,11 @@ ROTAS = {
     "rel/aging": lambda c: relatorios.aging(),
     "rel/clientes": lambda c: relatorios.por_cliente(),
     "rel/fluxo": lambda c: relatorios.fluxo_caixa(dias=int(c.get("dias") or 90)),
-    "rel/dre": lambda c: relatorios.dre(int(c.get("ano") or date.today().year)),
+    "rel/dre": lambda c: contabil.dre(int(c.get("ano") or financeiro.hoje().year)),
+    "rel/indicadores": lambda c: contabil.indicadores(),
+    "rel/fluxo_mensal": lambda c: contabil.fluxo_mensal(),
+    "rel/livro_caixa": lambda c: contabil.livro_caixa(str(c.get("inicio") or financeiro.hoje().replace(day=1).isoformat()),
+                                                      str(c.get("fim") or financeiro.hoje().isoformat())),
 }
 
 
