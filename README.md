@@ -30,21 +30,51 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 ## Início rápido (Windows)
 
 1. Descompacte o pacote numa pasta, por exemplo `C:\EmissorItaborai`.
-2. Dê dois cliques em **`INICIAR.bat`**. Ele faz quatro coisas sozinho:
+2. Dê dois cliques em **`INICIAR.bat`**. Ele faz três coisas sozinho:
    - instala o que faltar;
-   - cadastra os clientes a partir dos XML das notas já emitidas, que ficam em
-     `Downloads\nfse\MORAES OLIVEIRA CONTABILIDADE LTDA`;
-   - abre a tela.
-3. Na tela:
-   - **Emitir nota**: escolha o cliente, digite o valor e clique em **Emitir nota**.
-   - **Emitir em lote**: marque os clientes e clique em **Emitir selecionadas**. O valor já vem com o da
-     última nota de cada cliente.
-   - **Clientes**: digite o CNPJ, clique em **Buscar na Receita** e depois em **Salvar**.
-   - **Ambiente**: o selo no topo mostra se você está em HOMOLOGAÇÃO (teste) ou PRODUÇÃO. Clique no selo
-     para trocar; a troca pede confirmação.
+   - importa os clientes dos XML em `Downloads\nfse\MORAES OLIVEIRA CONTABILIDADE LTDA`;
+   - abre o sistema no navegador.
+3. (Opcional) Dê dois cliques em **`AGENDAR_ROBO.bat`** para o robô financeiro rodar todo dia às 08:00, mesmo
+   com o sistema fechado.
 
-O serviço padrão de todas as notas fica em `servico_padrao.json`: descrição, item 17.19, NBS, desdobro,
-IBS/CBS e percentual IBPT.
+## O sistema
+
+| Menu | O que faz |
+|---|---|
+| **Painel** | Mostra os indicadores principais: faturado, recebido, a receber, em atraso, % de inadimplência, MRR, a pagar e RBT12 com a alíquota estimada do DAS. Também traz o gráfico de 12 meses, os alertas, os maiores devedores e os vencimentos da semana. |
+| **Emitir nota** | Escolha o cliente e o valor e clique em emitir. A nota já gera a conta a receber, com PIX ou boleto, e entra na régua de cobrança. |
+| **Emitir em lote** | Marque os clientes; o valor vem da última nota. |
+| **Contas a receber** | Filtros: a receber, atrasados, pagos, sem NFS-e e cancelados. Mostra o valor atualizado com multa e juros. Ações: baixar, cobrar (e-mail ou WhatsApp), emitir NFS-e, cancelar (cancela também a NFS-e na prefeitura) e estornar. Exporta para CSV. |
+| **Contratos** | Honorários recorrentes, com dia de vencimento, vigência, reajuste anual automático (% e mês) e NFS-e automática. O botão **Criar a partir do histórico** monta a carteira inteira em um clique, com o valor da última nota de cada cliente. |
+| **Cobrança** | Régua automática, por padrão em −3, 0, +1, +5, +15 e +30 dias. O e-mail sai sozinho. O WhatsApp fica numa fila: um clique abre a conversa com a mensagem pronta. Também mostra o histórico de envios. |
+| **Contas a pagar** | Despesas por categoria, com lançamento recorrente todo mês. |
+| **Conciliação** | Importa o extrato OFX do banco. Os recebimentos casam pelo identificador do PIX, pelo nome ou CNPJ do cliente ou pelo valor, e a baixa é automática. Se o mesmo cliente tem vários títulos de mesmo valor, quita o mais antigo. Os pagamentos casam com as contas a pagar. |
+| **Relatórios** | Aging de inadimplência, ranking por cliente com score de pagamento (0–100), fluxo de caixa projetado para 90 dias, DRE gerencial mensal e log do sistema. |
+| **Configurações** | Robô, chave PIX, Asaas, multa e juros, régua, e-mail (SMTP) e categorias de despesa. |
+
+**Robô financeiro** (Configurações > Robô ligado). Roda ao abrir o sistema, a cada hora e todo dia pelo
+agendador. Em ordem, ele:
+1. faz o backup;
+2. lança as despesas recorrentes;
+3. gera os títulos dos contratos;
+4. **emite as NFS-e** (só em produção);
+5. cria o PIX ou o boleto;
+6. dá baixa pelo Asaas;
+7. roda a régua de cobrança.
+
+Cada etapa é independente: um erro em uma não para as outras e fica registrado no log. Notas de teste e notas
+com erro nunca entram na régua.
+
+**Meios de cobrança**
+- **PIX copia e cola próprio** (padrão): sem tarifa. O identificador do título vai no PIX e a baixa sai pela
+  conciliação do extrato.
+- **Asaas**: boleto e PIX com baixa automática. Basta informar a chave da API em Configurações.
+
+**Regras tributárias usadas**
+- **DAS estimado:** alíquota efetiva do Anexo III da LC 123/2006 calculada sobre o RBT12 de cada mês. Escritório
+  contábil recolhe ISS em valor fixo (art. 18, § 22-A), então a parcela do ISS sai da estimativa.
+- **Multa e juros:** 2% de multa e 1% ao mês pro rata dia, configuráveis.
+- **Sublimite:** alerta quando o RBT12 passa de 80% do sublimite de R$ 3,6 milhões.
 
 ## Instalação (Windows)
 
@@ -129,7 +159,7 @@ pip install pytest lxml
 python -m pytest
 ```
 
-São 27 testes, que cobrem:
+São 74 testes, que cobrem o emissor e o financeiro:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

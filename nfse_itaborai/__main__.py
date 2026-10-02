@@ -90,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
     ic = sub.add_parser("importar-clientes", help="cadastra os tomadores encontrados em XMLs de NFS-e")
     ic.add_argument("pasta", type=Path)
 
+    sub.add_parser("robo", help="roda a rotina financeira (para o Agendador do Windows)")
+
     t = sub.add_parser("tela", help="abre a tela de emissão no navegador (http://127.0.0.1:8765)")
     t.add_argument("--porta", type=int, default=8765)
 
@@ -116,6 +118,11 @@ def main(argv: list[str] | None = None) -> int:
             r = clientes.importar_xmls(a.pasta, emissor.prestador_do_ambiente().cnpj)
             print(f"XML lidos: {r['xml_lidos']} | ignorados: {r['xml_ignorados']} | "
                   f"clientes novos: {r['clientes_novos']} | total no cadastro: {r['clientes_total']}")
+            return 0
+        if a.cmd == "robo":
+            from . import automacao
+            r = automacao.rodar()
+            print(json.dumps(r, ensure_ascii=False, indent=2, default=str))
             return 0
         if a.cmd == "tela":
             from .tela import servir
