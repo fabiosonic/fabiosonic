@@ -1,0 +1,58 @@
+"""Aba Notas emitidas: lista por competência, filtros e cancelamento da NFS-e."""
+
+from nfse_itaborai import financeiro
+from nfse_itaborai.tela import tratar
+from test_emissor import Simulador, ambiente  # noqa: F401  (fixture)
+from test_financeiro import CLI_A, CLI_B, base  # noqa: F401  (fixture)
+
+
+def _emitir(doc, valor):
+    r = tratar("emitir", {"cpf_cnpj": doc, "valor": valor, "cobrar": False})
+    assert r["sucesso"], r
+    return r["titulo_id"], r["nfse"]
+
+
+def test_lista_filtra_e_cancela(base):  # noqa: F811
+    a, na = _emitir(CLI_A["cpf_cnpj"], "350")
+    b, _ = _emitir(CLI_B["cpf_cnpj"], "400")
+    antiga = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "100", competencia="2026-08", emitir_nfse=False)
+    financeiro.atualizar_titulo(antiga, nfse_status="emitida", nfse_numero="77", origem="importado")
+    comp = financeiro.obter_titulo(a)["competencia"]
+    r = tratar("nfse/listar", {"competencia": comp})
+    assert r["qtd"] == 2 and r["total_cent"] == 75000 and {n["id"] for n in r["notas"]} == {a, b}
+    assert all(n["pode_cancelar"] and n["data"] for n in r["notas"])
+    assert tratar("nfse/listar", {"competencia": ""})["qtd"] == 3                       # todas as competências
+    assert [n["id"] for n in tratar("nfse/listar", {"competencia": comp, "busca": "cultivar"})["notas"]] == [b]
+    assert [n["id"] for n in tratar("nfse/listar", {"competencia": comp, "busca": CLI_A["cpf_cnpj"]})["notas"]] == [a]
+    importada = tratar("nfse/listar", {"competencia": "2026-08"})["notas"][0]
+    assert not importada["pode_cancelar"]
+    assert "portal" in tratar("titulo/cancelar_nfse", {"id": antiga, "justificativa": "Emitida em duplicidade"})["erros"][0]
+    assert not tratar("titulo/cancelar_nfse", {"id": a, "justificativa": "curta"})["sucesso"]
+    c = tratar("titulo/cancelar_nfse", {"id": a, "justificativa": "Nota emitida com valor incorreto"})
+    assert c["sucesso"], c
+    t = financeiro.obter_titulo(a)
+    assert t["nfse_status"] == "cancelada" and t["status"] == "cancelado"
+    r = tratar("nfse/listar", {"competencia": comp})
+    assert r["qtd"] == 1 and r["canceladas"] == 1
+    assert [n["id"] for n in tratar("nfse/listar", {"competencia": comp, "situacao": "cancelada"})["notas"]] == [a]
+
+
+def test_nota_de_conta_paga_exige_estorno(base):  # noqa: F811
+    a, _ = _emitir(CLI_A["cpf_cnpj"], "350")
+    financeiro.baixar(a, forma="manual")
+    r = tratar("titulo/cancelar_nfse", {"id": a, "justificativa": "Nota emitida com valor incorreto"})
+    assert not r["sucesso"] and "estorno" in r["erros"][0]
+    assert financeiro.obter_titulo(a)["nfse_status"] == "emitida"
+
+
+def test_encerrar_sistema_pela_tela_e_ja_aberto(base, monkeypatch):  # noqa: F811
+    import os
+    import time
+    from nfse_itaborai import tela
+    saiu = []
+    monkeypatch.setattr(os, "_exit", lambda c: saiu.append(c))
+    assert tratar("sistema/encerrar", {})["ok"]
+    time.sleep(1.2)
+    assert saiu == [0]
+    monkeypatch.setattr(tela, "_quem_esta_na_porta", lambda p: {})
+    assert tela.abrir_se_ja_aberto() is False

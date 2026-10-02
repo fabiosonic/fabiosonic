@@ -92,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("robo", help="roda a rotina financeira (para o Agendador do Windows)")
 
+    sub.add_parser("ja-aberto", help="se esta versão já estiver rodando, só abre o navegador (sai com 0)")
+
     t = sub.add_parser("tela", help="abre a tela de emissão no navegador (http://127.0.0.1:8765)")
     t.add_argument("--porta", type=int, default=8765)
 
@@ -126,6 +128,9 @@ def main(argv: list[str] | None = None) -> int:
             r = automacao.rodar_todas()
             print(json.dumps(r, ensure_ascii=False, indent=2, default=str))
             return 0
+        if a.cmd == "ja-aberto":
+            from .tela import abrir_se_ja_aberto
+            return 0 if abrir_se_ja_aberto() else 1
         if a.cmd == "tela":
             from .tela import servir
             servir(a.porta)

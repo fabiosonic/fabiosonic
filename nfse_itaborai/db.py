@@ -6,7 +6,7 @@ Valores monetários são guardados em centavos (inteiros) para não haver erro d
 from __future__ import annotations
 
 import sqlite3
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -136,7 +136,8 @@ MIGRACOES = {
                   "nfse_quando": "TEXT DEFAULT ''"},
     "titulos": {"origem": "TEXT DEFAULT 'sistema'", "nfse_canal": "TEXT DEFAULT 'municipal'",
                 "nfse_chave": "TEXT DEFAULT ''", "servico_id": "TEXT DEFAULT ''", "banco_id": "TEXT DEFAULT ''", "nosso_numero": "TEXT DEFAULT ''",
-                "boleto_pdf": "TEXT DEFAULT ''", "cobrar": "INTEGER NOT NULL DEFAULT 1"},
+                "boleto_pdf": "TEXT DEFAULT ''", "cobrar": "INTEGER NOT NULL DEFAULT 1",
+                "nfse_data": "TEXT DEFAULT ''"},
 }
 
 
@@ -173,7 +174,7 @@ def backup() -> Path:
     pasta.mkdir(parents=True, exist_ok=True)
     destino = pasta / f"sistema_{datetime.now(emissor.FUSO):%Y-%m-%d}.db"
     if not destino.exists():
-        with conexao() as con, sqlite3.connect(destino) as dst:
+        with conexao() as con, closing(sqlite3.connect(destino)) as dst:
             con.backup(dst)
     for velho in sorted(pasta.glob("sistema_*.db"))[:-30]:
         velho.unlink()

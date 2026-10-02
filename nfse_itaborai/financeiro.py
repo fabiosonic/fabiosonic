@@ -460,6 +460,7 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
         raise
     if r["sucesso"]:
         atualizar_titulo(tid, nfse_status="emitida" if producao else "teste", nfse_numero=r.get("nfse", ""),
+                         nfse_data=hoje().isoformat(),
                          nfse_rps=r.get("rps", ""), nfse_link=r.get("link", ""), nfse_erro="",
                          nfse_canal=r.get("canal", "municipal"), nfse_chave=r.get("chave", ""))
     else:
@@ -527,6 +528,41 @@ def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cob
     elif not emissor.em_producao():
         cancelar_titulo(tid, "teste em homologação (não entra no financeiro)")
     return r | {"titulo_id": tid}
+
+
+# ---------------------------------------------------------------- notas fiscais emitidas
+
+SITUACAO_NOTA = {"emitida": "Emitida", "cancelada": "Cancelada", "teste": "Homologação (teste)"}
+
+
+def listar_notas(competencia: str = "", situacao: str = "validas", busca: str = "", servico_id: str = "") -> dict:
+    """Todas as NFS-e (emitidas pelo sistema ou importadas dos XML), com filtros e totais."""
+    sql, p = "SELECT * FROM titulos WHERE nfse_numero!='' AND nfse_status IN ('emitida','cancelada','teste')", []
+    if competencia:
+        sql += " AND competencia=?"
+        p.append(competencia)
+    if situacao == "validas":
+        sql += " AND nfse_status IN ('emitida','cancelada')"
+    elif situacao in SITUACAO_NOTA:
+        sql += " AND nfse_status=?"
+        p.append(situacao)
+    if servico_id:
+        sql += " AND servico_id=?"
+        p.append(servico_id)
+    b = clientes._digitos(busca) if busca else ""
+    notas = []
+    for t in db.linhas(sql + " ORDER BY competencia DESC, CAST(nfse_numero AS INTEGER) DESC, id DESC", p):
+        if busca and not (busca.strip().lower() in t["cliente_nome"].lower() or (b and b in t["cpf_cnpj"])
+                          or (b and b == t["nfse_numero"][-len(b):])):
+            continue
+        notas.append({k: t[k] for k in ("id", "cpf_cnpj", "cliente_nome", "competencia", "descricao", "valor_cent",
+                                        "nfse_numero", "nfse_status", "nfse_link", "nfse_canal", "nfse_chave",
+                                        "nfse_rps", "status", "origem", "servico_id", "observacao")}
+                     | {"data": t.get("nfse_data") or t["criado_em"][:10],
+                        "pode_cancelar": t["nfse_status"] == "emitida" and t["origem"] != "importado"})
+    emitidas = [n for n in notas if n["nfse_status"] == "emitida"]
+    return {"notas": notas, "qtd": len(emitidas), "total_cent": sum(n["valor_cent"] for n in emitidas),
+            "canceladas": sum(1 for n in notas if n["nfse_status"] == "cancelada")}
 
 
 # ---------------------------------------------------------------- contas a pagar

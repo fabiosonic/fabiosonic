@@ -16,6 +16,7 @@ Restauração com segurança:
 from __future__ import annotations
 
 import base64
+from contextlib import closing
 import json
 import re
 import shutil
@@ -82,7 +83,8 @@ def criar(motivo: str = "manual", raiz: Path | None = None) -> dict:
         banco = raiz / "dados" / "sistema.db"
         if banco.exists():   # cópia consistente mesmo com o sistema aberto
             copia = Path(tmp) / "sistema.db"
-            with sqlite3.connect(banco) as origem, sqlite3.connect(copia) as dst:
+            # conexões fechadas explicitamente: no Windows, arquivo aberto impede apagar a pasta temporária
+            with closing(sqlite3.connect(banco)) as origem, closing(sqlite3.connect(copia)) as dst:
                 origem.backup(dst)
             z.write(copia, "dados/sistema.db")
         arquivos = list(_arquivos(raiz))
@@ -220,7 +222,7 @@ def restaurar(zip_path: Path, raiz: Path | None = None) -> dict:
             z.extractall(tmp)   # caminhos já validados em ler_manifesto
         banco = tmp / "dados" / "sistema.db"
         if banco.exists():
-            with sqlite3.connect(banco) as con:
+            with closing(sqlite3.connect(banco)) as con:
                 if con.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ValueError("O banco de dados deste backup está corrompido; restauração recusada.")
         antes = criar("antes_da_restauracao", raiz) if (raiz / "dados").exists() else None

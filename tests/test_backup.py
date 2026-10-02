@@ -87,3 +87,22 @@ def test_zip_estranho_e_recusado(multi, tmp_path):  # noqa: F811
     r = tratar("backup/restaurar_arquivo", {"arquivo": base64.b64encode(b"nao e zip").decode()})
     assert "zip" in r["erro"]
     assert config.carregar()["empresa"]["nome"] == "MORAES & OLIVEIRA CONTABILIDADE"
+
+
+def test_backup_fecha_as_conexoes_do_banco(multi, monkeypatch):  # noqa: F811
+    """No Windows, conexão aberta trava a pasta temporária (WinError 32): todas devem ser fechadas."""
+    import sqlite3
+    abertas = []
+    original = sqlite3.connect
+
+    def conectar(*a, **k):
+        c = original(*a, **k)
+        abertas.append(c)
+        return c
+    monkeypatch.setattr(sqlite3, "connect", conectar)
+    financeiro.criar_titulo("32396063000103", "250", vencimento="2026-10-10", emitir_nfse=False)
+    b = backup.criar("manual")
+    backup.restaurar(backup.pasta_backups() / b["nome"])
+    for c in abertas:
+        with pytest.raises(sqlite3.ProgrammingError):
+            c.execute("SELECT 1")

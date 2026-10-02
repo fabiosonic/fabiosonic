@@ -37,21 +37,30 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 3. No primeiro acesso, em **Configurações**:
    - informe as credenciais do **Banco Inter**, a chave PIX, o e-mail (SMTP) e o e-mail que recebe o
      **resumo diário**.
-4. Em **Contratos**, clique em **Confirmar todos** os contratos que o robô detectou nas suas notas.
+4. Em **Recorrência**, marque "Repetir todo mês" nos clientes mensais.
+
+### Sem janela preta
+
+O sistema e o robô rodam **escondidos**. O atalho "Sistema Financeiro NFS-e" (área de trabalho e inicialização
+do Windows) chama `SISTEMA.vbs`, que abre o navegador sem janela; se o sistema já estiver aberto, só abre o
+navegador de novo. O robô agendado (de hora em hora) também roda sem janela. Para fechar, use **Encerrar o
+sistema** no menu. O registro do que aconteceria na janela fica em `dados\tela.log` e `dados\robo.log`.
+Para ver a janela (diagnóstico), rode `INICIAR.bat` direto.
 
 Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são mantidos.
 
 ## Atualizar de uma versão anterior
 
-1. Feche a janela preta do sistema antigo, se estiver aberta.
+1. Feche o sistema antigo (janela preta ou botão "Encerrar o sistema"), se estiver aberto.
 2. Descompacte o pacote novo **por cima da mesma pasta** de antes. Assim o banco de dados (`dados\sistema.db`),
    os clientes e as empresas continuam lá.
-3. Abra pelo `INICIAR.bat`. A cada abertura ele:
-   - encerra telas de versões antigas que tenham ficado abertas;
+3. Abra pelo `INICIAR.bat` (uma vez) ou pelo atalho. A cada abertura ele:
+   - se esta mesma versão já estiver aberta, só abre o navegador (não abre outra cópia);
+   - encerra telas de versões antigas ou de outras pastas que tenham ficado abertas;
    - aponta o robô agendado, a inicialização com o Windows e o atalho da área de trabalho para a pasta
-     dele;
+     dele, rodando sem janela;
    - se a porta 8765 continuar ocupada, abre em outra porta livre.
-4. A versão aparece no canto inferior do menu (ex.: v3.0.0).
+4. A versão aparece no canto inferior do menu (ex.: v3.1.0).
 5. Se a versão nova foi para outra pasta, o painel mostra "Versão anterior encontrada" (há também o botão em
    Configurações › Versão anterior).
    - O que é trazido: e-mail de envio, Banco Inter, chave PIX, e-mail do dono, certificado (copiado para dentro da
@@ -254,6 +263,15 @@ controla o financeiro.
   nota e cobrança, editáveis na própria linha. Marque "Repetir todo mês" para o cliente entrar no faturamento
   mensal; quem não estiver marcado nunca é cobrado. "Mais" abre início, fim, reajuste e descrição.
 
+## Notas emitidas
+
+Aba **Notas emitidas**: todas as NFS-e (do sistema e importadas dos XML), abrindo na competência atual.
+Filtros: competência (ou "Todas as competências"), situação (emitidas, canceladas, testes de homologação),
+serviço e busca por cliente, CNPJ ou número. Totais de notas e valor emitido. **Cancelar NFS-e** pede
+justificativa (mín. 15 caracteres) e confirmação, envia ao canal em que a nota saiu (Itaboraí ou Nacional) e
+cancela também a conta a receber e o boleto. Conta já paga exige estorno antes; nota importada (emitida fora do
+sistema) é cancelada no portal em que foi emitida.
+
 ## Backup e restauração
 
 Em Configurações › "Backup e restauração":
@@ -413,7 +431,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 155 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 159 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

@@ -17,6 +17,11 @@ function aplicarTema(t) {
 }
 let TEMA = ""; try { TEMA = localStorage.getItem("tema") || ""; } catch (e) { /* sem armazenamento: automático */ }
 aplicarTema(TEMA);
+document.getElementById("sair").onclick = async () => {
+  if (!confirm("Encerrar o sistema? O robô agendado continua rodando de hora em hora. Para abrir de novo, use o atalho “Sistema Financeiro NFS-e” na área de trabalho.")) return;
+  try { await api("sistema/encerrar"); } catch (e) { /* já encerrando */ }
+  document.body.innerHTML = '<main style="display:grid;place-items:center;min-height:100vh;text-align:center;padding:24px"><div><h1>Sistema encerrado</h1><p>Para abrir de novo, use o atalho <b>Sistema Financeiro NFS-e</b> na área de trabalho.<br>O robô agendado continua cuidando das rotinas de hora em hora.</p></div></main>';
+};
 document.getElementById("tema").onclick = () => {
   TEMA = TEMAS[(TEMAS.findIndex(x => x[0] == TEMA) + 1) % TEMAS.length][0];
   try { localStorage.setItem("tema", TEMA); } catch (e) { /* ignora */ }
@@ -38,7 +43,7 @@ function fechar() { $("#modal").hidden = true; }
 $("#modal").addEventListener("click", e => { if (e.target.id == "modal") fechar(); });
 function selo(sit) {
   const m = { pago: ["bom", "Pago"], aberto: ["neutro", "Em aberto"], atrasado: ["critico", "Atrasado"], cancelado: ["neutro", "Cancelado"],
-    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], emitindo: ["serio", "Em emissão — conferir no portal"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"], apos_pagamento: ["neutro", "Após o pagamento"], sem_cobranca: ["neutro", "Sem cobrança"],
+    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], emitindo: ["serio", "Em emissão — conferir no portal"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"], apos_pagamento: ["neutro", "Após o pagamento"], sem_cobranca: ["neutro", "Sem cobrança"], nf_cancelada: ["critico", "Cancelada"],
     bom: ["bom", "Bom"], "atenção": ["alerta", "Atenção"], risco: ["critico", "Risco"], enviado: ["bom", "Enviado"], feito: ["bom", "Feito"],
     sem_contato: ["alerta", "Sem contato"] };
   const [c, t] = m[sit] || ["neutro", sit];
@@ -289,6 +294,61 @@ PAGINAS.lote = async el => {
     finally { $("#l_btn").disabled = false; }
   };
 };
+
+// ---------------------------------------------------------------- notas fiscais emitidas
+const FILTRO_NF = { competencia: null, situacao: "validas", busca: "", servico_id: "" };
+PAGINAS.notas = async el => {
+  if (FILTRO_NF.competencia === null) FILTRO_NF.competencia = hojeISO().slice(0, 7);
+  el.innerHTML = `<h1>Notas fiscais (NFS-e) <span class="acoes"><button class="btn" onclick="ir('emitir')">${ic("mais")}Emitir nota</button></span></h1>
+  <div class="kpis" id="nf_kpis"></div>
+  <div class="card"><div class="barra filtros-nf">
+    <label>Competência<input type="month" id="nf_comp" value="${FILTRO_NF.competencia}"></label>
+    <label>Situação<select id="nf_sit">${[["validas", "Emitidas e canceladas"], ["emitida", "Só emitidas"], ["cancelada", "Só canceladas"], ["teste", "Testes de homologação"], ["todas", "Todas"]].map(([v, t]) => `<option value="${v}" ${FILTRO_NF.situacao == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    ${(ST.servicos || []).length > 1 ? `<label>Serviço<select id="nf_serv">${opcoesServ(FILTRO_NF.servico_id, "Todos")}</select></label>` : ""}
+    <label style="flex:1">Procurar<input id="nf_busca" placeholder="cliente, CNPJ ou nº da nota" value="${esc(FILTRO_NF.busca)}"></label>
+    <button class="btn sec" id="nf_todas" title="Mostrar todas as competências">Todas as competências</button></div>
+    <div id="nf_tab"><div class="vazio">Carregando…</div></div></div>`;
+  let tmr;
+  const carregar = async () => {
+    const r = await api("nfse/listar", FILTRO_NF);
+    $("#nf_kpis").innerHTML = `<div class="kpi"><div class="r">Notas emitidas ${FILTRO_NF.competencia ? "em " + mes(FILTRO_NF.competencia) : "(todas as competências)"}</div><div class="v">${r.qtd}</div></div>
+      <div class="kpi"><div class="r">Valor das notas emitidas</div><div class="v">${brl(r.total_cent)}</div></div>
+      <div class="kpi"><div class="r">Canceladas</div><div class="v">${r.canceladas}</div></div>`;
+    $("#nf_tab").innerHTML = tabela([
+      { t: "Nº NFS-e", f: n => `<b>${esc(n.nfse_numero)}</b>${n.nfse_link && n.nfse_link.startsWith("http") ? `<div class="sub"><a href="${esc(n.nfse_link)}" target="_blank">abrir nota</a></div>` : ""}` },
+      { t: "Emissão", f: n => dt(n.data) }, { t: "Comp.", f: n => mes(n.competencia) },
+      { t: "Cliente", f: n => `${esc(n.cliente_nome)}<div class="sub">${fmtDoc(n.cpf_cnpj)}</div>` },
+      { t: "Serviço", f: n => `<span class="sub">${esc(n.descricao)}</span>` },
+      { t: "Valor", n: 1, f: n => num(n.valor_cent) },
+      { t: "Situação", f: n => n.nfse_status == "emitida" ? selo("emitida") : n.nfse_status == "cancelada" ? selo("nf_cancelada") : selo("teste") },
+      { t: "Origem", f: n => `<span class="sub">${n.origem == "importado" ? "importada (XML)" : n.nfse_canal == "nacional" ? "sistema · Nacional" : "sistema · Itaboraí"}</span>` },
+      { t: "", f: n => n.pode_cancelar ? `<button class="btn min sec perigo-txt" data-cn="${n.id}">${ic("x")}Cancelar NFS-e</button>` : n.nfse_status == "emitida" && n.origem == "importado" ? '<span class="sub" title="Emitida fora do sistema">cancelar no portal</span>' : "" }],
+      r.notas, FILTRO_NF.competencia ? `Nenhuma nota em ${mes(FILTRO_NF.competencia)} com esses filtros.` : "Nenhuma nota com esses filtros.");
+    $$("[data-cn]", el).forEach(b => b.onclick = () => cancelarNota(r.notas.find(n => n.id == b.dataset.cn)));
+  };
+  $("#nf_comp").onchange = () => { FILTRO_NF.competencia = $("#nf_comp").value; carregar(); };
+  $("#nf_sit").onchange = () => { FILTRO_NF.situacao = $("#nf_sit").value; carregar(); };
+  if ($("#nf_serv")) $("#nf_serv").onchange = () => { FILTRO_NF.servico_id = $("#nf_serv").value; carregar(); };
+  $("#nf_busca").oninput = () => { clearTimeout(tmr); tmr = setTimeout(() => { FILTRO_NF.busca = $("#nf_busca").value.trim(); carregar(); }, 250); };
+  $("#nf_todas").onclick = () => { FILTRO_NF.competencia = ""; $("#nf_comp").value = ""; carregar(); };
+  carregar();
+};
+function cancelarNota(n) {
+  modal(`<h2>Cancelar NFS-e nº ${esc(n.nfse_numero)}</h2>
+    <p><b>${esc(n.cliente_nome)}</b> — ${brl(n.valor_cent)} — competência ${mes(n.competencia)}</p>
+    <div class="msg erro">O cancelamento é enviado ${n.nfse_canal == "nacional" ? "ao Emissor Nacional (Sefin)" : "à Prefeitura de Itaboraí"} e <b>não pode ser desfeito</b>. A conta a receber desta nota também é cancelada (e o boleto, se houver).</div>
+    <div class="campos"><label class="inteiro">Justificativa (mínimo 15 caracteres)<textarea id="cn_just" rows="3" maxlength="255" placeholder="ex.: Nota emitida com valor incorreto"></textarea></label></div>
+    <p class="sub" id="cn_cont">0 de 15 caracteres</p>
+    <p><button class="btn perigo" id="cn_ok" disabled>${ic("x")}Cancelar a nota fiscal</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#cn_just").oninput = () => { const k = $("#cn_just").value.trim().length; $("#cn_cont").textContent = `${k} de 15 caracteres`; $("#cn_ok").disabled = k < 15; };
+  $("#cn_ok").onclick = async () => {
+    if (!confirm(`Confirma o CANCELAMENTO da NFS-e ${n.nfse_numero}?`)) return;
+    $("#cn_ok").disabled = true; $("#cn_ok").textContent = "Enviando…";
+    const r = await api("titulo/cancelar_nfse", { id: n.id, justificativa: $("#cn_just").value.trim() });
+    if (r.sucesso) { fechar(); aviso(`NFS-e ${n.nfse_numero} cancelada ✔`, 7000); ir("notas"); }
+    else { $("#cn_ok").disabled = false; $("#cn_ok").innerHTML = `${ic("x")}Cancelar a nota fiscal`; aviso("A nota NÃO foi cancelada: " + (r.erros || []).join("; "), 12000); }
+  };
+}
 
 // ---------------------------------------------------------------- contas a receber
 let FILTRO_REC = "a_receber";

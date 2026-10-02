@@ -385,3 +385,5 @@ label.btn { display: inline-flex; flex-direction: row; align-items: center; curs
 .recor td { padding-left: 8px; padding-right: 8px; }
 .recor td .acoes-linha { flex-wrap: nowrap; }
 .opcoes-cancel { display: grid; gap: 6px; margin: 12px 0; } .opcoes-cancel .btn { justify-content: flex-start; white-space: normal; height: auto; min-height: 38px; padding: 8px 14px; } .opcoes-cancel p { margin: 0 0 8px; }
+.btn.perigo-txt { color: var(--critico); } .filtros-nf { flex-wrap: wrap; align-items: end; }
+.caixa .msg + .campos { margin-top: 14px; }

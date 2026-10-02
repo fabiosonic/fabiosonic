@@ -141,7 +141,8 @@ def importar_titulos_externos(notas: list[dict]) -> int:
         venc = (date.fromisoformat(n["emissao"]) + timedelta(days=prazo)).isoformat()
         tid = financeiro.criar_titulo(n["cliente"]["cpf_cnpj"], financeiro.reais(n["valor_cent"]), n["descricao"],
                                       venc, n["competencia"], emitir_nfse=False, cobrar=False)
-        financeiro.atualizar_titulo(tid, nfse_status="emitida", nfse_numero=n["numero"], origem="importado")
+        financeiro.atualizar_titulo(tid, nfse_status="emitida", nfse_numero=n["numero"], origem="importado",
+                                    nfse_data=n["emissao"][:10])
         existentes.add(n["numero"])
         novos += 1
     if novos:

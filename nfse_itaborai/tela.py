@@ -49,6 +49,13 @@ def _emitir_item(it: dict) -> dict:
 
 def _cancelar_nfse_titulo(tid: int, justificativa: str) -> dict:
     t = financeiro.obter_titulo(tid)
+    if len(justificativa.strip()) < 15:
+        return {"sucesso": False, "erros": ["A justificativa precisa ter pelo menos 15 caracteres."]}
+    if t["status"] == "pago":
+        return {"sucesso": False, "erros": ["Esta conta já foi paga: faça o estorno do pagamento antes de cancelar a nota."]}
+    if t.get("origem") == "importado":
+        return {"sucesso": False, "erros": ["Nota emitida fora do sistema (importada do XML): cancele no portal em que foi "
+                                            "emitida."]}
     if t["nfse_status"] == "emitida" and t["nfse_numero"]:
         if t.get("nfse_canal") == "nacional":
             resp = nacional.cancelar(t["nfse_chave"], justificativa, producao=emissor.em_producao())
@@ -56,6 +63,8 @@ def _cancelar_nfse_titulo(tid: int, justificativa: str) -> dict:
             resp = emissor.cancelar(t["nfse_numero"], justificativa, producao=emissor.em_producao())
         if not resp.sucesso:
             return {"sucesso": False, "erros": resp.erros}
+        financeiro.atualizar_titulo(tid, nfse_status="cancelada")
+        db.registrar("nfse", f"NFS-e {t['nfse_numero']} ({t['cliente_nome']}) cancelada: {justificativa}")
     if t["status"] == "aberto":
         cobranca.cancelar_boleto(t, "NFS-e cancelada")
     financeiro.cancelar_titulo(tid, f"NFS-e cancelada: {justificativa}")
@@ -178,6 +187,9 @@ ROTAS = {
     "titulo/cancelar": lambda c: _cancelar_titulo(_id(c), c.get("motivo", "")),
     "titulo/sem_cobranca": lambda c: _tirar_da_cobranca(_id(c)),
     "titulo/gerar_cobranca": lambda c: (financeiro.atualizar_titulo(_id(c), cobrar=1), cobranca.preparar_pagamento(_id(c)))[1],
+    "nfse/listar": lambda c: financeiro.listar_notas(str(c.get("competencia") or ""), str(c.get("situacao") or "validas"),
+                                                     str(c.get("busca") or ""), str(c.get("servico_id") or "")),
+    "sistema/encerrar": lambda c: _encerrar(),
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
     "titulo/emitir_nfse": lambda c: financeiro.emitir_nfse_titulo(_id(c)),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),
@@ -342,6 +354,24 @@ def _quem_esta_na_porta(porta: int) -> dict:
         return {}
 
 
+def abrir_se_ja_aberto(porta: int = 8765) -> bool:
+    """Se ESTA versão (mesma pasta) já está rodando, só abre o navegador nela."""
+    for p in range(porta, porta + 20):
+        outro = _quem_esta_na_porta(p)
+        if outro.get("versao") == __version__ and outro.get("pasta") == str(emissor.BASE):
+            webbrowser.open(f"http://127.0.0.1:{p}")
+            return True
+    return False
+
+
+def _encerrar() -> dict:
+    """Botão 'Encerrar o sistema': o servidor roda oculto, sem janela para fechar."""
+    import threading
+    db.registrar("sistema", "Sistema encerrado pela tela")
+    threading.Timer(0.8, lambda: os._exit(0)).start()
+    return {"ok": True}
+
+
 def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
     srv = None
     for p in range(porta, porta + 20):
@@ -365,7 +395,7 @@ def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
     empresas.aplicar_ativa()
     importador.caixa()  # cria a pasta IMPORTAR XML dentro da pasta do sistema
     url = f"http://127.0.0.1:{porta}"
-    print(f"Sistema versão {__version__} em {url} (deixe esta janela aberta; Ctrl+C para sair)")
+    print(f"Sistema versão {__version__} em {url} (para fechar: botão “Encerrar o sistema” na tela)")
     if robo:
         automacao.iniciar_em_segundo_plano()
     if abrir:
