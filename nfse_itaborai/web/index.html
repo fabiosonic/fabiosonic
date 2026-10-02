@@ -7,20 +7,51 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-painel" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+    <symbol id="i-nota" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+    <symbol id="i-lote" viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 17.5 10 5 10-5"/></symbol>
+    <symbol id="i-receber" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M8 13l4 4 4-4"/></symbol>
+    <symbol id="i-pagar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 17V7M8 11l4-4 4 4"/></symbol>
+    <symbol id="i-contratos" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="i-cobranca" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-banco" viewBox="0 0 24 24"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></symbol>
+    <symbol id="i-relatorios" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M8 17v-5M13 17V8M18 17v-9"/></symbol>
+    <symbol id="i-clientes" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-config" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/></symbol>
+    <symbol id="i-alerta" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-relogio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-bloqueio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+    <symbol id="i-imprimir" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
+    <symbol id="i-email" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></symbol>
+    <symbol id="i-fone" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-raio" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+    <symbol id="i-mais" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  </defs>
+</svg>
 <aside id="menu">
-  <div class="marca">M&amp;O<span>Financeiro · NFS-e</span></div>
+  <div class="marca"><span class="selo-marca">M&amp;O</span><span class="marca-txt">Moraes &amp; Oliveira<small>Financeiro · NFS-e</small></span></div>
   <nav>
-    <a data-p="painel" class="on">📊 Painel</a>
-    <a data-p="emitir">🧾 Emitir nota</a>
-    <a data-p="lote">📚 Emitir em lote</a>
-    <a data-p="receber">💰 Contas a receber</a>
-    <a data-p="contratos">🔁 Contratos</a>
-    <a data-p="cobranca">📣 Cobrança</a>
-    <a data-p="pagar">📤 Contas a pagar</a>
-    <a data-p="conciliacao">🏦 Conciliação</a>
-    <a data-p="relatorios">📈 Relatórios</a>
-    <a data-p="clientes">👥 Clientes</a>
-    <a data-p="config">⚙️ Configurações</a>
+    <span class="grupo">Visão geral</span>
+    <a data-p="painel" class="on"><svg class="ic"><use href="#i-painel"/></svg>Painel</a>
+    <span class="grupo">Notas fiscais</span>
+    <a data-p="emitir"><svg class="ic"><use href="#i-nota"/></svg>Emitir nota</a>
+    <a data-p="lote"><svg class="ic"><use href="#i-lote"/></svg>Emitir em lote</a>
+    <span class="grupo">Financeiro</span>
+    <a data-p="receber"><svg class="ic"><use href="#i-receber"/></svg>Contas a receber</a>
+    <a data-p="contratos"><svg class="ic"><use href="#i-contratos"/></svg>Contratos</a>
+    <a data-p="cobranca"><svg class="ic"><use href="#i-cobranca"/></svg>Cobrança</a>
+    <a data-p="pagar"><svg class="ic"><use href="#i-pagar"/></svg>Contas a pagar</a>
+    <a data-p="conciliacao"><svg class="ic"><use href="#i-banco"/></svg>Conciliação</a>
+    <span class="grupo">Gestão</span>
+    <a data-p="relatorios"><svg class="ic"><use href="#i-relatorios"/></svg>Relatórios</a>
+    <a data-p="clientes"><svg class="ic"><use href="#i-clientes"/></svg>Clientes</a>
+    <a data-p="config"><svg class="ic"><use href="#i-config"/></svg>Configurações</a>
   </nav>
   <button id="amb" class="amb">…</button>
 </aside>

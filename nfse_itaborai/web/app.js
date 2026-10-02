@@ -9,6 +9,7 @@ const dt = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4
 const mes = c => c ? `${c.slice(5, 7)}/${c.slice(0, 4)}` : "";
 const fmtDoc = d => !d ? "" : d.length == 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 const valorNum = s => { s = String(s ?? "").trim(); if (s.includes(",")) s = s.replace(/\./g, "").replace(",", "."); return Number(s) || 0; };
+const ic = n => `<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 let ST = { clientes: [], padrao: {}, producao: false, config: {} };
 
@@ -41,7 +42,7 @@ function form(el) { const o = {}; $$("[name]", el).forEach(i => o[i.name] = i.ty
 async function carregarEstado() {
   ST = await api("estado");
   const b = $("#amb");
-  b.textContent = (ST.producao ? "● PRODUÇÃO" : "● HOMOLOGAÇÃO (teste)") + " · " + nomeCanal(true);
+  b.innerHTML = `<span class="ponto"></span><span><b>${ST.producao ? "Produção" : "Homologação"}</b><small>${ST.producao ? "Notas com validade fiscal" : "Teste, sem validade"} · ${nomeCanal(true)}</small></span>`;
   b.className = "amb " + (ST.producao ? "prod" : "hom");
   b.title = "Clique para trocar o ambiente";
 }
@@ -66,67 +67,79 @@ async function ir(p) {
 $$("nav a").forEach(a => a.onclick = () => ir(a.dataset.p));
 
 // ---------------------------------------------------------------- painel
-function grafico(serie) {
-  const W = 760, H = 240, ml = 52, mb = 26, mt = 10, larg = W - ml - 8, alt = H - mt - mb;
+function grafico(serie, W = 760) {
+  const H = 250, ml = 52, mb = 26, mt = 10, larg = W - ml - 8, alt = H - mt - mb;
   const max = Math.max(1, ...serie.flatMap(s => [s.faturado, s.recebido]));
   const passo = Math.pow(10, Math.floor(Math.log10(max / 100))) * 100;
   const topo = Math.ceil(max / passo / 4) * passo * 4 || 1;
   const y = v => mt + alt - v / topo * alt, gw = larg / serie.length, bw = Math.min(18, (gw - 10) / 2);
   let s = "";
-  for (let i = 0; i <= 4; i++) { const v = topo / 4 * i; s += `<line class="grade" x1="${ml}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}"/><text class="eixo" x="${ml - 6}" y="${y(v) + 4}" text-anchor="end">${(v / 100 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k</text>`; }
+  for (let i = 0; i <= 4; i++) { const v = topo / 4 * i; s += `<line class="grade" x1="${ml}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}"/><text class="eixo" x="${ml - 6}" y="${y(v) + 4}" text-anchor="end">${v ? (v / 100 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mil" : "0"}</text>`; }
+  s += `<line class="base" x1="${ml}" x2="${W - 8}" y1="${y(0)}" y2="${y(0)}"/>`;
   const barra = (x, v, cor, i, k) => { const h = Math.max(0, alt - (y(v) - mt)); const yy = y(v); const r = Math.min(4, h);
     return `<path d="M${x},${yy + h} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${yy + h} Z" fill="var(${cor})" data-i="${i}" data-k="${k}"/>`; };
   serie.forEach((p, i) => {
     const x0 = ml + gw * i + (gw - (bw * 2 + 2)) / 2;
     s += barra(x0, p.faturado, "--serie-1", i, "f") + barra(x0 + bw + 2, p.recebido, "--serie-2", i, "r");
     s += `<rect x="${ml + gw * i}" y="${mt}" width="${gw}" height="${alt}" fill="transparent" data-i="${i}" class="alvo"/>`;
-    s += `<text class="eixo" x="${ml + gw * i + gw / 2}" y="${H - 8}" text-anchor="middle">${p.mes.slice(5)}/${p.mes.slice(2, 4)}</text>`;
+    if (gw >= 38 || i % 2 == (serie.length - 1) % 2) s += `<text class="eixo" x="${ml + gw * i + gw / 2}" y="${H - 8}" text-anchor="middle">${p.mes.slice(5)}/${p.mes.slice(2, 4)}</text>`;
   });
   return `<div class="legenda"><span><i style="background:var(--serie-1)"></i>Faturado (competência)</span><span><i style="background:var(--serie-2)"></i>Recebido</span></div>
-    <div class="grafico"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Faturado e recebido nos últimos 12 meses">${s}</svg><div class="dica" hidden></div></div>
+    <div class="grafico"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Faturado e recebido nos últimos 12 meses">${s}</svg><div class="dica" hidden></div></div>
     <details><summary class="sub">Ver tabela</summary>${tabela([{ t: "Mês", f: p => mes(p.mes) }, { t: "Faturado", n: 1, f: p => num(p.faturado) }, { t: "Recebido", n: 1, f: p => num(p.recebido) }], serie)}</details>`;
 }
 function ligarDica(el, serie) {
   const g = $(".grafico", el); if (!g) return; const d = $(".dica", g);
   $$(".alvo", g).forEach(r => {
     r.onmousemove = ev => { const p = serie[r.dataset.i]; const b = g.getBoundingClientRect();
-      d.innerHTML = `<b>${mes(p.mes)}</b><br>Faturado ${brl(p.faturado)}<br>Recebido ${brl(p.recebido)}`; d.hidden = false;
+      d.innerHTML = `<b>${mes(p.mes)}</b><br><i style="background:var(--serie-1)"></i>Faturado ${brl(p.faturado)}<br><i style="background:var(--serie-2)"></i>Recebido ${brl(p.recebido)}`; d.hidden = false;
       d.style.left = (ev.clientX - b.left) + "px"; d.style.top = (ev.clientY - b.top) + "px"; };
     r.onmouseleave = () => d.hidden = true;
   });
 }
 PAGINAS.painel = async el => {
   const p = await api("painel");
-  const alertas = [];
-  if (p.sem_nfse) alertas.push(`🧾 <b>${p.sem_nfse}</b> título(s) sem NFS-e válida — <a href="#" onclick="ir('receber');return false">ver</a>`);
-  if (p.atrasado_qtd) alertas.push(`⏰ <b>${p.atrasado_qtd}</b> título(s) em atraso de <b>${p.clientes_atrasados}</b> cliente(s): ${brl(p.atrasado)}`);
-  if (p.criticos.length) alertas.push(`⛔ <b>${p.criticos.length}</b> cliente(s) com atraso crítico (≥ ${ST.config.cobranca.bloquear_apos_dias} dias): ${p.criticos.slice(0, 5).map(esc).join(", ")}${p.criticos.length > 5 ? ` e mais ${p.criticos.length - 5} — <a href="#" onclick="ABA_REL='aging';ir('relatorios');return false">ver todos</a>` : ""}`);
-  if (p.a_pagar_atrasado) alertas.push(`📤 Contas a pagar vencidas: ${brl(p.a_pagar_atrasado)}`);
-  if (p.sublimite_pct >= 80) alertas.push(`⚠ RBT12 em ${p.sublimite_pct}% do sublimite de R$ 3,6 mi do Simples`);
-  if (p.contratos_a_confirmar) alertas.unshift(`🔁 <b>${p.contratos_a_confirmar}</b> contrato(s) recorrente(s) detectado(s) nas suas notas — <a href="#" onclick="ir('contratos');return false">conferir</a> ou <a href="#" onclick="confirmarTodos();return false"><b>confirmar todos</b></a>`);
-  if (!ST.config.automacao.ativa) alertas.push(`🤖 O robô financeiro está desligado — <a href="#" onclick="ir('config');return false">ligar em Configurações</a>`);
-  const robo = ST.config.automacao.ativa ? `<span class="selo bom">Robô ligado</span> <span class="sub">${p.ultima_execucao_robo ? "última execução " + dt(p.ultima_execucao_robo.slice(0, 10)) + " " + p.ultima_execucao_robo.slice(11, 16) : "ainda não executou"}</span>` : `<span class="selo critico">Robô desligado</span>`;
-  el.innerHTML = `<h1>Painel <span style="font-size:13px;font-weight:400">${robo}</span><span class="acoes"><button class="btn sec" id="robo">🤖 Rodar robô agora</button></span></h1>
+  const al = [], A = (sev, icone, html) => al.push({ sev, icone, html });
+  if (p.contratos_a_confirmar) A("info", "contratos", `<b>${p.contratos_a_confirmar}</b> contrato(s) recorrente(s) detectado(s) nas suas notas — <a href="#" onclick="ir('contratos');return false">conferir</a> ou <a href="#" onclick="confirmarTodos();return false"><b>confirmar todos</b></a>`);
+  if (p.sem_nfse) A("alerta", "nota", `<b>${p.sem_nfse}</b> título(s) sem NFS-e válida — <a href="#" onclick="ir('receber');return false">ver</a>`);
+  if (p.atrasado_qtd) A("serio", "relogio", `<b>${p.atrasado_qtd}</b> título(s) em atraso de <b>${p.clientes_atrasados}</b> cliente(s): <b>${brl(p.atrasado)}</b>`);
+  if (p.criticos.length) A("critico", "bloqueio", `<b>${p.criticos.length}</b> cliente(s) com atraso crítico (≥ ${ST.config.cobranca.bloquear_apos_dias} dias): ${p.criticos.slice(0, 3).map(esc).join(", ")}${p.criticos.length > 3 ? ` e mais ${p.criticos.length - 3} — <a href="#" onclick="ABA_REL='aging';ir('relatorios');return false">ver todos</a>` : ""}`);
+  if (p.a_pagar_atrasado) A("serio", "pagar", `Contas a pagar vencidas: <b>${brl(p.a_pagar_atrasado)}</b>`);
+  if (p.sublimite_pct >= 80) A("critico", "alerta", `RBT12 em ${p.sublimite_pct}% do sublimite de R$ 3,6 mi do Simples`);
+  if (!ST.config.automacao.ativa) A("alerta", "play", `O robô financeiro está desligado — <a href="#" onclick="ir('config');return false">ligar em Configurações</a>`);
+  const robo = ST.config.automacao.ativa ? `<span class="selo bom">Robô ligado</span><span>${p.ultima_execucao_robo ? "última execução " + dt(p.ultima_execucao_robo.slice(0, 10)) + " às " + p.ultima_execucao_robo.slice(11, 16) : "ainda não executou"}</span>` : `<span class="selo critico">Robô desligado</span>`;
+  const kpi = (cls, icone, rot, val, sub = "") => `<div class="kpi ${cls}"><div class="r">${ic(icone)}${rot}</div><div class="v">${val}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
+  el.innerHTML = `<h1>Painel <span class="titulo-sub">${robo}</span><span class="acoes"><button class="btn sec" id="robo">${ic("play")}Rodar robô agora</button></span></h1>
   <div class="kpis">
-    <div class="kpi"><div class="r">Faturado em ${mes(p.competencia)}</div><div class="v">${brl(p.faturado_mes)}</div><div class="s">por competência</div></div>
-    <div class="kpi"><div class="r">Recebido no mês</div><div class="v">${brl(p.recebido_mes)}</div></div>
-    <div class="kpi"><div class="r">A receber</div><div class="v">${brl(p.a_receber)}</div></div>
-    <div class="kpi"><div class="r">Em atraso</div><div class="v">${brl(p.atrasado)}</div><div class="s">${p.atrasado_qtd} título(s) · inadimplência ${p.inadimplencia_pct}%</div></div>
-    <div class="kpi"><div class="r">Receita recorrente (MRR)</div><div class="v">${brl(p.mrr)}</div><div class="s">${p.contratos_ativos} contrato(s) · ticket ${brl(p.ticket_medio)}</div></div>
-    <div class="kpi"><div class="r">A pagar</div><div class="v">${brl(p.a_pagar)}</div></div>
-    <div class="kpi"><div class="r">RBT12 (Simples)</div><div class="v">${brl(p.rbt12)}</div><div class="s">DAS estimado ${String(p.aliquota_simples_estimada).replace(".", ",")}% · ${p.sublimite_pct}% do sublimite</div></div>
+    ${kpi("destaque", "nota", `Faturado em ${mes(p.competencia)}`, brl(p.faturado_mes), "por competência")}
+    ${kpi("destaque", "receber", "Recebido no mês", brl(p.recebido_mes), "pagamentos baixados")}
+    ${kpi("destaque", "relogio", "A receber", brl(p.a_receber), "títulos em aberto")}
+    ${kpi(p.atrasado ? "critico" : "destaque", "alerta", "Em atraso", brl(p.atrasado), `${p.atrasado_qtd} título(s) <span class="selo ${p.inadimplencia_pct > 5 ? "critico" : p.inadimplencia_pct > 2 ? "alerta" : "bom"}">inadimplência ${String(p.inadimplencia_pct).replace(".", ",")}%</span>`)}
+  </div>
+  <div class="kpis secundarios">
+    ${kpi("", "contratos", "Receita recorrente (MRR)", brl(p.mrr), `${p.contratos_ativos} contrato(s) · ticket médio ${brl(p.ticket_medio)}`)}
+    ${kpi("", "pagar", "A pagar", brl(p.a_pagar), p.a_pagar_atrasado ? `<span class="selo critico">${brl(p.a_pagar_atrasado)} vencido</span>` : "nada vencido")}
+    ${kpi("", "relatorios", "RBT12 (Simples Nacional)", brl(p.rbt12), `DAS estimado ${String(p.aliquota_simples_estimada).replace(".", ",")}% · ${String(p.sublimite_pct).replace(".", ",")}% do sublimite`)}
   </div>
   <div class="grid2">
-    <div class="card"><h2>Últimos 12 meses</h2>${grafico(p.serie)}</div>
-    <div class="card"><h2>Alertas</h2>${alertas.length ? `<ul class="lista-alertas">${alertas.map(a => `<li>${a}</li>`).join("")}</ul>` : '<div class="vazio">Tudo em dia ✔</div>'}
-      <h2 style="margin-top:16px">Maiores devedores</h2>${tabela([{ t: "Cliente", f: x => esc(x.cliente) }, { t: "Atualizado", n: 1, f: x => brl(x.valor) }], p.maiores_devedores, "Ninguém em atraso.")}</div>
+    <div class="card"><h2>${ic("relatorios")}Faturado x recebido — últimos 12 meses</h2>${grafico(p.serie)}</div>
+    <div class="card"><h2>${ic("alerta")}Alertas</h2>${al.length ? `<ul class="alertas">${al.map(a => `<li class="${a.sev}"><span class="ai">${ic(a.icone)}</span><div class="txt">${a.html}</div></li>`).join("")}</ul>` : `<div class="tudo-ok">${ic("ok")}Tudo em dia</div>`}</div>
   </div>
-  <div class="card"><h2>Vencem nos próximos 7 dias</h2>${tabela([{ t: "Cliente", f: t => esc(t.cliente_nome) }, { t: "Vencimento", f: t => dt(t.vencimento) }, { t: "Valor", n: 1, f: t => brl(t.valor_cent) }, { t: "NFS-e", f: t => selo(t.nfse_status) }], p.proximos_7_dias, "Nenhum vencimento na semana.")}</div>`;
-  ligarDica(el, p.serie);
+  <div class="grid2">
+    <div class="card"><h2>${ic("bloqueio")}Maiores devedores</h2>${tabela([{ t: "Cliente", f: x => esc(x.cliente) }, { t: "Valor atualizado", n: 1, f: x => brl(x.valor) }], p.maiores_devedores, "Ninguém em atraso.")}</div>
+    <div class="card"><h2>${ic("relogio")}Vencem nos próximos 7 dias</h2>${tabela([{ t: "Cliente", f: t => esc(t.cliente_nome) }, { t: "Vencimento", f: t => dt(t.vencimento) }, { t: "Valor", n: 1, f: t => brl(t.valor_cent) }, { t: "NFS-e", f: t => selo(t.nfse_status) }], p.proximos_7_dias, "Nenhum vencimento na semana.")}</div>
+  </div>`;
+  // desenha na largura real do cartão e redesenha quando a janela muda (eixo sem distorção)
+  const cartao = $(".grafico", el).closest(".card");
+  const desenharGrafico = () => { const w = Math.round($(".grafico", cartao).clientWidth); if (!w || w == cartao._w) return;
+    cartao._w = w; $(".grafico", cartao).outerHTML = $(".grafico", new DOMParser().parseFromString(grafico(p.serie, w), "text/html")).outerHTML;
+    ligarDica(el, p.serie); };
+  desenharGrafico();
+  if (window.ResizeObserver) new ResizeObserver(desenharGrafico).observe(cartao);
   $("#robo").onclick = async ev => {
     if (!confirm(`Rodar o robô agora?\n\nEle gera os títulos dos contratos, ${ST.producao ? "EMITE AS NFS-e VÁLIDAS pendentes" : "não emite NFS-e (homologação)"}, cria PIX/boleto, envia a régua de cobrança e confere pagamentos.`)) return;
-    ev.target.disabled = true; modal('<h2>Robô em execução…</h2><p class="sub">Pode levar alguns minutos se houver muitas notas para emitir. Não feche esta janela.</p>');
-    let r; try { r = await api("robo/rodar"); } finally { ev.target.disabled = false; }
+    const bt = ev.currentTarget; bt.disabled = true; modal('<h2>Robô em execução…</h2><p class="sub">Pode levar alguns minutos se houver muitas notas para emitir. Não feche esta janela.</p>');
+    let r; try { r = await api("robo/rodar"); } finally { bt.disabled = false; }
     modal(`<h2>Resultado do robô</h2>${resumoRobo(r)}<button class="btn" onclick="fechar();ir('painel')">OK</button>`); };
 };
 
@@ -196,7 +209,7 @@ PAGINAS.receber = async el => {
   const comp = (el._comp ?? "");
   const lst = await api("titulos", { filtro: FILTRO_REC, competencia: comp });
   const soma = lst.reduce((a, t) => a + (t.status == "aberto" ? t.total_cent : t.status == "pago" ? t.valor_pago_cent : 0), 0);
-  el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">+ Título avulso</button><button class="btn sec" id="pdf_bol">⬇ PDFs dos boletos</button> <a class="btn sec" href="/export/titulos.csv">⬇ Exportar CSV</a></span></h1>
+  el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">${ic("mais")}Título avulso</button><button class="btn sec" id="pdf_bol">${ic("download")}PDFs dos boletos</button><a class="btn sec" href="/export/titulos.csv">${ic("download")}Exportar CSV</a></span></h1>
   <div class="card"><div class="abas">${[["a_receber", "A receber"], ["atrasado", "Atrasados"], ["pago", "Pagos"], ["sem_nfse", "Sem NFS-e"], ["cancelado", "Cancelados"], ["todos", "Todos"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_REC ? "on" : ""}">${t}</button>`).join("")}
     <label style="flex-direction:row;align-items:center;gap:6px;margin-left:auto">Competência <input type="month" id="r_comp" value="${comp}" style="width:160px"></label></div>
     <p class="sub">${lst.length} título(s) · ${brl(soma)}</p>
@@ -219,17 +232,18 @@ PAGINAS.receber = async el => {
   };
 };
 function acoesTitulo(t) {
-  const b = [];
+  const prin = [], mais = [];
+  const it = (txt, js) => `<button onclick="this.closest('details').open=false;${js}">${txt}</button>`;
   if (t.status == "aberto") {
-    b.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
-    b.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
-    if (t.banco_id) b.push(`<a class="btn min sec" href="/boleto/${t.id}.pdf" target="_blank">Boleto PDF</a>`);
-    if (["pendente", "erro", "teste"].includes(t.nfse_status)) b.push(`<button class="btn min sec" onclick="emitirTitulo(${t.id})">Emitir NFS-e</button>`);
-    b.push(`<button class="btn min sec" onclick="cancelarTitulo(${t.id},'${t.nfse_status}')">Cancelar</button>`);
+    prin.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
+    prin.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
+    if (t.banco_id) mais.push(`<a href="/boleto/${t.id}.pdf" target="_blank">${ic("download")}Boleto em PDF</a>`);
+    if (["pendente", "erro", "teste"].includes(t.nfse_status)) mais.push(it(`${ic("nota")}Emitir NFS-e`, `emitirTitulo(${t.id})`));
   }
-  if (t.status == "pago") b.push(`<button class="btn min sec" onclick="estornar(${t.id})">Estornar</button>`);
-  b.push(`<button class="btn min sec" onclick="historicoTitulo(${t.id})">Histórico</button>`);
-  return `<div style="display:flex;gap:4px;flex-wrap:wrap">${b.join("")}</div>`;
+  if (t.status == "pago") prin.push(`<button class="btn min sec" onclick="estornar(${t.id})">Estornar</button>`);
+  mais.push(it(`${ic("relogio")}Histórico`, `historicoTitulo(${t.id})`));
+  if (t.status == "aberto") mais.push(it(`${ic("x")}Cancelar título`, `cancelarTitulo(${t.id},'${t.nfse_status}')`).replace("<button", '<button class="perigo"'));
+  return `<div class="acoes-linha">${prin.join("")}<details class="menu-acoes"><summary class="btn min sec" title="Mais ações">Mais</summary><div class="pop">${mais.join("")}</div></details></div>`;
 }
 async function baixar(id, total) {
   modal(`<h2>Dar baixa</h2><div class="campos" id="fb"><label>Data do pagamento<input type="date" name="data" value="${hojeISO()}"></label>
@@ -278,7 +292,7 @@ function novoTitulo() {
 PAGINAS.contratos = async el => {
   const lst = await api("contratos");
   const ativos = lst.filter(c => c.ativo && c.confirmado), pend = lst.filter(c => c.ativo && !c.confirmado);
-  el.innerHTML = `<h1>Contratos recorrentes <span class="acoes"><button class="btn" id="nc">+ Novo contrato</button><button class="btn sec" id="hist">⚡ Criar a partir do histórico</button><button class="btn sec" id="gerar">Gerar títulos do mês</button></span></h1>
+  el.innerHTML = `<h1>Contratos recorrentes <span class="acoes"><button class="btn" id="nc">${ic("mais")}Novo contrato</button><button class="btn sec" id="hist">${ic("raio")}Criar a partir do histórico</button><button class="btn sec" id="gerar">Gerar títulos do mês</button></span></h1>
   <div class="kpis"><div class="kpi"><div class="r">Contratos ativos</div><div class="v">${ativos.length}</div></div><div class="kpi"><div class="r">MRR</div><div class="v">${brl(ativos.reduce((a, c) => a + c.valor_cent, 0))}</div></div></div>
   ${pend.length ? `<div class="card" style="border-color:var(--alerta)"><h2>${pend.length} contrato(s) detectado(s) automaticamente</h2><p>O robô encontrou cobrança mensal de mesmo valor nas suas notas. Confira e confirme: só depois disso eles passam a emitir NFS-e e cobrar. Começam no mês seguinte à última nota, para não cobrar em dobro.</p><button class="btn" onclick="confirmarTodos()">Confirmar todos</button></div>` : ""}
   <div class="card"><p class="sub">Todo mês, no dia configurado, o robô gera a conta a receber de cada contrato, emite a NFS-e, cria o PIX/boleto e coloca na régua de cobrança. Reajuste anual automático no mês escolhido.</p>
@@ -335,7 +349,7 @@ async function feito(id) { await api("whatsapp/feito", { id }); if (PAG == "cobr
 let FILTRO_PAG = "a_pagar";
 PAGINAS.pagar = async el => {
   const lst = await api("despesas", { filtro: FILTRO_PAG });
-  el.innerHTML = `<h1>Contas a pagar <span class="acoes"><button class="btn" id="nd">+ Nova despesa</button></span></h1>
+  el.innerHTML = `<h1>Contas a pagar <span class="acoes"><button class="btn" id="nd">${ic("mais")}Nova despesa</button></span></h1>
   <div class="card"><div class="abas">${[["a_pagar", "A pagar"], ["atrasado", "Vencidas"], ["pago", "Pagas"], ["todos", "Todas"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_PAG ? "on" : ""}">${t}</button>`).join("")}</div>
   <p class="sub">${lst.length} despesa(s) · ${brl(lst.reduce((a, d) => a + d.valor_cent, 0))}</p>
   ${tabela([{ t: "Descrição", f: d => `${esc(d.descricao)}<div class="sub">${esc(d.fornecedor)}${d.recorrente ? " · recorrente" : ""}</div>` }, { t: "Categoria", f: d => esc(d.categoria) },
@@ -377,7 +391,7 @@ async function vincular(movimento, titulo) { await api("conciliacao/vincular", {
 let ABA_REL = "aging";
 PAGINAS.relatorios = async el => {
   const abas = [["aging", "Inadimplência (aging)"], ["clientes", "Por cliente"], ["fluxo", "Fluxo de caixa"], ["dre", "DRE gerencial"], ["log", "Log do sistema"]];
-  el.innerHTML = `<h1>Relatórios <span class="acoes"><a class="btn sec" href="/export/titulos.csv">⬇ Contas a receber (CSV)</a><button class="btn sec" onclick="window.print()">🖨 Imprimir</button></span></h1>
+  el.innerHTML = `<h1>Relatórios <span class="acoes"><a class="btn sec" href="/export/titulos.csv">${ic("download")}Contas a receber (CSV)</a><button class="btn sec" onclick="window.print()">${ic("imprimir")}Imprimir</button></span></h1>
     <div class="abas">${abas.map(([k, t]) => `<button data-a="${k}" class="${k == ABA_REL ? "on" : ""}">${t}</button>`).join("")}</div><div id="rel" class="card"><div class="vazio">Carregando…</div></div>`;
   $$(".abas button", el).forEach(b => b.onclick = () => { ABA_REL = b.dataset.a; ir("relatorios"); });
   const r = $("#rel");
@@ -423,8 +437,8 @@ PAGINAS.clientes = async el => {
   const preencher = c => { $("#c_doc").value = c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || ""); };
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => esc(c.razao_social) }, { t: "CPF/CNPJ", f: c => fmtDoc(c.cpf_cnpj) },
-      { t: "Contato", f: c => (c.email ? "✉ " : "") + (c.telefone ? "📱" : "") || '<span class="sub">sem contato</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
-      { t: "", f: c => `<button class="btn min sec" data-ed="${c.cpf_cnpj}">Editar</button> <button class="btn min sec" data-ex="${c.cpf_cnpj}">✕</button>` }],
+      { t: "Contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
+      { t: "", f: c => `<button class="btn min sec" data-ed="${c.cpf_cnpj}">Editar</button> <button class="btn min sec" data-ex="${c.cpf_cnpj}" title="Excluir">${ic("x")}</button>` }],
       ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)));
     $$("[data-ed]").forEach(b => b.onclick = () => { preencher(ST.clientes.find(c => c.cpf_cnpj == b.dataset.ed)); scrollTo(0, 0); });
     $$("[data-ex]").forEach(b => b.onclick = async () => { if (confirm("Excluir do cadastro?")) { await api("cliente/excluir", { cpf_cnpj: b.dataset.ex }); await carregarEstado(); desenhar(); } }); };
@@ -441,10 +455,10 @@ PAGINAS.config = async el => {
   const sl = (s, k, t, ops) => `<label>${t}<select data-s="${s}" data-k="${k}">${ops.map(([v, x]) => `<option value="${v}" ${String(c[s][k]) == v ? "selected" : ""}>${x}</option>`).join("")}</select></label>`;
   const tx = (s, k, t, tipo = "text", extra = "") => `<label>${t}<input type="${tipo}" data-s="${s}" data-k="${k}" value="${esc(Array.isArray(c[s][k]) ? c[s][k].join(", ") : c[s][k])}" ${extra}></label>`;
   el.innerHTML = `<h1>Configurações <span class="acoes"><button class="btn" id="salvar">Salvar tudo</button></span></h1>
-  <div class="card"><h2>🤖 Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
+  <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
-  <div class="card"><h2>🧾 Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
+  <div class="card"><h2>${ic("nota")}Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
     <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     ${tx("emissao", "certificado_pfx", "Certificado A1 (.pfx)", "text", 'placeholder="C:\\Users\\...\\certificado.pfx"')}${tx("emissao", "certificado_senha", "Senha do certificado", "password")}
     ${tx("emissao", "serie_dps", "Série da DPS")}${tx("emissao", "proximo_dps", "Próximo nº da DPS", "number")}
