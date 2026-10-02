@@ -18,9 +18,14 @@ PADRAO = {
     "smtp": {"host": "", "porta": 587, "usuario": "", "senha": "", "remetente": "", "ssl": False,
              "copia_para": ""},
     "cobranca": {
-        "provedor": "pix",          # pix (PIX copia-e-cola próprio, sem tarifa) | asaas (boleto+PIX com baixa automática) | nenhum
-        "asaas_api_key": "",
-        "asaas_sandbox": True,
+        "provedor": "inter",        # inter (boleto + PIX registrados na API do Banco Inter) | pix (copia e cola próprio) | nenhum
+        "inter_client_id": "",
+        "inter_client_secret": "",
+        "inter_certificado": "",    # arquivo .crt gerado na integração do Inter
+        "inter_chave": "",          # arquivo .key gerado na integração do Inter
+        "inter_conta": "",          # nº da conta corrente (só se houver mais de uma)
+        "inter_sandbox": False,
+        "inter_dias_agenda": 60,    # dias após o vencimento em que o banco ainda aceita o pagamento (máx. 60)
         "multa_pct": 2.0,
         "juros_mes_pct": 1.0,
         "regua_dias": [-3, 0, 1, 5, 15, 30],
@@ -42,7 +47,7 @@ PADRAO = {
     "pastas": {
         "xml_nfse": "~/Downloads/nfse/MORAES OLIVEIRA CONTABILIDADE LTDA",  # XML das notas já emitidas
         "extratos": "~/Downloads",  # o robô importa todo .ofx novo que aparecer aqui
-        "boletos": "~/Downloads/Boletos",  # PDFs dos boletos (Asaas), em subpastas AAAA-MM
+        "boletos": "~/Downloads/Boletos",  # PDF + dados de pagamento de cada boleto, em subpastas AAAA-MM
     },
     "emissao": {
         "canal": "municipal",       # municipal (webservice de Itaboraí) | nacional (Emissor Nacional, nfse.gov.br)
@@ -83,14 +88,14 @@ PADRAO = {
         "criar_cobranca": True,
         "baixar_boletos": True,     # salva o PDF de cada boleto na pasta de boletos
         "regua": True,
-        "sincronizar_asaas": True,
+        "sincronizar_banco": True,  # baixa automática dos boletos pagos (consulta no Inter)
         "despesas_recorrentes": True,
         "backup": True,
     },
 }
 
 
-SEGREDOS = (("smtp", "senha"), ("cobranca", "asaas_api_key"), ("whatsapp", "zapi_token"),
+SEGREDOS = (("smtp", "senha"), ("cobranca", "inter_client_secret"), ("whatsapp", "zapi_token"),
             ("whatsapp", "zapi_client_token"), ("whatsapp", "evolution_apikey"),
             ("emissao", "certificado_senha"))
 
@@ -112,7 +117,18 @@ def carregar() -> dict:
     cfg = copy.deepcopy(PADRAO)
     arq = _arquivo()
     if arq.exists():
-        _mesclar(cfg, json.loads(arq.read_text(encoding="utf-8")))
+        salvo = json.loads(arq.read_text(encoding="utf-8"))
+        # versões anteriores usavam Asaas ou só PIX: a cobrança passa a ser boleto+PIX direto no Banco Inter
+        cob = salvo.get("cobranca", {})
+        if not cob.get("migrado_inter"):
+            if cob.get("provedor") in ("asaas", "pix"):
+                cob["provedor"] = "inter"
+            for k in [k for k in cob if k.startswith("asaas")]:
+                cob.pop(k)
+            cob["migrado_inter"] = True
+            salvo["cobranca"] = cob
+            arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
+        _mesclar(cfg, salvo)
     return cfg
 
 

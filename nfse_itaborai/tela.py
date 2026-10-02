@@ -12,8 +12,8 @@ from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (asaas, automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro, importacao,
-               lote, nacional, relatorios, whatsapp)
+from . import (automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro, importacao,
+               inter, lote, nacional, relatorios, whatsapp)
 from .validacao import ErroValidacao
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -52,11 +52,8 @@ def _cancelar_nfse_titulo(tid: int, justificativa: str) -> dict:
             resp = emissor.cancelar(t["nfse_numero"], justificativa, producao=emissor.em_producao())
         if not resp.sucesso:
             return {"sucesso": False, "erros": resp.erros}
-    if t["asaas_id"]:
-        try:
-            asaas.cancelar(t["asaas_id"])
-        except asaas.ErroAsaas as ex:
-            db.registrar("asaas", f"Cancelamento da cobrança {t['asaas_id']}: {ex}")
+    if t["status"] == "aberto":
+        cobranca.cancelar_boleto(t, "NFS-e cancelada")
     financeiro.cancelar_titulo(tid, f"NFS-e cancelada: {justificativa}")
     return {"sucesso": True}
 
@@ -67,6 +64,14 @@ def _cancelar_avulso(c: dict):
     if len(numero.replace(" ", "")) == 50:
         return nacional.cancelar(numero, just, producao=emissor.em_producao(), motivo=str(c.get("motivo", "1")))
     return emissor.cancelar(numero, just, producao=emissor.em_producao())
+
+
+def _cancelar_titulo(tid: int, motivo: str) -> dict:
+    t = financeiro.obter_titulo(tid)
+    if t["status"] == "aberto":
+        cobranca.cancelar_boleto(t, motivo)
+    financeiro.cancelar_titulo(tid, motivo)
+    return {"ok": True}
 
 
 def _abrir_pasta(p: Path) -> dict:
@@ -94,8 +99,9 @@ ROTAS = {
     "conferir": lambda c: _conferir(c),
     "cancelar": lambda c: _resultado(_cancelar_avulso(c), "Cancelamento processado", "Cancelamento não processado"),
     "nacional/testar": lambda c: nacional.testar_conexao(),
-    "titulo/boleto": lambda c: {"arquivo": cobranca.baixar_boleto(_id(c), refazer=bool(c.get("refazer")))},
-    "boletos/baixar": lambda c: cobranca.baixar_boletos(str(c.get("competencia", ""))),
+    "titulo/boleto": lambda c: {"arquivo": cobranca.salvar_boleto(_id(c), refazer=bool(c.get("refazer")))},
+    "boletos/baixar": lambda c: cobranca.salvar_boletos(str(c.get("competencia", ""))),
+    "inter/testar": lambda c: inter.testar(),
     "boletos/abrir_pasta": lambda c: _abrir_pasta(cobranca.pasta_boletos()),
     # clientes
     "cnpj": lambda c: clientes.consultar_cnpj(str(c.get("cnpj", ""))),
@@ -107,7 +113,7 @@ ROTAS = {
     "titulo/novo": lambda c: _novo_titulo(c),
     "titulo/baixar": lambda c: financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual")),
     "titulo/estornar": lambda c: (financeiro.estornar(_id(c)), {"ok": True})[1],
-    "titulo/cancelar": lambda c: (financeiro.cancelar_titulo(_id(c), c.get("motivo", "")), {"ok": True})[1],
+    "titulo/cancelar": lambda c: _cancelar_titulo(_id(c), c.get("motivo", "")),
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
     "titulo/emitir_nfse": lambda c: financeiro.emitir_nfse_titulo(_id(c)),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),
@@ -185,7 +191,7 @@ def tratar(rota: str, corpo: dict):
         return func(corpo or {})
     except ErroValidacao as ex:
         return {"sucesso": False, "titulo": "Pendências (nada foi enviado)", "erros": ex.erros, "erro": "; ".join(ex.erros)}
-    except (emissor.ErroConfiguracao, ValueError, KeyError, asaas.ErroAsaas, RuntimeError) as ex:
+    except (emissor.ErroConfiguracao, ValueError, KeyError, RuntimeError) as ex:
         return {"sucesso": False, "titulo": "Erro", "erros": [str(ex)], "erro": str(ex)}
     except OSError as ex:
         return {"sucesso": False, "titulo": "Falha de comunicação", "erros": [str(ex)], "erro": f"Falha de comunicação: {ex}"}

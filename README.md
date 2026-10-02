@@ -54,7 +54,7 @@ Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são ma
 | **Contas a pagar** | Despesas por categoria, com lançamento recorrente todo mês. |
 | **Conciliação** | Importa o extrato OFX do banco. Os recebimentos casam pelo identificador do PIX, pelo nome ou CNPJ do cliente ou pelo valor, e a baixa é automática. Se o mesmo cliente tem vários títulos de mesmo valor, quita o mais antigo. Os pagamentos casam com as contas a pagar. |
 | **Relatórios** | Aging de inadimplência, ranking por cliente com score de pagamento (0–100), fluxo de caixa projetado para 90 dias, DRE gerencial mensal e log do sistema. |
-| **Configurações** | Robô, chave PIX, Asaas, multa e juros, régua, e-mail (SMTP) e categorias de despesa. |
+| **Configurações** | Robô, emissão (Itaboraí/Nacional), Banco Inter, chave PIX, multa e juros, régua, e-mail (SMTP) e categorias de despesa. |
 
 **O que o robô faz sozinho, a cada hora** (vem ligado; cada item pode ser desligado em Configurações):
 
@@ -65,7 +65,7 @@ Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são ma
 | Recorrência | Gera os títulos dos contratos confirmados (contrato detectado só cobra depois de confirmado, em um clique). |
 | NFS-e | Emite as notas pendentes (só em produção). Falha de rede volta para a fila; recusa da prefeitura vai para revisão. Cada título é reservado antes do envio, o que impede emissão em dobro. |
 | Cobrança | Cria o PIX/boleto e roda a régua por e-mail e WhatsApp (automático com Z-API ou Evolution). |
-| Baixas | Asaas (consulta de status) e **extratos .ofx que aparecerem na pasta Downloads**, importados sozinhos. |
+| Baixas | Banco Inter (consulta de cada boleto pela API) e **extratos .ofx que aparecerem na pasta Downloads**, importados sozinhos. |
 | Despesas | Débitos do extrato sem conta a pagar viram despesa paga, classificada por regra ("DAS" vai para Impostos, "TARIFA" para Bancárias...). |
 | Resumo | E-mail diário para você: recebidos, atrasos, NFS-e com erro e contratos a confirmar. |
 | Segurança | Backup diário do banco e trava para nunca rodar dois robôs ao mesmo tempo. |
@@ -77,16 +77,17 @@ agendador. Em ordem, ele:
 3. gera os títulos dos contratos;
 4. **emite as NFS-e** (só em produção);
 5. cria o PIX ou o boleto;
-6. dá baixa pelo Asaas;
+6. dá baixa nos boletos pagos, consultando o Inter;
 7. roda a régua de cobrança.
 
 Cada etapa é independente: um erro em uma não para as outras e fica registrado no log. Notas de teste e notas
 com erro nunca entram na régua.
 
 **Meios de cobrança**
-- **PIX copia e cola próprio** (padrão): sem tarifa. O identificador do título vai no PIX e a baixa sai pela
-  conciliação do extrato.
-- **Asaas**: boleto e PIX com baixa automática. Basta informar a chave da API em Configurações.
+- **Banco Inter** (padrão): boleto com QR Code PIX registrado direto na conta do escritório pela API de Cobrança
+  v3 do Inter, sem nenhum intermediário. A baixa é automática.
+- **PIX copia e cola próprio**: sem tarifa. O identificador do título vai no PIX e a baixa sai pela conciliação
+  do extrato. Também é o que o sistema usa enquanto o Inter não estiver configurado.
 
 **Regras tributárias usadas**
 - **DAS estimado:** alíquota efetiva do Anexo III da LC 123/2006 calculada sobre o RBT12 de cada mês. Escritório
@@ -135,18 +136,36 @@ Cada envio grava em `saida\AAAA-MM\RPS_<n>\`:
 O número do RPS só avança quando ele vira NFS-e. Se o RPS for rejeitado, o mesmo número é reaproveitado
 na correção.
 
-## Boletos em PDF
+## Boletos (Banco Inter)
 
-Com o meio de cobrança **Asaas** (Configurações › Cobrança), cada título vira uma cobrança com boleto e PIX.
-O sistema então:
-- **envia o boleto ao cliente**: o e-mail da régua e o botão **Cobrar** levam o PDF anexado, além do link da
-  fatura, do link do PDF, da linha digitável e do PIX copia e cola. No WhatsApp vão os links;
-- **salva o PDF** em `Downloads\Boletos\AAAA-MM\<vencimento> - <cliente> - titulo N.pdf`. O robô faz
-  isso sozinho a cada execução, e a pasta pode ser trocada em Configurações › Cobrança;
-- na tela **Contas a receber**, o botão **⬇ PDFs dos boletos** baixa os que faltam (da competência filtrada,
-  ou de todas) e abre a pasta. Em cada título, o botão **Boleto PDF** abre o boleto.
+Os boletos são registrados **direto no Banco Inter**, pela API oficial de Cobrança (v3), com autenticação pelo
+certificado da integração. Não há nenhum sistema de cobrança intermediário.
 
-No modo **PIX copia e cola** (sem Asaas) não existe boleto registrado em banco: a mensagem leva só o PIX.
+**Como configurar (uma vez):**
+1. No Internet Banking PJ do Inter, acesse **Soluções para sua empresa › Nova integração** e marque os escopos de
+   emissão, cancelamento e consulta de boletos.
+2. Baixe o **certificado (.crt)** e a **chave (.key)** e guarde-os numa pasta do computador.
+3. Em **Configurações › Cobrança**: escolha "Inter: boleto + PIX" e informe client_id, client_secret e o caminho
+   do .crt e do .key. Salve e clique em **Testar conexão com o Inter**.
+
+**Depois disso, sem nenhuma ação manual:**
+- **registro:** cada título com NFS-e válida vira um boleto com PIX, com a multa e os juros configurados e o
+  vencimento do contrato;
+- **pasta:** o **PDF** é salvo em `Downloads\Boletos\AAAA-MM\<vencimento> - <cliente> - titulo N.pdf`. Ao lado
+  dele fica um **.txt** com a linha digitável e o PIX copia e cola;
+- **envio ao cliente:** o e-mail da régua e o botão **Cobrar** vão com o PDF anexado, a linha digitável e o PIX.
+  Com WhatsApp automático (Z-API ou Evolution), o PDF vai como documento. No modo link (wa.me) vão a linha
+  digitável e o PIX, e o PDF fica na pasta para anexar;
+- **baixa:** o robô consulta o Inter e baixa os boletos pagos, com a data e o valor recebidos;
+- **cancelamento:** cancelar um título (ou a NFS-e dele) cancela também o boleto no banco;
+- **na tela Contas a receber:** o botão **⬇ PDFs dos boletos** salva os que faltam e abre a pasta. Em cada
+  título, o botão **Boleto PDF** abre o boleto.
+
+O Inter exige endereço completo do pagador, incluindo cidade e UF. A cidade é preenchida pelo código IBGE (a
+tabela dos municípios da carteira vem no sistema; os demais são consultados uma vez no IBGE), ou digitada no
+cadastro. Se faltar algum dado, aquele boleto aparece no log do robô e os demais seguem normalmente.
+
+O Inter não gera página pública de pagamento: o que vai ao cliente é o PDF, a linha digitável e o PIX.
 
 ## Emissão pelo Emissor Nacional (nfse.gov.br)
 
@@ -225,7 +244,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 104 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 106 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
@@ -237,7 +256,8 @@ São 104 testes, que cobrem o emissor (municipal e nacional), o financeiro e as 
 - a trava de produção;
 - o canal nacional: DPS no XSD v1.01, assinatura, adulteração detectada, certificado com senha errada ou de
   outro CNPJ, e emissão e cancelamento contra um **Sefin simulado com TLS mútuo**;
-- os PDFs dos boletos: pasta por competência, anexo no e-mail e robô;
+- os boletos contra uma **API do Inter simulada com TLS mútuo**: token, campos do boleto, PDF e .txt na pasta,
+  anexo no e-mail, baixa automática, cancelamento e cadastro incompleto;
 - a tela.
 
 ## Limitações conhecidas

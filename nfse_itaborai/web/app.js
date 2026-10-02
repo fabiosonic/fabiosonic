@@ -134,7 +134,7 @@ function resumoRobo(r) {
   if (!r.executado) return `<p>${esc(r.motivo || "Nada executado.")}</p>`;
   const nomes = { importacao_xml: "XML das notas (clientes, notas externas, contratos)", contatos_completados: "Contatos completados pela Receita",
     despesas_recorrentes: "Despesas recorrentes lançadas", titulos_gerados: "Títulos gerados (contratos)", nfse: "NFS-e",
-    cobrancas_criadas: "Cobranças (PIX/boleto) criadas", baixas_asaas: "Baixas automáticas (Asaas)", extratos: "Extratos importados",
+    cobrancas_criadas: "Cobranças (PIX/boleto) criadas", baixas_banco: "Boletos pagos baixados (Inter)", boletos_pdf: "PDFs de boletos salvos", extratos: "Extratos importados",
     regua: "Régua de cobrança", resumo: "Resumo diário por e-mail", backup: "Backup" };
   const fmt = v => typeof v == "object" ? Object.entries(v).map(([k, x]) => `${k}: ${x}`).join(" · ") : String(v);
   return `<table>${Object.entries(nomes).filter(([k]) => k in r).map(([k, t]) => `<tr><td>${t}</td><td>${esc(fmt(r[k]))}</td></tr>`).join("")}</table><p></p>`;
@@ -223,7 +223,7 @@ function acoesTitulo(t) {
   if (t.status == "aberto") {
     b.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
     b.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
-    if (t.asaas_id) b.push(`<a class="btn min sec" href="/boleto/${t.id}.pdf" target="_blank">Boleto PDF</a>`);
+    if (t.banco_id) b.push(`<a class="btn min sec" href="/boleto/${t.id}.pdf" target="_blank">Boleto PDF</a>`);
     if (["pendente", "erro", "teste"].includes(t.nfse_status)) b.push(`<button class="btn min sec" onclick="emitirTitulo(${t.id})">Emitir NFS-e</button>`);
     b.push(`<button class="btn min sec" onclick="cancelarTitulo(${t.id},'${t.nfse_status}')">Cancelar</button>`);
   }
@@ -414,11 +414,11 @@ PAGINAS.clientes = async el => {
     <div class="campos" id="fcli"><label class="inteiro">Razão social / nome<input name="razao_social"></label>
     <label>Tipo logradouro<input name="tipo_logradouro" placeholder="RUA"></label><label>Logradouro<input name="logradouro"></label><label>Número<input name="numero"></label>
     <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label>CEP<input name="cep"></label>
-    <label>Cód. IBGE município<input name="codigo_municipio"></label><label>UF<input name="uf" maxlength="2"></label>
+    <label>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label>Cód. IBGE município<input name="codigo_municipio"></label><label>UF<input name="uf" maxlength="2"></label>
     <label>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label></div>
     <p><button class="btn" id="sc">Salvar cliente</button> <button class="btn sec" id="lc">Novo</button></p></div>
     <div class="card"><div class="barra"><label style="flex:1">Procurar<input id="c_f" placeholder="nome ou CNPJ"></label></div><div id="c_tab"></div></div>`;
-  const END = ["tipo_logradouro", "logradouro", "numero", "complemento", "bairro", "cep", "codigo_municipio", "uf"];
+  const END = ["tipo_logradouro", "logradouro", "numero", "complemento", "bairro", "cep", "cidade", "codigo_municipio", "uf"];
   const preencher = c => { $("#c_doc").value = c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || ""); };
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => esc(c.razao_social) }, { t: "CPF/CNPJ", f: c => fmtDoc(c.cpf_cnpj) },
@@ -443,7 +443,7 @@ PAGINAS.config = async el => {
   el.innerHTML = `<h1>Configurações <span class="acoes"><button class="btn" id="salvar">Salvar tudo</button></span></h1>
   <div class="card"><h2>🤖 Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
-    ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_asaas", "Baixa automática (Asaas)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
+    ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
   <div class="card"><h2>🧾 Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
     <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     ${tx("emissao", "certificado_pfx", "Certificado A1 (.pfx)", "text", 'placeholder="C:\\Users\\...\\certificado.pfx"')}${tx("emissao", "certificado_senha", "Senha do certificado", "password")}
@@ -465,10 +465,14 @@ PAGINAS.config = async el => {
     <textarea id="regras" rows="6">${esc(c.regras_despesa.map(([p, k]) => `${p.trim()} = ${k}`).join("\n"))}</textarea></div>
   <div class="card"><h2>Empresa e PIX</h2><div class="campos">${tx("empresa", "nome", "Nome no PIX")}${tx("empresa", "pix_chave", "Chave PIX que recebe")}${tx("empresa", "pix_cidade", "Cidade (PIX)")}${tx("empresa", "whatsapp", "WhatsApp do escritório")}${tx("empresa", "assinatura", "Assinatura das mensagens")}</div></div>
   <div class="card"><h2>Cobrança</h2><div class="campos">
-    <label>Meio de cobrança<select data-s="cobranca" data-k="provedor">${[["pix", "PIX copia e cola (sem tarifa, baixa pelo extrato)"], ["asaas", "Asaas: boleto + PIX com baixa automática"], ["nenhum", "Nenhum"]].map(([v, t]) => `<option value="${v}" ${c.cobranca.provedor == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-    ${tx("cobranca", "asaas_api_key", "Chave API Asaas", "password")}${ck("cobranca", "asaas_sandbox", "Asaas em sandbox (teste)")}
+    <label>Meio de cobrança<select data-s="cobranca" data-k="provedor">${[["inter", "Inter: boleto + PIX"], ["pix", "Só PIX copia e cola"], ["nenhum", "Nenhum"]].map(([v, t]) => `<option value="${v}" ${c.cobranca.provedor == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    ${tx("cobranca", "inter_client_id", "Inter: client_id")}${tx("cobranca", "inter_client_secret", "Inter: client_secret", "password")}
+    ${tx("cobranca", "inter_certificado", "Inter: certificado (.crt)")}${tx("cobranca", "inter_chave", "Inter: chave (.key)")}
+    ${tx("cobranca", "inter_conta", "Inter: conta corrente (opcional)")}${tx("cobranca", "inter_dias_agenda", "Aceitar pagamento até (dias após venc.)", "number")}${ck("cobranca", "inter_sandbox", "Inter em sandbox (teste)")}
     ${tx("cobranca", "multa_pct", "Multa (%)")}${tx("cobranca", "juros_mes_pct", "Juros ao mês (%)")}${tx("cobranca", "regua_dias", "Régua (dias, ex.: -3, 0, 1, 5, 15, 30)")}
     ${ck("cobranca", "regua_email", "Régua por e-mail (automático)")}${ck("cobranca", "regua_whatsapp", "Régua por WhatsApp (fila com 1 clique)")}${ck("cobranca", "anexar_boleto", "Anexar o PDF do boleto no e-mail")}${tx("pastas", "boletos", "Pasta dos PDFs dos boletos")}${tx("cobranca", "bloquear_apos_dias", "Alerta de atraso crítico após (dias)", "number")}</div></div>
+  <div class="card"><h2>Banco Inter — como obter as credenciais</h2><p class="sub">No Internet Banking PJ do Inter: <b>Soluções para sua empresa › Nova integração</b>, marque os escopos <b>Emissão e cancelamento de boletos</b> e <b>Consulta de boletos</b>. Baixe o certificado (.crt) e a chave (.key), copie client_id e client_secret para cá, salve e teste. Os boletos são registrados direto na conta do escritório, com PIX no próprio boleto; o sistema dá a baixa sozinho quando o cliente paga.</p>
+    <p><button class="btn sec" id="teste_inter">Testar conexão com o Inter</button></p></div>
   <div class="card"><h2>E-mail (SMTP)</h2><p class="sub">Gmail: servidor smtp.gmail.com, porta 587, e uma “senha de app” da conta Google.</p><div class="campos">${tx("smtp", "host", "Servidor")}${tx("smtp", "porta", "Porta", "number")}${tx("smtp", "usuario", "Usuário")}${tx("smtp", "senha", "Senha", "password")}${tx("smtp", "remetente", "Remetente")}${tx("smtp", "copia_para", "Cópia oculta para")}${ck("smtp", "ssl", "SSL direto (porta 465)")}</div>
     <p><button class="btn sec" id="teste_email">Enviar e-mail de teste</button></p></div>
   <div class="card"><h2>Financeiro</h2><div class="campos">${tx("financeiro", "dia_vencimento_padrao", "Dia de vencimento padrão", "number")}${tx("financeiro", "dia_geracao", "Dia de gerar a recorrência", "number")}${tx("financeiro", "prazo_avulso_dias", "Prazo da nota avulsa (dias)", "number")}
@@ -490,6 +494,7 @@ PAGINAS.config = async el => {
       $("#cert_res").innerHTML = `<div class="msg ${r.conexao && !r.vencido ? "ok" : "erro"}"><b>${esc(r.titular)}</b> — CNPJ ${fmtDoc(r.cnpj || "")} — válido até ${r.validade} (${r.dias_restantes} dias)<br>${esc(r.mensagem)}${r.convenio ? "<br>Convênio do município: " + esc(JSON.stringify(r.convenio)) : ""}</div>`;
     } catch (e) { $("#cert_res").innerHTML = ""; }
   };
+  $("#teste_inter").onclick = async () => { const r = await api("inter/testar"); aviso(r.mensagem || "OK", 6000); };
   $("#teste_zap").onclick = async () => { const t = prompt("Enviar teste para qual WhatsApp (com DDD)?"); if (!t) return; await api("whatsapp/testar", { telefone: t }); aviso("WhatsApp de teste enviado ✔"); };
   $("#imp_xml").onclick = async () => { aviso("Lendo XML…"); const r = await api("importacao/xml"); aviso(`XML: ${JSON.stringify(r)}`, 8000); await carregarEstado(); };
   $("#imp_cont").onclick = async () => { aviso("Consultando a Receita…"); const r = await api("importacao/contatos", { limite: 50 }); aviso(`${r.atualizados} cliente(s) com contato completado ✔`, 6000); await carregarEstado(); };

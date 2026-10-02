@@ -1,8 +1,9 @@
-"""Cobrança: meio de pagamento por título (PIX próprio ou Asaas), mensagens e régua automática.
+"""Cobrança: meio de pagamento por título (boleto+PIX pela API do Banco Inter ou PIX próprio), mensagens e régua.
 
-Régua padrão (dias em relação ao vencimento): -3 lembrete, 0 vence hoje, +1, +5, +15, +30 atraso.
-E-mail sai sozinho (SMTP configurado). WhatsApp fica numa fila com o texto pronto e um clique
-para abrir a conversa (envio automático por WhatsApp exige API paga; o link evita custo e bloqueio).
+Nenhum intermediário: o boleto é registrado direto no Inter (conta do escritório) e o PIX "copia e cola"
+próprio sai da chave PIX da empresa. Régua padrão (dias em relação ao vencimento): -3, 0, +1, +5, +15, +30.
+E-mail sai sozinho (SMTP) com o PDF do boleto anexado. WhatsApp: envio automático (Z-API/Evolution, com o PDF)
+ou fila com o texto pronto e um clique para abrir a conversa.
 """
 
 from __future__ import annotations
@@ -16,26 +17,43 @@ from datetime import date
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import asaas, clientes, config, db, emissor, financeiro, pix, whatsapp
+from . import clientes, config, db, emissor, financeiro, inter, pix, whatsapp
 
 
 # ---------------------------------------------------------------- meio de pagamento
 
 def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
-    """Gera PIX copia-e-cola (provedor 'pix') ou cobrança Asaas (boleto+PIX) para o título."""
+    """Registra o boleto no Inter (provedor 'inter') ou gera o PIX copia-e-cola próprio (provedor 'pix')."""
     cfg = cfg or config.carregar()
     t = financeiro.obter_titulo(tid)
     if t["status"] != "aberto":
         return t
     prov = cfg["cobranca"]["provedor"]
-    if prov == "asaas" and not t["asaas_id"]:
-        financeiro.atualizar_titulo(tid, **asaas.criar_cobranca(t, cfg))
-    elif prov == "pix" and cfg["empresa"].get("pix_chave"):
+    if prov == "inter" and not t["banco_id"] and inter.configurado(cfg):
+        financeiro.atualizar_titulo(tid, **inter.criar_cobranca(t, cfg))
+        db.registrar("boleto", f"Título {tid} ({t['cliente_nome']}): boleto registrado no Inter")
+        try:
+            salvar_boleto(tid, cfg)
+        except Exception as ex:  # noqa: BLE001 — o robô tenta o PDF de novo na próxima execução
+            db.registrar("boleto", f"Título {tid}: PDF ainda indisponível ({ex})")
+    elif prov in ("pix", "inter") and cfg["empresa"].get("pix_chave") and not t["pix_copia_cola"] \
+            and not t["banco_id"]:  # Inter ainda não configurado: PIX próprio enquanto isso
         emp = cfg["empresa"]
         financeiro.atualizar_titulo(tid, pix_copia_cola=pix.payload(
             emp["pix_chave"], t["valor_cent"], emp["nome"], emp["pix_cidade"], f"T{t['id']}",
             f"NFSE {t['nfse_numero']}" if t["nfse_numero"] else ""))
     return financeiro.obter_titulo(tid)
+
+
+def cancelar_boleto(t: dict, motivo: str = "", cfg: dict | None = None) -> None:
+    """Cancela no banco o boleto de um título cancelado (para o cliente não pagar por engano)."""
+    if not t.get("banco_id"):
+        return
+    try:
+        inter.cancelar(t["banco_id"], motivo or "Titulo cancelado", cfg)
+        db.registrar("boleto", f"Boleto do título {t['id']} cancelado no Inter")
+    except inter.ErroInter as ex:
+        db.registrar("boleto", f"Cancelamento do boleto do título {t['id']}: {ex}")
 
 
 # ---------------------------------------------------------------- PDF dos boletos
@@ -46,70 +64,89 @@ def pasta_boletos(cfg: dict | None = None) -> Path:
     return p if p.is_absolute() else emissor.RAIZ / p
 
 
-def _nome_arquivo(t: dict) -> str:
+def _nome_base(t: dict) -> str:
     nome = re.sub(r'[\\/:*?"<>|]+', " ", t["cliente_nome"]).strip()[:60].strip()
-    return f"{t['vencimento']} - {nome} - titulo {t['id']}.pdf"
+    return f"{t['vencimento']} - {nome} - titulo {t['id']}"
 
 
-def baixar_boleto(tid: int, cfg: dict | None = None, refazer: bool = False) -> str:
-    """Salva o PDF do boleto do título (Asaas) em <pasta de boletos>/AAAA-MM/ e devolve o caminho."""
+def _texto_pagamento(t: dict) -> str:
+    linhas = [f"Cliente: {t['cliente_nome']} ({t['cpf_cnpj']})", f"Referente a: {t['descricao']}",
+              f"Competência: {t['competencia'][5:]}/{t['competencia'][:4]}",
+              f"Vencimento: {_data(t['vencimento'])}", f"Valor: {_brl(t['valor_cent'])}"]
+    if t.get("nosso_numero"):
+        linhas.append(f"Nosso número: {t['nosso_numero']}")
+    if t.get("linha_digitavel"):
+        linhas += ["", "Linha digitável do boleto:", t["linha_digitavel"]]
+    if t.get("pix_copia_cola"):
+        linhas += ["", "PIX copia e cola:", t["pix_copia_cola"]]
+    return "\r\n".join(linhas) + "\r\n"
+
+
+def salvar_boleto(tid: int, cfg: dict | None = None, refazer: bool = False) -> str:
+    """Salva em <pasta de boletos>/AAAA-MM/ o PDF do boleto e, ao lado, um .txt com a linha digitável e o PIX."""
     cfg = cfg or config.carregar()
     t = financeiro.obter_titulo(tid)
     if t.get("boleto_pdf") and Path(t["boleto_pdf"]).exists() and not refazer:
         return t["boleto_pdf"]
-    if not t["asaas_id"]:
-        raise RuntimeError("Este título não tem boleto: o boleto em PDF é gerado pelo Asaas "
-                           "(Configurações › Cobrança › Asaas). No modo PIX vai só o copia e cola.")
-    url = t.get("boleto_url") or asaas.url_boleto(t["asaas_id"], cfg)
-    if not url:
-        raise RuntimeError("O Asaas ainda não disponibilizou o boleto desta cobrança.")
-    destino = pasta_boletos(cfg) / t["competencia"] / _nome_arquivo(t)
+    if not t.get("banco_id"):
+        raise RuntimeError("Este título ainda não tem boleto registrado no Inter (use o botão Cobrar ou "
+                           "aguarde o robô).")
+    dados = inter.pdf(t["banco_id"], cfg)
+    if not t.get("linha_digitavel"):  # registro concluído depois da emissão: completa os dados
+        d = inter.consultar(t["banco_id"], cfg)
+        financeiro.atualizar_titulo(tid, **{k: d[k] for k in ("linha_digitavel", "pix_copia_cola", "nosso_numero")
+                                            if d[k]})
+        t = financeiro.obter_titulo(tid)
+    destino = pasta_boletos(cfg) / t["competencia"] / (_nome_base(t) + ".pdf")
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(asaas.baixar_pdf(url))
-    financeiro.atualizar_titulo(tid, boleto_url=url, boleto_pdf=str(destino))
+    destino.write_bytes(dados)
+    destino.with_name(_nome_base(t) + " - pagamento.txt").write_text(_texto_pagamento(t), encoding="utf-8")
+    financeiro.atualizar_titulo(tid, boleto_pdf=str(destino))
     return str(destino)
 
 
-def baixar_boletos(competencia: str = "", cfg: dict | None = None) -> dict:
-    """Baixa os PDFs que faltam dos títulos em aberto com boleto (opcionalmente de uma competência)."""
+def salvar_boletos(competencia: str = "", cfg: dict | None = None) -> dict:
+    """Salva os PDFs que faltam dos títulos em aberto com boleto (opcionalmente de uma competência)."""
     cfg = cfg or config.carregar()
-    sql = "SELECT id FROM titulos WHERE status='aberto' AND asaas_id!=''"
+    sql = "SELECT id FROM titulos WHERE status='aberto' AND banco_id!=''"
     params: tuple = ()
     if competencia:
         sql, params = sql + " AND competencia=?", (competencia,)
     res = {"baixados": 0, "ja_existiam": 0, "erros": [], "pasta": str(pasta_boletos(cfg))}
-    for (tid,) in ((r["id"],) for r in db.linhas(sql, params)):
+    for tid in (r["id"] for r in db.linhas(sql, params)):
         t = financeiro.obter_titulo(tid)
         if t.get("boleto_pdf") and Path(t["boleto_pdf"]).exists():
             res["ja_existiam"] += 1
             continue
         try:
-            baixar_boleto(tid, cfg)
+            salvar_boleto(tid, cfg)
             res["baixados"] += 1
         except Exception as ex:  # noqa: BLE001 — segue para os próximos
             res["erros"].append(f"{t['cliente_nome']}: {ex}")
     return res
 
 
-def _anexo_boleto(t: dict, cfg: dict) -> list[str]:
-    if not (cfg["cobranca"].get("anexar_boleto", True) and t.get("asaas_id")):
-        return []
+def _pdf_boleto(t: dict, cfg: dict) -> str:
+    if not (t.get("banco_id") and cfg["cobranca"].get("anexar_boleto", True)):
+        return ""
     try:
-        return [baixar_boleto(t["id"], cfg)]
-    except Exception:  # noqa: BLE001 — sem o PDF o e-mail sai com o link
-        return []
+        return salvar_boleto(t["id"], cfg)
+    except Exception:  # noqa: BLE001 — sem o PDF a mensagem sai com a linha digitável e o PIX
+        return ""
 
 
-def sincronizar_asaas(cfg: dict | None = None) -> int:
-    """Baixa automática: consulta no Asaas os títulos em aberto que têm cobrança lá."""
+def sincronizar_banco(cfg: dict | None = None) -> int:
+    """Baixa automática: consulta no Inter os títulos em aberto que têm boleto registrado."""
     cfg = cfg or config.carregar()
     baixados = 0
-    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND asaas_id!=''"):
-        st = asaas.consultar(t["asaas_id"], cfg)
+    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND banco_id!=''"):
+        st = inter.consultar(t["banco_id"], cfg)
         if st["pago"]:
-            financeiro.baixar(t["id"], st["data_pagamento"], financeiro.reais(financeiro.cent(st["valor_pago"])),
-                              "asaas")
+            financeiro.baixar(t["id"], st["data_pagamento"][:10] or financeiro.hoje().isoformat(),
+                              financeiro.reais(financeiro.cent(st["valor_pago"])), "inter")
             baixados += 1
+        elif st["baixado"]:
+            db.registrar("boleto", f"Boleto do título {t['id']} ({t['cliente_nome']}) está {st['situacao']} no Inter")
     return baixados
 
 
@@ -145,8 +182,8 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
         linhas.append(f"NFS-e nº {t['nfse_numero']}" + (f": {t['nfse_link']}" if t["nfse_link"].startswith("http") else ""))
     if t["cobranca_link"]:
         linhas.append(f"Boleto/PIX: {t['cobranca_link']}")
-    if t.get("boleto_url"):
-        linhas.append(f"Boleto em PDF: {t['boleto_url']}")
+    if t.get("banco_id"):
+        linhas.append("Boleto em PDF: enviado em anexo (e-mail/WhatsApp).")
     if t["linha_digitavel"]:
         linhas.append(f"Linha digitável: {t['linha_digitavel']}")
     if t["pix_copia_cola"]:
@@ -226,7 +263,8 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                     res["sem_contato"] += 1
                 else:
                     try:
-                        enviar_email(cli["email"], assunto, texto, cfg, _anexo_boleto(t, cfg))
+                        pdf_ = _pdf_boleto(t, cfg)
+                        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [])
                         status, det = "enviado", cli["email"]
                         res["email"] += 1
                     except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
@@ -238,6 +276,9 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             elif whatsapp.automatico(cfg):
                 try:
                     whatsapp.enviar(cli["telefone"], texto, cfg)
+                    pdf_ = _pdf_boleto(t, cfg)
+                    if pdf_:
+                        whatsapp.enviar_pdf(cli["telefone"], pdf_, cfg)
                     status, det = "enviado", whatsapp.numero(cli["telefone"])
                     res["whatsapp"] += 1
                 except Exception as ex:  # noqa: BLE001
@@ -280,9 +321,14 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "whatsapp_enviado": False, "email": "",
            "texto": texto}
     if cli.get("email") and cfg["smtp"].get("host"):
-        enviar_email(cli["email"], assunto, texto, cfg, _anexo_boleto(t, cfg))
+        pdf_ = _pdf_boleto(t, cfg)
+        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [])
         out["email"] = cli["email"]
     if cli.get("telefone") and whatsapp.automatico(cfg):
         whatsapp.enviar(cli["telefone"], texto, cfg)
+        pdf_ = _pdf_boleto(t, cfg)
+        if pdf_:
+            whatsapp.enviar_pdf(cli["telefone"], pdf_, cfg)
         out["whatsapp_enviado"] = True
+    out["pdf"] = t.get("boleto_pdf") or (_pdf_boleto(t, cfg) if t.get("banco_id") else "")
     return out

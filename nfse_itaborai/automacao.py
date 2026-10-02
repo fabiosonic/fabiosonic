@@ -1,8 +1,8 @@
 """Robô financeiro: rotina idempotente que pode rodar a cada hora (tela aberta) e 1x/dia (Agendador do Windows).
 
 Ordem: backup → XML (clientes, notas externas, contratos detectados) → contatos pela Receita
-       → despesas recorrentes → títulos do mês (contratos) → NFS-e → cobrança (PIX/Asaas)
-       → baixa automática (Asaas) → extratos OFX da pasta → régua de cobrança → resumo diário por e-mail.
+       → despesas recorrentes → títulos do mês (contratos) → NFS-e → cobrança (boleto Inter / PIX)
+       → baixa automática (Inter) → extratos OFX da pasta → régua de cobrança → resumo diário por e-mail.
 Cada etapa é isolada: uma falha não impede as demais e fica registrada no log.
 """
 
@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import date
 
-from . import cobranca, config, db, emissor, financeiro, importacao
+from . import cobranca, config, db, emissor, financeiro, importacao, inter
 
 
 TRAVA_MAX_SEG = 2 * 3600
@@ -84,18 +84,25 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     etapa("nfse", auto["emitir_nfse"], nfse)
 
     def cobrancas():
-        n = 0
-        for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND pix_copia_cola='' AND asaas_id=''"):
+        n, erros = 0, []
+        boleto = cfg["cobranca"]["provedor"] == "inter" and inter.configurado(cfg)
+        sql = "SELECT * FROM titulos WHERE status='aberto' AND banco_id=''" + ("" if boleto else " AND pix_copia_cola=''")
+        for t in db.linhas(sql):
             if t["nfse_status"] in ("pendente", "erro", "teste"):
                 continue                      # cobra junto com a nota válida
-            financeiro_t = cobranca.preparar_pagamento(t["id"], cfg)
-            n += bool(financeiro_t["pix_copia_cola"] or financeiro_t["asaas_id"])
-        return n
+            try:
+                financeiro_t = cobranca.preparar_pagamento(t["id"], cfg)
+            except Exception as ex:  # noqa: BLE001 — um cadastro incompleto não trava os demais boletos
+                erros.append(f"{t['cliente_nome']}: {ex}")
+                db.registrar("boleto_erro", f"Título {t['id']} ({t['cliente_nome']}): {ex}")
+                continue
+            n += bool(financeiro_t["pix_copia_cola"] or financeiro_t["banco_id"])
+        return {"criadas": n, "erros": erros} if erros else n
     etapa("cobrancas_criadas", auto["criar_cobranca"] and cfg["cobranca"]["provedor"] != "nenhum", cobrancas)
-    etapa("baixas_asaas", auto["sincronizar_asaas"] and cfg["cobranca"]["provedor"] == "asaas",
-          lambda: cobranca.sincronizar_asaas(cfg))
-    etapa("boletos_pdf", auto.get("baixar_boletos", True) and cfg["cobranca"]["provedor"] == "asaas",
-          lambda: cobranca.baixar_boletos(cfg=cfg))
+    etapa("baixas_banco", auto.get("sincronizar_banco", True) and cfg["cobranca"]["provedor"] == "inter",
+          lambda: cobranca.sincronizar_banco(cfg))
+    etapa("boletos_pdf", auto.get("baixar_boletos", True) and cfg["cobranca"]["provedor"] == "inter",
+          lambda: cobranca.salvar_boletos(cfg=cfg))
     etapa("extratos", auto.get("importar_extratos"), importacao.importar_extratos)
     etapa("regua", auto["regua"], lambda: cobranca.rodar_regua(em, cfg))
     etapa("resumo", auto.get("resumo_diario"), lambda: importacao.resumo_diario(res, em))

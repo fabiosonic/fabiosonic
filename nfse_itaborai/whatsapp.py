@@ -9,8 +9,10 @@ Sem provedor configurado, o sistema usa o link wa.me (um clique por mensagem).
 
 from __future__ import annotations
 
+import base64
 import json
 import ssl
+from pathlib import Path
 import urllib.error
 import urllib.request
 
@@ -59,4 +61,22 @@ def enviar(telefone: str, texto: str, cfg: dict | None = None) -> dict:
     if w["provedor"] == "evolution":
         return _post(f"{w['evolution_url'].rstrip('/')}/message/sendText/{w['evolution_instancia']}",
                      {"number": fone, "text": texto}, {"apikey": w["evolution_apikey"]})
+    raise RuntimeError("Envio automático de WhatsApp não configurado.")
+
+
+def enviar_pdf(telefone: str, caminho: str, cfg: dict | None = None) -> dict:
+    """Envia o PDF (boleto) como documento pela mesma API configurada."""
+    cfg = cfg or config.carregar()
+    w = cfg["whatsapp"]
+    fone, arq = numero(telefone), Path(caminho)
+    b64 = base64.b64encode(arq.read_bytes()).decode()
+    if w["provedor"] == "zapi":
+        base = w.get("zapi_url") or URL_ZAPI
+        cab = {"Client-Token": w["zapi_client_token"]} if w.get("zapi_client_token") else {}
+        return _post(f"{base}/instances/{w['zapi_instancia']}/token/{w['zapi_token']}/send-document/pdf",
+                     {"phone": fone, "document": "data:application/pdf;base64," + b64, "fileName": arq.stem}, cab)
+    if w["provedor"] == "evolution":
+        return _post(f"{w['evolution_url'].rstrip('/')}/message/sendMedia/{w['evolution_instancia']}",
+                     {"number": fone, "mediatype": "document", "mimetype": "application/pdf", "media": b64,
+                      "fileName": arq.name}, {"apikey": w["evolution_apikey"]})
     raise RuntimeError("Envio automático de WhatsApp não configurado.")

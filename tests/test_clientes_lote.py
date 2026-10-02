@@ -77,7 +77,7 @@ def test_brasilapi_convertida():
                                "cep": "20211020", "ddd_telefone_1": "2199999999", "email": "X@Y.COM"})
     assert c["endereco"] == {"tipo_logradouro": "RUA", "logradouro": "FREI CANECA", "numero": "441",
                              "complemento": "", "bairro": "ESTACIO", "codigo_municipio": "3304557", "uf": "RJ",
-                             "cep": "20211020"}
+                             "cep": "20211020", "cidade": ""}
     assert c["email"] == "x@y.com"
 
 

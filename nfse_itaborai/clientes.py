@@ -69,7 +69,7 @@ def normalizar(c: dict) -> dict:
             "numero": str(e.get("numero", "")).strip(), "complemento": str(e.get("complemento", "")).strip(),
             "bairro": str(e.get("bairro", "")).strip(), "codigo_municipio": cod,
             "uf": (str(e.get("uf", "")).strip() or UF_POR_IBGE.get(cod[:2], "")).upper(),
-            "cep": _digitos(e.get("cep")),
+            "cep": _digitos(e.get("cep")), "cidade": str(e.get("cidade", "")).strip(),
         },
         **{k: c[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "observacao") if k in c},
     }
@@ -154,7 +154,7 @@ def de_brasilapi(d: dict) -> dict:
             "logradouro": d.get("logradouro", ""), "numero": d.get("numero", ""),
             "complemento": d.get("complemento", ""), "bairro": d.get("bairro", ""),
             "codigo_municipio": str(d.get("codigo_municipio_ibge") or ""), "uf": d.get("uf", ""),
-            "cep": d.get("cep", ""),
+            "cep": d.get("cep", ""), "cidade": (d.get("municipio") or "").title(),
         },
     })
 

@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS titulos (
     nfse_rps TEXT DEFAULT '',
     nfse_link TEXT DEFAULT '',
     nfse_erro TEXT DEFAULT '',
-    asaas_id TEXT DEFAULT '',
+    asaas_id TEXT DEFAULT '',            -- legado (não usado)
     cobranca_link TEXT DEFAULT '',
     pix_copia_cola TEXT DEFAULT '',
     linha_digitavel TEXT DEFAULT '',
@@ -133,7 +133,7 @@ def conexao():
 MIGRACOES = {
     "contratos": {"confirmado": "INTEGER NOT NULL DEFAULT 1", "origem": "TEXT DEFAULT 'manual'"},
     "titulos": {"origem": "TEXT DEFAULT 'sistema'", "nfse_canal": "TEXT DEFAULT 'municipal'",
-                "nfse_chave": "TEXT DEFAULT ''", "boleto_url": "TEXT DEFAULT ''",
+                "nfse_chave": "TEXT DEFAULT ''", "banco_id": "TEXT DEFAULT ''", "nosso_numero": "TEXT DEFAULT ''",
                 "boleto_pdf": "TEXT DEFAULT ''"},
 }
 

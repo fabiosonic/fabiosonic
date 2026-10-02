@@ -1,11 +1,8 @@
-import json
-import threading
 from datetime import date
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from nfse_itaborai import (asaas, automacao, clientes, cobranca, conciliacao, config, db, emissor, financeiro,
+from nfse_itaborai import (automacao, clientes, cobranca, conciliacao, config, db, financeiro,
                            pix, relatorios)
 from nfse_itaborai.tela import tratar
 from test_emissor import Simulador, ambiente  # noqa: F401  (fixture)
@@ -159,67 +156,6 @@ def test_regua_ignora_titulo_com_nota_de_teste_ou_pendente(base, monkeypatch):
                                                     (40, set(), None), (31, {30}, None), (15, {-3, 0}, 15)])
 def test_etapa_devida(dias, enviadas, esperada):
     assert cobranca.etapa_devida(dias, [-3, 0, 1, 5, 15, 30], enviadas) == esperada
-
-
-class FakeAsaas(BaseHTTPRequestHandler):
-    pagos: set = set()
-
-    def _json(self, d, code=200):
-        b = json.dumps(d).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(b)))
-        self.end_headers()
-        self.wfile.write(b)
-
-    def do_GET(self):  # noqa: N802
-        if self.path.startswith("/b/pdf/"):  # link público do boleto (sem token)
-            corpo = b"%PDF-1.4 boleto " + self.path.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/pdf")
-            self.send_header("Content-Length", str(len(corpo)))
-            self.end_headers()
-            return self.wfile.write(corpo)
-        assert self.headers["access_token"] == "chave-teste"
-        if self.path.startswith("/customers"):
-            return self._json({"data": []})
-        if self.path.endswith("/pixQrCode"):
-            return self._json({"payload": "00020101PIXASAAS"})
-        if self.path.endswith("/identificationField"):
-            return self._json({"identificationField": "34191.79001 01043.510047"})
-        pid = self.path.rsplit("/", 1)[-1]
-        return self._json({"id": pid, "status": "RECEIVED" if pid in self.pagos else "PENDING",
-                           "clientPaymentDate": "2026-10-01", "value": 300.0})
-
-    def do_POST(self):  # noqa: N802
-        corpo = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        if self.path == "/customers":
-            assert corpo["cpfCnpj"] == "32396063000103"
-            return self._json({"id": "cus_1"})
-        assert corpo["customer"] == "cus_1" and corpo["billingType"] == "UNDEFINED" and corpo["fine"] == {"value": 2.0}
-        pid = "pay_" + corpo["externalReference"].split("-")[1]
-        host = f"http://127.0.0.1:{self.server.server_address[1]}"
-        return self._json({"id": pid, "invoiceUrl": "https://asaas/i/1", "bankSlipUrl": f"{host}/b/pdf/{pid}"})
-
-    def log_message(self, *a):
-        pass
-
-
-def test_asaas_cria_cobranca_e_baixa_automatica(base):
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), FakeAsaas)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    config.salvar({"cobranca": {"provedor": "asaas", "asaas_api_key": "chave-teste",
-                                "asaas_url": f"http://127.0.0.1:{srv.server_address[1]}"}})
-    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-10-05", emitir_nfse=False)
-    t = cobranca.preparar_pagamento(tid)
-    assert t["asaas_id"] == f"pay_{tid}" and t["pix_copia_cola"] == "00020101PIXASAAS"
-    assert t["cobranca_link"] == "https://asaas/i/1" and t["linha_digitavel"].startswith("34191")
-    assert cobranca.sincronizar_asaas() == 0
-    FakeAsaas.pagos.add(f"pay_{tid}")
-    assert cobranca.sincronizar_asaas() == 1
-    t = financeiro.obter_titulo(tid)
-    assert t["status"] == "pago" and t["forma_pagamento"] == "asaas" and t["data_pagamento"] == "2026-10-01"
-    srv.shutdown()
 
 
 # ---------------------------------------------------------------- conciliação
