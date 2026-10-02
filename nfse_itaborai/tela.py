@@ -13,6 +13,7 @@ from pathlib import Path
 
 from . import (automacao, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, inter, lote, nacional, relatorios, saude)
+from . import __version__
 from .validacao import ErroValidacao
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -94,7 +95,7 @@ ROTAS = {
     "empresa/credenciais": lambda c: empresas.credenciais(),
     "empresa/credenciais/salvar": lambda c: empresas.salvar_credenciais(c),
     "servico/salvar": lambda c: empresas.salvar_servico(c),
-    "estado": lambda c: {"empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
+    "estado": lambda c: {"versao": __version__, "empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
                          "producao": emissor.em_producao(), "config": config.publico(),
                          "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
@@ -226,6 +227,9 @@ class _Handler(BaseHTTPRequestHandler):
         caminho = self.path.split("?")[0]
         if caminho == "/favicon.ico":
             return self._responder(204, b"", "image/x-icon")
+        if caminho == "/api/versao":
+            return self._responder(200, json.dumps({"sistema": "nfse_itaborai", "versao": __version__,
+                                                    "pasta": str(emissor.BASE)}).encode(), "application/json")
         if caminho == "/export/titulos.csv":
             return self._responder(200, relatorios.csv_titulos().encode("utf-8"), "text/csv; charset=utf-8",
                                    {"Content-Disposition": 'attachment; filename="contas_a_receber.csv"'})
@@ -261,11 +265,39 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
+def _quem_esta_na_porta(porta: int) -> dict:
+    """Identifica o programa que já ocupa a porta (versão antiga do sistema, esta mesma versão ou outro)."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{porta}/api/versao", timeout=2) as r:
+            return json.loads(r.read().decode())
+    except Exception:  # noqa: BLE001 — versão antiga não tem /api/versao
+        return {}
+
+
 def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
-    srv = ThreadingHTTPServer(("127.0.0.1", porta), _Handler)
+    srv = None
+    for p in range(porta, porta + 20):
+        try:
+            srv = ThreadingHTTPServer(("127.0.0.1", p), _Handler)
+            break
+        except OSError:
+            outro = _quem_esta_na_porta(p)
+            if outro.get("versao") == __version__ and outro.get("pasta") == str(emissor.BASE):
+                print(f"O sistema já está aberto em http://127.0.0.1:{p} — abrindo no navegador.")
+                if abrir:
+                    webbrowser.open(f"http://127.0.0.1:{p}")
+                return
+            print(f"Aviso: a porta {p} está ocupada por "
+                  + (f"outra cópia do sistema (versão {outro.get('versao')}, pasta {outro.get('pasta')})"
+                     if outro else "uma versão antiga do sistema ou outro programa")
+                  + ". Feche a janela antiga. Usando a próxima porta livre.")
+    if srv is None:
+        raise SystemExit("Nenhuma porta livre entre 8765 e 8784.")
+    porta = srv.server_address[1]
     empresas.aplicar_ativa()
     url = f"http://127.0.0.1:{porta}"
-    print(f"Sistema em {url} (deixe esta janela aberta; Ctrl+C para sair)")
+    print(f"Sistema versão {__version__} em {url} (deixe esta janela aberta; Ctrl+C para sair)")
     if robo:
         automacao.iniciar_em_segundo_plano()
     if abrir:

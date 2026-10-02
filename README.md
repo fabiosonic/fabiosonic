@@ -41,6 +41,18 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 
 Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são mantidos.
 
+## Atualizar de uma versão anterior
+
+1. Feche a janela preta do sistema antigo, se estiver aberta.
+2. Descompacte o pacote novo **por cima da mesma pasta** de antes. Assim o banco de dados (`dados\sistema.db`),
+   os clientes e as empresas continuam lá.
+3. Abra pelo `INICIAR.bat`. A cada abertura ele:
+   - encerra telas de versões antigas que tenham ficado abertas;
+   - aponta o robô agendado, a inicialização com o Windows e o atalho da área de trabalho para a pasta
+     dele;
+   - se a porta 8765 continuar ocupada, abre em outra porta livre.
+4. A versão aparece no canto inferior do menu (ex.: v3.0.0).
+
 ## O sistema
 
 | Menu | O que faz |
@@ -325,7 +337,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 127 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 128 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

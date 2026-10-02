@@ -50,3 +50,41 @@ def test_fechamento_mensal_salva_envia_e_nao_repete(base, monkeypatch, tmp_path)
     assert enviados[0][1] == "Fechamento financeiro de 09/2026" and enviados[0][2] == doc
     assert saude.fechamento_mensal(date(2026, 10, 9)) == "fechamento de 2026-09 já feito" and len(enviados) == 1
     assert Path(arq).exists()
+
+
+def test_abre_em_outra_porta_se_versao_antiga_ocupa_a_8765(tmp_path, monkeypatch):
+    import json as _json
+    import socket
+    import threading
+    import time
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from nfse_itaborai import __version__, emissor, tela
+
+    class Antigo(BaseHTTPRequestHandler):           # versão antiga: não conhece /api/versao
+        def do_GET(self):
+            self.send_response(404)
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta = s.getsockname()[1]
+    s.close()
+    velho = ThreadingHTTPServer(("127.0.0.1", porta), Antigo)
+    threading.Thread(target=velho.serve_forever, daemon=True).start()
+    monkeypatch.setattr(emissor, "BASE", tmp_path)
+    monkeypatch.setattr(emissor, "RAIZ", emissor._Raiz(tmp_path))
+    threading.Thread(target=tela.servir, args=(porta, False, False), daemon=True).start()
+    for _ in range(50):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{porta + 1}/api/versao", timeout=1) as r:
+                info = _json.loads(r.read())
+            break
+        except OSError:
+            time.sleep(0.1)
+    assert info["versao"] == __version__ and info["pasta"] == str(tmp_path)
+    assert tela._quem_esta_na_porta(porta) == {}
+    velho.shutdown()

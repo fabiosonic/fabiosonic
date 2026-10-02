@@ -42,7 +42,7 @@ function form(el) { const o = {}; $$("[name]", el).forEach(i => o[i.name] = i.ty
 async function carregarEstado() {
   ST = await api("estado");
   const b = $("#amb");
-  b.innerHTML = `<span class="ponto"></span><span><b>${ST.producao ? "Produção" : "Homologação"}</b><small>${ST.producao ? "Notas com validade fiscal" : "Teste, sem validade"} · ${nomeCanal(true)}</small></span>`;
+  b.innerHTML = `<span class="ponto"></span><span><b>${ST.producao ? "Produção" : "Homologação"}</b><small>${ST.producao ? "Notas com validade fiscal" : "Teste, sem validade"} · ${nomeCanal(true)} · v${esc(ST.versao || "")}</small></span>`;
   b.className = "amb " + (ST.producao ? "prod" : "hom");
   b.title = "Clique para trocar o ambiente";
   const e = ST.empresa || {}, nome = (e.nome || "Empresa").trim();
