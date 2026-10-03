@@ -273,7 +273,11 @@ notas dele. Retenções de até R$ 10,00 são dispensadas automaticamente. A reg
 não incidência), exigibilidade suspensa, benefício municipal, ISS retido pelo intermediário, CST de PIS/COFINS,
 órgão público e destinatário diferente. Na emissão, **Mais campos da nota** traz local da prestação, código
 municipal, descontos, dedução/redução, obra, evento, pedido, ART/RRT, imóvel (CIB), reembolso/repasse, NFS-e
-referenciada, intermediário e substituição (também pelo botão **Substituir** em Notas emitidas). Detalhes por regime em
+referenciada, intermediário e substituição (também pelo botão **Substituir** em Notas emitidas). A tela mostra **só os campos
+que o regime da empresa e o caso exigem**: MEI quase nada; Simples só ISS retido e INSS; Presumido/Real as
+retenções federais, PIS/COFINS e IBS/CBS. Obra só para serviços do item 7, evento para itens de eventos,
+dedução para itens 7, 9 e 12, substituição só no canal nacional; campos que dependem de outro aparecem quando
+ele é preenchido. Campo escondido não é enviado. Detalhes por regime em
 `docs/NFSE_NACIONAL_CAMPOS_POR_REGIME.md`.
 
 ## Notas emitidas

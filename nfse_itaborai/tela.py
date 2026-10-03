@@ -123,6 +123,13 @@ def _restaurar_arquivo(c: dict) -> dict:
     return r | {"empresa_id": dona["id"], "empresa_nome": dona.get("nome", "")}
 
 
+def _ctx_fiscal() -> dict:
+    """O que a tela precisa para mostrar só os campos que o regime e a data exigem."""
+    from datetime import date
+    g = fiscal.geral()
+    return {"regime": g["regime"], "ibscbs": fiscal.informar_ibscbs(g, date.today())}
+
+
 def _abrir_pasta(p: Path) -> dict:
     """Abre a pasta no Explorer (o servidor roda no próprio computador do escritório)."""
     p.mkdir(parents=True, exist_ok=True)
@@ -157,6 +164,7 @@ ROTAS = {
                          "servicos": servicos.listar(), "regra_geral": financeiro.regra_geral(),
                          "regras_nfse": financeiro.regras_por_cliente(), "regras_nomes": financeiro.REGRAS_NFSE,
                          "fiscal_resumo": fiscal.resumo(fiscal.geral()), "regimes": fiscal.REGIMES,
+                         "fiscal_ctx": _ctx_fiscal(),
                          "producao": emissor.em_producao(), "config": config.publico(),
                          "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
