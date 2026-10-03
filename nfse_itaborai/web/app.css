@@ -414,3 +414,9 @@ details.mais-nota[open] > summary, details.mais-fz[open] > summary { margin-bott
   border: 1px solid var(--borda); box-shadow: var(--sombra-alta, 0 10px 30px rgba(0,0,0,.08)); }
 .caixa-pin h1 { margin: 0; font-size: 22px; display: flex; gap: 8px; align-items: center; }
 .caixa-pin input { font-size: 22px; letter-spacing: 6px; text-align: center; }
+
+/* última nota do tomador (Emitir nota) */
+.ultima-nota { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px dashed var(--borda-forte); border-radius: var(--raio-p); background: var(--superficie2); font-size: 14px; }
+.ultima-nota > span { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.ultima-nota .ic { flex: none; }

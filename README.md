@@ -402,6 +402,15 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### Copiar a última nota do tomador
+
+Em **Emitir nota**, ao escolher o cliente aparece a **última NFS-e emitida para ele** (número, data, competência,
+valor e descrição) com o botão **Copiar dados da última nota**: preenche valor, serviço, descrição e os campos de
+"Mais campos da nota" (local, descontos, obra, evento, intermediário…). Campos que valem para uma nota só
+(substituição, NFS-e referenciada, documentos de dedução, reembolso e nº do pedido) não são copiados. Em
+**Notas emitidas**, o botão **Copiar** de cada linha faz o mesmo a partir de qualquer nota. Confira sempre o
+valor e o mês na descrição antes de emitir.
+
 ### Casos raros da NFS-e (exterior, dedução por documentos, emissão pelo tomador)
 
 - **Cliente do exterior** (Clientes › "Cliente do exterior"): sem CPF/CNPJ, com NIF (ou o motivo de não ter),
@@ -550,7 +559,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 230 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 231 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

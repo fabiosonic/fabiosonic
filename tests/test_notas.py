@@ -56,3 +56,17 @@ def test_encerrar_sistema_pela_tela_e_ja_aberto(base, monkeypatch):  # noqa: F81
     assert saiu == [0]
     monkeypatch.setattr(tela, "_quem_esta_na_porta", lambda p: {})
     assert tela.abrir_se_ja_aberto() is False
+
+
+def test_copiar_dados_da_ultima_nota(base):  # noqa: F811
+    from nfse_itaborai.tela import tratar
+    assert tratar("nfse/ultima", {"cpf_cnpj": CLI_A["cpf_cnpj"]})["nota"] is None
+    x = {"local_prestacao": "3304557", "desc_incond": "10", "pedido": "PED-1", "subst_chave": "", "doc_ref": "Contrato 7"}
+    financeiro.emitir_avulsa(CLI_A["cpf_cnpj"], "374,40", "HONORARIOS SETEMBRO", vencimento="2026-10-10", extras=x)
+    financeiro.emitir_avulsa(CLI_A["cpf_cnpj"], "400,00", "HONORARIOS OUTUBRO", vencimento="2026-11-10", extras=x)
+    n = tratar("nfse/ultima", {"cpf_cnpj": CLI_A["cpf_cnpj"]})["nota"]
+    assert n["valor_cent"] == 40000 and n["descricao"] == "HONORARIOS OUTUBRO" and n["nfse_numero"]
+    assert n["extras"]["local_prestacao"] == "3304557" and n["extras"]["doc_ref"] == "Contrato 7"
+    assert "pedido" not in n["extras"]                       # campo de uma nota só não é copiado
+    assert tratar("nfse/ultima", {"cpf_cnpj": "54399432000146"})["nota"] is None   # outro tomador
+    assert tratar("nfse/dados", {"id": n["id"]})["valor_cent"] == 40000

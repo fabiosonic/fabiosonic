@@ -163,6 +163,9 @@ function ligarNota(el, item) {
   $$("[data-nx]", box).forEach(i => { i.addEventListener("input", atu); i.addEventListener("change", atu); });
   atu(); return atu;
 }
+function preencherNota(el, x) {
+  $$("[data-nx]", el).forEach(i => { i.value = x[i.dataset.nx] ?? (i.tagName == "SELECT" ? i.options[0].value : ""); });
+}
 function lerNota(el) {
   const x = {}; $$("[data-nx]", el).forEach(i => { const v = i.value.trim(); if (v && !i.closest("[hidden]")) x[i.dataset.nx] = v.replace(/^(\d+),(\d+)$/, "$1.$2"); });
   if (!x.ree_valor) Object.keys(x).filter(k => k.startsWith("ree_")).forEach(k => delete x[k]);

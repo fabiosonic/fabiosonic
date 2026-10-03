@@ -12,6 +12,7 @@ function linhaRes(r) {
 PAGINAS.emitir = async el => {
   el.innerHTML = `<h1>Emitir nota</h1><div class="card"><div class="campos">
     <label class="inteiro">Cliente<input id="e_cli" list="dl_cli" placeholder="Digite o nome ou CNPJ e escolha"></label>
+    <div class="inteiro ultima-nota" id="e_ultima" hidden></div>
     <label>Valor (R$)<input id="e_valor" inputmode="decimal" placeholder="0,00"></label>
     <label>Vencimento<input id="e_venc" type="date"></label>
     <label class="inteiro">Serviço (atividade)<select id="e_serv">${opcoesServ(servPadrao().id)}</select></label>
@@ -30,7 +31,28 @@ PAGINAS.emitir = async el => {
   ligarFiscal("ef");
   const atuNota = ligarNota(el, () => servDe($("#e_serv").value).item_lista_servico);
   $("#e_serv").addEventListener("change", atuNota);
-  const cliInput = $("#e_cli").oninput; $("#e_cli").oninput = () => { cliInput(); atuNota(); };
+  // última nota do tomador: mostra e permite copiar valor, serviço, descrição e os campos extras da nota
+  let docUltima = "";
+  const copiar = n => {
+    $("#e_valor").value = num(n.valor_cent); if (n.servico_id) trocaServ(n.servico_id); $("#e_desc").value = n.descricao || $("#e_desc").value;
+    preencherNota(el, n.extras || {}); atuNota(); atuRegra();
+    if (Object.keys(n.extras || {}).length) $(".mais-nota", el).open = true;
+    aviso(`Dados da nota ${n.nfse_numero ? "nº " + n.nfse_numero : ""} copiados — confira o valor e a descrição antes de emitir.`, 6000); };
+  const mostrarUltima = async () => {
+    const doc = docDe($("#e_cli").value), c = ST.clientes.find(x => x.cpf_cnpj == doc), box = $("#e_ultima");
+    if (!c) { docUltima = ""; box.hidden = true; return; }
+    if (doc == docUltima) return; docUltima = doc;
+    const { nota } = await api("nfse/ultima", { cpf_cnpj: doc });
+    if (docDe($("#e_cli").value) != doc) return;          // o usuário já trocou de cliente
+    if (!nota) { box.hidden = true; return; }
+    box.innerHTML = `${ic("nota")}<span><b>Última nota:</b> nº ${esc(nota.nfse_numero)} em ${dt(nota.data)} · competência ${mes(nota.competencia)} · <b>${brl(nota.valor_cent)}</b><span class="sub"> — ${esc(nota.descricao).slice(0, 90)}</span></span>
+      <button class="btn min sec" type="button" id="e_copiar">${ic("lista")}Copiar dados da última nota</button>`;
+    box.hidden = false; $("#e_copiar").onclick = () => copiar(nota); };
+  const cliInput = $("#e_cli").oninput; $("#e_cli").oninput = () => { cliInput(); atuNota(); mostrarUltima(); };
+  if (PREENCHER && PREENCHER.copiar) { const id = PREENCHER.copiar; PREENCHER = null; const n = await api("nfse/dados", { id });
+    const c = ST.clientes.find(x => x.cpf_cnpj == n.cpf_cnpj);
+    if (c) { $("#e_cli").value = `${c.razao_social} — ${fmtDoc(c.cpf_cnpj)}`; $("#e_cli").oninput(); }
+    copiar(n); }
   if (PREENCHER) { const p = PREENCHER; PREENCHER = null; const c = ST.clientes.find(x => x.cpf_cnpj == p.doc);
     if (c) { $("#e_cli").value = `${c.razao_social} — ${fmtDoc(c.cpf_cnpj)}`; $("#e_cli").oninput(); }
     $("#e_valor").value = p.valor; if (p.servico_id) trocaServ(p.servico_id); $("#e_desc").value = p.desc || $("#e_desc").value;
@@ -108,9 +130,11 @@ PAGINAS.notas = async el => {
       { t: "Valor", n: 1, f: n => num(n.valor_cent) },
       { t: "Situação", f: n => n.nfse_status == "emitida" ? selo("emitida") : n.nfse_status == "cancelada" ? selo("nf_cancelada") : selo("teste") },
       { t: "Origem", f: n => `<span class="sub">${n.origem == "importado" ? "importada (XML)" : n.nfse_canal == "nacional" ? "sistema · Nacional" : "sistema · Itaboraí"}</span>` },
+      { t: "", f: n => `<div class="acoes-linha"><button class="btn min sec" data-cp="${n.id}" title="Abre Emitir nota com os dados desta nota">Copiar</button></div>` },
       { t: "", f: n => n.pode_cancelar ? `<div class="acoes-linha">${n.nfse_canal == "nacional" && n.nfse_chave ? `<button class="btn min sec" data-sb="${n.id}" title="Emite uma nova nota que substitui esta">Substituir</button> ` : ""}<button class="btn min sec perigo-txt" data-cn="${n.id}">${ic("x")}Cancelar NFS-e</button></div>` : n.nfse_status == "emitida" && n.origem == "importado" ? '<span class="sub" title="Emitida fora do sistema">cancelar no portal</span>' : "" }],
       r.notas, FILTRO_NF.competencia ? `Nenhuma nota em ${mes(FILTRO_NF.competencia)} com esses filtros.` : "Nenhuma nota com esses filtros.");
     $$("[data-cn]", el).forEach(b => b.onclick = () => cancelarNota(r.notas.find(n => n.id == b.dataset.cn)));
+    $$("[data-cp]", el).forEach(b => b.onclick = () => { PREENCHER = { copiar: Number(b.dataset.cp) }; ir("emitir"); });
     $$("[data-sb]", el).forEach(b => b.onclick = () => { const n = r.notas.find(x => x.id == b.dataset.sb);
       PREENCHER = { doc: n.cpf_cnpj, valor: num(n.valor_cent), desc: n.descricao, servico_id: n.servico_id, subst_chave: n.nfse_chave }; ir("emitir"); });
   };

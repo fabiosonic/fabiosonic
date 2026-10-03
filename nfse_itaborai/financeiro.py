@@ -575,6 +575,29 @@ def listar_notas(competencia: str = "", situacao: str = "validas", busca: str = 
             "canceladas": sum(1 for n in notas if n["nfse_status"] == "cancelada")}
 
 
+# campos que são de UMA nota só e nunca se repetem na cópia (substituição, documentos, reembolso, pedido)
+NAO_COPIAR = ("subst_chave", "subst_motivo", "subst_xmotivo", "ref_nfse", "ded_docs", "pedido")
+
+
+def dados_da_nota(tid: int) -> dict:
+    """Dados para emitir de novo com base numa nota: valor, descrição, serviço e os campos extras da nota."""
+    t = obter_titulo(tid)
+    extras = {k: v for k, v in json.loads(t.get("extras") or "{}").items()
+              if k not in NAO_COPIAR and not k.startswith("ree_")}
+    return {"id": t["id"], "cpf_cnpj": t["cpf_cnpj"], "cliente_nome": t["cliente_nome"], "valor_cent": t["valor_cent"],
+            "descricao": t["descricao"], "servico_id": t.get("servico_id") or "", "extras": extras,
+            "nfse_numero": t.get("nfse_numero") or "", "competencia": t["competencia"],
+            "data": t.get("nfse_data") or t["criado_em"][:10], "cobrar": bool(t.get("cobrar"))}
+
+
+def ultima_nota(cpf_cnpj: str) -> dict | None:
+    """Última NFS-e válida emitida para o tomador (do sistema ou importada dos XML)."""
+    doc = clientes._digitos(cpf_cnpj)
+    linhas = db.linhas("SELECT id FROM titulos WHERE cpf_cnpj=? AND nfse_numero!='' AND nfse_status='emitida' "
+                       "ORDER BY COALESCE(NULLIF(nfse_data,''), substr(criado_em,1,10)) DESC, id DESC LIMIT 1", (doc,))
+    return dados_da_nota(linhas[0]["id"]) if linhas else None
+
+
 # ---------------------------------------------------------------- contas a pagar
 
 def salvar_despesa(d: dict) -> int:

@@ -230,6 +230,8 @@ ROTAS = {
     "titulo/gerar_cobranca": lambda c: (financeiro.atualizar_titulo(_id(c), cobrar=1), cobranca.preparar_pagamento(_id(c)))[1],
     "nfse/listar": lambda c: financeiro.listar_notas(str(c.get("competencia") or ""), str(c.get("situacao") or "validas"),
                                                      str(c.get("busca") or ""), str(c.get("servico_id") or "")),
+    "nfse/ultima": lambda c: {"nota": financeiro.ultima_nota(str(c.get("cpf_cnpj", "")))},
+    "nfse/dados": lambda c: financeiro.dados_da_nota(_id(c)),
     "sistema/encerrar": lambda c: _encerrar(),
     "cliente/fiscal": lambda c: clientes.salvar({**(clientes.obter(str(c.get("cpf_cnpj", ""))) or {}),
                                                  "fiscal": c.get("fiscal") or {"usar_geral": True}}),
