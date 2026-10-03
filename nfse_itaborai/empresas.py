@@ -156,6 +156,9 @@ def salvar_credenciais(d: dict, destino: Path | None = None) -> dict:
             raise ValueError("CNPJ inválido.")
         if re.search(r"[\r\n]", valor):
             raise ValueError("Valor inválido.")
+        if campo == "chave":                      # chave do webservice guardada protegida no .env
+            from . import segredos
+            valor = segredos.proteger(valor)
         novos[var] = valor
     feitos = set()
     for i, linha in enumerate(linhas):
@@ -167,6 +170,27 @@ def salvar_credenciais(d: dict, destino: Path | None = None) -> dict:
     arq.parent.mkdir(parents=True, exist_ok=True)
     arq.write_text("\n".join(linhas) + "\n", encoding="utf-8")
     return credenciais(destino)
+
+
+def proteger_senhas() -> int:
+    """Protege as senhas ainda gravadas em texto (versões anteriores) em todas as empresas deste computador."""
+    from . import config, segredos
+    n = 0
+    for e in listar():
+        p = pasta(e)
+        with emissor.usar_empresa(p):
+            arq = p / "dados" / "config.json"
+            if arq.exists():
+                bruto = json.loads(arq.read_text(encoding="utf-8"))
+                if any(bruto.get(sec, {}).get(campo) and not segredos.protegido(bruto[sec][campo])
+                       for sec, campo in config.SEGREDOS):
+                    config.salvar({})
+                    n += 1
+            chave = emissor.ler_env(p / ".env").get("ITABORAI_CHAVE", "")
+            if chave and not segredos.protegido(chave):
+                salvar_credenciais({"chave": chave}, p)
+                n += 1
+    return n
 
 
 def salvar_servico(d: dict) -> dict:

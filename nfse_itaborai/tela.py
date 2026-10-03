@@ -11,7 +11,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (assistente, automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, assistente, automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -119,7 +119,12 @@ def _restaurar_arquivo(c: dict) -> dict:
             empresas.criar({"nome": m.get("empresa") or m["cnpj"], "cnpj": m["cnpj"]})
             dona = next(e for e in empresas.listar() if e["cnpj"] == m["cnpj"])
     with emissor.usar_empresa(empresas.pasta(dona)):   # o arquivo só é gravado na pasta da empresa dona
-        r = backup.restaurar(backup.receber(dados))
+        arq = backup.receber(dados)
+        try:
+            r = backup.restaurar(arq, senha=str(c.get("senha") or ""))
+        except ValueError:
+            arq.unlink(missing_ok=True)       # senha errada: não acumula cópias do arquivo enviado
+            raise
     return r | {"empresa_id": dona["id"], "empresa_nome": dona.get("nome", "")}
 
 
@@ -152,7 +157,7 @@ ROTAS = {
     "backup/listar": lambda c: {"backups": backup.listar(), "pasta": str(backup.pasta_backups()),
                                 "copia": config.carregar()["pastas"].get("backup_copia", "")},
     "backup/criar": lambda c: backup.criar("manual"),
-    "backup/restaurar": lambda c: backup.restaurar(backup.arquivo(str(c.get("nome", "")))),
+    "backup/restaurar": lambda c: backup.restaurar(backup.arquivo(str(c.get("nome", ""))), senha=str(c.get("senha") or "")),
     "backup/restaurar_arquivo": _restaurar_arquivo,
     "backup/abrir_pasta": lambda c: _abrir_pasta(backup.pasta_backups()),
     "empresa/criar": lambda c: (empresas.criar(c), {"empresas": empresas.listar()})[1],
@@ -317,19 +322,22 @@ class _Handler(BaseHTTPRequestHandler):
         if caminho == "/api/versao":
             return self._responder(200, json.dumps({"sistema": "nfse_itaborai", "versao": __version__,
                                                     "pasta": str(emissor.BASE)}).encode(), "application/json")
+        livres = caminho in ("/", "") or re.fullmatch(r"/[\w-]+\.(html|js|css|png|svg)", caminho)
+        if not livres and not acesso.valido(acesso.token_do_cookie(self.headers.get("Cookie"))):
+            return self._responder(401, "Sistema bloqueado: entre com o PIN.".encode("utf-8"), "text/plain; charset=utf-8")
         if caminho == "/export/titulos.csv":
             return self._responder(200, relatorios.csv_titulos().encode("utf-8"), "text/csv; charset=utf-8",
                                    {"Content-Disposition": 'attachment; filename="contas_a_receber.csv"'})
         f = re.fullmatch(r"/fechamento/(\d{4}-\d{2})\.html", caminho)
         if f:
             return self._responder(200, saude.relatorio_mensal_html(f.group(1)).encode("utf-8"), "text/html; charset=utf-8")
-        b = re.fullmatch(r"/backup/([\w.-]+\.zip)", caminho)
+        b = re.fullmatch(r"/backup/([\w.-]+\.(?:zip|protegido))", caminho)
         if b:
             try:
                 arq = backup.arquivo(b.group(1))
             except ValueError as ex:
                 return self._responder(404, str(ex).encode("utf-8"), "text/plain; charset=utf-8")
-            return self._responder(200, arq.read_bytes(), "application/zip",
+            return self._responder(200, arq.read_bytes(), "application/zip" if arq.suffix == ".zip" else "application/octet-stream",
                                    {"Content-Disposition": f'attachment; filename="{arq.name}"'})
         m = re.fullmatch(r"/boleto/(\d+)\.pdf", caminho)
         if m:
@@ -352,9 +360,34 @@ class _Handler(BaseHTTPRequestHandler):
             return self._responder(404, b"{}", "application/json")
         tamanho = int(self.headers.get("Content-Length", 0))
         corpo = json.loads(self.rfile.read(tamanho) or b"{}")
-        r = tratar(self.path[len("/api/"):], corpo)
+        rota = self.path[len("/api/"):]
+        token = acesso.token_do_cookie(self.headers.get("Cookie"))
+        extra: dict = {}
+        if rota == "acesso/estado":
+            r = acesso.estado(token)
+        elif rota == "acesso/entrar":
+            try:
+                extra["Set-Cookie"] = acesso.cookie(acesso.entrar(str(corpo.get("pin", ""))))
+                r = {"ok": True}
+            except ValueError as ex:
+                r = {"sucesso": False, "erro": str(ex)}
+        elif rota == "acesso/sair":
+            acesso.sair(token)
+            extra["Set-Cookie"] = acesso.cookie("", apagar=True)
+            r = {"ok": True}
+        elif not acesso.valido(token):
+            r = {"sucesso": False, "bloqueado": True, "erro": "Sistema bloqueado: entre com o PIN."}
+        elif rota == "acesso/definir":
+            try:
+                r = acesso.definir(str(corpo.get("atual", "")), str(corpo.get("novo", "")), corpo.get("minutos"))
+                if r["ativo"] and corpo.get("novo"):     # quem definiu o PIN continua dentro
+                    extra["Set-Cookie"] = acesso.cookie(acesso.entrar(str(corpo["novo"])))
+            except ValueError as ex:
+                r = {"sucesso": False, "erro": str(ex)}
+        else:
+            r = tratar(rota, corpo)
         self._responder(200, json.dumps(r, ensure_ascii=False, default=str).encode("utf-8"),
-                        "application/json; charset=utf-8")
+                        "application/json; charset=utf-8", extra)
 
     def log_message(self, *args):
         pass
@@ -409,6 +442,10 @@ def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
         raise SystemExit("Nenhuma porta livre entre 8765 e 8784.")
     porta = srv.server_address[1]
     empresas.aplicar_ativa()
+    try:
+        empresas.proteger_senhas()          # senhas antigas em texto passam a ficar protegidas
+    except Exception as ex:  # noqa: BLE001 — nunca impede o sistema de abrir
+        print(f"Aviso: não foi possível proteger as senhas agora ({ex}).")
     importador.caixa()  # cria a pasta IMPORTAR XML dentro da pasta do sistema
     url = f"http://127.0.0.1:{porta}"
     print(f"Sistema versão {__version__} em {url} (para fechar: botão “Encerrar o sistema” na tela)")

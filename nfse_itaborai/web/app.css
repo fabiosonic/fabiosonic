@@ -403,4 +403,14 @@ details.mais-nota[open] > summary, details.mais-fz[open] > summary { margin-bott
 .val-topo h2 { margin: 0 0 4px; }
 .val-acao { display: flex; gap: 10px; align-items: center; }
 .val-res ul { margin: 6px 0 0; padding-left: 18px; }
+.val-res li, .val-res p { overflow-wrap: anywhere; }
+.val-passo select, .val-passo input { max-width: 100%; min-width: 0; }
+#val_cli { width: 100%; }
 .val-res p { margin: 10px 0 0; }
+
+/* PIN de acesso */
+.tela-pin { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: var(--fundo); }
+.caixa-pin { width: min(360px, 100%); display: grid; gap: 12px; padding: 28px; border-radius: 14px; background: var(--superficie);
+  border: 1px solid var(--borda); box-shadow: var(--sombra-alta, 0 10px 30px rgba(0,0,0,.08)); }
+.caixa-pin h1 { margin: 0; font-size: 22px; display: flex; gap: 8px; align-items: center; }
+.caixa-pin input { font-size: 22px; letter-spacing: 6px; text-align: center; }

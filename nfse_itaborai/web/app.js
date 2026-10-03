@@ -34,6 +34,7 @@ let ST = { clientes: [], padrao: {}, producao: false, config: {} };
 async function api(rota, corpo) {
   const r = await fetch("/api/" + rota, { method: "POST", body: JSON.stringify(corpo || {}) });
   const d = await r.json();
+  if (d && d.bloqueado) { telaPin(); throw new Error(d.erro); }
   if (d && d.erro && !Array.isArray(d)) { aviso("⚠ " + d.erro, 7000); throw new Error(d.erro); }
   return d;
 }
@@ -1001,19 +1002,21 @@ async function listarBackups() {
   const r = await api("backup/listar");
   const mot = { manual: "Manual", automatico: "Automático (robô)", antes_da_restauracao: "Antes de uma restauração", arquivo: "Enviado de arquivo" };
   el.innerHTML = tabela([{ t: "Backup", f: b => `<b>${esc(b.criado_em ? dtHora(b.criado_em) : b.nome)}</b><div class="sub">${esc(b.nome)}</div>` },
-    { t: "Tipo", f: b => esc(mot[b.motivo] || b.motivo || "—") }, { t: "Tamanho", n: 1, f: b => tamanho(b.tamanho) },
+    { t: "Tipo", f: b => esc(mot[b.motivo] || b.motivo || "—") + (b.protegido ? ' <span class="selo bom" title="Protegido por senha (AES-256)">🔒 com senha</span>' : "") }, { t: "Tamanho", n: 1, f: b => tamanho(b.tamanho) },
     { t: "", f: b => `<div class="acoes-linha"><a class="btn min sec" href="/backup/${encodeURIComponent(b.nome)}" download>${ic("download")}Baixar</a>${b.valido ? ` <button class="btn min sec" type="button" data-bk="${esc(b.nome)}">Restaurar</button>` : ""}</div>` }],
     r.backups.slice(0, 15), "Nenhum backup ainda. Clique em “Fazer backup agora”.") + (r.backups.length > 15 ? `<p class="sub">Mostrando os 15 mais recentes de ${r.backups.length}. Todos estão em ${esc(r.pasta)}.</p>` : "");
   $$("[data-bk]", el).forEach(b => b.onclick = async () => {
     const x = r.backups.find(k => k.nome == b.dataset.bk);
     if (!confirm(`Restaurar o backup de ${dtHora(x.criado_em)}?\n\nTudo desta empresa (financeiro, clientes, configurações) volta ao estado desse dia. Antes, o estado atual é salvo num backup automático.`)) return;
-    aviso("Restaurando…", 60000); await posRestauracao(await api("backup/restaurar", { nome: x.nome })); });
+    const senha = x.protegido ? prompt("Senha deste backup (deixe em branco para usar a senha configurada):") : "";
+    if (senha === null) return;
+    aviso("Restaurando…", 60000); await posRestauracao(await api("backup/restaurar", { nome: x.nome, senha })); });
 }
 function tamanho(n) { return n < 1048576 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / 1048576).toFixed(1).replace(".", ",") + " MB"; }
 function dtHora(s) { const [d, h] = String(s).split(" "); return dt(d) + (h ? " " + h.slice(0, 5) : ""); }
 async function posRestauracao(r) {
   await carregarEstado();
-  aviso(`Backup de ${dtHora(r.criado_em)} restaurado ✔${r.empresa_nome ? " na empresa " + r.empresa_nome : ""}. O estado anterior ficou salvo em ${r.backup_anterior || "—"}.`, 12000);
+  aviso(`Backup de ${dtHora(r.criado_em)} restaurado ✔${r.empresa_nome ? " na empresa " + r.empresa_nome : ""}${r.senhas_restauradas ? ` (com ${r.senhas_restauradas} senha(s))` : ""}. O estado anterior ficou salvo em ${r.backup_anterior || "—"}.`, 12000);
   ir(PAG);
 }
 
@@ -1028,11 +1031,14 @@ PAGINAS.config = async el => {
   <div class="card"><h2>${ic("download")}Versão anterior</h2><p class="sub">Traz da instalação antiga deste computador o que ainda estiver vazio aqui: e-mail de envio, Banco Inter, chave PIX, certificado, clientes, financeiro e outras empresas.</p>
     <p><button class="btn sec" id="busca_ant">Procurar versão anterior</button></p><div id="migra_cfg"></div></div>
   <div class="card"><h2>${ic("download")}Backup e restauração</h2><p class="sub">O backup guarda tudo desta empresa (financeiro, clientes, configurações, serviços, numeração, certificados e XML das notas) num arquivo .zip. O robô faz um por dia (guarda os 30 últimos); você pode fazer um agora a qualquer momento. Para proteger contra perda do computador, informe uma segunda pasta (pendrive, HD externo ou pasta sincronizada com a nuvem).</p>
-    <div class="campos">${tx("pastas", "backup_copia", "Cópia extra dos backups em (pasta)", "text", 'placeholder="ex.: E:\\Backup ou G:\\Meu Drive\\Backup"')}</div>
+    <div class="campos">${tx("pastas", "backup_copia", "Cópia extra dos backups em (pasta)", "text", 'placeholder="ex.: E:\\Backup ou G:\\Meu Drive\\Backup"')}
+      ${tx("seguranca", "backup_senha", "Senha do backup (recomendado)", "password", 'autocomplete="new-password" placeholder="mínimo 6 caracteres — vazio = sem senha"')}</div>
+    <p class="sub">${c.seguranca.backup_senha ? "🔒 Backups <b>protegidos por senha</b> (AES-256): levam também as senhas da empresa, para restaurar em outro computador já funcionando." : "Sem senha, o backup é um .zip comum: quem tiver o arquivo vê os dados (as senhas ficam fora dele). Com senha, ele fica ilegível sem ela."} <b>Anote a senha em local seguro: sem ela o backup protegido não pode ser aberto.</b></p>
     <p><button class="btn" id="bk_criar" type="button">${ic("download")}Fazer backup agora</button> <button class="btn sec" id="bk_pasta" type="button">Abrir a pasta dos backups</button>
-      <label class="btn sec"><input type="file" id="bk_arq" accept=".zip" hidden>Restaurar de um arquivo…</label></p>
+      <label class="btn sec"><input type="file" id="bk_arq" accept=".zip,.protegido" hidden>Restaurar de um arquivo…</label></p>
     <p class="sub">Restaurar volta a empresa ao estado do backup. Antes, o sistema faz um backup do estado atual (dá para desfazer). A numeração do RPS/DPS nunca volta atrás e o ambiente (homologação/produção) não muda. Backup de uma empresa nunca é restaurado em outra.</p>
     <div id="bk_lista"><div class="vazio">Carregando…</div></div></div>
+  <div class="card" id="card_pin"></div>
   <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
@@ -1125,14 +1131,16 @@ PAGINAS.config = async el => {
   $$("[data-k]", rf).forEach(i => { const v = VIS_CFG[i.dataset.k]; if (v) (i.closest("label") || i).dataset.vis = v; });
   const atuReg = () => aplicarVis(rf, ctxFiscal({ regime: selReg.value }));
   $$("[data-k]", rf).forEach(i => i.addEventListener("change", atuReg)); atuReg();
-  listarBackups();
+  listarBackups(); cartaoPin($("#card_pin"));
   $("#bk_criar").onclick = async () => { if (!await salvarTudo()) return; aviso("Gerando o backup…", 30000); const r = await api("backup/criar");
     aviso(`Backup criado ✔ ${r.nome} (${tamanho(r.tamanho)})${r.copia ? " · cópia em " + r.copia : ""}`, 8000); listarBackups(); };
   $("#bk_pasta").onclick = () => api("backup/abrir_pasta");
   $("#bk_arq").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
     if (!confirm(`Restaurar o backup ${f.name}?\n\nOs dados da empresa dona deste backup voltam ao estado dele. Antes disso, o estado atual é salvo num backup automático.`)) return;
+    const senha = f.name.endsWith(".protegido") ? prompt("Senha deste backup:") : "";
+    if (senha === null) return;
     aviso("Restaurando…", 60000); const b64 = await new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
-    const r = await api("backup/restaurar_arquivo", { arquivo: b64 }); await posRestauracao(r); };
+    const r = await api("backup/restaurar_arquivo", { arquivo: b64, senha }); await posRestauracao(r); };
   $("#cert_arq").onchange = e => { const f = e.target.files[0]; if (f) { $("#cert_nome").textContent = "Selecionado: " + f.name + " — informe a senha e clique em Salvar certificado"; $("#cert_senha").focus(); } };
   const lerB64 = f => new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
   $("#cert_salvar").onclick = async () => {
@@ -1158,5 +1166,41 @@ PAGINAS.config = async el => {
     await api("email/testar", { para: p }); aviso("E-mail de teste enviado ✔ Confira a caixa de entrada (e o spam).", 7000); };
 };
 
+// ---------------------------------------------------------------- PIN de acesso
+function telaPin() {
+  if ($("#tela_pin")) return;
+  const d = document.createElement("div");
+  d.id = "tela_pin"; d.className = "tela-pin";
+  d.innerHTML = `<form class="caixa-pin" autocomplete="off"><h1>${ic("cadeado")} Sistema bloqueado</h1>
+    <p class="sub">Digite o PIN de acesso para abrir o financeiro e as notas fiscais.</p>
+    <label>PIN<input id="pin_v" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" autofocus></label>
+    <p id="pin_msg" class="sub"></p><button class="btn" type="submit">Entrar</button></form>`;
+  document.body.appendChild(d);
+  $("#pin_v").focus();
+  $("form", d).onsubmit = async e => { e.preventDefault();
+    const r = await (await fetch("/api/acesso/entrar", { method: "POST", body: JSON.stringify({ pin: $("#pin_v").value }) })).json();
+    if (r.ok) location.reload(); else { $("#pin_msg").textContent = r.erro; $("#pin_v").value = ""; $("#pin_v").focus(); } };
+}
+async function cartaoPin(box) {
+  const st = await api("acesso/estado");
+  box.innerHTML = `<h2>${ic("cadeado")}Acesso à tela (PIN)</h2>
+    <p class="sub">${st.ativo ? `🔒 PIN <b>ativo</b>: a tela pede o PIN ao abrir e depois de ${st.minutos} minutos sem uso. Vale para todas as empresas deste computador; o robô continua rodando normalmente.` : "Sem PIN: qualquer pessoa com acesso a este computador abre o sistema. Defina um PIN de 4 a 8 números para proteger os dados."}</p>
+    <div class="campos">${st.ativo ? '<label>PIN atual<input type="password" id="pin_atual" inputmode="numeric" maxlength="8" autocomplete="off"></label>' : ""}
+      <label>${st.ativo ? "Novo PIN" : "PIN"}<input type="password" id="pin_novo" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="4 a 8 números"></label>
+      <label>Bloquear após (minutos sem uso)<input type="number" id="pin_min" min="5" max="1440" value="${st.minutos}"></label></div>
+    <p><button class="btn" type="button" id="pin_salvar">${st.ativo ? "Trocar PIN" : "Ativar PIN"}</button>
+      ${st.ativo ? '<button class="btn sec" type="button" id="pin_remover">Remover PIN</button> <button class="btn sec" type="button" id="pin_bloq">Bloquear agora</button>' : ""}</p>`;
+  const enviar = async novo => { const r = await api("acesso/definir", { atual: ($("#pin_atual") || {}).value || "", novo, minutos: $("#pin_min").value });
+    if (r.sucesso === false) return aviso("⚠ " + r.erro, 6000);
+    aviso(r.ativo ? "PIN salvo ✔" : "PIN removido", 5000); cartaoPin(box); };
+  $("#pin_salvar", box).onclick = () => { const n = $("#pin_novo").value.trim(); if (!/^\d{4,8}$/.test(n)) return aviso("O PIN deve ter de 4 a 8 números."); enviar(n); };
+  if ($("#pin_remover", box)) $("#pin_remover", box).onclick = () => { if (confirm("Remover o PIN? O sistema abre sem pedir senha.")) enviar(""); };
+  if ($("#pin_bloq", box)) $("#pin_bloq", box).onclick = async () => { await api("acesso/sair"); location.reload(); };
+}
+
 // ---------------------------------------------------------------- início
-(async () => { await carregarEstado(); const h = location.hash.slice(1); ir(h in PAGINAS ? h : "painel"); })();
+(async () => {
+  const st = await (await fetch("/api/acesso/estado", { method: "POST", body: "{}" })).json();
+  if (st.ativo && !st.logado) return telaPin();
+  await carregarEstado(); const h = location.hash.slice(1); ir(h in PAGINAS ? h : "painel");
+})();

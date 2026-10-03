@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import json
 
-from . import emissor
+from . import emissor, segredos
 
 PADRAO = {
     "empresa": {
@@ -95,6 +95,8 @@ PADRAO = {
         "nfse_quando": "",
         "nfse_apos_pagamento": False,  # legado: equivale a nfse_quando = "baixa"
     },
+    # senha que protege os backups (vazia = backup .zip comum); guardada protegida, como as demais senhas
+    "seguranca": {"backup_senha": ""},
     "resumo": {"email_dono": "", "ultimo_envio": "", "dia_fechamento": 3, "ultimo_fechamento": ""},
     "regras_despesa": [             # palavra no histórico do extrato -> categoria
         ["DAS", "Impostos"], ["DARF", "Impostos"], ["GPS", "Impostos"], ["FGTS", "Folha"], ["SIMPLES", "Impostos"],
@@ -123,7 +125,8 @@ PADRAO = {
 }
 
 
-SEGREDOS = (("smtp", "senha"), ("cobranca", "inter_client_secret"), ("emissao", "certificado_senha"))
+SEGREDOS = (("smtp", "senha"), ("cobranca", "inter_client_secret"), ("emissao", "certificado_senha"),
+            ("seguranca", "backup_senha"))
 
 
 def _arquivo():
@@ -163,6 +166,8 @@ def carregar() -> dict:
         if any(r is not None for r in removidos):
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
         _mesclar(cfg, salvo)
+    for sec, campo in SEGREDOS:          # senhas ficam protegidas no disco e abertas só na memória
+        cfg[sec][campo] = segredos.revelar(cfg[sec].get(campo, ""))
     return cfg
 
 
@@ -170,7 +175,10 @@ def salvar(novo: dict) -> dict:
     cfg = _mesclar(carregar(), novo)
     arq = _arquivo()
     arq.parent.mkdir(parents=True, exist_ok=True)
-    arq.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    disco = copy.deepcopy(cfg)
+    for sec, campo in SEGREDOS:
+        disco[sec][campo] = segredos.proteger(disco[sec].get(campo, ""))
+    arq.write_text(json.dumps(disco, indent=2, ensure_ascii=False), encoding="utf-8")
     return cfg
 
 
@@ -192,4 +200,7 @@ def salvar_da_tela(novo: dict) -> dict:
     for sec, campo in SEGREDOS:
         if novo.get(sec, {}).get(campo) == "••••••":
             novo[sec].pop(campo)
+    bs = (novo.get("seguranca") or {}).get("backup_senha")
+    if bs and len(bs) < 6:
+        raise ValueError("A senha do backup precisa ter ao menos 6 caracteres.")
     return publico(salvar(novo))

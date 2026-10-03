@@ -121,6 +121,9 @@ def env(chave: str, padrao: str = "") -> str:
     variáveis de ambiente do computador — empresas adicionais nunca herdam credenciais de fora da pasta delas."""
     v = ler_env().get(chave)
     if v not in (None, ""):
+        if v.startswith(("dpapi:", "aesl:")):
+            from . import segredos
+            return segredos.revelar(v)
         return v
     return padrao if empresa_adicional() else os.environ.get(chave, padrao)
 

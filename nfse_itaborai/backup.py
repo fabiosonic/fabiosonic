@@ -11,6 +11,11 @@ Restauração com segurança:
 - a numeração do RPS/DPS nunca volta atrás (evita repetir número já enviado à prefeitura/Sefin);
 - o ambiente (homologação/produção) continua o atual: restauração nunca liga a produção;
 - só aceita caminhos conhecidos dentro do .zip (nada fora da pasta da empresa).
+
+Backup protegido por senha (Configurações › Backup): o .zip inteiro é cifrado com AES-256-GCM (chave derivada
+da senha por scrypt) e salvo como .protegido. Só esse tipo leva as senhas da empresa (segredos.json), para
+que a restauração em outro computador já volte com e-mail, banco, certificado e webservice funcionando.
+Sem a senha não há como abrir o arquivo — guarde-a em local seguro.
 """
 
 from __future__ import annotations
@@ -26,12 +31,14 @@ import zipfile
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from . import __version__, emissor
+from . import __version__, emissor, segredos
 from .xml_rps import so_digitos
 
 ARQUIVOS_RAIZ = (".env", "servicos.json", "servico_padrao.json")
 PASTAS = ("dados", "saida")
 MANIFESTO = "backup.json"
+SEGREDOS_ARQ = "segredos.json"
+EXT_PROTEGIDO = ".protegido"
 MANTER_AUTOMATICOS = 30
 CHAVES_PRESERVADAS_ENV = ("ITABORAI_AMBIENTE", "ITABORAI_CIENTE_IRREVERSIVEL")
 
@@ -91,10 +98,51 @@ def criar(motivo: str = "manual", raiz: Path | None = None) -> dict:
         for rel in arquivos:
             z.write(raiz / rel, rel)
         manifesto["arquivos"] = len(arquivos) + banco.exists()
+        senha = _senha_backup(raiz)
+        manifesto["protegido"] = bool(senha)
+        if senha:
+            z.writestr(SEGREDOS_ARQ, json.dumps(_segredos(raiz), ensure_ascii=False))
         z.writestr(MANIFESTO, json.dumps(manifesto, indent=2, ensure_ascii=False))
+    if senha:
+        cab = json.dumps({k: v for k, v in manifesto.items()}, ensure_ascii=False).encode("utf-8")
+        protegido = destino.with_suffix(EXT_PROTEGIDO)
+        protegido.write_bytes(segredos.cifrar_com_senha(destino.read_bytes(), senha, cab))
+        destino.unlink()
+        destino = protegido
     copia_extra = _copiar_para_pasta_extra(destino, raiz)
     _limpar_antigos(raiz)
     return _info(destino) | {"copia": copia_extra}
+
+
+def _senha_backup(raiz: Path) -> str:
+    from . import config
+    with emissor.usar_empresa(raiz):
+        return config.carregar()["seguranca"].get("backup_senha", "")
+
+
+def _segredos(raiz: Path) -> dict:
+    """Senhas da empresa em texto (só vão dentro do backup cifrado)."""
+    from . import config
+    with emissor.usar_empresa(raiz):
+        cfg = config.carregar()
+        out = {f"{sec}.{campo}": cfg[sec].get(campo, "") for sec, campo in config.SEGREDOS}
+        out["env.ITABORAI_CHAVE"] = emissor.env("ITABORAI_CHAVE")
+    return {k: v for k, v in out.items() if v}
+
+
+def _aplicar_segredos(raiz: Path, dados: dict) -> None:
+    from . import config
+    novo: dict = {}
+    for k, v in dados.items():
+        sec, campo = k.split(".", 1)
+        if sec == "env":
+            continue
+        novo.setdefault(sec, {})[campo] = v
+    with emissor.usar_empresa(raiz):
+        if novo:
+            config.salvar(novo)
+    if dados.get("env.ITABORAI_CHAVE"):
+        _gravar_env(raiz, {"ITABORAI_CHAVE": segredos.proteger(dados["env.ITABORAI_CHAVE"])})
 
 
 def _copiar_para_pasta_extra(arq: Path, raiz: Path) -> str:
@@ -117,7 +165,7 @@ def _copiar_para_pasta_extra(arq: Path, raiz: Path) -> str:
 
 
 def _limpar_antigos(raiz: Path) -> None:
-    autos = sorted(pasta_backups(raiz).glob("backup_*_automatico.zip"))
+    autos = sorted(_backups(raiz, "_automatico"))
     for velho in autos[:-MANTER_AUTOMATICOS]:
         velho.unlink()
 
@@ -126,28 +174,42 @@ def automatico(raiz: Path | None = None) -> str:
     """Robô: um backup completo por dia."""
     raiz = raiz or emissor.raiz()
     hoje = datetime.now(emissor.FUSO).strftime("%Y-%m-%d")
-    feito = next(pasta_backups(raiz).glob(f"backup_*_{hoje}_*_automatico.zip"), None)
+    feito = next((a for a in _backups(raiz, "_automatico") if f"_{hoje}_" in a.name), None)
     return feito.name if feito else criar("automatico", raiz)["nome"]
+
+
+def _backups(raiz: Path | None = None, fim: str = "") -> list[Path]:
+    p = pasta_backups(raiz)
+    return [a for ext in (".zip", EXT_PROTEGIDO) for a in p.glob(f"backup_*{fim}{ext}")]
+
+
+def _manifesto_protegido(dados: bytes) -> dict:
+    return json.loads(segredos.cabecalho(dados).decode("utf-8"))
 
 
 def _info(arq: Path) -> dict:
     try:
-        with zipfile.ZipFile(arq) as z:
-            m = json.loads(z.read(MANIFESTO))
+        if arq.suffix == EXT_PROTEGIDO:
+            with open(arq, "rb") as f:
+                m = _manifesto_protegido(f.read(65536))
+        else:
+            with zipfile.ZipFile(arq) as z:
+                m = json.loads(z.read(MANIFESTO))
     except (OSError, KeyError, ValueError, zipfile.BadZipFile):
         m = {}
     return {"nome": arq.name, "tamanho": arq.stat().st_size, "criado_em": m.get("criado_em", ""),
             "motivo": m.get("motivo", ""), "cnpj": m.get("cnpj", ""), "empresa": m.get("empresa", ""),
-            "versao_sistema": m.get("versao_sistema", ""), "valido": bool(m)}
+            "versao_sistema": m.get("versao_sistema", ""), "valido": bool(m),
+            "protegido": arq.suffix == EXT_PROTEGIDO}
 
 
 def listar() -> list[dict]:
-    return [_info(a) for a in sorted(pasta_backups().glob("backup_*.zip"), reverse=True)]
+    return [_info(a) for a in sorted(_backups(), key=lambda a: a.name, reverse=True)]
 
 
 def arquivo(nome: str) -> Path:
     """Caminho de um backup desta empresa pelo nome (sem permitir sair da pasta)."""
-    if not re.fullmatch(r"[\w.-]+\.zip", nome or ""):
+    if not re.fullmatch(r"[\w.-]+\.(zip|protegido)", nome or ""):
         raise ValueError("Nome de backup inválido.")
     p = pasta_backups() / nome
     if not p.is_file():
@@ -159,7 +221,7 @@ def _caminho_permitido(nome: str) -> bool:
     p = PurePosixPath(nome)
     if p.is_absolute() or ".." in p.parts or "\\" in nome or nome.endswith("/"):
         return False
-    if nome in ARQUIVOS_RAIZ or nome == MANIFESTO:
+    if nome in ARQUIVOS_RAIZ or nome in (MANIFESTO, SEGREDOS_ARQ):
         return True
     return p.parts[0] in PASTAS and not nome.startswith("dados/backup/")
 
@@ -208,9 +270,33 @@ def _gravar_env(raiz: Path, valores: dict) -> None:
     arq.write_text("\n".join(linhas + [f"{k}={v}" for k, v in valores.items()]) + "\n", encoding="utf-8")
 
 
-def restaurar(zip_path: Path, raiz: Path | None = None) -> dict:
-    """Volta a empresa ao estado do backup (com backup prévio do estado atual)."""
+def restaurar(arq: Path, raiz: Path | None = None, senha: str = "") -> dict:
+    """Volta a empresa ao estado do backup (com backup prévio do estado atual). Backup .protegido pede a senha
+    (sem ela, tenta a senha de backup configurada nesta empresa)."""
     raiz = raiz or emissor.raiz()
+    if arq.suffix != EXT_PROTEGIDO:
+        return _restaurar_zip(arq, raiz, arq.name)
+    dados = arq.read_bytes()
+    m = _manifesto_protegido(dados)
+    atual = _cnpj(raiz)
+    if atual and m.get("cnpj") and m["cnpj"] != atual:
+        raise ValueError(f"Este backup é da empresa {m.get('empresa') or ''} (CNPJ {m['cnpj']}) e não pode ser "
+                         f"restaurado na empresa em uso (CNPJ {atual}). Os dados de uma empresa nunca vão para outra.")
+    senha = senha or _senha_backup(raiz)
+    if not senha:
+        raise ValueError("Este backup é protegido: informe a senha do backup.")
+    zip_bytes = segredos.decifrar_com_senha(dados, senha)
+    with tempfile.TemporaryDirectory() as tmp:
+        z = Path(tmp) / "b.zip"
+        z.write_bytes(zip_bytes)
+        with zipfile.ZipFile(z) as zz:
+            sec = json.loads(zz.read(SEGREDOS_ARQ)) if SEGREDOS_ARQ in zz.namelist() else {}
+        r = _restaurar_zip(z, raiz, arq.name)
+    _aplicar_segredos(raiz, sec)
+    return r | {"senhas_restauradas": len(sec)}
+
+
+def _restaurar_zip(zip_path: Path, raiz: Path, nome: str) -> dict:
     m = ler_manifesto(zip_path)
     atual = _cnpj(raiz)
     if atual and m.get("cnpj") and m["cnpj"] != atual:
@@ -237,7 +323,7 @@ def restaurar(zip_path: Path, raiz: Path | None = None) -> dict:
                 arq.unlink()
         for arq in sorted(tmp.rglob("*")):
             rel = arq.relative_to(tmp).as_posix()
-            if arq.is_dir() or rel == MANIFESTO:
+            if arq.is_dir() or rel in (MANIFESTO, SEGREDOS_ARQ):
                 continue
             alvo = raiz / rel
             alvo.parent.mkdir(parents=True, exist_ok=True)
@@ -262,19 +348,21 @@ def restaurar(zip_path: Path, raiz: Path | None = None) -> dict:
         c.setdefault("emissao", {})["proximo_dps"] = max(int(c["emissao"].get("proximo_dps", 1) or 1), salvo["proximo_dps"])
         cfg.write_text(json.dumps(c, indent=2, ensure_ascii=False), encoding="utf-8")
     from . import db
-    db.registrar("backup", f"Restaurado o backup de {m.get('criado_em')} ({zip_path.name})")
-    return {"restaurado": zip_path.name, "criado_em": m.get("criado_em"), "empresa": m.get("empresa"),
+    db.registrar("backup", f"Restaurado o backup de {m.get('criado_em')} ({nome})")
+    return {"restaurado": nome, "criado_em": m.get("criado_em"), "empresa": m.get("empresa"),
             "backup_anterior": antes["nome"] if antes else ""}
 
 
 def decodificar(arquivo_b64: str) -> bytes:
     dados = base64.b64decode(arquivo_b64.split(",")[-1] or b"")
-    if not dados.startswith(b"PK"):
-        raise ValueError("Selecione o arquivo .zip do backup.")
+    if not dados.startswith((b"PK", segredos.MAGICO)):
+        raise ValueError("Selecione o arquivo do backup (.zip ou .protegido).")
     return dados
 
 
 def manifesto_de_bytes(dados: bytes) -> dict:
+    if dados.startswith(segredos.MAGICO):
+        return _manifesto_protegido(dados)
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "b.zip"
         p.write_bytes(dados)
@@ -284,10 +372,11 @@ def manifesto_de_bytes(dados: bytes) -> dict:
 def receber(dados: bytes) -> Path:
     """Guarda na pasta de backups da empresa em uso um .zip enviado pela tela."""
     stamp = datetime.now(emissor.FUSO).strftime("%Y-%m-%d_%H%M%S")
-    destino = pasta_backups() / f"backup_enviado_{stamp}_arquivo.zip"
+    ext = EXT_PROTEGIDO if dados.startswith(segredos.MAGICO) else ".zip"
+    destino = pasta_backups() / f"backup_enviado_{stamp}_arquivo{ext}"
     destino.write_bytes(dados)
     try:
-        ler_manifesto(destino)
+        manifesto_de_bytes(dados) if ext == EXT_PROTEGIDO else ler_manifesto(destino)
     except ValueError:
         destino.unlink()
         raise

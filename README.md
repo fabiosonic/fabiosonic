@@ -388,6 +388,18 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### Segurança
+
+- **Senhas protegidas no disco:** senha do e-mail, do certificado, segredo da API do Inter, senha do backup e
+  a chave do webservice (.env) ficam cifradas — no Windows pela DPAPI do usuário (só o mesmo usuário, no mesmo
+  computador, abre). Senhas antigas em texto são protegidas automaticamente ao abrir o sistema.
+- **Backup com senha** (Configurações › Backup): o arquivo vira `.protegido`, cifrado com AES-256-GCM (chave
+  derivada da senha por scrypt). Só esse backup leva as senhas da empresa, para restaurar em outro computador
+  já funcionando. **Sem a senha o backup não abre — anote-a em local seguro.**
+- **PIN de acesso** (Configurações › Acesso à tela): 4 a 8 números, guardado só como hash; bloqueia a tela ao
+  abrir e após o tempo sem uso escolhido; 5 erros seguidos travam novas tentativas por 5 minutos. O robô
+  agendado continua rodando normalmente.
+
 ### Validação com credenciais reais (menu Validação)
 
 Antes de ligar a produção, o menu **Validação** testa cada integração com os dados verdadeiros da empresa e
@@ -500,7 +512,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 197 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 210 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

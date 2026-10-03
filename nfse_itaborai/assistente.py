@@ -8,6 +8,7 @@ Os resultados ficam gravados (tabela `validacoes`) para mostrar o que já foi co
 
 from __future__ import annotations
 
+import io
 import json
 import sqlite3
 import time
@@ -15,7 +16,7 @@ import zipfile
 from contextlib import closing
 from datetime import datetime, timedelta
 
-from . import backup, clientes, config, db, emissor, inter, lote, nacional
+from . import backup, clientes, config, db, emissor, inter, lote, nacional, segredos
 
 JUSTIFICATIVA = "Teste do assistente de validacao do emissor (homologacao)"
 DESCRICAO = "TESTE DE HOMOLOGACAO - SEM VALOR FISCAL"
@@ -170,14 +171,21 @@ def _backup(c: dict) -> dict:
     info = backup.criar("teste")
     arq = backup.pasta_backups() / info["nome"]
     det = [f"Arquivo: {arq}"]
-    with zipfile.ZipFile(arq) as z:
+    conteudo = arq
+    if info.get("protegido"):
+        senha = config.carregar()["seguranca"].get("backup_senha", "")
+        conteudo = io.BytesIO(segredos.decifrar_com_senha(arq.read_bytes(), senha))
+        det.append("Protegido por senha (AES-256): aberto e conferido com a senha configurada.")
+    else:
+        det.append("Sem senha: configure a senha do backup em Configurações para protegê-lo.")
+    with zipfile.ZipFile(conteudo) as z:
         ruim = z.testzip()
         if ruim:
             return _resultado("erro", f"Backup corrompido: {ruim}.", det)
-        manifesto = backup.ler_manifesto(arq)
+        manifesto = json.loads(z.read(backup.MANIFESTO))
         det.append(f"Empresa: {manifesto.get('empresa') or manifesto.get('cnpj')} — {manifesto.get('arquivos')} arquivo(s)")
         if "dados/sistema.db" in z.namelist():
-            tmp = arq.with_suffix(".verifica.db")
+            tmp = arq.with_name(arq.name + ".verifica.db")
             try:
                 tmp.write_bytes(z.read("dados/sistema.db"))
                 with closing(sqlite3.connect(tmp)) as con:
