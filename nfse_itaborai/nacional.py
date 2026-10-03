@@ -235,19 +235,122 @@ def _trib_federal(rps: Rps, regime: str) -> str:
         raise ValueError("Optante do Simples Nacional não sofre retenção de PIS/COFINS (Lei 10.833/2003, art. 32, "
                          "II): ajuste a regra fiscal deste tomador.")
     pis_cofins = ""
+    x = rps.extras or {}
     if regime in fiscal.PIS_COFINS:
-        p_pis, p_cof = (Decimal(x) for x in fiscal.PIS_COFINS[regime])
-        base = rps.base_calculo
-        pis_cofins = ("<piscofins>" + _t("CST", "01") + _t("vBCPisCofins", _v(base))
-                      + _t("pAliqPis", _v(p_pis)) + _t("pAliqCofins", _v(p_cof))
-                      + _t("vPis", _v(dinheiro(base * p_pis / 100))) + _t("vCofins", _v(dinheiro(base * p_cof / 100)))
-                      + _t("tpRetPisCofins", TP_RET_PCC[pcc]) + "</piscofins>")
+        cst = so_digitos(x.get("pis_cofins_cst")) or "01"
+        if cst in ("01", "02", "03", "05"):        # tributável: base, alíquotas e valores
+            p_pis = _d(x.get("p_pis") or fiscal.PIS_COFINS[regime][0])
+            p_cof = _d(x.get("p_cofins") or fiscal.PIS_COFINS[regime][1])
+            base = rps.base_calculo
+            valores = (_t("vBCPisCofins", _v(base)) + _t("pAliqPis", _v(p_pis)) + _t("pAliqCofins", _v(p_cof))
+                       + _t("vPis", _v(dinheiro(base * p_pis / 100))) + _t("vCofins", _v(dinheiro(base * p_cof / 100))))
+        else:                                       # alíquota zero, isenção, sem incidência, suspensão, outras
+            valores = ""
+        pis_cofins = ("<piscofins>" + _t("CST", cst) + valores + _t("tpRetPisCofins", TP_RET_PCC[pcc]) + "</piscofins>")
     # NT 007/2026: vRetCSLL leva a soma de PIS + COFINS + CSLL retidos
     soma_pcc = dinheiro(r.valor_pis + r.valor_cofins + r.valor_csll)
     corpo = (pis_cofins + (_t("vRetCP", _v(r.valor_inss)) if r.valor_inss else "")
              + (_t("vRetIRRF", _v(r.valor_ir)) if r.valor_ir else "")
              + (_t("vRetCSLL", _v(soma_pcc)) if soma_pcc else ""))
     return f"<tribFed>{corpo}</tribFed>" if corpo else ""
+
+
+def _d(v) -> Decimal:
+    return Decimal(str(v).replace(",", "."))
+
+
+def _pessoa(tag: str, doc, nome) -> str:
+    doc = so_digitos(doc)
+    if not doc:
+        return ""
+    return (f"<{tag}>" + _t("CNPJ" if len(doc) == 14 else "CPF", doc) + _t("xNome", _txt(nome, 150)) + f"</{tag}>")
+
+
+def _subst(x: dict) -> str:
+    """Substituição de NFS-e (chave da nota substituída + motivo)."""
+    ch = str(x.get("subst_chave") or "").strip()
+    if not ch:
+        return ""
+    return ("<subst>" + _t("chSubstda", ch) + _t("cMotivo", x.get("subst_motivo") or "99")
+            + _t("xMotivo", _txt(x.get("subst_xmotivo"), 255)) + "</subst>")
+
+
+def _obra(x: dict) -> str:
+    cno, cib = so_digitos(x.get("obra_cno")), str(x.get("obra_cib") or "").strip()
+    if not (cno or cib):
+        return ""
+    return ("<obra>" + _t("inscImobFisc", _txt(x.get("obra_insc_imob"), 30))
+            + (_t("cObra", cno[:30]) if cno else _t("cCIB", cib[:8])) + "</obra>")
+
+
+def _evento(x: dict) -> str:
+    if not x.get("evento_nome"):
+        return ""
+    if x.get("evento_id"):
+        local = _t("idAtvEvt", _txt(x["evento_id"], 30))
+    else:
+        local = ("<end>" + _t("CEP", so_digitos(x.get("evento_cep"))) + _t("xLgr", _txt(x.get("evento_lgr"), 255))
+                 + _t("nro", _txt(x.get("evento_nro") or "S/N", 60)) + _t("xBairro", _txt(x.get("evento_bairro"), 60))
+                 + "</end>")
+    return ("<atvEvento>" + _t("xNome", _txt(x["evento_nome"], 255)) + _t("dtIni", x.get("evento_ini"))
+            + _t("dtFim", x.get("evento_fim") or x.get("evento_ini")) + local + "</atvEvento>")
+
+
+def _info_compl(x: dict, obs: str) -> str:
+    corpo = (_t("idDocTec", _txt(x.get("doc_tec"), 40)) + _t("docRef", _txt(x.get("doc_ref"), 255))
+             + _t("xPed", _txt(x.get("pedido"), 15)) + _t("xInfComp", obs))
+    return f"<infoCompl>{corpo}</infoCompl>" if corpo else ""
+
+
+def _tot_trib(rps: Rps, regime: str, op_sn: str, x: dict, cfg: dict) -> str:
+    """Carga aproximada (Lei 12.741/2012): uma das formas do leiaute, conforme a regra geral e o regime."""
+    modo = x.get("tot_trib_modo") or "auto"
+    if modo == "nao" or (modo == "auto" and regime == "mei"):
+        return _t("indTotTrib", "0")
+    if modo == "percentual":
+        return ("<pTotTrib>" + "".join(_t(t, _v(_d(x.get(k) or 0))) for t, k in
+                (("pTotTribFed", "p_tot_fed"), ("pTotTribEst", "p_tot_est"), ("pTotTribMun", "p_tot_mun"))) + "</pTotTrib>")
+    if modo == "simples" or (modo == "auto" and op_sn == "3"):
+        return _t("pTotTribSN", f"{_aliquota_sn(cfg):.2f}")
+    return ("<vTotTrib>" + _t("vTotTribFed", _v(rps.valor_total_tributos))
+            + _t("vTotTribEst", "0.00") + _t("vTotTribMun", "0.00") + "</vTotTrib>")
+
+
+def _ibscbs(rps: Rps, x: dict, ctrib: str) -> str:
+    refs = [so_digitos(c) for c in str(x.get("ref_nfse") or "").replace(";", ",").split(",") if so_digitos(c)]
+    dest = ""
+    if so_digitos(x.get("dest_doc")):
+        d = so_digitos(x["dest_doc"])
+        dest = "<dest>" + _t("CNPJ" if len(d) == 14 else "CPF", d) + _t("xNome", _txt(x.get("dest_nome"), 150)) + "</dest>"
+    imovel = ""
+    if x.get("imovel_cib"):
+        imovel = ("<imovel>" + _t("inscImobFisc", _txt(x.get("imovel_insc_imob"), 30))
+                  + _t("cCIB", str(x["imovel_cib"])[:8]) + "</imovel>")
+    ree = ""
+    if x.get("ree_valor"):
+        chave = so_digitos(x.get("ree_chave"))
+        doc = (f"<dFeNacional>{_t('tipoChaveDFe', x.get('ree_tipo_chave') or '1')}{_t('chaveDFe', chave)}</dFeNacional>"
+               if chave else f"<docOutro>{_t('nDoc', _txt(x.get('ree_ndoc'), 255))}{_t('xDoc', _txt(x.get('ree_xdoc'), 255))}</docOutro>")
+        fdoc = so_digitos(x.get("ree_fornec_doc"))
+        fornec = (f"<fornec>{_t('CNPJ' if len(fdoc) == 14 else 'CPF', fdoc)}{_t('xNome', _txt(x.get('ree_fornec_nome'), 150))}</fornec>"
+                  if fdoc else "")
+        ree = ("<gReeRepRes><documentos>" + doc + fornec + _t("dtEmiDoc", x.get("ree_dt_emi")) + _t("dtCompDoc", x.get("ree_dt_comp") or x.get("ree_dt_emi"))
+               + _t("tpReeRepRes", x.get("ree_tipo") or "99")
+               + (_t("xTpReeRepRes", _txt(x.get("ree_xtipo") or "Reembolso de despesa", 150)) if (x.get("ree_tipo") or "99") == "99" else "")
+               + _t("vlrReeRepRes", _v(_d(x["ree_valor"]))) + "</documentos></gReeRepRes>")
+    reg = (f"<gTribRegular>{_t('CSTReg', so_digitos(x['cst_reg']))}{_t('cClassTribReg', so_digitos(x.get('class_trib_reg')))}</gTribRegular>"
+           if x.get("cst_reg") and x.get("class_trib_reg") else "")
+    dif = ""
+    if any(x.get(k) for k in ("p_dif_uf", "p_dif_mun", "p_dif_cbs")):
+        dif = ("<gDif>" + "".join(_t(t, _v(_d(x.get(k) or 0))) for t, k in
+               (("pDifUF", "p_dif_uf"), ("pDifMun", "p_dif_mun"), ("pDifCBS", "p_dif_cbs"))) + "</gDif>")
+    return ("<IBSCBS>" + _t("finNFSe", "0") + _t("indFinal", "1" if rps.ind_final == "1" else "0")
+            + _t("cIndOp", so_digitos(rps.indicador_operacao)) + _t("tpOper", x.get("tp_oper"))
+            + ("<gRefNFSe>" + "".join(_t("refNFSe", c) for c in refs[:99]) + "</gRefNFSe>" if refs else "")
+            + _t("tpEnteGov", x.get("tp_ente_gov")) + _t("indDest", "1" if dest else "0") + dest + imovel
+            + "<valores>" + ree + "<trib><gIBSCBS>" + _t("CST", ctrib[:3]) + _t("cClassTrib", ctrib)
+            + _t("cCredPres", so_digitos(x.get("c_cred_pres"))[:2]) + reg + dif
+            + "</gIBSCBS></trib></valores></IBSCBS>")
 
 
 def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero: str,
@@ -298,49 +401,58 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
                 + (_t("fone", fone) if 6 <= len(fone) <= 20 else "")
                 + (_t("email", email[:80]) if "@" in email else "") + "</toma>")
 
+    x = rps.extras or {}
     desc = _txt("; ".join(i.descricao for i in rps.itens), 2000)
     obs = _txt(rps.observacoes, 2000)
     serv = ("<serv><locPrest>" + _t("cLocPrestacao", so_digitos(rps.local_prestacao) or "3301900") + "</locPrest>"
             + "<cServ>" + _t("cTribNac", so_digitos(rps.codigo_desdobro)[:6])
+            + _t("cTribMun", so_digitos(rps.codigo_tributacao_municipio)[:3] if len(so_digitos(rps.codigo_tributacao_municipio)) == 3 else "")
             + _t("xDescServ", desc) + _t("cNBS", so_digitos(rps.codigo_nbs)) + "</cServ>"
-            + (f"<infoCompl>{_t('xInfComp', obs)}</infoCompl>" if obs else "") + "</serv>")
+            + _obra(x) + _evento(x) + _info_compl(x, obs) + "</serv>")
 
     retido = rps.iss_retido == ISS_RETIDO_SIM
+    trib_issqn = str(x.get("trib_issqn") or "1")
+    if regime == "mei" or trib_issqn != "1":
+        retido = False          # MEI: ISS no DAS-MEI (E1302); imune/exportação/não incidência: nada a reter
     desc_cond, desc_inc = dinheiro(rps.desconto_condicionado), dinheiro(rps.desconto_incondicionado)
     descontos = ""
     if desc_cond or desc_inc:
         descontos = ("<vDescCondIncond>" + (_t("vDescIncond", _v(desc_inc)) if desc_inc else "")
                      + (_t("vDescCond", _v(desc_cond)) if desc_cond else "") + "</vDescCondIncond>")
-    if regime == "mei":
-        retido = False          # MEI: ISS fixo no DAS-MEI; campos de ISS não podem ser informados (E1302)
+    ded = ""
+    if x.get("ded_pct"):
+        ded = f"<vDedRed>{_t('pDR', _v(Decimal(str(x['ded_pct']))))}</vDedRed>"
+    elif rps.valor_deducoes:
+        ded = f"<vDedRed>{_t('vDR', _v(rps.valor_deducoes))}</vDedRed>"
+    susp = (f"<exigSusp>{_t('tpSusp', x['exig_susp_tp'])}{_t('nProcesso', x.get('exig_susp_proc'))}</exigSusp>"
+            if x.get("exig_susp_tp") else "")
+    bm = (f"<BM>{_t('nBM', x['n_bm'])}{_t('pRedBCBM', _v(Decimal(str(x['p_red_bm']))) if x.get('p_red_bm') else '')}</BM>"
+          if x.get("n_bm") else "")
+    tp_ret = ("3" if x.get("ret_iss_por") == "intermediario" else "2") if retido else "1"
     # alíquota só para ME/EPP com retenção (E0625); não optante em município conveniado usa a parametrizada (E0617)
-    trib_mun = ("<tribMun>" + _t("tribISSQN", "1") + _t("tpRetISSQN", "2" if retido else "1")
+    trib_mun = ("<tribMun>" + _t("tribISSQN", trib_issqn)
+                + (_t("cPaisResult", x.get("pais_result")) if trib_issqn == "3" else "")
+                + (_t("tpImunidade", x.get("tp_imunidade") or "0") if trib_issqn == "2" else "")
+                + susp + bm + _t("tpRetISSQN", tp_ret)
                 + (_t("pAliq", _v(rps.aliquota_iss)) if retido and op_sn == "3" and rps.aliquota_iss else "")
                 + "</tribMun>")
     trib_fed = _trib_federal(rps, regime)
-    if regime == "mei":
-        tot = _t("indTotTrib", "0")
-    elif op_sn == "3":
-        tot = _t("pTotTribSN", f"{_aliquota_sn(cfg):.2f}")
-    else:
-        tot = ("<vTotTrib>" + _t("vTotTribFed", _v(rps.valor_total_tributos))
-               + _t("vTotTribEst", "0.00") + _t("vTotTribMun", "0.00") + "</vTotTrib>")
-    valores = ("<valores><vServPrest>" + _t("vServ", _v(rps.valor_servicos)) + "</vServPrest>" + descontos
-               + "<trib>" + trib_mun + trib_fed + f"<totTrib>{tot}</totTrib></trib></valores>")
+    tot = _tot_trib(rps, regime, op_sn, x, cfg)
+    vreceb = _t("vReceb", _v(Decimal(str(x["v_receb"])))) if x.get("v_receb") and x.get("interm_doc") else ""
+    valores = ("<valores><vServPrest>" + vreceb + _t("vServ", _v(rps.valor_servicos)) + "</vServPrest>" + descontos
+               + ded + "<trib>" + trib_mun + trib_fed + f"<totTrib>{tot}</totTrib></trib></valores>")
 
     ibscbs = ""
     ctrib = so_digitos(rps.classificacao_tributaria)
     if fiscal.informar_ibscbs(f, compet) and ctrib and so_digitos(rps.indicador_operacao):
-        ibscbs = ("<IBSCBS>" + _t("finNFSe", "0") + _t("indFinal", "1" if rps.ind_final == "1" else "0")
-                  + _t("cIndOp", so_digitos(rps.indicador_operacao)) + _t("indDest", "0")
-                  + "<valores><trib><gIBSCBS>" + _t("CST", ctrib[:3]) + _t("cClassTrib", ctrib)
-                  + "</gIBSCBS></trib></valores></IBSCBS>")
+        ibscbs = _ibscbs(rps, x, ctrib)
+    interm = _pessoa("interm", x.get("interm_doc"), x.get("interm_nome"))
 
     return (f'<DPS xmlns="{NS}" versao="{VERSAO}"><infDPS Id="{ident}">'
             + _t("tpAmb", "1" if producao else "2") + _t("dhEmi", dh) + _t("verAplic", VER_APLIC)
             + _t("serie", serie) + _t("nDPS", numero) + _t("dCompet", compet.isoformat())
             + _t("tpEmit", "1") + _t("cLocEmi", cmun)
-            + prest + toma + serv + valores + ibscbs + "</infDPS></DPS>")
+            + _subst(x) + prest + toma + interm + serv + valores + ibscbs + "</infDPS></DPS>")
 
 
 def gerar_cancelamento(chave: str, cnpj: str, motivo: str, justificativa: str, producao: bool,

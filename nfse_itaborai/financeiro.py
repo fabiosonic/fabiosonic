@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import json
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -353,21 +354,23 @@ def gerar_decimo_terceiro(em: date | None = None) -> list[int]:
 
 def criar_titulo(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", competencia: str = "",
                  emitir_nfse: bool = True, servico_id: str = "", cobrar: bool = True,
-                 apos_pagamento: bool | None = False) -> int:
+                 apos_pagamento: bool | None = False, extras: dict | None = None) -> int:
     doc = clientes._digitos(cpf_cnpj)
     if not clientes.obter(doc):
         raise ValueError("Cliente não cadastrado.")
     fin = config.carregar()["financeiro"]
     servico_id = servico_id or (clientes.obter(doc) or {}).get("servico_id") or ""
+    from . import fiscal
+    extras_json = json.dumps(fiscal.normalizar_nota(extras), ensure_ascii=False) if extras else ""
     venc = vencimento or (hoje() + timedelta(days=int(fin["prazo_avulso_dias"]))).isoformat()
     with db.conexao() as con:
         cur = con.execute(
             "INSERT INTO titulos (cpf_cnpj, cliente_nome, competencia, descricao, valor_cent, vencimento, nfse_status,"
-            " criado_em, servico_id, cobrar) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            " criado_em, servico_id, cobrar, extras) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (doc, _nome(doc), competencia or competencia_de(hoje()),
              (descricao or servicos.obter(servico_id)["descricao"])
              .strip()[:190], cent(valor), venc, status_nfse_inicial(emitir_nfse, apos_pagamento), db.agora(), servico_id or "",
-             int(bool(cobrar))))
+             int(bool(cobrar)), extras_json))
         return cur.lastrowid
 
 
@@ -454,7 +457,7 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
     producao = emissor.em_producao()
     try:
         r = lote.emitir_um(t["cpf_cnpj"], reais(t["valor_cent"]), t["descricao"], producao=producao, url=url,
-                           servico_id=t.get("servico_id") or "")
+                           servico_id=t.get("servico_id") or "", extras=json.loads(t.get("extras") or "{}"))
     except Exception:
         atualizar_titulo(tid, nfse_status=t["nfse_status"])
         raise
@@ -463,6 +466,13 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
                          nfse_data=hoje().isoformat(),
                          nfse_rps=r.get("rps", ""), nfse_link=r.get("link", ""), nfse_erro="",
                          nfse_canal=r.get("canal", "municipal"), nfse_chave=r.get("chave", ""))
+        subst = json.loads(t.get("extras") or "{}").get("subst_chave")
+        if subst and producao:      # a nota substituída deixa de valer (fica cancelada por substituição)
+            for velho in db.linhas("SELECT id, status FROM titulos WHERE nfse_chave=? AND id!=?", (subst, tid)):
+                atualizar_titulo(velho["id"], nfse_status="cancelada",
+                                 observacao=f"Substituída pela NFS-e {r.get('nfse', '')}")
+                if velho["status"] == "aberto":
+                    cancelar_titulo(velho["id"], "NFS-e substituída")
     else:
         msg = "; ".join(r.get("erros", []))[:500]
         transitoria = any(x in msg.lower() for x in ("falha de comunicação", "timed out", "tempo esgotado",
@@ -475,7 +485,7 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
 
 def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "", url: str | None = None,
                   servico_id: str = "", cobrar: bool = True, apos_pagamento: bool | None = None,
-                  recorrente: bool = False, recorrente_ate: str = "", regra: str = "") -> dict:
+                  recorrente: bool = False, recorrente_ate: str = "", regra: str = "", extras: dict | None = None) -> dict:
     """Aba 'Emitir nota'. A regra da NFS-e vem da recorrência do cliente (se tiver regra própria) ou da regra
     geral das Configurações; 'regra'/'apos_pagamento' só forçam uma regra quando informados."""
     regra = _regra(regra) or ({True: "baixa", False: "geracao"}.get(apos_pagamento) if apos_pagamento is not None
@@ -483,7 +493,7 @@ def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "
     if regra == "nada":
         regra = "lancar"
     apos_pagamento = regra == "baixa"
-    r = _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, regra)
+    r = _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, regra, extras)
     if recorrente:
         t = obter_titulo(r["titulo_id"])
         if t["status"] == "cancelado":
@@ -501,13 +511,13 @@ def emitir_avulsa(cpf_cnpj: str, valor, descricao: str = "", vencimento: str = "
     return r
 
 
-def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, regra) -> dict:
+def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cobrar, regra, extras=None) -> dict:
     """Cria a conta a receber e, conforme a regra, emite a NFS-e agora, só na baixa, ou não emite.
 
     cobrar=False: só a conta a receber (sem boleto/PIX e fora da régua)."""
     if regra in ("baixa", "lancar"):
         tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar,
-                           emitir_nfse=regra == "baixa", apos_pagamento=regra == "baixa")
+                           emitir_nfse=regra == "baixa", apos_pagamento=regra == "baixa", extras=extras)
         r = {"sucesso": True, "aguardando_pagamento": regra == "baixa", "sem_nota": regra == "lancar",
              "erros": [], "alertas": [], "titulo_id": tid}
         if cobrar and config.carregar()["cobranca"]["provedor"] != "nenhum":
@@ -521,7 +531,7 @@ def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cob
         db.registrar("faturamento", f"Título {tid}: " + ("NFS-e após o pagamento" if regra == "baixa"
                                                           else "lançado sem NFS-e"))
         return r | {"titulo": obter_titulo(tid)}
-    tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar)
+    tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar, extras=extras)
     r = emitir_nfse_titulo(tid, url=url)
     if not r["sucesso"]:
         cancelar_titulo(tid, "NFS-e não emitida")

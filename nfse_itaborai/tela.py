@@ -39,7 +39,8 @@ def _emitir_item(it: dict) -> dict:
                                      str(it.get("vencimento", "")), servico_id=str(it.get("servico_id", "")),
                                      cobrar=it.get("cobrar", True) is not False,
                                      regra=str(it.get("regra") or ("baixa" if it.get("apos_pagamento") else "")),
-                                     recorrente=bool(it.get("recorrente")), recorrente_ate=str(it.get("recorrente_ate") or ""))
+                                     recorrente=bool(it.get("recorrente")), recorrente_ate=str(it.get("recorrente_ate") or ""),
+                                     extras=it.get("extras") or None)
     except (ValueError, ErroValidacao, emissor.ErroConfiguracao) as ex:
         return base | {"sucesso": False, "erros": getattr(ex, "erros", None) or [str(ex)]}
     return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "rps", "nfse", "link", "titulo_id",

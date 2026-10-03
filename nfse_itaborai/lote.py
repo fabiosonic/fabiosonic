@@ -12,7 +12,8 @@ def servico_padrao() -> dict:
     return servicos.padrao()
 
 
-def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "", servico_id: str = "") -> dict:
+def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "", servico_id: str = "",
+               extras: dict | None = None) -> dict:
     """Dicionário de RPS pronto para emissor.rps_de_dict, a partir do cadastro e do serviço escolhido
     (sem escolha: o serviço habitual do cliente; sem esse: o padrão da empresa)."""
     cli = clientes.obter(cpf_cnpj)
@@ -25,6 +26,8 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
     pct = str(p.get("ibpt_percentual") or "0").replace(",", ".")
     ibpt = (v * Decimal(pct) / 100).quantize(Decimal("0.01"))
     from . import fiscal
+    x = fiscal.normalizar_nota(extras)
+    ded = Decimal(x.get("ded_valor") or 0) or (v * Decimal(x.get("ded_pct") or 0) / 100).quantize(Decimal("0.01"))
     return fiscal.aplicar({
         "numero": "", "competencia": competencia,
         "itens": [{"descricao": (descricao or p["descricao"]).strip(), "quantidade": 1, "valor_unitario": str(v)}],
@@ -34,7 +37,11 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
         "valor_total_tributos": str(ibpt),
         "tomador": clientes.para_dict_tomador(cli),
         # local da prestação e do recolhimento: município da empresa emissora (multiempresa)
-        "local_prestacao": _municipio(), "local_recolhimento": _municipio(),
+        "local_prestacao": x.get("local_prestacao") or _municipio(), "local_recolhimento": _municipio(),
+        "codigo_tributacao_municipio": x.get("c_trib_mun", ""),
+        "desconto_incondicionado": x.get("desc_incond", "0"), "desconto_condicionado": x.get("desc_cond", "0"),
+        "valor_deducoes": str(ded), "codigo_obra": x.get("obra_cno", "") if len(x.get("obra_cno", "")) <= 6 else "",
+        "extras": x,
     }, cli)
 
 
@@ -44,13 +51,13 @@ def _municipio() -> str:
 
 
 def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False, url: str | None = None,
-              canal: str | None = None, servico_id: str = "") -> dict:
+              canal: str | None = None, servico_id: str = "", extras: dict | None = None) -> dict:
     """Emite pelo canal escolhido em Configurações > Emissão: municipal (Itaboraí) ou nacional (nfse.gov.br)."""
     canal = canal or nacional.canal()
     cli = clientes.obter(cpf_cnpj) or {}
     base = {"cpf_cnpj": cpf_cnpj, "cliente": cli.get("razao_social", cpf_cnpj), "valor": str(valor), "canal": canal}
     try:
-        dados = montar_rps(cpf_cnpj, valor, descricao, servico_id=servico_id)
+        dados = montar_rps(cpf_cnpj, valor, descricao, servico_id=servico_id, extras=extras)
         alertas_fiscais = dados.pop("_alertas_fiscais", [])
         rps = emissor.rps_de_dict(dados)
         kw = {"url": url} if url else {}

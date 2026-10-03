@@ -141,3 +141,24 @@ regime regular, usa a redução e destaca IBS/CBS normalmente.
   (Lei 10.833/03, art. 31, §3º). Simples com retenção de PIS/COFINS é recusado (Lei 10.833/03, art. 32, II).
 - **Canal municipal (Itaboraí)**: o regime define "Optante do Simples" e o tipo de tributação; as retenções
   calculadas vão em `ValoresRetencoes`.
+
+## 5. Onde cada grupo da DPS é preenchido no sistema
+
+| Grupo da DPS | Onde preencher |
+|---|---|
+| `regTrib` (opSimpNac, regApTribSN, regEspTrib) | Configurações › Regras fiscais (regime, apuração no Simples, regime especial) |
+| `totTrib` (vTotTrib, pTotTrib, pTotTribSN, indTotTrib) | Configurações › Regras fiscais › Campos avançados (automático pelo regime ou forma escolhida) |
+| `tribFed/piscofins` (CST, alíquotas), `tpRetPisCofins`, `vRetIRRF`, `vRetCSLL`, `vRetCP` | Regra geral (CST/alíquotas/retenções) e regra do tomador (CST e retenções próprias) |
+| `tribMun` (tribISSQN, tpImunidade, cPaisResult, exigSusp, BM, tpRetISSQN 2/3, pAliq) | Regra do tomador › Mais regras do tomador |
+| `IBSCBS` indFinal, tpEnteGov, tpOper, indDest/dest | Regra do tomador |
+| `IBSCBS` gTribRegular, gDif, cCredPres | Configurações › Campos avançados |
+| `IBSCBS` cIndOp, CST/cClassTrib | Cadastro do serviço (e cClassTrib específico na regra do tomador) |
+| `serv/locPrest`, `cTribMun`, `vDescCondIncond`, `vDedRed` (pDR/vDR) | Emitir nota › Mais campos da nota |
+| `obra`, `atvEvento`, `infoCompl` (xPed, idDocTec, docRef) | Emitir nota › Mais campos da nota |
+| `IBSCBS/imovel`, `gReeRepRes`, `gRefNFSe` | Emitir nota › Mais campos da nota |
+| `interm`, `vReceb` | Emitir nota › Mais campos da nota |
+| `subst` (substituição de NFS-e) | Notas emitidas › Substituir (preenche a emissão com a chave da nota substituída) |
+
+Ainda não implementados (pouco usados num escritório contábil): `comExt` (exportação/importação de serviço com
+moeda estrangeira e mecanismos de fomento), tomador/prestador no exterior (NIF, endereço exterior), dedução por
+lista de documentos (`documentos/docDedRed`), emissão pelo tomador ou intermediário (`tpEmit` 2/3).

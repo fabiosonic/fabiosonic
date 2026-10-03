@@ -269,7 +269,11 @@ Em **Configurações › Regras fiscais** fica a regra geral da empresa: regime 
 Lucro Real), apuração no Simples, regime especial, ISS retido e alíquota, retenções federais (IRRF, PIS, COFINS,
 CSLL, INSS) e IBS/CBS. Ao emitir (e no cadastro do cliente) o sistema pergunta **"Usar regra geral"** ou
 **"Regra específica deste tomador"**; a específica fica guardada só naquele tomador e vale primeiro nas próximas
-notas dele. Retenções de até R$ 10,00 são dispensadas automaticamente. Detalhes por regime em
+notas dele. Retenções de até R$ 10,00 são dispensadas automaticamente. A regra do tomador também cobre situação do ISS (imune, exportação,
+não incidência), exigibilidade suspensa, benefício municipal, ISS retido pelo intermediário, CST de PIS/COFINS,
+órgão público e destinatário diferente. Na emissão, **Mais campos da nota** traz local da prestação, código
+municipal, descontos, dedução/redução, obra, evento, pedido, ART/RRT, imóvel (CIB), reembolso/repasse, NFS-e
+referenciada, intermediário e substituição (também pelo botão **Substituir** em Notas emitidas). Detalhes por regime em
 `docs/NFSE_NACIONAL_CAMPOS_POR_REGIME.md`.
 
 ## Notas emitidas
@@ -440,7 +444,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 164 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 167 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

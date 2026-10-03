@@ -293,6 +293,7 @@ def rps_de_dict(d: dict) -> Rps:
         valor_total_tributos=_d(d.get("valor_total_tributos")),
         observacoes=d.get("observacoes", ""),
         ind_final=str(d.get("ind_final", "")),
+        extras=dict(d.get("extras") or {}),
     )
 
 

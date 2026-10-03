@@ -68,6 +68,10 @@ PADRAO = {
         "ret_irrf_pct": "0", "ret_pis_pct": "0", "ret_cofins_pct": "0", "ret_csll_pct": "0", "ret_inss_pct": "0",
         "ibscbs": "auto",           # auto (regime regular já; Simples/MEI a partir de 2027) | sempre | nunca
         "ind_final": "auto",        # auto (CPF = consumo pessoal) | 0 | 1
+        # avançados: carga aproximada, PIS/COFINS próprio e IBS/CBS (tributação regular, diferimento, crédito presumido)
+        "tot_trib_modo": "auto", "p_tot_fed": "", "p_tot_est": "", "p_tot_mun": "", "pis_cofins_cst": "",
+        "p_pis": "", "p_cofins": "", "cst_reg": "", "class_trib_reg": "", "c_cred_pres": "",
+        "p_dif_uf": "", "p_dif_mun": "", "p_dif_cbs": "",
     },
     "emissao": {
         "canal": "municipal",       # municipal (webservice de Itaboraí) | nacional (Emissor Nacional, nfse.gov.br)

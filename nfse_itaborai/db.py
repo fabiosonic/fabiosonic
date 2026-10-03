@@ -137,7 +137,7 @@ MIGRACOES = {
     "titulos": {"origem": "TEXT DEFAULT 'sistema'", "nfse_canal": "TEXT DEFAULT 'municipal'",
                 "nfse_chave": "TEXT DEFAULT ''", "servico_id": "TEXT DEFAULT ''", "banco_id": "TEXT DEFAULT ''", "nosso_numero": "TEXT DEFAULT ''",
                 "boleto_pdf": "TEXT DEFAULT ''", "cobrar": "INTEGER NOT NULL DEFAULT 1",
-                "nfse_data": "TEXT DEFAULT ''"},
+                "nfse_data": "TEXT DEFAULT ''", "extras": "TEXT DEFAULT ''"},
 }
 
 

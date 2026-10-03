@@ -74,22 +74,48 @@ function blocoFiscal(p) {
       ${RET_NOMES.map(([k, t]) => `<label>Retenção ${t} (%)<input data-fz="${k}" inputmode="decimal" placeholder="0"></label>`).join("")}
       <label>Consumo pessoal (IBS/CBS)<select data-fz="ind_final"><option value="auto">Automático (CPF = sim)</option><option value="0">Não</option><option value="1">Sim</option></select></label>
       <label>cClassTrib específico (opcional)<input data-fz="class_trib" maxlength="6" inputmode="numeric" placeholder="ex.: 410999"></label>
+      <details class="inteiro mais-fz"><summary>Mais regras do tomador (ISS imune/exportação, exigibilidade suspensa, benefício municipal, PIS/COFINS, órgão público, destinatário)</summary><div class="campos">
+        <label>Situação do ISS<select data-fz="trib_issqn"><option value="1">Operação tributável</option><option value="2">Imunidade</option><option value="3">Exportação de serviço</option><option value="4">Não incidência</option></select></label>
+        <label data-se="trib_issqn=2">Tipo de imunidade<select data-fz="tp_imunidade"><option value="1">Patrimônio, renda ou serviços uns dos outros (art. 150, VI, a)</option><option value="2">Templos de qualquer culto (VI, b)</option><option value="3">Partidos, sindicatos, educação e assistência social (VI, c)</option><option value="4">Livros, jornais e periódicos (VI, d)</option><option value="5">Fonogramas e videofonogramas (VI, e)</option><option value="0">Não informado</option></select></label>
+        <label data-se="trib_issqn=3">País do resultado (sigla ISO)<input data-fz="pais_result" maxlength="2" placeholder="ex.: US"></label>
+        <label>ISS retido por<select data-fz="ret_iss_por"><option value="tomador">Tomador</option><option value="intermediario">Intermediário</option></select></label>
+        <label>Exigibilidade do ISS suspensa<select data-fz="exig_susp_tp"><option value="">Não</option><option value="1">Por decisão judicial</option><option value="2">Por processo administrativo</option></select></label>
+        <label data-se="exig_susp_tp!=">Nº do processo (30 dígitos)<input data-fz="exig_susp_proc" maxlength="30" inputmode="numeric"></label>
+        <label>Benefício municipal (nº de 14 dígitos)<input data-fz="n_bm" maxlength="14" inputmode="numeric" placeholder="opcional"></label>
+        <label data-se="n_bm!=">Redução da base pelo benefício (%)<input data-fz="p_red_bm" inputmode="decimal"></label>
+        <label>CST PIS/COFINS próprio (Real/Presumido)<select data-fz="pis_cofins_cst"><option value="">Regra geral</option><option value="01">01 Tributável alíquota básica</option><option value="02">02 Tributável alíquota diferenciada</option><option value="06">06 Alíquota zero</option><option value="07">07 Isenta</option><option value="08">08 Sem incidência</option><option value="09">09 Suspensão</option><option value="49">49 Outras saídas</option><option value="99">99 Outras operações</option></select></label>
+        <label>Órgão público (IBS/CBS)<select data-fz="tp_ente_gov"><option value="">Não</option><option value="1">União</option><option value="2">Estado</option><option value="3">Distrito Federal</option><option value="4">Município</option></select></label>
+        <label>Tipo de operação (governo/imóveis)<select data-fz="tp_oper"><option value="">Não se aplica</option><option value="1">Fornecimento com pagamento posterior</option><option value="2">Recebimento com fornecimento já realizado</option><option value="3">Fornecimento com pagamento já realizado</option><option value="4">Recebimento com fornecimento posterior</option><option value="5">Fornecimento e pagamento concomitantes</option></select></label>
+        <label>Destinatário diferente: CPF/CNPJ<input data-fz="dest_doc" inputmode="numeric" placeholder="vazio = o próprio tomador"></label>
+        <label data-se="dest_doc!=">Destinatário: nome<input data-fz="dest_nome" maxlength="150"></label>
+      </div></details>
     </div>
     <p class="sub" data-fz-dica hidden>A regra específica fica guardada neste tomador e vale nas próximas notas dele. Os demais seguem a regra geral (Configurações › Regras fiscais). Dispensa legal automática: IRRF e PIS/COFINS/CSLL de até R$ 10,00 não são retidos.</p></div>`;
 }
 function preencherFiscal(p, f) {
   f = f || { usar_geral: true }; const box = $(`#${p}_fz`); if (!box) return;
   $$(`[name=${p}_fzg]`).forEach(r => r.checked = (r.value == "1") == (f.usar_geral !== false));
-  $$("[data-fz]", box).forEach(i => { const v = f[i.dataset.fz]; if (i.type == "checkbox") i.checked = !!v; else i.value = v == null || v === "0" && i.tagName != "SELECT" ? (i.tagName == "SELECT" ? "auto" : "") : String(v).replace(".", ","); });
-  if (!f.ind_final) $('[data-fz="ind_final"]', box).value = "auto";
+  $$("[data-fz]", box).forEach(i => { const v = f[i.dataset.fz];
+    if (i.type == "checkbox") i.checked = !!v;
+    else if (i.tagName == "SELECT") i.value = v != null && [...i.options].some(o => o.value == v) ? v : i.options[0].value;
+    else i.value = v == null || v === "0" ? "" : String(v).replace(".", ","); });
   alternarFiscal(p);
+}
+function condicionais(box) {
+  $$("[data-se]", box).forEach(l => { const [k, val] = l.dataset.se.split(/!?=/), neg = l.dataset.se.includes("!=");
+    const atual = ($(`[data-fz="${k}"]`, box) || {}).value || ""; l.hidden = neg ? atual == val : atual != val; });
 }
 function alternarFiscal(p) {
   const box = $(`#${p}_fz`), geral = ($(`[name=${p}_fzg]:checked`) || {}).value != "0";
   $("[data-fz-campos]", box).hidden = geral; $("[data-fz-dica]", box).hidden = geral;
   $("[data-fz-resumo]", box).textContent = geral ? "Regra geral: " + (ST.fiscal_resumo || "") : "";
+  condicionais(box);
 }
-function ligarFiscal(p, aoMudar) { $$(`[name=${p}_fzg]`).forEach(r => r.onchange = () => { alternarFiscal(p); aoMudar && aoMudar(); }); alternarFiscal(p); }
+function ligarFiscal(p, aoMudar) {
+  $$(`[name=${p}_fzg]`).forEach(r => r.onchange = () => { alternarFiscal(p); aoMudar && aoMudar(); });
+  $$("[data-fz]", $(`#${p}_fz`)).forEach(i => i.addEventListener("input", () => condicionais($(`#${p}_fz`))));
+  alternarFiscal(p);
+}
 function lerFiscal(p) {
   const box = $(`#${p}_fz`), f = { usar_geral: ($(`[name=${p}_fzg]:checked`) || {}).value != "0" };
   if (f.usar_geral) return f;
@@ -99,6 +125,32 @@ function lerFiscal(p) {
 function mesmoFiscal(a, b) {
   const n = f => JSON.stringify(f && f.usar_geral === false ? Object.keys(f).sort().map(k => [k, String(f[k] ?? "").replace(/^0$/, "")]) : "geral");
   return n(a) == n(b);
+}
+
+function blocoNota() {
+  const c = (k, t, extra = "") => `<label>${t}<input data-nx="${k}" ${extra}></label>`;
+  return `<details class="mais-nota"><summary>${ic("mais")}Mais campos da nota (local, deduções, obra, evento, pedido, reembolso, intermediário, substituição)</summary>
+    <div class="grupo-nx"><h3 class="bloco">Local e código</h3><div class="campos">${c("local_prestacao", "Município da prestação (IBGE)", 'inputmode="numeric" maxlength="7" placeholder="vazio = da empresa"')}${c("c_trib_mun", "Código de tributação municipal", 'maxlength="3" inputmode="numeric"')}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Descontos e dedução/redução da base</h3><div class="campos">${c("desc_incond", "Desconto incondicionado (R$)", 'inputmode="decimal"')}${c("desc_cond", "Desconto condicionado (R$)", 'inputmode="decimal"')}${c("ded_valor", "Dedução/redução (R$)", 'inputmode="decimal"')}${c("ded_pct", "ou Dedução/redução (%)", 'inputmode="decimal"')}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Obra</h3><div class="campos">${c("obra_cno", "CNO / CEI da obra", 'maxlength="30"')}${c("obra_cib", "ou CIB (8 caracteres)", 'maxlength="8"')}${c("obra_insc_imob", "Inscrição imobiliária (opcional)", 'maxlength="30"')}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Evento (artístico, cultural, esportivo…)</h3><div class="campos">${c("evento_nome", "Nome do evento", 'maxlength="255"')}${c("evento_ini", "Início", 'type="date"')}${c("evento_fim", "Fim", 'type="date"')}${c("evento_id", "Código do evento (prefeitura)", 'maxlength="30"')}${c("evento_cep", "ou CEP do local", 'maxlength="8" inputmode="numeric"')}${c("evento_lgr", "Logradouro")}${c("evento_nro", "Número")}${c("evento_bairro", "Bairro")}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Pedido e documentos</h3><div class="campos">${c("pedido", "Nº do pedido / ordem de compra", 'maxlength="15"')}${c("doc_tec", "ART / RRT / DRT", 'maxlength="40"')}${c("doc_ref", "Documento de referência (contrato, chave…)", 'maxlength="255"')}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Imóvel (IBS/CBS — serviços sobre bens imóveis, exceto obra)</h3><div class="campos">${c("imovel_cib", "CIB do imóvel", 'maxlength="8"')}${c("imovel_insc_imob", "Inscrição imobiliária", 'maxlength="30"')}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Reembolso, repasse ou ressarcimento (valores de terceiros já tributados)</h3><div class="campos">${c("ree_valor", "Valor (R$)", 'inputmode="decimal"')}
+      <label>Tipo<select data-nx="ree_tipo"><option value="99">99 Outros reembolsos/ressarcimentos</option><option value="01">01 Repasse a corretores (imóveis)</option><option value="02">02 Repasse a fornecedor (agência de turismo)</option><option value="03">03 Produção externa (publicidade)</option><option value="04">04 Mídia (publicidade)</option></select></label>
+      ${c("ree_xtipo", "Descrição (tipo 99)", 'maxlength="150"')}${c("ree_chave", "Chave do documento eletrônico (se houver)", 'maxlength="50" inputmode="numeric"')}
+      <label>Tipo do documento<select data-nx="ree_tipo_chave"><option value="1">NFS-e</option><option value="2">NF-e</option><option value="3">CT-e</option><option value="9">Outro</option></select></label>
+      ${c("ree_ndoc", "ou Nº do documento não fiscal")}${c("ree_xdoc", "Descrição do documento")}${c("ree_fornec_doc", "Fornecedor CPF/CNPJ", 'inputmode="numeric"')}${c("ree_fornec_nome", "Fornecedor nome")}${c("ree_dt_emi", "Emissão do documento", 'type="date"')}${c("ree_dt_comp", "Competência do documento", 'type="date"')}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Intermediário e notas relacionadas</h3><div class="campos">${c("interm_doc", "Intermediário CPF/CNPJ", 'inputmode="numeric"')}${c("interm_nome", "Intermediário nome")}${c("v_receb", "Valor recebido pelo intermediário (R$)", 'inputmode="decimal"')}${c("ref_nfse", "NFS-e referenciada(s) — chaves, separadas por vírgula", 'class="inteiro"')}</div></div>
+    <div class="grupo-nx"><h3 class="bloco">Substituição de NFS-e (só canal nacional)</h3><div class="campos">${c("subst_chave", "Chave da NFS-e substituída", 'maxlength="50" inputmode="numeric"')}
+      <label>Motivo<select data-nx="subst_motivo"><option value="99">99 Outros</option><option value="01">01 Desenquadramento do Simples</option><option value="02">02 Enquadramento no Simples</option><option value="03">03 Inclusão retroativa de imunidade/isenção</option><option value="04">04 Exclusão retroativa de imunidade/isenção</option><option value="05">05 Rejeição pelo tomador/intermediário</option></select></label>${c("subst_xmotivo", "Descrição do motivo")}</div></div>
+  </details>`;
+}
+function lerNota(el) {
+  const x = {}; $$("[data-nx]", el).forEach(i => { const v = i.value.trim(); if (v) x[i.dataset.nx] = v.replace(/^(\d+),(\d+)$/, "$1.$2"); });
+  if (!x.ree_valor) Object.keys(x).filter(k => k.startsWith("ree_")).forEach(k => delete x[k]);
+  if (!x.subst_chave) { delete x.subst_motivo; delete x.subst_xmotivo; }
+  return x;
 }
 
 function regraDe(doc) { return (doc && (ST.regras_nfse || {})[doc]) || ST.regra_geral || "geracao"; }
@@ -288,6 +340,7 @@ PAGINAS.emitir = async el => {
     <label class="inteiro">Descrição<input id="e_desc" maxlength="190" value="${esc(servPadrao().descricao || "")}"></label></div>
     <datalist id="dl_cli">${opcoesClientes()}</datalist>
     ${blocoFiscal("ef")}
+    ${blocoNota()}
     ${blocoFaturar("e")}
     <p class="sub">Emitindo por: <b>${nomeCanal()}</b> — troque em <a href="#config">Configurações › Emissão</a>.</p>
     <button class="btn" id="e_btn">Emitir nota</button><div id="e_res"></div></div>`;
@@ -297,6 +350,11 @@ PAGINAS.emitir = async el => {
   $("#e_cli").oninput = () => { const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)); if (c && c.ultimo_valor && !$("#e_valor").value) $("#e_valor").value = Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
     if (c && c.servico_id) trocaServ(c.servico_id); atuRegra(); if (c) preencherFiscal("ef", c.fiscal); };
   ligarFiscal("ef");
+  if (PREENCHER) { const p = PREENCHER; PREENCHER = null; const c = ST.clientes.find(x => x.cpf_cnpj == p.doc);
+    if (c) { $("#e_cli").value = `${c.razao_social} — ${fmtDoc(c.cpf_cnpj)}`; $("#e_cli").oninput(); }
+    $("#e_valor").value = p.valor; if (p.servico_id) trocaServ(p.servico_id); $("#e_desc").value = p.desc || $("#e_desc").value;
+    $(".mais-nota").open = true; $('[data-nx="subst_chave"]').value = p.subst_chave;
+    aviso("Substituição: confira os dados, escolha o motivo e emita. A nota antiga fica cancelada por substituição.", 9000); }
   $("#e_btn").onclick = async () => {
     const doc = docDe($("#e_cli").value), cli = ST.clientes.find(c => c.cpf_cnpj == doc);
     if (!cli) return aviso("Escolha um cliente da lista (ou cadastre em Clientes).");
@@ -308,7 +366,7 @@ PAGINAS.emitir = async el => {
       + `\n\n${cli.razao_social}\nServiço: ${servDe($("#e_serv").value).nome}\nR$ ${v}\nCobrança: ${fat.cobrar ? "sim (boleto/PIX + régua)" : "não"}\nRegras fiscais: ${fz.usar_geral ? "regra geral" : "específicas deste tomador (ficam guardadas nele)"}`)) return;
     if (!mesmoFiscal(fz, cli.fiscal)) { await api("cliente/fiscal", { cpf_cnpj: cli.cpf_cnpj, fiscal: fz }); await carregarEstado(); }
     $("#e_btn").disabled = true; $("#e_res").innerHTML = '<div class="msg">Enviando…</div>';
-    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value, ...fat }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
+    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value, ...fat, extras: lerNota(el) }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
     finally { $("#e_btn").disabled = false; }
   };
 };
@@ -342,6 +400,7 @@ PAGINAS.lote = async el => {
 };
 
 // ---------------------------------------------------------------- notas fiscais emitidas
+let PREENCHER = null;
 const FILTRO_NF = { competencia: null, situacao: "validas", busca: "", servico_id: "" };
 PAGINAS.notas = async el => {
   if (FILTRO_NF.competencia === null) FILTRO_NF.competencia = hojeISO().slice(0, 7);
@@ -368,9 +427,11 @@ PAGINAS.notas = async el => {
       { t: "Valor", n: 1, f: n => num(n.valor_cent) },
       { t: "Situação", f: n => n.nfse_status == "emitida" ? selo("emitida") : n.nfse_status == "cancelada" ? selo("nf_cancelada") : selo("teste") },
       { t: "Origem", f: n => `<span class="sub">${n.origem == "importado" ? "importada (XML)" : n.nfse_canal == "nacional" ? "sistema · Nacional" : "sistema · Itaboraí"}</span>` },
-      { t: "", f: n => n.pode_cancelar ? `<button class="btn min sec perigo-txt" data-cn="${n.id}">${ic("x")}Cancelar NFS-e</button>` : n.nfse_status == "emitida" && n.origem == "importado" ? '<span class="sub" title="Emitida fora do sistema">cancelar no portal</span>' : "" }],
+      { t: "", f: n => n.pode_cancelar ? `<div class="acoes-linha">${n.nfse_canal == "nacional" && n.nfse_chave ? `<button class="btn min sec" data-sb="${n.id}" title="Emite uma nova nota que substitui esta">Substituir</button> ` : ""}<button class="btn min sec perigo-txt" data-cn="${n.id}">${ic("x")}Cancelar NFS-e</button></div>` : n.nfse_status == "emitida" && n.origem == "importado" ? '<span class="sub" title="Emitida fora do sistema">cancelar no portal</span>' : "" }],
       r.notas, FILTRO_NF.competencia ? `Nenhuma nota em ${mes(FILTRO_NF.competencia)} com esses filtros.` : "Nenhuma nota com esses filtros.");
     $$("[data-cn]", el).forEach(b => b.onclick = () => cancelarNota(r.notas.find(n => n.id == b.dataset.cn)));
+    $$("[data-sb]", el).forEach(b => b.onclick = () => { const n = r.notas.find(x => x.id == b.dataset.sb);
+      PREENCHER = { doc: n.cpf_cnpj, valor: num(n.valor_cent), desc: n.descricao, servico_id: n.servico_id, subst_chave: n.nfse_chave }; ir("emitir"); });
   };
   $("#nf_comp").onchange = () => { FILTRO_NF.competencia = $("#nf_comp").value; carregar(); };
   $("#nf_sit").onchange = () => { FILTRO_NF.situacao = $("#nf_sit").value; carregar(); };
@@ -905,6 +966,15 @@ PAGINAS.config = async el => {
     ${RET_NOMES.map(([k, t]) => tx("fiscal", k, `Retenção ${t} (%)`)).join("")}
     ${sl("fiscal", "ibscbs", "Informar IBS/CBS na nota", [["auto", "Automático (regime regular já; Simples/MEI a partir de 2027)"], ["sempre", "Sempre"], ["nunca", "Nunca"]])}
     ${sl("fiscal", "ind_final", "Consumo pessoal (IBS/CBS)", [["auto", "Automático (CPF = sim)"], ["0", "Não"], ["1", "Sim"]])}</div>
+    <details class="mais-fz"><summary>Campos avançados (carga aproximada, PIS/COFINS próprio, IBS/CBS: tributação regular, diferimento e crédito presumido)</summary><div class="campos">
+    ${sl("fiscal", "tot_trib_modo", "Carga aproximada (Lei 12.741)", [["auto", "Automático pelo regime"], ["valor", "Valor (IBPT do serviço)"], ["percentual", "Percentuais federal/estadual/municipal"], ["simples", "Percentual do Simples"], ["nao", "Não informar"]])}
+    ${tx("fiscal", "p_tot_fed", "% federal")}${tx("fiscal", "p_tot_est", "% estadual")}${tx("fiscal", "p_tot_mun", "% municipal")}
+    ${sl("fiscal", "pis_cofins_cst", "CST PIS/COFINS próprio (Real/Presumido)", [["", "01 Alíquota básica (padrão)"], ["02", "02 Alíquota diferenciada"], ["06", "06 Alíquota zero"], ["07", "07 Isenta"], ["08", "08 Sem incidência"], ["09", "09 Suspensão"], ["49", "49 Outras saídas"], ["99", "99 Outras operações"]])}
+    ${tx("fiscal", "p_pis", "Alíquota PIS (%) — vazio = pelo regime")}${tx("fiscal", "p_cofins", "Alíquota COFINS (%) — vazio = pelo regime")}
+    ${tx("fiscal", "cst_reg", "IBS/CBS: CST da tributação regular")}${tx("fiscal", "class_trib_reg", "IBS/CBS: cClassTrib da tributação regular")}
+    ${tx("fiscal", "c_cred_pres", "IBS/CBS: código do crédito presumido")}
+    ${tx("fiscal", "p_dif_uf", "Diferimento IBS UF (%)")}${tx("fiscal", "p_dif_mun", "Diferimento IBS Município (%)")}${tx("fiscal", "p_dif_cbs", "Diferimento CBS (%)")}</div>
+    <p class="sub">Tributação regular de referência: para optante do Simples que recolhe IBS/CBS pelo regime regular ou situações especiais. Deixe em branco o que não se aplica.</p></details>
     <p class="sub">Retenções usuais de serviços profissionais para Lucro Real/Presumido: IRRF 1,5% · PIS 0,65% · COFINS 3% · CSLL 1% · INSS 11% (cessão de mão de obra). Optante do Simples, em regra, não sofre retenção federal. Retenções de até R$ 10,00 são dispensadas automaticamente.</p></div>
   <div class="card"><h2>${ic("nota")}Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
     <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>

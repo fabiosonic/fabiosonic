@@ -391,3 +391,8 @@ label.btn { display: inline-flex; flex-direction: row; align-items: center; curs
 .fiscal-tom .opc-nfse { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
 .fiscal-tom p.sub { margin: 0; }
 .fiscal-tom .campos { margin-top: 4px; }
+details.mais-nota, details.mais-fz { margin: 12px 0; border: 1px solid var(--borda); border-radius: 10px; padding: 10px 14px; background: var(--superficie2); }
+details.mais-nota > summary, details.mais-fz > summary { cursor: pointer; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+details.mais-nota[open] > summary, details.mais-fz[open] > summary { margin-bottom: 8px; }
+.grupo-nx + .grupo-nx { margin-top: 10px; }
+.grupo-nx h3.bloco { margin: 6px 0; font-size: 13px; font-weight: 650; color: var(--texto2); }
