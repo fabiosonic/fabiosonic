@@ -1,3 +1,4 @@
+import urllib.parse
 from datetime import date
 
 import pytest
@@ -150,6 +151,7 @@ def test_regua_envia_email_e_enfileira_whatsapp_sem_repetir(base, monkeypatch):
     assert cobranca.rodar_regua(date(2026, 9, 30)) == {"email": 0, "whatsapp": 0, "sem_contato": 0, "erros": 0}
     fila = cobranca.fila_whatsapp()
     assert len(fila) == 1 and fila[0]["detalhe"].startswith("https://wa.me/5521988887777?text=")
+    assert "anexo" not in urllib.parse.unquote(fila[0]["detalhe"])          # WhatsApp não leva anexo
     cobranca.marcar_whatsapp_feito(fila[0]["id"])
     assert cobranca.fila_whatsapp() == []
     assert b

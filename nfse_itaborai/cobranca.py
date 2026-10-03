@@ -239,8 +239,10 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
             "assinatura": emp.get("assinatura") or emp["nome"], "whatsapp": emp.get("whatsapp", "")}
 
 
-def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = None) -> tuple[str, str]:
-    """(assunto, texto) conforme a etapa da régua — texto simples (e-mail sem HTML e WhatsApp)."""
+def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = None,
+             canal: str = "email") -> tuple[str, str]:
+    """(assunto, texto) conforme a etapa da régua — texto simples (e-mail sem HTML e WhatsApp).
+    No WhatsApp não há anexo: sai a linha digitável e o PIX, e o PDF fica no e-mail."""
     cfg = cfg or config.carregar()
     c = _conteudo(t, etapa, cfg, em)
     linhas = [f"Olá, {c['nome']}!", "", c["abertura"]]
@@ -251,7 +253,7 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
         linhas.append(f"NFS-e nº {c['nfse']}" + (f": {c['nfse_link']}" if c["nfse_link"] else ""))
     if c["boleto_link"]:
         linhas.append(f"Boleto/PIX: {c['boleto_link']}")
-    if c["boleto_pdf"]:
+    if c["boleto_pdf"] and canal == "email":
         linhas.append("Boleto em PDF: segue em anexo.")
     if c["linha"]:
         linhas.append(f"Linha digitável: {c['linha']}")
@@ -461,7 +463,7 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                     status, det = "erro", str(ex)[:300]
                     res["erros"] += 1
             else:
-                status, det = "pendente", link_whatsapp(cli["telefone"], texto)
+                status, det = "pendente", link_whatsapp(cli["telefone"], mensagem(t, etapa, cfg, em, "whatsapp")[1])
                 res["whatsapp"] += 1
             with db.conexao() as con:
                 con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
@@ -497,7 +499,7 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
         t = _atualizar_cartao(t, cfg)
     assunto, texto = mensagem(t, etapa, cfg)
     cli = clientes.obter(t["cpf_cnpj"]) or {}
-    out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "email": "",
+    out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), mensagem(t, etapa, cfg, canal="whatsapp")[1]), "email": "",
            "texto": texto, "whatsapp_enviado": "", "whatsapp_erro": ""}
     if cli.get("telefone") and cli.get("whatsapp_cobranca") and whatsapp.configurado(cfg):
         try:
