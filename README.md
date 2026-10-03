@@ -402,10 +402,14 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
-### Cartão de crédito (InfinitePay) com a taxa repassada
+### Cartão de crédito (InfinitePay) — taxas por conta do cliente
 
 Em **Configurações › Cartão de crédito**, escolha InfinitePay e informe a sua **InfiniteTag** (no app, canto
-superior esquerdo, sem o $). Ajuste as taxas do **seu plano** (Perfil › Taxas no app): elas definem o acréscimo.
+superior esquerdo, sem o $) e a taxa do crédito à vista do **seu plano** (Perfil › Taxas no app).
+**As taxas do cartão ficam sempre por conta do cliente:** a taxa do crédito à vista (e a fixa, se houver) é
+somada ao valor do link, e o parcelamento é escolhido pelo cliente na tela da InfinitePay com os juros pagos por ele
+— deixe ligado no app "juros do parcelamento por conta do cliente". Os juros do parcelamento não entram como
+receita do escritório.
 - Cada cobrança leva, além do boleto/PIX do Inter, o link **"Pagar com cartão"** criado pela API da InfinitePay. O
   valor no cartão = honorário + acréscimo calculado para que, descontada a taxa, o escritório receba o honorário
   cheio (Lei 13.455/2017 permite preço diferente conforme o meio de pagamento). A mensagem avisa que pelo boleto

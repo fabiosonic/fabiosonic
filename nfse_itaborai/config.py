@@ -36,15 +36,11 @@ PADRAO = {
         "regua_whatsapp": True,
         "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado
         "bloquear_apos_dias": 60,   # alerta de cliente para suspensão/negociação
-        # cartão de crédito (InfinitePay): link por título, com a taxa repassada a quem escolher o cartão
+        # cartão de crédito (InfinitePay): link por título; as taxas do cartão ficam sempre por conta do cliente
         "cartao_provedor": "",      # "" desligado | infinitepay
         "cartao_infinitepay_tag": "",  # InfiniteTag da conta (no app, canto superior esquerdo, sem o $)
         "cartao_oferecer": True,    # mensagens de cobrança levam o link "pagar com cartão"
-        "cartao_repassar": True,    # acrescenta a taxa ao valor no cartão (o escritório recebe o honorário cheio)
-        "cartao_parcelas_max": 1,   # parcelas do link (a taxa usada é a da faixa)
         "cartao_taxa_1x": 4.20,     # % no crédito à vista — confira a SUA taxa no app da InfinitePay e ajuste
-        "cartao_taxa_2a6": 7.50,    # % de 2 a 6 parcelas (confira no app)
-        "cartao_taxa_7a12": 12.40,  # % de 7 a 12 parcelas (confira no app)
         "cartao_taxa_fixa": 0.0,    # R$ fixo por venda, se houver
     },
     "financeiro": {

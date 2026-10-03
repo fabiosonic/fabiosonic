@@ -205,8 +205,8 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
         acresc = (t.get("cartao_total_cent") or 0) - t["valor_cent"]
         linhas += ["", f"Prefere pagar com cartão de crédito? {t['cartao_link']}",
                    f"Valor no cartão: {_brl(t['cartao_total_cent'])}"
-                   + (f" em até {t['cartao_parcelas']}x" if (t.get("cartao_parcelas") or 1) > 1 else "")
-                   + (f" (inclui {_brl(acresc)} referente à taxa da operadora do cartão)" if acresc > 0 else "")]
+                   + (f" (inclui {_brl(acresc)} da taxa da operadora, por conta de quem paga com cartão)" if acresc > 0 else ""),
+                   "Parcelamento disponível, com os juros por conta do titular do cartão."]
         if acresc > 0 and (t.get("linha_digitavel") or t.get("pix_copia_cola")):
             linhas.append("Pelo boleto ou PIX acima, sem acréscimo.")
     if t["pix_copia_cola"]:

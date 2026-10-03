@@ -39,8 +39,9 @@ class FakeInfinitePay(BaseHTTPRequestHandler):
             return self._json({"url": f"https://checkout.infinitepay.io/moraes_contab?lenc={js['order_nsu']}"}, 201)
         if self.path == "/payment_check":
             v = FakeInfinitePay.pagos.get((js["order_nsu"], js["transaction_nsu"], js["slug"]))
-            return self._json({"success": True, "paid": bool(v), "amount": v or 0, "paid_amount": v or 0,
-                               "installments": 1, "capture_method": "credit_card"})
+            # paid_amount maior: juros do parcelamento pagos pelo cliente à InfinitePay (não são receita)
+            return self._json({"success": True, "paid": bool(v), "amount": v or 0, "paid_amount": round((v or 0) * 1.12),
+                               "installments": 6, "capture_method": "credit_card"})
         self._json({}, 404)
 
 
@@ -55,15 +56,14 @@ def infinite(base):  # noqa: F811
     srv.shutdown()
 
 
-def test_taxa_repassada_mantem_o_honorario_cheio():
-    cfg = {"cobranca": {"cartao_repassar": True, "cartao_taxa_1x": 4.20, "cartao_taxa_2a6": 7.5, "cartao_taxa_7a12": 12.4,
-                        "cartao_taxa_fixa": 0, "cartao_parcelas_max": 12}}
+def test_taxas_sempre_por_conta_do_cliente():
+    cfg = {"cobranca": {"cartao_taxa_1x": 4.20, "cartao_taxa_fixa": 0, "cartao_repassar": False}}
     v = cartao.valor_no_cartao(100000, 1, cfg)
     assert v["total_cent"] == 104385 and v["acrescimo_cent"] == 4385          # 1000 / (1 - 4,20%)
     assert 0 <= v["total_cent"] * (1 - 0.042) - 100000 < 1                       # sobra o honorário cheio
-    assert cartao.valor_no_cartao(100000, 10, cfg)["taxa_pct"] == 12.4
-    cfg["cobranca"]["cartao_repassar"] = False
-    assert cartao.valor_no_cartao(100000, 1, cfg)["acrescimo_cent"] == 0
+    assert cartao.valor_no_cartao(100000, 10, cfg)["total_cent"] == 104385     # parcelas: juros pagos pelo cliente
+    cfg["cobranca"]["cartao_taxa_fixa"] = 0.5
+    assert cartao.valor_no_cartao(100000, 1, cfg)["acrescimo_cent"] == 4437    # taxa fixa também é do cliente
 
 
 def test_link_na_cobranca_e_pago_no_cartao(infinite):
@@ -78,6 +78,7 @@ def test_link_na_cobranca_e_pago_no_cartao(infinite):
     assert t["cartao_link"].startswith("https://checkout.infinitepay.io/") and t["cartao_status"] == "aberto"
     _, texto = cobranca.mensagem(t, -3)
     assert "Prefere pagar com cartão" in texto and "R$ 1.043,85" in texto and "sem acréscimo" in texto
+    assert "juros por conta do titular" in texto
     assert cartao.gerar_link(tid)["reaproveitado"]
     r = tratar("titulo/pago_cartao", {"id": tid, "data": "2026-10-12"})
     assert r["ok"] and not r["conferido"]

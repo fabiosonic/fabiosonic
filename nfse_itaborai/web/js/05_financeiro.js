@@ -55,14 +55,13 @@ async function baixar(id, total) {
   $("#ok").onclick = async () => { await api("titulo/baixar", { id, ...form($("#fb")) }); fechar(); aviso("Baixa registrada ✔"); ir(PAG); };
 }
 async function linkCartao(id, valor) {
-  const max = Number(ST.config.cobranca.cartao_parcelas_max || 1);
-  modal(`<h2>Pagamento com cartão de crédito</h2><div class="campos"><label>Parcelas<select id="lc_parc">${Array.from({ length: max }, (_, i) => `<option value="${i + 1}" ${i + 1 == max ? "selected" : ""}>${i + 1}x</option>`).join("")}</select></label></div>
-    <div id="lc_sim" class="msg">Calculando…</div><p><button class="btn" id="lc_ok">Gerar link</button> <button class="btn sec" onclick="fechar()">Fechar</button></p><div id="lc_res"></div>`);
-  const sim = async () => { const x = await api("cartao/simular", { valor: valor / 100, parcelas: $("#lc_parc").value });
-    $("#lc_sim").innerHTML = `Honorário ${brl(x.valor_cent)} · no cartão <b>${brl(x.total_cent)}</b>${x.parcelas > 1 ? ` em ${x.parcelas}x de ${brl(x.parcela_cent)}` : " à vista"} · acréscimo ${brl(x.acrescimo_cent)} (taxa ${String(x.taxa_pct).replace(".", ",")}% + ${brl(x.taxa_fixa_cent)})`; };
-  $("#lc_parc").onchange = sim; sim();
+  modal(`<h2>Pagamento com cartão de crédito</h2>
+    <div id="lc_sim" class="msg">Calculando…</div><p class="sub">As taxas ficam por conta do cliente: a do crédito à vista já está no valor; no parcelamento, ele escolhe as parcelas na InfinitePay e paga os juros.</p>
+    <p><button class="btn" id="lc_ok">Gerar link</button> <button class="btn sec" onclick="fechar()">Fechar</button></p><div id="lc_res"></div>`);
+  const x = await api("cartao/simular", { valor: valor / 100 });
+  $("#lc_sim").innerHTML = `Honorário ${brl(x.valor_cent)} · no cartão <b>${brl(x.total_cent)}</b> · acréscimo ${brl(x.acrescimo_cent)} (taxa ${String(x.taxa_pct).replace(".", ",")}%${x.taxa_fixa_cent ? " + " + brl(x.taxa_fixa_cent) : ""})`;
   $("#lc_ok").onclick = async () => { $("#lc_ok").disabled = true;
-    try { const r = await api("titulo/cartao", { id, parcelas: $("#lc_parc").value });
+    try { const r = await api("titulo/cartao", { id });
       $("#lc_res").innerHTML = `<div class="msg ok">Link ${r.reaproveitado ? "(já existia)" : "criado"}: <a href="${esc(r.link)}" target="_blank">${esc(r.link)}</a>
         <p><button class="btn min sec" type="button" onclick="navigator.clipboard.writeText('${esc(r.link)}');aviso('Link copiado')">Copiar link</button></p></div>`;
     } finally { $("#lc_ok").disabled = false; } };

@@ -1,4 +1,5 @@
-"""Pagamento com cartão de crédito pela InfinitePay (Checkout Integrado), com a taxa repassada a quem escolher o cartão.
+"""Pagamento com cartão de crédito pela InfinitePay (Checkout Integrado). As taxas do cartão ficam SEMPRE por conta do
+cliente: acréscimo da taxa no valor do link e juros do parcelamento pagos por ele na InfinitePay.
 
 API (pública, sem mensalidade; identifica a conta pela InfiniteTag, sem senha):
 - POST https://api.checkout.infinitepay.io/links  {handle, order_nsu, items:[{quantity, price (centavos), description}],
@@ -47,26 +48,17 @@ def configurado(cfg: dict | None = None) -> bool:
     return c.get("cartao_provedor") == "infinitepay" and bool(_tag(c))
 
 
-# ---------------------------------------------------------------- taxa repassada
-
-def taxa_pct(parcelas: int, cfg: dict | None = None) -> float:
-    c = _cfg(cfg)
-    if parcelas <= 1:
-        return float(c.get("cartao_taxa_1x") or 0)
-    if parcelas <= 6:
-        return float(c.get("cartao_taxa_2a6") or 0)
-    return float(c.get("cartao_taxa_7a12") or 0)
-
+# ---------------------------------------------------------------- taxa por conta do cliente
 
 def valor_no_cartao(valor_cent: int, parcelas: int = 1, cfg: dict | None = None) -> dict:
-    """Valor a cobrar no cartão para que, descontada a taxa (percentual + fixa), sobre o honorário cheio."""
+    """Valor a cobrar no cartão: honorário + taxa da InfinitePay, SEMPRE por conta do cliente — descontada a taxa
+    (percentual do crédito à vista + fixa), sobra o honorário cheio. Parcelamento: o cliente escolhe as parcelas na
+    tela da InfinitePay e os juros ficam com ele (opção "juros por conta do cliente" no app)."""
     c = _cfg(cfg)
-    parcelas = max(1, min(int(parcelas or 1), int(c.get("cartao_parcelas_max") or 12)))
-    pct, fixa = taxa_pct(parcelas, cfg), round(float(c.get("cartao_taxa_fixa") or 0) * 100)
-    total = math.ceil((valor_cent + fixa) / (1 - pct / 100)) if c.get("cartao_repassar", True) else valor_cent
-    return {"valor_cent": valor_cent, "parcelas": parcelas, "taxa_pct": pct, "taxa_fixa_cent": fixa,
-            "total_cent": total, "acrescimo_cent": total - valor_cent, "parcela_cent": math.ceil(total / parcelas),
-            "taxa_cent": round(total * pct / 100) + fixa}
+    pct, fixa = float(c.get("cartao_taxa_1x") or 0), round(float(c.get("cartao_taxa_fixa") or 0) * 100)
+    total = math.ceil((valor_cent + fixa) / (1 - pct / 100))
+    return {"valor_cent": valor_cent, "parcelas": 1, "taxa_pct": pct, "taxa_fixa_cent": fixa, "total_cent": total,
+            "acrescimo_cent": total - valor_cent, "parcela_cent": total, "taxa_cent": round(total * pct / 100) + fixa}
 
 
 # ---------------------------------------------------------------- API da InfinitePay
@@ -130,10 +122,8 @@ def gerar_link(tid: int, parcelas: int = 0, cfg: dict | None = None) -> dict:
     t = financeiro.obter_titulo(tid)
     if t["status"] != "aberto":
         raise ErroCartao("Só títulos em aberto podem ser pagos com cartão.")
-    parcelas = parcelas or int(_cfg(cfg).get("cartao_parcelas_max") or 1)
-    v = valor_no_cartao(t["valor_cent"], parcelas, cfg)
-    if t.get("cartao_link") and t.get("cartao_total_cent") == v["total_cent"] and t.get("cartao_parcelas") == v["parcelas"] \
-            and t.get("cartao_status") == "aberto":
+    v = valor_no_cartao(t["valor_cent"], 1, cfg)
+    if t.get("cartao_link") and t.get("cartao_total_cent") == v["total_cent"] and t.get("cartao_status") == "aberto":
         return v | {"link": t["cartao_link"], "id": t["cartao_id"], "reaproveitado": True}
     n = int(str(t["cartao_id"]).rsplit("-", 1)[-1]) + 1 if re.fullmatch(r"T\d+-\d+", t.get("cartao_id") or "") else 1
     order = f"T{tid}-{n}"                          # número novo a cada link (valor ou parcelas mudaram)
@@ -168,12 +158,14 @@ def confirmar_pagamento(tid: int, valor=None, data: str = "", comprovante: str =
                                      "transaction_nsu": c["transaction_nsu"], "slug": c["slug"]}, cfg)
         if not r.get("paid"):
             raise ErroCartao("A InfinitePay não confirmou este pagamento. Confira o comprovante.")
-        total, conferido = int(r.get("paid_amount") or r.get("amount") or total), True
+        # "amount" é o preço; "paid_amount" pode trazer os juros do parcelamento pagos pelo cliente à InfinitePay,
+        # que não são receita do escritório
+        total, conferido = int(r.get("amount") or r.get("paid_amount") or total), True
     elif comprovante.strip():
         raise ErroCartao("Não achei o código da transação no comprovante. Deixe o campo vazio para baixar sem conferir.")
     if total <= 0:
         raise ErroCartao("Informe o valor pago no cartão.")
-    v = valor_no_cartao(t["valor_cent"], t.get("cartao_parcelas") or 1, cfg)
+    v = valor_no_cartao(t["valor_cent"], 1, cfg)
     taxa = round(total * v["taxa_pct"] / 100) + v["taxa_fixa_cent"]
     data = data or financeiro.hoje().isoformat()
     if t["nfse_status"] != "emitida" and total != t["valor_cent"]:
