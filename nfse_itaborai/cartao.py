@@ -114,15 +114,17 @@ def testar(cfg: dict | None = None) -> dict:
 
 # ---------------------------------------------------------------- link do título
 
-def gerar_link(tid: int, parcelas: int = 0, cfg: dict | None = None) -> dict:
-    """Cria (ou reaproveita) o link de pagamento com cartão do título e devolve o link e os valores."""
+def gerar_link(tid: int, parcelas: int = 0, cfg: dict | None = None, em=None) -> dict:
+    """Cria (ou reaproveita) o link de pagamento com cartão do título e devolve o link e os valores.
+    Em atraso, a base é o valor atualizado (multa e juros), como no boleto."""
     cfg = cfg or config.carregar()
     if not configurado(cfg):
         raise ErroCartao("Cartão de crédito não configurado (Configurações › Cartão de crédito).")
     t = financeiro.obter_titulo(tid)
     if t["status"] != "aberto":
         raise ErroCartao("Só títulos em aberto podem ser pagos com cartão.")
-    v = valor_no_cartao(t["valor_cent"], 1, cfg)
+    base = financeiro.enriquecer(t, em)["total_cent"]          # = valor original até o vencimento
+    v = valor_no_cartao(base, 1, cfg)
     if t.get("cartao_link") and t.get("cartao_total_cent") == v["total_cent"] and t.get("cartao_status") == "aberto":
         return v | {"link": t["cartao_link"], "id": t["cartao_id"], "reaproveitado": True}
     n = int(str(t["cartao_id"]).rsplit("-", 1)[-1]) + 1 if re.fullmatch(r"T\d+-\d+", t.get("cartao_id") or "") else 1
@@ -168,9 +170,11 @@ def confirmar_pagamento(tid: int, valor=None, data: str = "", comprovante: str =
     v = valor_no_cartao(t["valor_cent"], 1, cfg)
     taxa = round(total * v["taxa_pct"] / 100) + v["taxa_fixa_cent"]
     data = data or financeiro.hoje().isoformat()
-    if t["nfse_status"] != "emitida" and total != t["valor_cent"]:
-        # NFS-e ainda não emitida: o preço do serviço pago no cartão inclui o acréscimo
-        financeiro.atualizar_titulo(tid, valor_cent=total,
+    preco = min(total, valor_no_cartao(t["valor_cent"], 1, cfg)["total_cent"])
+    if t["nfse_status"] != "emitida" and preco != t["valor_cent"]:
+        # NFS-e ainda não emitida: o preço do serviço pago no cartão inclui o acréscimo da taxa
+        # (multa e juros de atraso, se houver, ficam fora da nota: são receita financeira)
+        financeiro.atualizar_titulo(tid, valor_cent=preco,
                                     descricao=(t["descricao"] + " (pagamento com cartão de crédito)")[:190])
     financeiro.atualizar_titulo(tid, cartao_status="pago")
     financeiro.baixar(tid, data, financeiro.reais(total), "cartao")

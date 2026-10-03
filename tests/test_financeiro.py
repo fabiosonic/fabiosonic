@@ -139,7 +139,7 @@ def test_baixa_estorno_e_cancelamento(base):
 
 def test_regua_envia_email_e_enfileira_whatsapp_sem_repetir(base, monkeypatch):
     enviados = []
-    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None: enviados.append((para, assunto, texto)))
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, **k: enviados.append((para, assunto, texto)))
     a = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-09-25", emitir_nfse=False)
     b = financeiro.criar_titulo(CLI_B["cpf_cnpj"], "300", vencimento="2026-09-25", emitir_nfse=False)
     cobranca.preparar_pagamento(a)
@@ -238,7 +238,7 @@ def test_despesas_recorrentes(base):
 
 def test_robo_ponta_a_ponta(base, monkeypatch):
     enviados = []
-    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None: enviados.append(assunto))
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, **k: enviados.append(assunto))
     config.salvar({"automacao": {"ativa": True}})
     financeiro.salvar_contrato({"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "374,40", "inicio": "2026-10", "dia_vencimento": 5})
     r = automacao.rodar(date(2026, 10, 2))

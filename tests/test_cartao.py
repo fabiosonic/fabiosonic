@@ -119,3 +119,27 @@ def test_tag_errada(infinite):
     config.salvar({"cobranca": {"cartao_infinitepay_tag": "outra"}})
     r = tratar("cartao/testar", {})
     assert r["sucesso"] is False and "handle" in r["erro"]
+
+
+def test_email_html_e_cartao_em_atraso(infinite):
+    from datetime import date
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "1000,00", "HONORARIOS SETEMBRO", vencimento="2026-09-10",
+                                  emitir_nfse=False)
+    financeiro.atualizar_titulo(tid, pix_copia_cola="00020101PIXTESTE", linha_digitavel="07790.00116 12345")
+    cartao.gerar_link(tid, em=date(2026, 9, 1))
+    t = financeiro.obter_titulo(tid)
+    assunto, texto = cobranca.mensagem(t, -3, em=date(2026, 9, 7))
+    assert texto.index("PIX copia e cola") < texto.index("Prefere pagar com cartão") < texto.index("sem acréscimo")
+    html = cobranca.mensagem_html(t, -3, em=date(2026, 9, 7))
+    assert "Pagar com cartão de crédito" in html and "PIX copia e cola" in html and "LEMBRETE" in html
+    assert "07790.00116 12345" in html and "<script" not in html
+    # em atraso: o link do cartão passa a ter multa e juros + a taxa (pagar no cartão nunca sai mais barato)
+    antes = t["cartao_total_cent"]
+    t2 = cobranca._atualizar_cartao(t, config.carregar(), date(2026, 10, 10))
+    atualizado = financeiro.enriquecer(t, date(2026, 10, 10))["total_cent"]
+    assert t2["cartao_total_cent"] == cartao.valor_no_cartao(atualizado)["total_cent"] > antes
+    assert "EM ATRASO" in cobranca.mensagem_html(t2, 30, em=date(2026, 10, 10))
+    # a NFS-e (se ainda não emitida) leva honorário + taxa, sem a multa e os juros
+    r = cartao.confirmar_pagamento(tid, valor=t2["cartao_total_cent"] / 100)
+    assert r["titulo"]["valor_cent"] == cartao.valor_no_cartao(100000)["total_cent"]
+    assert r["titulo"]["valor_pago_cent"] == t2["cartao_total_cent"]

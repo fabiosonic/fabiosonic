@@ -47,6 +47,19 @@ def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
     return financeiro.obter_titulo(tid)
 
 
+def _atualizar_cartao(t: dict, cfg: dict, em: date | None = None) -> dict:
+    """Título em atraso: o link do cartão passa a cobrar o valor atualizado (multa e juros) + a taxa."""
+    if not (t.get("cartao_link") and t.get("cartao_status") == "aberto"):
+        return t
+    from . import cartao
+    try:
+        cartao.gerar_link(t["id"], cfg=cfg, em=em)
+    except Exception as ex:  # noqa: BLE001 — sem o link atualizado, a mensagem segue sem o cartão
+        db.registrar("cartao", f"Título {t['id']}: link do cartão não atualizado ({ex})")
+        financeiro.atualizar_titulo(t["id"], cartao_status="encerrado")
+    return financeiro.obter_titulo(t["id"])
+
+
 def _oferecer_cartao(tid: int, cfg: dict) -> None:
     """Se o cartão estiver ligado, a cobrança já leva o link 'pagar com cartão' (o cliente escolhe o meio)."""
     from . import cartao
@@ -175,12 +188,31 @@ def _data(iso: str) -> str:
     return f"{iso[8:10]}/{iso[5:7]}/{iso[0:4]}"
 
 
-def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = None) -> tuple[str, str]:
-    """(assunto, texto) conforme a etapa da régua."""
-    cfg = cfg or config.carregar()
+SIGLAS = {"LTDA", "ME", "EPP", "EIRELI", "S/A", "SA", "S.A.", "MEI", "SS", "SLU"}
+MINUSCULAS = {"de", "da", "do", "das", "dos", "e", "em", "a", "o"}
+
+
+def nome_cliente(nome: str) -> str:
+    """'RPS CONSULTORIA E SERVICOS LTDA' -> 'RPS Consultoria e Servicos LTDA' (nomes em maiúsculas ficam legíveis)."""
+    nome = nome.split(" - ")[0].strip()
+    if nome != nome.upper():
+        return nome
+    out = []
+    for i, w in enumerate(nome.split()):
+        sem_vogal = not any(ch in "AEIOUÁÉÍÓÚÂÊÔÃÕ" for ch in w)
+        if w in SIGLAS or (sem_vogal and len(w) <= 4):
+            out.append(w)
+        elif i and w.lower() in MINUSCULAS:
+            out.append(w.lower())
+        else:
+            out.append(w.capitalize())
+    return " ".join(out)
+
+
+def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
+    """Partes da mensagem de cobrança (usadas no texto, no HTML e no WhatsApp)."""
     t = financeiro.enriquecer(t, em)
-    nome = t["cliente_nome"].split(" - ")[0]
-    ref = f"{t['descricao']} — competência {t['competencia'][5:]}/{t['competencia'][:4]}"
+    nome = nome_cliente(t["cliente_nome"])
     if etapa < 0:
         assunto = f"Lembrete: honorários vencem em {_data(t['vencimento'])}"
         abertura = f"Lembramos que o pagamento de {_brl(t['valor_cent'])} vence em {_data(t['vencimento'])}."
@@ -190,32 +222,113 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
     else:
         assunto = f"Pagamento em aberto há {t['dias_atraso']} dia(s)"
         abertura = (f"Não identificamos o pagamento de {_brl(t['valor_cent'])}, vencido em {_data(t['vencimento'])}. "
-                    f"Valor atualizado com multa e juros: {_brl(t['total_cent'])}. "
-                    "Se já pagou, por favor desconsidere e nos envie o comprovante.")
-    linhas = [f"Olá, {nome}!", "", abertura, "", f"Referente a: {ref}"]
-    if t["nfse_numero"]:
-        linhas.append(f"NFS-e nº {t['nfse_numero']}" + (f": {t['nfse_link']}" if t["nfse_link"].startswith("http") else ""))
-    if t["cobranca_link"]:
-        linhas.append(f"Boleto/PIX: {t['cobranca_link']}")
-    if t.get("banco_id"):
-        linhas.append("Boleto em PDF: segue em anexo.")
-    if t["linha_digitavel"]:
-        linhas.append(f"Linha digitável: {t['linha_digitavel']}")
+                    f"Valor atualizado com multa e juros: {_brl(t['total_cent'])}.")
+    cartao = None
     if t.get("cartao_link") and t.get("cartao_status") == "aberto":
-        acresc = (t.get("cartao_total_cent") or 0) - t["valor_cent"]
-        linhas += ["", f"Prefere pagar com cartão de crédito? {t['cartao_link']}",
-                   f"Valor no cartão: {_brl(t['cartao_total_cent'])}"
-                   + (f" (inclui {_brl(acresc)} da taxa da operadora, por conta de quem paga com cartão)" if acresc > 0 else ""),
-                   "Parcelamento disponível, com os juros por conta do titular do cartão."]
-        if acresc > 0 and (t.get("linha_digitavel") or t.get("pix_copia_cola")):
-            linhas.append("Pelo boleto ou PIX acima, sem acréscimo.")
-    if t["pix_copia_cola"]:
-        linhas += ["", "PIX copia e cola:", t["pix_copia_cola"]]
+        base = t["total_cent"] if etapa > 0 else t["valor_cent"]
+        cartao = {"link": t["cartao_link"], "valor": t.get("cartao_total_cent") or 0,
+                  "acrescimo": max(0, (t.get("cartao_total_cent") or 0) - base)}
     emp = cfg["empresa"]
-    linhas += ["", "Atenciosamente,", emp.get("assinatura") or emp["nome"]]
-    if emp.get("whatsapp"):
-        linhas.append(f"WhatsApp: {emp['whatsapp']}")
-    return assunto, "\n".join(linhas)
+    return {"assunto": assunto, "nome": nome, "abertura": abertura, "atraso": etapa > 0,
+            "referente": t["descricao"], "competencia": f"{t['competencia'][5:]}/{t['competencia'][:4]}",
+            "vencimento": _data(t["vencimento"]), "valor": _brl(t["valor_cent"]),
+            "total": _brl(t["total_cent"]) if etapa > 0 else "",
+            "nfse": t["nfse_numero"], "nfse_link": t["nfse_link"] if str(t["nfse_link"]).startswith("http") else "",
+            "boleto_link": t["cobranca_link"], "boleto_pdf": bool(t.get("banco_id")),
+            "linha": t["linha_digitavel"], "pix": t["pix_copia_cola"], "cartao": cartao,
+            "assinatura": emp.get("assinatura") or emp["nome"], "whatsapp": emp.get("whatsapp", "")}
+
+
+def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = None) -> tuple[str, str]:
+    """(assunto, texto) conforme a etapa da régua — texto simples (e-mail sem HTML e WhatsApp)."""
+    cfg = cfg or config.carregar()
+    c = _conteudo(t, etapa, cfg, em)
+    linhas = [f"Olá, {c['nome']}!", "", c["abertura"]]
+    if c["atraso"]:
+        linhas.append("Se já pagou, por favor desconsidere e nos envie o comprovante.")
+    linhas += ["", f"Referente a: {c['referente']} — competência {c['competencia']}"]
+    if c["nfse"]:
+        linhas.append(f"NFS-e nº {c['nfse']}" + (f": {c['nfse_link']}" if c["nfse_link"] else ""))
+    if c["boleto_link"]:
+        linhas.append(f"Boleto/PIX: {c['boleto_link']}")
+    if c["boleto_pdf"]:
+        linhas.append("Boleto em PDF: segue em anexo.")
+    if c["linha"]:
+        linhas.append(f"Linha digitável: {c['linha']}")
+    if c["pix"]:
+        linhas += ["", "PIX copia e cola:", c["pix"]]
+    if c["cartao"]:
+        k = c["cartao"]
+        linhas += ["", f"Prefere pagar com cartão de crédito? {k['link']}",
+                   f"Valor no cartão: {_brl(k['valor'])}"
+                   + (f" (inclui {_brl(k['acrescimo'])} da taxa da operadora, por conta de quem paga com cartão)"
+                      if k["acrescimo"] else ""),
+                   "Parcelamento disponível, com os juros por conta do titular do cartão."]
+        if k["acrescimo"] and (c["linha"] or c["pix"]):
+            linhas.append("Pelo boleto ou PIX, sem acréscimo.")
+    linhas += ["", "Atenciosamente,", c["assinatura"]]
+    if c["whatsapp"]:
+        linhas.append(f"WhatsApp: {c['whatsapp']}")
+    return c["assunto"], "\n".join(linhas)
+
+
+def mensagem_html(t: dict, etapa: int, cfg: dict | None = None, em: date | None = None) -> str:
+    """Versão formatada do e-mail de cobrança (compatível com Gmail/Outlook: tabelas e estilos em linha)."""
+    from html import escape as e
+    cfg = cfg or config.carregar()
+    c = _conteudo(t, etapa, cfg, em)
+    cor = "#b42318" if c["atraso"] else "#1f4fbf"
+    selo = "EM ATRASO" if c["atraso"] else ("VENCE HOJE" if etapa == 0 else "LEMBRETE")
+    linha = lambda r, v, forte=False: (  # noqa: E731
+        f'<tr><td style="padding:6px 0;color:#667085;font-size:14px">{r}</td>'
+        f'<td style="padding:6px 0;text-align:right;font-size:14px;{"font-weight:700;color:#101828" if forte else "color:#101828"}">{v}</td></tr>')
+    botao = lambda url, txt, fundo: (  # noqa: E731
+        f'<a href="{e(url)}" style="display:inline-block;background:{fundo};color:#ffffff;text-decoration:none;'
+        f'font-weight:700;font-size:15px;padding:12px 20px;border-radius:8px;margin:4px 6px 4px 0">{txt}</a>')
+    caixa = lambda titulo, conteudo: (  # noqa: E731
+        f'<p style="margin:18px 0 6px;font-size:13px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.04em">{titulo}</p>'
+        f'<div style="background:#f4f6f9;border:1px solid #e3e7ee;border-radius:8px;padding:12px;font-family:Consolas,Menlo,monospace;'
+        f'font-size:13px;color:#101828;word-break:break-all">{e(conteudo)}</div>')
+    detalhes = (linha("Referente a", e(c["referente"])) + linha("Competência", c["competencia"])
+                + linha("Vencimento", c["vencimento"]) + linha("Valor", c["valor"], not c["atraso"])
+                + (linha("Valor atualizado (multa e juros)", c["total"], True) if c["atraso"] else "")
+                + (linha("NFS-e", (f'<a href="{e(c["nfse_link"])}" style="color:#1f4fbf">nº {e(c["nfse"])}</a>'
+                                   if c["nfse_link"] else f"nº {e(c['nfse'])}")) if c["nfse"] else ""))
+    pagar = ""
+    if c["boleto_link"]:
+        pagar += botao(c["boleto_link"], "Pagar boleto / PIX", "#1f4fbf")
+    if c["cartao"]:
+        pagar += botao(c["cartao"]["link"], "Pagar com cartão de crédito", "#344054")
+    corpo = (f'<p style="margin:0 0 4px;font-size:16px;color:#101828">Olá, <b>{e(c["nome"])}</b>!</p>'
+             f'<p style="margin:8px 0 16px;font-size:15px;line-height:1.5;color:#344054">{e(c["abertura"])}'
+             + (" Se já pagou, por favor desconsidere e nos envie o comprovante." if c["atraso"] else "") + "</p>"
+             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e3e7ee;'
+             f'border-bottom:1px solid #e3e7ee;margin:0 0 8px">{detalhes}</table>'
+             + (f'<div style="margin:16px 0 4px">{pagar}</div>' if pagar else "")
+             + (caixa("Linha digitável do boleto", c["linha"]) if c["linha"] else "")
+             + ('<p style="margin:6px 0 0;font-size:13px;color:#667085">O boleto em PDF segue em anexo.</p>' if c["boleto_pdf"] else "")
+             + (caixa("PIX copia e cola", c["pix"]) if c["pix"] else ""))
+    if c["cartao"]:
+        k = c["cartao"]
+        corpo += (f'<div style="margin:18px 0 0;padding:12px 14px;border:1px solid #e3e7ee;border-radius:8px;font-size:14px;color:#344054;line-height:1.5">'
+                  f'<b>Cartão de crédito:</b> {_brl(k["valor"])}'
+                  + (f' — inclui {_brl(k["acrescimo"])} da taxa da operadora, por conta de quem paga com cartão.' if k["acrescimo"] else ".")
+                  + " Parcelamento disponível, com os juros por conta do titular do cartão."
+                  + (" <b>Pelo boleto ou PIX, sem acréscimo.</b>" if k["acrescimo"] and (c["linha"] or c["pix"]) else "")
+                  + f'<br><a href="{e(k["link"])}" style="color:#1f4fbf">{e(k["link"])}</a></div>')
+    rodape = e(c["assinatura"]) + (f' · WhatsApp {e(c["whatsapp"])}' if c["whatsapp"] else "")
+    return (f'<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+            f'<title>{e(c["assunto"])}</title></head><body style="margin:0;padding:0;background:#f4f6f9">'
+            f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f9;padding:24px 12px">'
+            f'<tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+            f'style="max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e3e7ee;font-family:Segoe UI,Arial,sans-serif">'
+            f'<tr><td style="padding:18px 24px;border-bottom:4px solid {cor}"><span style="font-size:17px;font-weight:700;color:#101828">'
+            f'{e(cfg["empresa"]["nome"])}</span><span style="float:right;font-size:12px;font-weight:700;color:{cor};'
+            f'border:1px solid {cor};border-radius:999px;padding:3px 10px">{selo}</span></td></tr>'
+            f'<tr><td style="padding:22px 24px">{corpo}</td></tr>'
+            f'<tr><td style="padding:14px 24px;background:#f8f9fb;border-top:1px solid #e3e7ee;border-radius:0 0 12px 12px;'
+            f'font-size:13px;color:#667085">Atenciosamente,<br><b style="color:#344054">{rodape}</b></td></tr>'
+            f'</table></td></tr></table></body></html>')
 
 
 def link_whatsapp(telefone: str, texto: str) -> str:
@@ -317,6 +430,8 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             etapa = etapa_devida(dias, etapas_da_regua(dias, cob), enviadas)
             if etapa is None:
                 continue
+            if etapa > 0 and canal == "email":
+                t = _atualizar_cartao(t, cfg, em)
             assunto, texto = mensagem(t, etapa, cfg, em)
             if canal == "email":
                 if not cli.get("email"):
@@ -325,7 +440,8 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                 else:
                     try:
                         pdf_ = _pdf_boleto(t, cfg)
-                        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [])
+                        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [],
+                                     html=mensagem_html(t, etapa, cfg, em))
                         status, det = "enviado", cli["email"]
                         res["email"] += 1
                     except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
@@ -366,13 +482,16 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     cfg = cfg or config.carregar()
     t = preparar_pagamento(tid, cfg)
     dias = (financeiro.hoje() - date.fromisoformat(t["vencimento"])).days
-    assunto, texto = mensagem(t, max(dias, -1) if dias < 0 else dias, cfg)
+    etapa = max(dias, -1) if dias < 0 else dias
+    if etapa > 0:
+        t = _atualizar_cartao(t, cfg)
+    assunto, texto = mensagem(t, etapa, cfg)
     cli = clientes.obter(t["cpf_cnpj"]) or {}
     out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "email": "",
            "texto": texto}
     if cli.get("email") and cfg["smtp"].get("host"):
         pdf_ = _pdf_boleto(t, cfg)
-        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [])
+        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [], html=mensagem_html(t, etapa, cfg))
         out["email"] = cli["email"]
     out["pdf"] = t.get("boleto_pdf") or (_pdf_boleto(t, cfg) if t.get("banco_id") else "")
     return out

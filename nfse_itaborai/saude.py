@@ -178,7 +178,8 @@ def fechamento_mensal(em: date | None = None, forcar: bool = False) -> str:
     para = cfg["resumo"].get("email_dono")
     if para and cfg["smtp"].get("host"):
         cobranca.enviar_email(para, f"Fechamento financeiro de {ref[5:]}/{ref[:4]}",
-                              "Seu relatório de fechamento está em anexo e no corpo deste e-mail (versão HTML).",
+                              f"O relatório de fechamento de {ref[5:]}/{ref[:4]} está no corpo deste e-mail e foi salvo "
+                              f"também em {arq}.",
                               cfg, html=doc)
         enviado = f" e enviado para {para}"
     config.salvar({"resumo": {"ultimo_fechamento": ref}})

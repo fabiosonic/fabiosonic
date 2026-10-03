@@ -270,19 +270,41 @@ def resumo_diario(resultado_robo: dict, em: date | None = None, forcar: bool = F
     erros = db.linhas("SELECT cliente_nome, nfse_erro FROM titulos WHERE nfse_status='erro' AND status='aberto'")
     pendentes = db.linhas("SELECT COUNT(*) n FROM contratos WHERE confirmado=0 AND ativo=1")[0]["n"]
     b = lambda c: f"R$ {c / 100:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")  # noqa: E731
-    linhas = [f"Resumo financeiro de {em:%d/%m/%Y}", "",
-              f"Recebido ontem: {b(sum(t['valor_pago_cent'] for t in recebidos))} ({len(recebidos)} pagamento(s))",
-              f"Recebido no mês: {b(p['recebido_mes'])}", f"A receber: {b(p['a_receber'])}",
-              f"Em atraso: {b(p['atrasado'])} — {p['atrasado_qtd']} título(s), inadimplência {p['inadimplencia_pct']}%",
-              f"A pagar: {b(p['a_pagar'])}", f"Receita recorrente (MRR): {b(p['mrr'])}", "",
-              "Robô de hoje:"] + [f"  - {k}: {v}" for k, v in resultado_robo.items() if k not in ("executado", "data")]
+    pct = f"{p['inadimplencia_pct']:.1f}".replace(".", ",") + "%"
+    robo = {k: v for k, v in resultado_robo.items() if k not in ("executado", "data")}
+    numeros = [("Recebido ontem", f"{b(sum(t['valor_pago_cent'] for t in recebidos))} ({len(recebidos)} pagamento(s))"),
+               ("Recebido no mês", b(p["recebido_mes"])), ("A receber", b(p["a_receber"])),
+               ("Em atraso", f"{b(p['atrasado'])} — {p['atrasado_qtd']} título(s), inadimplência {pct}"),
+               ("A pagar", b(p["a_pagar"])), ("Receita recorrente (MRR)", b(p["mrr"]))]
+    avisos = []
     if erros:
-        linhas += ["", "NFS-e com erro (precisam de revisão):"] + [f"  - {e['cliente_nome']}: {e['nfse_erro'][:150]}"
-                                                                for e in erros]
+        avisos += ["NFS-e com erro (precisam de revisão):"] + [f"  - {e['cliente_nome']}: {e['nfse_erro'][:150]}" for e in erros]
     if pendentes:
-        linhas += ["", f"{pendentes} contrato(s) detectado(s) aguardando sua confirmação (menu Contratos)."]
+        avisos.append(f"{pendentes} contrato(s) detectado(s) aguardando sua confirmação (menu Recorrência).")
     if p["criticos"]:
-        linhas += ["", "Atraso crítico: " + ", ".join(p["criticos"][:15])]
-    cobranca.enviar_email(para, f"Resumo financeiro {em:%d/%m} — a receber {b(p['a_receber'])}", "\n".join(linhas), cfg)
+        avisos.append("Atraso crítico: " + ", ".join(p["criticos"][:15]))
+    linhas = [f"Resumo financeiro de {em:%d/%m/%Y}", ""] + [f"{r}: {v}" for r, v in numeros]
+    if robo:
+        linhas += ["", "Robô de hoje:"] + [f"  - {k}: {v}" for k, v in robo.items()]
+    if avisos:
+        linhas += [""] + avisos
+    from html import escape as e
+    html = ('<!doctype html><html lang="pt-br"><head><meta charset="utf-8"></head><body style="margin:0;background:#f4f6f9">'
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center">'
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;'
+            'border:1px solid #e3e7ee;border-radius:12px;font-family:Segoe UI,Arial,sans-serif">'
+            f'<tr><td style="padding:18px 24px;border-bottom:4px solid #1f4fbf"><b style="font-size:17px;color:#101828">'
+            f'{e(cfg["empresa"]["nome"])}</b><br><span style="color:#667085;font-size:13px">Resumo financeiro de {em:%d/%m/%Y}</span></td></tr>'
+            '<tr><td style="padding:18px 24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+            + "".join(f'<tr><td style="padding:7px 0;color:#667085;font-size:14px;border-bottom:1px solid #eef0f4">{e(r)}</td>'
+                      f'<td style="padding:7px 0;text-align:right;font-weight:700;font-size:14px;color:#101828;border-bottom:1px solid #eef0f4">{e(v)}</td></tr>'
+                      for r, v in numeros) + "</table>"
+            + (f'<div style="margin-top:16px;padding:12px 14px;background:#fdf1dc;border-radius:8px;color:#7a4500;font-size:14px;line-height:1.5">'
+               + "<br>".join(e(a) for a in avisos) + "</div>" if avisos else "")
+            + (f'<p style="margin:16px 0 4px;font-size:13px;color:#667085;font-weight:700">ROBÔ DE HOJE</p><p style="margin:0;font-size:13px;color:#344054;line-height:1.6">'
+               + "<br>".join(f"{e(k)}: {e(str(v))}" for k, v in robo.items()) + "</p>" if robo else "")
+            + '</td></tr></table></td></tr></table></body></html>')
+    cobranca.enviar_email(para, f"Resumo financeiro {em:%d/%m} — a receber {b(p['a_receber'])}", "\n".join(linhas), cfg,
+                          html=html)
     config.salvar({"resumo": {"ultimo_envio": em.isoformat()}})
     return f"enviado para {para}"

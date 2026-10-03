@@ -108,6 +108,21 @@ class SMTPTeste(FakeSMTP):
         super().send_message(msg)
         caixa.write_text(json.dumps([{"para": m["To"], "assunto": m["Subject"]} for m in FakeSMTP.enviados],
                                     ensure_ascii=False), encoding="utf-8")
+        # cópia completa (texto, HTML e anexos) para conferir o modelo dos e-mails
+        import base64
+        partes = {"para": msg["To"], "de": msg["From"], "assunto": msg["Subject"], "texto": "", "html": "", "anexos": []}
+        for parte in msg.walk():
+            tipo = parte.get_content_type()
+            if parte.get_filename():
+                partes["anexos"].append({"nome": parte.get_filename(), "tipo": tipo,
+                                         "b64": base64.b64encode(parte.get_payload(decode=True)).decode()})
+            elif tipo == "text/plain" and not partes["texto"]:
+                partes["texto"] = parte.get_content()
+            elif tipo == "text/html":
+                partes["html"] = parte.get_content()
+        completo = pasta / "dados" / "emails_completos.json"
+        lst = json.loads(completo.read_text(encoding="utf-8")) if completo.exists() else []
+        completo.write_text(json.dumps(lst + [partes], ensure_ascii=False), encoding="utf-8")
 
 
 cobranca.smtplib.SMTP = SMTPTeste

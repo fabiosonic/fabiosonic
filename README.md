@@ -402,6 +402,21 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### E-mails enviados pelo sistema
+
+| E-mail | Para | Quando |
+|---|---|---|
+| Lembrete (vence em N dias), Vence hoje, Em atraso | cliente | régua de cobrança e botão "Cobrar" |
+| Resumo financeiro | dono do escritório | todo dia (robô) ou "Enviar resumo" |
+| Fechamento financeiro do mês | dono do escritório | no dia configurado (padrão: dia 3) |
+| Teste de e-mail | quem você indicar | Configurações › E-mail |
+
+Os e-mails de cobrança saem em **HTML formatado** (cabeçalho com a empresa e a etapa, tabela com referência,
+competência, vencimento, valor e NFS-e, botão "Pagar com cartão", linha digitável, PIX copia e cola e boleto em
+PDF anexo) e com versão em texto simples para leitores que não mostram HTML. Em atraso, mostram o valor
+atualizado com multa e juros e o link do cartão passa a cobrar esse valor + a taxa. Nomes em maiúsculas são
+ajustados na saudação ("RPS Consultoria e Servicos de Engenharia LTDA").
+
 ### Cartão de crédito (InfinitePay) — taxas por conta do cliente
 
 Em **Configurações › Cartão de crédito**, escolha InfinitePay e informe a sua **InfiniteTag** (no app, canto
@@ -580,7 +595,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 238 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 239 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

@@ -123,7 +123,7 @@ def test_despesas_do_extrato_desligado(auto):
 
 def test_resumo_diario_uma_vez_por_dia(auto, monkeypatch):
     enviados = []
-    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None: enviados.append((para, texto)))
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, **k: enviados.append((para, texto)))
     assert importacao.resumo_diario({}) == "sem e-mail do dono ou SMTP"
     config.salvar({"resumo": {"email_dono": "fabio@x.com"}, "smtp": {"host": "smtp.x"}})
     financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-09-01", emitir_nfse=False)
