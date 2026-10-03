@@ -98,6 +98,18 @@ PAGINAS.config = async el => {
     <h3 class="bloco">Cobrança recorrente dos atrasados</h3>${ck("cobranca", "recorrente_ativa", "<b>Cobrar atrasados de forma recorrente</b>")}${tx("cobranca", "recorrente_apos_dias", "Começar após quantos dias de atraso", "number", 'min="1"')}${tx("cobranca", "recorrente_a_cada_dias", "Repetir a cada quantos dias", "number", 'min="1"')}</div></div>
   <div class="card"><h2>Banco Inter — como obter as credenciais</h2><p class="sub">No Internet Banking PJ do Inter: <b>Soluções para sua empresa › Nova integração</b>, marque os escopos <b>Emissão e cancelamento de boletos</b> e <b>Consulta de boletos</b>. Baixe o certificado (.crt) e a chave (.key), copie client_id e client_secret para cá, salve e teste. Os boletos são registrados direto na conta do escritório, com PIX no próprio boleto; o sistema dá a baixa sozinho quando o cliente paga.</p>
     <p><button class="btn sec" id="teste_inter">Salvar e testar conexão com o Inter</button></p></div>
+  <div class="card"><h2>${ic("receber")}Cartão de crédito (InfinitePay)</h2>
+    <p class="sub">O cliente que preferir pagar com cartão recebe, junto com o boleto/PIX, o link “Pagar com cartão” da InfinitePay. O valor no cartão já inclui a taxa (Lei 13.455/2017 permite preço diferente por meio de pagamento), para o escritório receber o honorário cheio. Quando o pagamento aparecer no app da InfinitePay, clique em <b>Pago no cartão</b> no título: o sistema dá a baixa, lança a taxa em despesas (Bancárias), cancela o boleto e, se a NFS-e ainda não saiu, emite pelo valor cobrado no cartão.</p>
+    <div class="campos">${sl("cobranca", "cartao_provedor", "Cartão de crédito", [["", "Desligado"], ["infinitepay", "InfinitePay"]])}
+      ${tx("cobranca", "cartao_infinitepay_tag", "Sua InfiniteTag", "text", 'placeholder="no app, canto superior esquerdo, sem o $"')}
+      ${ck("cobranca", "cartao_oferecer", "Oferecer o cartão em todas as cobranças")}
+      ${ck("cobranca", "cartao_repassar", "<b>Acrescentar a taxa ao valor no cartão</b>")}
+      ${tx("cobranca", "cartao_parcelas_max", "Parcelas no cartão (máx.)", "number", 'min="1" max="12"')}
+      ${tx("cobranca", "cartao_taxa_1x", "Taxa à vista (%)")}${tx("cobranca", "cartao_taxa_2a6", "Taxa 2 a 6x (%)")}
+      ${tx("cobranca", "cartao_taxa_7a12", "Taxa 7 a 12x (%)")}${tx("cobranca", "cartao_taxa_fixa", "Taxa fixa por venda (R$)")}</div>
+    <p class="sub"><b>Confira as taxas do SEU plano no app da InfinitePay</b> (Perfil › Taxas) e ajuste aqui: elas definem o acréscimo cobrado do cliente. A InfinitePay não cancela links pela API: se o cliente pagar por boleto e também pelo cartão, estorne pelo app.</p>
+    <p class="sub" id="cartao_sim"></p>
+    <p><button class="btn sec" id="teste_cartao" type="button">Salvar e testar conexão com a InfinitePay</button></p></div>
   <div class="card"><h2>E-mail (SMTP)</h2><p class="sub">Gmail: servidor smtp.gmail.com, porta 587, e uma “senha de app” da conta Google.</p><div class="campos">${tx("smtp", "host", "Servidor")}${tx("smtp", "porta", "Porta", "number")}${tx("smtp", "usuario", "Usuário")}${tx("smtp", "senha", "Senha", "password")}${tx("smtp", "remetente", "Remetente")}${tx("smtp", "copia_para", "Cópia oculta para")}${ck("smtp", "ssl", "SSL direto (porta 465)")}</div>
     <p><button class="btn sec" id="teste_email">Salvar e enviar e-mail de teste</button></p></div>
   <div class="card"><h2>${ic("contratos")}13º honorário</h2><p class="sub">Em novembro e dezembro, cobra o honorário mensal de cada contrato ativo em parcelas, com NFS-e e boleto, entrando na régua de cobrança.</p>
@@ -117,7 +129,7 @@ PAGINAS.config = async el => {
     $$("[data-s]").forEach(i => { let v = i.type == "checkbox" ? i.checked : i.value;
       if (["regua_dias"].includes(i.dataset.k)) v = v.split(/[,;\s]+/).filter(Boolean).map(Number);
       else if (["categorias_despesa", "contas_bancarias"].includes(i.dataset.k)) v = v.split(",").map(s => s.trim()).filter(Boolean);
-      else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct", "iss_fixo_mensal"].includes(i.dataset.k)) v = valorNum(v);
+      else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct", "iss_fixo_mensal", "cartao_taxa_1x", "cartao_taxa_2a6", "cartao_taxa_7a12", "cartao_taxa_fixa"].includes(i.dataset.k)) v = valorNum(v);
       else if (i.type == "number") v = Number(v);
       (novo[i.dataset.s] ||= {})[i.dataset.k] = v; });   // qualquer seção (ex.: seguranca) entra no que é salvo
     const cred = {};
@@ -165,6 +177,10 @@ PAGINAS.config = async el => {
     } catch (e) { $("#cert_res").innerHTML = ""; }
   };
   $("#teste_inter").onclick = async () => { if (!await salvarTudo()) return; const r = await api("inter/testar"); aviso(r.mensagem || "OK", 6000); };
+  $("#teste_cartao").onclick = async () => { if (!await salvarTudo()) return; const r = await api("cartao/testar"); aviso(r.mensagem || "OK", 6000); };
+  const simCartao = async () => { const x = await api("cartao/simular", { valor: "1000", parcelas: 1 });
+    $("#cartao_sim").innerHTML = `Exemplo com as taxas salvas: honorário de <b>${brl(x.valor_cent)}</b> → no cartão à vista o cliente paga <b>${brl(x.total_cent)}</b> (acréscimo de ${brl(x.acrescimo_cent)}); descontada a taxa, o escritório recebe o honorário cheio.`; };
+  simCartao();
   $("#imp_xml").onclick = async () => { aviso("Lendo XML…"); const r = await api("importacao/xml"); aviso(`XML: ${JSON.stringify(r)}`, 8000); await carregarEstado(); };
   $("#env_res").onclick = async () => { const r = await api("resumo/enviar"); aviso("Resumo: " + r.resultado, 6000); };
   $("#teste_email").onclick = async () => { const p = prompt("Enviar teste para qual e-mail?", (c.resumo || {}).email_dono || ""); if (!p) return;

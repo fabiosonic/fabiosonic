@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, assistente, atualizacao, automacao, paises, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, assistente, atualizacao, automacao, cartao, paises, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -238,6 +238,11 @@ ROTAS = {
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
     "titulo/emitir_nfse": lambda c: financeiro.emitir_nfse_titulo(_id(c)),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),
+    "titulo/cartao": lambda c: cartao.gerar_link(_id(c), int(c.get("parcelas") or 0)),
+    "cartao/simular": lambda c: cartao.valor_no_cartao(financeiro.cent(c.get("valor") or 0), int(c.get("parcelas") or 1)),
+    "cartao/testar": lambda c: cartao.testar(),
+    "titulo/pago_cartao": lambda c: cartao.confirmar_pagamento(_id(c), c.get("valor"), str(c.get("data") or ""),
+                                                               str(c.get("comprovante") or "")),
     "titulo/cobrar": lambda c: cobranca.cobrar_agora(_id(c)),
     "titulo/historico": lambda c: cobranca.historico(_id(c)),
     # contratos / recorrência
@@ -333,7 +338,7 @@ def tratar(rota: str, corpo: dict):
         return func(corpo or {})
     except ErroValidacao as ex:
         return {"sucesso": False, "titulo": "Pendências (nada foi enviado)", "erros": ex.erros, "erro": "; ".join(ex.erros)}
-    except (emissor.ErroConfiguracao, ValueError, KeyError, RuntimeError) as ex:
+    except (emissor.ErroConfiguracao, ValueError, KeyError, RuntimeError) as ex:   # inclui ErroCartao/ErroInter
         return {"sucesso": False, "titulo": "Erro", "erros": [str(ex)], "erro": str(ex)}
     except OSError as ex:
         return {"sucesso": False, "titulo": "Falha de comunicação", "erros": [str(ex)], "erro": f"Falha de comunicação: {ex}"}

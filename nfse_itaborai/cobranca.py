@@ -43,7 +43,21 @@ def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
         financeiro.atualizar_titulo(tid, pix_copia_cola=pix.payload(
             emp["pix_chave"], t["valor_cent"], emp["nome"], emp["pix_cidade"], f"T{t['id']}",
             f"NFSE {t['nfse_numero']}" if t["nfse_numero"] else ""))
+    _oferecer_cartao(tid, cfg)
     return financeiro.obter_titulo(tid)
+
+
+def _oferecer_cartao(tid: int, cfg: dict) -> None:
+    """Se o cartão estiver ligado, a cobrança já leva o link 'pagar com cartão' (o cliente escolhe o meio)."""
+    from . import cartao
+    t = financeiro.obter_titulo(tid)
+    if t["status"] != "aberto" or t.get("cartao_id") or not cfg["cobranca"].get("cartao_oferecer") \
+            or not cartao.configurado(cfg) or clientes.eh_exterior(clientes.obter(t["cpf_cnpj"])) or not t.get("cobrar", 1):
+        return
+    try:
+        cartao.gerar_link(tid, cfg=cfg)
+    except Exception as ex:  # noqa: BLE001 — boleto/PIX continuam valendo; o robô tenta o cartão de novo
+        db.registrar("cartao", f"Título {tid}: link de cartão não criado ({ex})")
 
 
 def cancelar_boleto(t: dict, motivo: str = "", cfg: dict | None = None) -> None:
@@ -187,6 +201,14 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
         linhas.append("Boleto em PDF: segue em anexo.")
     if t["linha_digitavel"]:
         linhas.append(f"Linha digitável: {t['linha_digitavel']}")
+    if t.get("cartao_link") and t.get("cartao_status") == "aberto":
+        acresc = (t.get("cartao_total_cent") or 0) - t["valor_cent"]
+        linhas += ["", f"Prefere pagar com cartão de crédito? {t['cartao_link']}",
+                   f"Valor no cartão: {_brl(t['cartao_total_cent'])}"
+                   + (f" em até {t['cartao_parcelas']}x" if (t.get("cartao_parcelas") or 1) > 1 else "")
+                   + (f" (inclui {_brl(acresc)} referente à taxa da operadora do cartão)" if acresc > 0 else "")]
+        if acresc > 0 and (t.get("linha_digitavel") or t.get("pix_copia_cola")):
+            linhas.append("Pelo boleto ou PIX acima, sem acréscimo.")
     if t["pix_copia_cola"]:
         linhas += ["", "PIX copia e cola:", t["pix_copia_cola"]]
     emp = cfg["empresa"]

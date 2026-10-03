@@ -121,6 +121,8 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     etapa("cobrancas_criadas", auto["criar_cobranca"] and cfg["cobranca"]["provedor"] != "nenhum", cobrancas)
     etapa("baixas_banco", auto.get("sincronizar_banco", True) and cfg["cobranca"]["provedor"] == "inter",
           lambda: cobranca.sincronizar_banco(cfg))
+    from . import cartao
+    etapa("cartao_links_encerrados", cartao.configurado(cfg), lambda: cartao.encerrar_links(cfg))
     etapa("boletos_pdf", auto.get("baixar_boletos", True) and cfg["cobranca"]["provedor"] == "inter",
           lambda: cobranca.salvar_boletos(cfg=cfg))
     etapa("extratos", auto.get("importar_extratos"), importacao.importar_extratos)

@@ -252,6 +252,29 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await ir('receber'); for (const f of ['a_receber', 'atrasado', 'pago', 'sem_cobranca', 'sem_nfse', 'cancelado', 'todos']) { await p.click(`.abas button[data-f="${f}"]`); await espera(500); }
   });
 
+  await passo('Cartão de crédito (InfinitePay): link com a taxa repassada e "Pago no cartão"', async () => {
+    const r0 = await api('titulo/novo', { cpf_cnpj: '35979895000132', valor: '1.000,00', nfse: 'pagamento', cobrar: true });
+    let t = (await api('titulos', { filtro: 'todos' })).find(x => x.id === r0.titulo_id);
+    certo(t.cartao_link && t.cartao_total_cent > t.valor_cent, 'cobrança sem link de cartão');
+    await ir('receber', 1200); await p.evaluate(([id, v]) => linkCartao(id, v), [t.id, t.valor_cent]); await espera(1200);
+    certo(/no cartão/.test(await p.textContent('#lc_sim')), await p.textContent('#lc_sim'));
+    await p.click('#lc_ok'); await espera(1500); certo(/Link/.test(await p.textContent('#lc_res')), await p.textContent('#lc_res'));
+    await p.evaluate(() => fechar());
+    await api('teste/infinitepay_pagar', { order_nsu: t.cartao_id, transaction_nsu: '9f1c2d3e-0000-4000-8000-123456789abc', slug: 'rec1', valor: t.cartao_total_cent });
+    await ir('receber', 1200); await p.evaluate(id => pagoCartao(id), t.id); await espera(1000);
+    await p.fill('#fpc [name=comprovante]', `https://checkout.infinitepay.io/retorno?order_nsu=${t.cartao_id}&slug=rec1&transaction_nsu=9f1c2d3e-0000-4000-8000-123456789abc`);
+    await p.click('#ok'); await espera(4000);
+    certo(/conferido na InfinitePay/.test(await aviso()), await aviso());
+    t = (await api('titulos', { filtro: 'todos' })).find(x => x.id === r0.titulo_id);
+    certo(t.status === 'pago' && t.forma_pagamento === 'cartao' && t.nfse_status === 'emitida', `${t.status}/${t.forma_pagamento}/${t.nfse_status}`);
+    certo((await api('despesas', { filtro: 'pago' })).some(d => /Taxa do cartão/.test(d.descricao)), 'taxa não lançada em despesas');
+    return `cliente pagou ${(t.valor_pago_cent / 100).toFixed(2)} no cartão`;
+  });
+  await passo('Configurações: testar InfinitePay e simulação da taxa', async () => {
+    await ir('config', 1500); certo(/no cartão à vista/.test(await p.textContent('#cartao_sim')), 'simulação não apareceu');
+    await p.click('#teste_cartao'); await espera(2000); certo(/InfinitePay OK/.test(await aviso()), await aviso());
+  });
+
   // ------------------------------------------------------------ recorrência
   await passo('Recorrência: marcar "Repetir todo mês" e salvar', async () => {
     const l0 = (await api('recorrencia')).linhas.find(x => x.cpf_cnpj === '35979895000132');

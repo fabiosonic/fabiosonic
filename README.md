@@ -402,6 +402,23 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### Cartão de crédito (InfinitePay) com a taxa repassada
+
+Em **Configurações › Cartão de crédito**, escolha InfinitePay e informe a sua **InfiniteTag** (no app, canto
+superior esquerdo, sem o $). Ajuste as taxas do **seu plano** (Perfil › Taxas no app): elas definem o acréscimo.
+- Cada cobrança leva, além do boleto/PIX do Inter, o link **"Pagar com cartão"** criado pela API da InfinitePay. O
+  valor no cartão = honorário + acréscimo calculado para que, descontada a taxa, o escritório receba o honorário
+  cheio (Lei 13.455/2017 permite preço diferente conforme o meio de pagamento). A mensagem avisa que pelo boleto
+  ou PIX não há acréscimo.
+- Quando o pagamento aparecer no app da InfinitePay, clique em **Pago no cartão** no título. Se colar o link do
+  comprovante (com `slug` e `transaction_nsu`), o sistema confere o pagamento na InfinitePay antes da baixa.
+- Na baixa: título pago pelo valor do cartão, taxa lançada em contas pagas (Bancárias), boleto do Inter cancelado
+  e, se a NFS-e ainda não saiu, ela é emitida pelo valor total (o acréscimo integra o preço do serviço e a
+  receita bruta do Simples).
+- Limites da InfinitePay: a confirmação automática exige webhook num endereço público (o sistema roda no seu
+  computador), por isso o clique em "Pago no cartão"; e links não são cancelados pela API — se o cliente pagar
+  pelos dois meios, estorne pelo app.
+
 ### Copiar a última nota do tomador
 
 Em **Emitir nota**, ao escolher o cliente aparece a **última NFS-e emitida para ele** (número, data, competência,
@@ -559,7 +576,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 233 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 238 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
@@ -582,7 +599,7 @@ e textos que transbordam. Rodam com `NFSE_TESTE_TELA=1 python -m pytest tests/te
 
 **Teste funcional de ponta a ponta** (`tests/ui/funcional.js` + `tests/ui/servidor_completo.py`): sobe o sistema em
 modo de teste com a prefeitura, o Sefin/ADN, o Banco Inter (TLS mútuo) e o e-mail **simulados** e usa a tela como
-um usuário, conferindo o resultado de 60 funções: clientes (inclusive do exterior e importação de XML),
+um usuário, conferindo o resultado de 62 funções: clientes (inclusive do exterior e importação de XML),
 serviços, configurações e testes de conexão, emissão em homologação e em produção simulada (Itaboraí e
 Nacional), lote, cópia da última nota, cancelamento, substituição, exportação, emissão pelo tomador, contas a
 receber (boleto, baixa, estorno, cobrança, PDF, CSV, cancelamentos), recorrência, régua, contas a pagar,

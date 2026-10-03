@@ -38,6 +38,8 @@ function acoesTitulo(t) {
     else { prin.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
       mais.push(it(`${ic("bloqueio")}Tirar da cobrança (manter a nota)`, `tirarDaCobranca(${t.id})`)); }
     if (t.banco_id) mais.push(`<a href="/boleto/${t.id}.pdf" target="_blank">${ic("download")}Boleto em PDF</a>`);
+    if (ST.config.cobranca.cartao_provedor) { mais.push(it(`${ic("receber")}Pagar com cartão (link)`, `linkCartao(${t.id},${t.valor_cent})`));
+      if (t.cartao_link) prin.push(`<button class="btn min sec" onclick="pagoCartao(${t.id})" title="O cliente pagou pelo link da InfinitePay">Pago no cartão</button>`); }
     if (["pendente", "erro", "teste"].includes(t.nfse_status)) mais.push(it(`${ic("nota")}Emitir NFS-e`, `emitirTitulo(${t.id})`));
   }
   if (t.status == "pago") prin.push(`<button class="btn min sec" onclick="estornar(${t.id})">Estornar</button>`);
@@ -51,6 +53,30 @@ async function baixar(id, total) {
     <label>Forma<select name="forma"><option>pix</option><option>boleto</option><option>transferencia</option><option>dinheiro</option><option>cartao</option></select></label></div>
     <p><button class="btn" id="ok">Confirmar baixa</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
   $("#ok").onclick = async () => { await api("titulo/baixar", { id, ...form($("#fb")) }); fechar(); aviso("Baixa registrada ✔"); ir(PAG); };
+}
+async function linkCartao(id, valor) {
+  const max = Number(ST.config.cobranca.cartao_parcelas_max || 1);
+  modal(`<h2>Pagamento com cartão de crédito</h2><div class="campos"><label>Parcelas<select id="lc_parc">${Array.from({ length: max }, (_, i) => `<option value="${i + 1}" ${i + 1 == max ? "selected" : ""}>${i + 1}x</option>`).join("")}</select></label></div>
+    <div id="lc_sim" class="msg">Calculando…</div><p><button class="btn" id="lc_ok">Gerar link</button> <button class="btn sec" onclick="fechar()">Fechar</button></p><div id="lc_res"></div>`);
+  const sim = async () => { const x = await api("cartao/simular", { valor: valor / 100, parcelas: $("#lc_parc").value });
+    $("#lc_sim").innerHTML = `Honorário ${brl(x.valor_cent)} · no cartão <b>${brl(x.total_cent)}</b>${x.parcelas > 1 ? ` em ${x.parcelas}x de ${brl(x.parcela_cent)}` : " à vista"} · acréscimo ${brl(x.acrescimo_cent)} (taxa ${String(x.taxa_pct).replace(".", ",")}% + ${brl(x.taxa_fixa_cent)})`; };
+  $("#lc_parc").onchange = sim; sim();
+  $("#lc_ok").onclick = async () => { $("#lc_ok").disabled = true;
+    try { const r = await api("titulo/cartao", { id, parcelas: $("#lc_parc").value });
+      $("#lc_res").innerHTML = `<div class="msg ok">Link ${r.reaproveitado ? "(já existia)" : "criado"}: <a href="${esc(r.link)}" target="_blank">${esc(r.link)}</a>
+        <p><button class="btn min sec" type="button" onclick="navigator.clipboard.writeText('${esc(r.link)}');aviso('Link copiado')">Copiar link</button></p></div>`;
+    } finally { $("#lc_ok").disabled = false; } };
+}
+async function pagoCartao(id) {
+  const t = (await api("titulos", { filtro: "todos" })).find(x => x.id == id) || {};
+  modal(`<h2>Pago no cartão (InfinitePay)</h2><p class="sub">${esc(t.cliente_nome || "")} — honorário ${brl(t.valor_cent)}${t.cartao_total_cent ? ` · valor do link ${brl(t.cartao_total_cent)}` : ""}</p>
+    <div class="campos" id="fpc"><label>Data do pagamento<input type="date" name="data" value="${hojeISO()}"></label>
+    <label>Valor pago no cartão (R$)<input name="valor" value="${num(t.cartao_total_cent || t.valor_cent)}"></label>
+    <label class="inteiro">Link do comprovante (opcional — com ele o sistema confere o pagamento na InfinitePay)<input name="comprovante" placeholder="cole aqui o link recebido da InfinitePay"></label></div>
+    <p class="sub">A taxa do cartão é lançada em contas pagas (Bancárias), o boleto é cancelado e, se a nota ainda não saiu, ela é emitida pelo valor pago.</p>
+    <p><button class="btn" id="ok">Confirmar pagamento</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#ok").onclick = async () => { const r = await api("titulo/pago_cartao", { id, ...form($("#fpc")) }); fechar();
+    aviso(`Pagamento no cartão registrado ✔ Taxa ${brl(r.taxa_cent)} lançada em despesas${r.conferido ? " · conferido na InfinitePay" : ""}.`, 8000); ir(PAG); };
 }
 async function estornar(id) { if (confirm("Estornar o pagamento deste título?")) { await api("titulo/estornar", { id }); ir(PAG); } }
 async function emitirTitulo(id) {

@@ -32,6 +32,8 @@ PASSOS = [
      "descricao": "Emite uma DPS de teste na Produção Restrita e registra o evento de cancelamento."},
     {"id": "inter", "titulo": "Banco Inter",
      "descricao": "Autentica e consulta cobranças. No sandbox também registra e cancela um boleto de teste."},
+    {"id": "cartao", "titulo": "Cartão de crédito (InfinitePay)",
+     "descricao": "Confere a InfiniteTag criando um link de teste de R$ 1,00 (não é enviado) e mostra a taxa repassada."},
     {"id": "backup", "titulo": "Backup",
      "descricao": "Gera um backup, confere o arquivo .zip, o manifesto e a integridade do banco de dados."},
 ]
@@ -203,8 +205,18 @@ def _backup(c: dict) -> dict:
     return _resultado("ok", "Backup gerado e conferido.", det)
 
 
+def _cartao(c: dict) -> dict:
+    from . import cartao
+    if not cartao.configurado():
+        raise Pulado("Cartão de crédito desligado (Configurações › Cartão de crédito).")
+    r = cartao.testar()
+    v = cartao.valor_no_cartao(100000, 1)
+    return _resultado("ok", r["mensagem"], [f"Link de teste: {r['link']}",f"Honorário de R$ 1.000,00 → no cartão à vista R$ {v['total_cent'] / 100:.2f}"
+                                            .replace(".", ",") + f" (taxa {v['taxa_pct']}% + R$ {v['taxa_fixa_cent'] / 100:.2f})"])
+
+
 FUNCOES = {"email": _email, "certificado": _certificado, "itaborai": _itaborai, "nacional": _nacional,
-           "inter": _inter, "backup": _backup}
+           "inter": _inter, "cartao": _cartao, "backup": _backup}
 
 
 # ---------------------------------------------------------------- execução e histórico
