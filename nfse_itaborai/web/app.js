@@ -1048,6 +1048,7 @@ PAGINAS.config = async el => {
     <p class="sub">Restaurar volta a empresa ao estado do backup. Antes, o sistema faz um backup do estado atual (dá para desfazer). A numeração do RPS/DPS nunca volta atrás e o ambiente (homologação/produção) não muda. Backup de uma empresa nunca é restaurado em outra.</p>
     <div id="bk_lista"><div class="vazio">Carregando…</div></div></div>
   <div class="card" id="card_pin"></div>
+  <div class="card" id="card_atual"></div>
   <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
     <div class="campos">${ck("automacao", "ativa", "<b>Robô ligado</b>")}${ck("automacao", "gerar_titulos", "Gerar títulos dos contratos")}${ck("automacao", "emitir_nfse", "Emitir NFS-e")}${ck("automacao", "criar_cobranca", "Criar PIX/boleto")}${ck("automacao", "baixar_boletos", "Salvar PDF dos boletos")}
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
@@ -1140,7 +1141,7 @@ PAGINAS.config = async el => {
   $$("[data-k]", rf).forEach(i => { const v = VIS_CFG[i.dataset.k]; if (v) (i.closest("label") || i).dataset.vis = v; });
   const atuReg = () => aplicarVis(rf, ctxFiscal({ regime: selReg.value }));
   $$("[data-k]", rf).forEach(i => i.addEventListener("change", atuReg)); atuReg();
-  listarBackups(); cartaoPin($("#card_pin"));
+  listarBackups(); cartaoPin($("#card_pin")); cartaoAtualizacao($("#card_atual"));
   $("#bk_criar").onclick = async () => { if (!await salvarTudo()) return; aviso("Gerando o backup…", 30000); const r = await api("backup/criar");
     aviso(`Backup criado ✔ ${r.nome} (${tamanho(r.tamanho)})${r.copia ? " · cópia em " + r.copia : ""}`, 8000); listarBackups(); };
   $("#bk_pasta").onclick = () => api("backup/abrir_pasta");
@@ -1205,6 +1206,32 @@ async function cartaoPin(box) {
   $("#pin_salvar", box).onclick = () => { const n = $("#pin_novo").value.trim(); if (!/^\d{4,8}$/.test(n)) return aviso("O PIN deve ter de 4 a 8 números."); enviar(n); };
   if ($("#pin_remover", box)) $("#pin_remover", box).onclick = () => { if (confirm("Remover o PIN? O sistema abre sem pedir senha.")) enviar(""); };
   if ($("#pin_bloq", box)) $("#pin_bloq", box).onclick = async () => { await api("acesso/sair"); location.reload(); };
+}
+
+// ---------------------------------------------------------------- atualização do sistema
+async function cartaoAtualizacao(box) {
+  const r = await api("atualizacao/versoes");
+  box.innerHTML = `<h2>${ic("download")}Atualizar o sistema</h2>
+    <p class="sub">Versão instalada: <b>${esc(r.versao)}</b>. Recebeu um ZIP novo do sistema? Selecione-o aqui: o sistema faz backup de todas as empresas, troca só os arquivos do programa (dados, senhas, certificados e notas ficam intactos) e reabre sozinho.</p>
+    <p><label class="btn"><input type="file" id="at_arq" accept=".zip" hidden>${ic("download")}Selecionar o ZIP da versão nova…</label></p>
+    ${r.versoes.length ? `<details><summary class="sub">Voltar para uma versão anterior (${r.versoes.length} guardada(s))</summary><div class="acoes-linha" style="margin-top:8px">${r.versoes.map(v => `<button class="btn min sec" type="button" data-volta="${esc(v.nome)}">Versão ${esc(v.versao)} — ${esc(v.nome.slice(-21, -4).replace("_", " "))}</button>`).join(" ")}</div></details>` : ""}`;
+  const lerB64 = f => new Promise((ok, erro) => { const x = new FileReader(); x.onload = () => ok(x.result); x.onerror = erro; x.readAsDataURL(f); });
+  const inicioAtual = (await (await fetch("/api/versao")).json()).inicio;
+  const esperarNova = async () => {
+    modal(`<h2>Atualizando…</h2><p>Backup feito e arquivos trocados. O sistema está reabrindo — esta tela recarrega sozinha.</p>`);
+    for (let i = 0; i < 90; i++) { await new Promise(ok => setTimeout(ok, 2000));
+      try { const v = await (await fetch("/api/versao")).json(); if (v.inicio && v.inicio != inicioAtual) { location.reload(); return; } } catch (e) { /* reiniciando */ } }
+    $("#modal_corpo").innerHTML = `<h2>Quase lá</h2><p>Se a tela não voltar, abra pelo atalho “Sistema Financeiro NFS-e” na área de trabalho.</p>`;
+  };
+  $("#at_arq", box).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    const arquivo = await lerB64(f); const a = await api("atualizacao/analisar", { arquivo });
+    const txt = a.mais_nova ? `Atualizar da versão ${a.versao_atual} para a ${a.versao_nova}?` : `Este ZIP é da versão ${a.versao_nova}${a.mesma ? " (a mesma instalada)" : ", ANTERIOR à instalada (" + a.versao_atual + ")"}. Instalar mesmo assim?`;
+    if (!confirm(txt + "\n\nAntes, o sistema faz backup de todas as empresas. Seus dados não são alterados.")) return;
+    aviso("Fazendo backup e atualizando…", 60000);
+    await api("atualizacao/aplicar", { arquivo, permitir_anterior: !a.mais_nova }); esperarNova(); };
+  $$("[data-volta]", box).forEach(b => b.onclick = async () => {
+    if (!confirm(`Voltar o programa para a ${b.textContent}? Os dados não mudam (antes é feito backup).`)) return;
+    await api("atualizacao/voltar", { nome: b.dataset.volta }); esperarNova(); });
 }
 
 // ---------------------------------------------------------------- início

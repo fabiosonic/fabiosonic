@@ -39,6 +39,13 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
      **resumo diário**.
 4. Em **Recorrência**, marque "Repetir todo mês" nos clientes mensais.
 
+### Python instalado sozinho
+
+`INSTALAR.bat` e `INICIAR.bat` procuram o Python 3.10+ (no PATH, no lançador `py` ou na pasta do usuário). Se não
+houver, instalam o Python 3.12 **automaticamente, só para o usuário** (sem pedir administrador): primeiro pelo
+`winget` do Windows e, se ele não existir, baixando o instalador oficial de python.org. Depois instalam os
+componentes (`lxml` e `cryptography`). Não é preciso baixar nem configurar nada à mão.
+
 ### Sem janela preta
 
 O sistema e o robô rodam **escondidos**. O atalho "Sistema Financeiro NFS-e" (área de trabalho e inicialização
@@ -51,6 +58,13 @@ Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são ma
 
 ## Atualizar de uma versão anterior
 
+**Pelo botão (recomendado, a partir da 3.2.0):** em **Configurações › Atualizar o sistema**, selecione o ZIP da
+versão nova. O sistema faz backup de todas as empresas, troca **só os arquivos do programa** (dados, senhas,
+certificados, notas e `.env` ficam intactos), guarda uma cópia da versão anterior (dá para voltar pelo mesmo
+cartão) e reabre sozinho. Se o robô estiver rodando naquele momento, ele pede para tentar em alguns minutos.
+
+**Manualmente:**
+
 1. Feche o sistema antigo (janela preta ou botão "Encerrar o sistema"), se estiver aberto.
 2. Descompacte o pacote novo **por cima da mesma pasta** de antes. Assim o banco de dados (`dados\sistema.db`),
    os clientes e as empresas continuam lá.
@@ -60,7 +74,7 @@ Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são ma
    - aponta o robô agendado, a inicialização com o Windows e o atalho da área de trabalho para a pasta
      dele, rodando sem janela;
    - se a porta 8765 continuar ocupada, abre em outra porta livre.
-4. A versão aparece no canto inferior do menu (ex.: v3.1.0).
+4. A versão aparece no canto inferior do menu (ex.: v3.2.0).
 5. Se a versão nova foi para outra pasta, o painel mostra "Versão anterior encontrada" (há também o botão em
    Configurações › Versão anterior).
    - O que é trazido: e-mail de envio, Banco Inter, chave PIX, e-mail do dono, certificado (copiado para dentro da
@@ -522,7 +536,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 215 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 219 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

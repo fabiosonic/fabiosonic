@@ -6,16 +6,18 @@ import json
 import mimetypes
 import os
 import re
+import time
 import webbrowser
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, assistente, automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, assistente, atualizacao, automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
 
+INICIO = time.time()           # identifica este processo (a tela percebe quando o sistema reabriu)
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -126,6 +128,19 @@ def _restaurar_arquivo(c: dict) -> dict:
             arq.unlink(missing_ok=True)       # senha errada: não acumula cópias do arquivo enviado
             raise
     return r | {"empresa_id": dona["id"], "empresa_nome": dona.get("nome", "")}
+
+
+def _b64(c: dict) -> bytes:
+    import base64
+    return base64.b64decode(str(c.get("arquivo", "")).split(",")[-1] or b"")
+
+
+def _atualizar(c: dict, voltar: bool = False) -> dict:
+    r = atualizacao.voltar(str(c.get("nome", ""))) if voltar else \
+        atualizacao.aplicar(_b64(c), permitir_anterior=bool(c.get("permitir_anterior")))
+    if c.get("reiniciar", True):
+        atualizacao.reiniciar()
+    return r
 
 
 def _ctx_fiscal() -> dict:
@@ -243,6 +258,11 @@ ROTAS = {
     "conciliacao/inter": lambda c: importacao.importar_extrato_inter(int(c.get("dias") or 0) or None),
     "conciliacao/pendentes": lambda c: conciliacao.nao_conciliados(),
     "conciliacao/vincular": lambda c: (conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo")), {"ok": True})[1],
+    # atualização do sistema pelo ZIP da versão nova
+    "atualizacao/analisar": lambda c: atualizacao.analisar(_b64(c)),
+    "atualizacao/aplicar": lambda c: _atualizar(c),
+    "atualizacao/versoes": lambda c: {"versao": __version__, "versoes": atualizacao.versoes_guardadas()},
+    "atualizacao/voltar": lambda c: _atualizar(c, voltar=True),
     # assistente de validação com credenciais reais
     "validacao": lambda c: assistente.situacao(),
     "validacao/rodar": lambda c: assistente.rodar(str(c.get("passo", "")), c),
@@ -322,7 +342,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._responder(204, b"", "image/x-icon")
         if caminho == "/api/versao":
             return self._responder(200, json.dumps({"sistema": "nfse_itaborai", "versao": __version__,
-                                                    "pasta": str(emissor.BASE)}).encode(), "application/json")
+                                                    "pasta": str(emissor.BASE), "inicio": INICIO}).encode(),
+                                   "application/json")
         livres = caminho in ("/", "") or re.fullmatch(r"/[\w-]+\.(html|js|css|png|svg)", caminho)
         if not livres and not acesso.valido(acesso.token_do_cookie(self.headers.get("Cookie"))):
             return self._responder(401, "Sistema bloqueado: entre com o PIN.".encode("utf-8"), "text/plain; charset=utf-8")

@@ -7,17 +7,17 @@ title Instalacao - Sistema Financeiro e NFS-e
 echo ============================================================
 echo  Instalacao do Sistema Financeiro e NFS-e (rode uma unica vez)
 echo ============================================================
-where python >nul 2>nul
+echo [0/5] Python...
+call "%~dp0_python.bat" instalar
 if errorlevel 1 (
-  echo Python nao encontrado. Instale pelo site que vai abrir, marque "Add Python to PATH" e rode este arquivo de novo.
-  start https://www.python.org/downloads/
   pause
   exit /b 1
 )
-echo [1/5] Instalando o validador XSD...
-python -m pip install --quiet --disable-pip-version-check lxml cryptography
+echo    OK: %PY%
+echo [1/5] Instalando os componentes - validador XSD e criptografia...
+%PY% -m pip install --quiet --disable-pip-version-check lxml cryptography
 echo [2/5] Configuracao (.env)...
-if not exist ".env" python -m nfse_itaborai configurar
+if not exist ".env" %PY% -m nfse_itaborai configurar
 echo [3/5] Robo financeiro de hora em hora, sem janela (Agendador do Windows)...
 schtasks /create /f /sc hourly /mo 1 /tn "Robo Financeiro NFS-e Itaborai" /tr "wscript.exe \"%~dp0SISTEMA.vbs\" robo" >nul
 if errorlevel 1 (echo    Aviso: nao foi possivel agendar o robo. Rode como administrador.) else (echo    OK: robo agendado.)

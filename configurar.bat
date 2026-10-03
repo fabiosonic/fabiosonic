@@ -1,4 +1,5 @@
 @echo off
 cd /d "%~dp0"
-python -m nfse_itaborai configurar
+call "%~dp0_python.bat" instalar || exit /b 1
+%PY% -m nfse_itaborai configurar
 pause
