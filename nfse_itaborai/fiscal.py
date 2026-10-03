@@ -126,10 +126,21 @@ def aplicar(rps: dict, cli: dict | None, cfg: dict | None = None) -> dict:
     if retido and reg != "mei":
         aliq = _dec(r.get("aliquota_iss_retido")) or _dec(rps.get("aliquota_iss"))
         rps["aliquota_iss"] = str(aliq)
-    if reg in ("simples", "mei"):
+    # Tipo de tributação do webservice de Itaboraí (0 no município, 1 fora, 2 isento/imune, 3 exigibilidade
+    # suspensa, 4 Simples Nacional)
+    nota = rps.get("extras") or {}
+    fora = nota.get("local_recolhimento") and nota["local_recolhimento"] != rps.get("local_prestacao_empresa")
+    if r.get("exig_susp_tp"):
+        rps["tipo_tributacao"] = "3"
+    elif str(r.get("trib_issqn") or "1") != "1":
+        rps["tipo_tributacao"] = "2"
+    elif reg in ("simples", "mei"):
         rps["tipo_tributacao"] = "4"
-    elif str(rps.get("tipo_tributacao", "4")) == "4":
-        rps["tipo_tributacao"] = "0"                # não optante: tributado no município
+    elif fora:
+        rps["tipo_tributacao"] = "1"
+    else:                                        # retido ou não: tributado no município (comportamento já aceito)
+        rps["tipo_tributacao"] = "0"
+    rps.pop("local_prestacao_empresa", None)
     if reg == "mei":
         rps["aliquota_iss"] = "0"
     # retenções federais (valores com dispensa legal de até R$ 10)
@@ -193,10 +204,12 @@ def resumo(f: dict) -> str:
 # ---------------------------------------------------------------- campos da própria nota
 
 CAMPOS_NOTA = {
-    "local_prestacao": 7, "c_trib_mun": 3, "desc_incond": "v", "desc_cond": "v", "ded_valor": "v", "ded_pct": "p",
+    "local_prestacao": 7, "local_recolhimento": 7, "c_trib_mun": 9, "desc_incond": "v", "desc_cond": "v", "ded_valor": "v", "ded_pct": "p",
     "obra_cno": 30, "obra_cib": "a8", "obra_insc_imob": "t30", "evento_nome": "t255", "evento_ini": "d", "evento_fim": "d",
     "evento_id": "t30", "evento_cep": 8, "evento_lgr": "t255", "evento_nro": "t60", "evento_bairro": "t60",
     "pedido": "t15", "doc_tec": "t40", "doc_ref": "t255", "imovel_cib": "a8", "imovel_insc_imob": "t30",
+    "imovel_cep": 8, "imovel_cmun": 7, "imovel_uf": "t2", "imovel_tipo_lgr": "t10", "imovel_lgr": "t80",
+    "imovel_nro": "t6", "imovel_bairro": "t30", "imovel_cpl": "t30", "evento_tipo_lgr": "t10", "evento_cpl": "t30",
     "ree_valor": "v", "ree_tipo": 2, "ree_xtipo": "t150", "ree_chave": 50, "ree_tipo_chave": 1, "ree_ndoc": "t255",
     "ree_xdoc": "t255", "ree_fornec_doc": 14, "ree_fornec_nome": "t150", "ree_dt_emi": "d", "ree_dt_comp": "d",
     "ref_nfse": "t1000", "interm_doc": 14, "interm_nome": "t150", "v_receb": "v",

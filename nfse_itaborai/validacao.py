@@ -108,6 +108,9 @@ def validar(rps: Rps, hoje: date | None = None) -> list[str]:
         if len(e.uf.strip()) != 2:
             erros.append("UF do tomador inválida.")
 
+    x = rps.extras or {}
+    if x.get("evento_nome") and not (x.get("evento_cep") and x.get("evento_lgr")):
+        erros.append("Evento: o webservice de Itaboraí exige o endereço do evento (CEP e logradouro).")
     if rps.aliquota_iss < 0 or rps.aliquota_iss > 5:
         erros.append("Alíquota de ISS fora do intervalo legal (máximo 5% — LC 116/2003, art. 8º, II).")
     if rps.tipo_tributacao == "4" and rps.iss_retido == ISS_RETIDO_SIM and rps.aliquota_iss <= 0:

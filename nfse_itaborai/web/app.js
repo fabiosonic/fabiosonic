@@ -80,6 +80,7 @@ function visivel(expr, ctx, box) {
     if (t == "regular") return ["presumido", "real"].includes(ctx.regime);
     if (t == "ibs") return ctx.ibs;
     if (t == "nacional") return ctx.nacional;
+    if (t == "municipal") return !ctx.nacional;
     if (t == "obra") return /^7\./.test(item);
     if (t == "evento") return /^12\./.test(item) || item == "17.10";
     if (t == "deducao") return /^(7|9|12)\./.test(item);
@@ -164,12 +165,15 @@ function blocoNota() {
   const c = (k, t, extra = "", vis = "") => `<label${vis ? ` data-vis="${vis}"` : ""}>${t}<input data-nx="${k}" ${extra}></label>`;
   const G = (vis, titulo, corpo) => `<div class="grupo-nx" data-grupo${vis ? ` data-vis="${vis}"` : ""}><h3 class="bloco">${titulo}</h3><div class="campos">${corpo}</div></div>`;
   return `<details class="mais-nota"><summary>${ic("mais")}Mais campos da nota <span class="sub" data-nx-resumo></span></summary>
-    ${G("", "Local e código", c("local_prestacao", "Município da prestação (IBGE)", 'inputmode="numeric" maxlength="7" placeholder="vazio = da empresa"') + c("c_trib_mun", "Código de tributação municipal", 'maxlength="3" inputmode="numeric" placeholder="se o município exigir"'))}
+    ${G("", "Local e código", c("local_prestacao", "Município da prestação (IBGE)", 'inputmode="numeric" maxlength="7" placeholder="vazio = da empresa"') + c("local_recolhimento", "Município do recolhimento do ISS (IBGE)", 'inputmode="numeric" maxlength="7" placeholder="vazio = da empresa"', "local_prestacao!=") + c("c_trib_mun", "Código de tributação municipal", 'maxlength="9" placeholder="se o município exigir"'))}
     ${G("", "Descontos" + '<span data-vis="deducao"> e dedução/redução da base</span>', c("desc_incond", "Desconto incondicionado (R$)", 'inputmode="decimal"') + c("desc_cond", "Desconto condicionado (R$)", 'inputmode="decimal"') + c("ded_valor", "Dedução/redução (R$)", 'inputmode="decimal"', "deducao") + c("ded_pct", "ou Dedução/redução (%)", 'inputmode="decimal"', "deducao"))}
     ${G("obra", "Obra (construção civil)", c("obra_cno", "CNO / CEI da obra", 'maxlength="30"') + c("obra_cib", "ou CIB (8 caracteres)", 'maxlength="8"') + c("obra_insc_imob", "Inscrição imobiliária (opcional)", 'maxlength="30"'))}
-    ${G("evento", "Evento", c("evento_nome", "Nome do evento", 'maxlength="255"') + c("evento_ini", "Início", 'type="date"') + c("evento_fim", "Fim", 'type="date"') + c("evento_id", "Código do evento (prefeitura)", 'maxlength="30"') + c("evento_cep", "ou CEP do local", 'maxlength="8" inputmode="numeric"', "evento_id=") + c("evento_lgr", "Logradouro", "", "evento_id=") + c("evento_nro", "Número", "", "evento_id=") + c("evento_bairro", "Bairro", "", "evento_id="))}
+    ${G("evento", "Evento", c("evento_nome", "Nome do evento", 'maxlength="255"') + c("evento_ini", "Início", 'type="date"') + c("evento_fim", "Fim", 'type="date"') + c("evento_id", "Código do evento (prefeitura)", 'maxlength="30"', "nacional") + c("evento_cep", "CEP do local", 'maxlength="8" inputmode="numeric"', "evento_id=") + c("evento_tipo_lgr", "Tipo (RUA, AV…)", 'maxlength="10"', "municipal") + c("evento_lgr", "Logradouro", "", "evento_id=") + c("evento_nro", "Número", "", "evento_id=") + c("evento_bairro", "Bairro", "", "evento_id=") + c("evento_cpl", "Complemento", "", "municipal"))}
     ${G("", "Pedido e documentos", c("pedido", "Nº do pedido / ordem de compra", 'maxlength="15"') + c("doc_ref", "Documento de referência (contrato, chave…)", 'maxlength="255"') + c("doc_tec", "ART / RRT / DRT", 'maxlength="40"', "obra"))}
-    ${G("ibs", "Imóvel (IBS/CBS — serviços sobre bens imóveis, exceto obra)", c("imovel_cib", "CIB do imóvel", 'maxlength="8"') + c("imovel_insc_imob", "Inscrição imobiliária", 'maxlength="30"'))}
+    ${G("ibs,municipal", "Imóvel (IBS/CBS — serviços sobre bens imóveis, exceto obra)", c("imovel_cib", "CIB do imóvel", 'maxlength="8"', "nacional") + c("imovel_insc_imob", "Inscrição imobiliária", 'maxlength="30"', "nacional")
+      + c("imovel_cep", "CEP do imóvel", 'maxlength="8" inputmode="numeric"', "municipal") + c("imovel_tipo_lgr", "Tipo (RUA, AV…)", 'maxlength="10"', "municipal imovel_cep!=") + c("imovel_lgr", "Logradouro", 'maxlength="80"', "municipal imovel_cep!=")
+      + c("imovel_nro", "Número", 'maxlength="6"', "municipal imovel_cep!=") + c("imovel_cpl", "Complemento", 'maxlength="30"', "municipal imovel_cep!=") + c("imovel_bairro", "Bairro", 'maxlength="30"', "municipal imovel_cep!=")
+      + c("imovel_cmun", "Município (IBGE)", 'maxlength="7" inputmode="numeric"', "municipal imovel_cep!=") + c("imovel_uf", "UF", 'maxlength="2"', "municipal imovel_cep!="))}
     ${G("ibs", "Reembolso, repasse ou ressarcimento (valores de terceiros já tributados)", c("ree_valor", "Valor (R$)", 'inputmode="decimal"')
       + `<label data-vis="ree_valor!=">Tipo<select data-nx="ree_tipo"><option value="99">99 Outros reembolsos/ressarcimentos</option><option value="01">01 Repasse a corretores (imóveis)</option><option value="02">02 Repasse a fornecedor (agência de turismo)</option><option value="03">03 Produção externa (publicidade)</option><option value="04">04 Mídia (publicidade)</option></select></label>`
       + c("ree_xtipo", "Descrição", 'maxlength="150"', "ree_valor!= ree_tipo=99") + c("ree_chave", "Chave do documento eletrônico (se houver)", 'maxlength="50" inputmode="numeric"', "ree_valor!=")
@@ -1013,7 +1017,8 @@ PAGINAS.config = async el => {
     ${ck("fiscal", "iss_retido", "ISS retido pelo tomador (regra geral)")}${tx("fiscal", "aliquota_iss_retido", "Alíquota do ISS retido (%)")}
     ${RET_NOMES.map(([k, t]) => tx("fiscal", k, `Retenção ${t} (%)`)).join("")}
     ${sl("fiscal", "ibscbs", "Informar IBS/CBS na nota", [["auto", "Automático (regime regular já; Simples/MEI a partir de 2027)"], ["sempre", "Sempre"], ["nunca", "Nunca"]])}
-    ${sl("fiscal", "ind_final", "Consumo pessoal (IBS/CBS)", [["auto", "Automático (CPF = sim)"], ["0", "Não"], ["1", "Sim"]])}</div>
+    ${sl("fiscal", "ind_final", "Consumo pessoal (IBS/CBS)", [["auto", "Automático (CPF = sim)"], ["0", "Não"], ["1", "Sim"]])}
+    ${sl("fiscal", "incentivo_fiscal", "Incentivo fiscal / imunidade do prestador", [["", "Não (padrão)"], ["sim", "Sim"], ["nao", "Não"]])}</div>
     <details class="mais-fz"><summary>Campos avançados (carga aproximada, PIS/COFINS próprio, IBS/CBS: tributação regular, diferimento e crédito presumido)</summary><div class="campos">
     ${sl("fiscal", "tot_trib_modo", "Carga aproximada (Lei 12.741)", [["auto", "Automático pelo regime"], ["valor", "Valor (IBPT do serviço)"], ["percentual", "Percentuais federal/estadual/municipal"], ["simples", "Percentual do Simples"], ["nao", "Não informar"]])}
     ${tx("fiscal", "p_tot_fed", "% federal")}${tx("fiscal", "p_tot_est", "% estadual")}${tx("fiscal", "p_tot_mun", "% municipal")}
@@ -1082,7 +1087,7 @@ PAGINAS.config = async el => {
     ret_irrf_pct: "regular", ret_pis_pct: "regular", ret_cofins_pct: "regular", ret_csll_pct: "regular", ret_inss_pct: "simples,regular",
     p_tot_fed: "tot_trib_modo=percentual", p_tot_est: "tot_trib_modo=percentual", p_tot_mun: "tot_trib_modo=percentual",
     pis_cofins_cst: "regular", p_pis: "regular", p_cofins: "regular", cst_reg: "simples", class_trib_reg: "simples",
-    c_cred_pres: "regular", p_dif_uf: "regular", p_dif_mun: "regular", p_dif_cbs: "regular" };
+    c_cred_pres: "regular", p_dif_uf: "regular", p_dif_mun: "regular", p_dif_cbs: "regular", incentivo_fiscal: "municipal" };
   const rf = $("#regras_fiscais"), selReg = $('[data-s="fiscal"][data-k="regime"]', rf);
   $$("[data-k]", rf).forEach(i => { const v = VIS_CFG[i.dataset.k]; if (v) (i.closest("label") || i).dataset.vis = v; });
   const atuReg = () => aplicarVis(rf, ctxFiscal({ regime: selReg.value }));

@@ -127,11 +127,20 @@ def gerar_xml_rps(rps: Rps) -> str:
                   + _tag("CodigoTributacaoMunicipio", texto(rps.codigo_tributacao_municipio))
                   + "</Informacoes>")
 
+    x = rps.extras or {}
+    imovel = ""
+    if x.get("imovel_cep") and x.get("imovel_lgr"):     # serviço sobre bem imóvel (exceto obra)
+        imovel = ("<ImovelIBSCBS>" + _tag("Cep", so_digitos(x["imovel_cep"])[:8])
+                  + _tag("CodigoMunicipio", so_digitos(x.get("imovel_cmun"))[:7]) + _tag("Uf", texto(x.get("imovel_uf"))[:2].upper())
+                  + _tag("TipoLogradouro", texto(x.get("imovel_tipo_lgr"))[:10]) + _tag("Logradouro", texto(x["imovel_lgr"])[:80])
+                  + _tag("Bairro", texto(x.get("imovel_bairro"))[:30]) + _tag("Numero", texto(x.get("imovel_nro"))[:6])
+                  + _tag("Complemento", texto(x.get("imovel_cpl"))[:30]) + "</ImovelIBSCBS>")
+    # obrigatório desde 01/06/2026 (validacao.py exige os dois códigos a partir dessa data)
     if so_digitos(rps.indicador_operacao) or so_digitos(rps.classificacao_tributaria):
         partes.append("<InformacoesIBSCBS>"
                       + _tag("IndicadorOperacao", so_digitos(rps.indicador_operacao))
                       + _tag("ClassificacaoTributaria", so_digitos(rps.classificacao_tributaria))
-                      + "</InformacoesIBSCBS>")
+                      + imovel + "</InformacoesIBSCBS>")
 
     r = rps.retencoes
     partes.append("<ValoresRetencoes>"
@@ -174,6 +183,14 @@ def gerar_xml_rps(rps: Rps) -> str:
                   + _tag("TelefoneContatoTomador", so_digitos(t.telefone))
                   + _tag("EmailTomador", texto(t.email))
                   + "</Endereco>")
+
+    if x.get("evento_nome"):
+        partes.append("<Evento>" + _tag("NomeEvento", texto(x["evento_nome"])[:255])
+                      + _tag("DataInicio", x.get("evento_ini", "")) + _tag("DataFim", x.get("evento_fim") or x.get("evento_ini", ""))
+                      + "<EnderecoEvento>" + _tag("Cep", so_digitos(x.get("evento_cep"))[:8])
+                      + _tag("TipoLogradouro", texto(x.get("evento_tipo_lgr"))[:10]) + _tag("Logradouro", texto(x.get("evento_lgr"))[:80])
+                      + _tag("Numero", texto(x.get("evento_nro") or "S/N")[:6]) + _tag("Bairro", texto(x.get("evento_bairro"))[:30])
+                      + _tag("Complemento", texto(x.get("evento_cpl"))[:30]) + "</EnderecoEvento></Evento>")
 
     partes.append("</Rps>")
     return "".join(partes)

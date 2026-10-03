@@ -72,7 +72,8 @@ PADRAO = {
         "tot_trib_modo": "auto", "p_tot_fed": "", "p_tot_est": "", "p_tot_mun": "", "pis_cofins_cst": "",
         "p_pis": "", "p_cofins": "", "cst_reg": "", "class_trib_reg": "", "c_cred_pres": "",
         "p_dif_uf": "", "p_dif_mun": "", "p_dif_cbs": "",
-        "lido_dos_xml": False,      # a regra geral já foi completada uma vez pelas notas importadas
+        "lido_dos_xml": False,
+        "incentivo_fiscal": "",     # webservice de Itaboraí: IncentivoFiscalImunidade (sim | nao | "" = .env)      # a regra geral já foi completada uma vez pelas notas importadas
     },
     "emissao": {
         "canal": "municipal",       # municipal (webservice de Itaboraí) | nacional (Emissor Nacional, nfse.gov.br)

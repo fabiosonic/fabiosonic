@@ -161,8 +161,20 @@ def prestador_do_ambiente() -> Prestador:
         chave_webservice=env("ITABORAI_CHAVE").strip(),
         inscricao_estadual=env("ITABORAI_IE", ""),
         optante_simples=_optante_simples(),
-        incentivo_fiscal=env("ITABORAI_INCENTIVO", "N").upper().startswith("S"),
+        incentivo_fiscal=_incentivo_fiscal(),
     )
+
+
+def _incentivo_fiscal() -> bool:
+    """Incentivo fiscal/imunidade do prestador: Configurações › Regras fiscais (ou ITABORAI_INCENTIVO no .env)."""
+    try:
+        from . import config
+        v = str((config.carregar().get("fiscal") or {}).get("incentivo_fiscal") or "")
+    except Exception:  # noqa: BLE001
+        v = ""
+    if v in ("sim", "nao"):
+        return v == "sim"
+    return env("ITABORAI_INCENTIVO", "N").upper().startswith("S")
 
 
 def _optante_simples() -> bool:
