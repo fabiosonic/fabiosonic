@@ -67,6 +67,8 @@ def normalizar(c: dict) -> dict:
             "cep": _digitos(e.get("cep")), "cidade": str(e.get("cidade", "")).strip(),
         },
         **{k: c[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "observacao", "servico_id") if k in c},
+        # cobrança por WhatsApp só para quem o escritório escolher (clientes que já conversam pelo WhatsApp)
+        **({"whatsapp_cobranca": bool(c["whatsapp_cobranca"])} if "whatsapp_cobranca" in c else {}),
         **({"fiscal": _fiscal(c["fiscal"])} if "fiscal" in c else {}),
         **({"estrangeiro": _estrangeiro(c["estrangeiro"])} if c.get("estrangeiro") else {}),
     }
@@ -138,7 +140,7 @@ def salvar(c: dict) -> dict:
     antigo = obter(c["cpf_cnpj"]) or {}
     # regra fiscal e serviço habitual do tomador só mudam quando vierem no cadastro (importações não apagam)
     lista.append({**{k: antigo[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "fiscal",
-                                            "servico_id", "estrangeiro") if k in antigo}, **c})
+                                            "servico_id", "estrangeiro", "whatsapp_cobranca") if k in antigo}, **c})
     _gravar(lista)
     return c
 

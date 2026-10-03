@@ -141,7 +141,7 @@ config.salvar({
     "cobranca": {"provedor": "inter", "inter_client_id": "cli", "inter_client_secret": "segredo",
                  "inter_certificado": "dados/certificados/inter.crt", "inter_chave": "dados/certificados/inter.key",
                  "inter_url": f"https://127.0.0.1:{p_inter}", "inter_ca": str(cert / "inter_srv.pem"), "inter_sandbox": True,
-                 "whatsapp_api": True, "whatsapp_token": "EAAG-teste", "whatsapp_phone_id": "123456",
+                 "whatsapp_api": False, "whatsapp_token": "EAAG-teste", "whatsapp_phone_id": "123456",
                  "whatsapp_api_url": f"http://127.0.0.1:{p_meta}",
                  "cartao_provedor": "infinitepay", "cartao_infinitepay_tag": "moraes_contab",
                  "cartao_infinitepay_url": f"http://127.0.0.1:{p_infinite}"},

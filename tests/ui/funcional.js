@@ -210,16 +210,14 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     certo(/E-mail enviado/.test(await p.textContent('#modal_corpo')), (await p.textContent('#modal_corpo')).slice(0, 200));
     await p.evaluate(() => fechar());
   });
-  await passo('WhatsApp (API oficial): "Cobrar" envia sozinho e régua usa os modelos', async () => {
-    const t = (await api('titulos', { filtro: 'a_receber' }))[0];
-    await ir('receber'); await p.evaluate(id => cobrar(id), t.id); await espera(2500);
-    certo(/WhatsApp enviado automaticamente/.test(await p.textContent('#modal_corpo')), (await p.textContent('#modal_corpo')).slice(0, 200));
-    await p.evaluate(() => fechar());
-    const env = (await api('teste/whatsapp_enviados')).enviados;
-    certo(env.length && /^cobranca_/.test(env.at(-1).template.name), 'nenhum modelo enviado');
-    await ir('config', 1500); await p.click('#teste_wa'); await espera(2000);
-    certo(/WhatsApp OK/.test(await aviso()), await aviso());
-    return `${env.length} mensagem(ns) pela API`;
+  await passo('WhatsApp: marcar o cliente que recebe cobrança por WhatsApp', async () => {
+    await ir('clientes', 1200);
+    const marca = '[data-wa="32396063000103"]';
+    if (!(await p.isChecked(marca))) await p.click(marca);
+    await espera(1000);
+    const c = (await api('estado')).clientes.find(x => x.cpf_cnpj === '32396063000103');
+    certo(c && c.whatsapp_cobranca === true, 'marcação não gravada');
+    certo(!(await api('estado')).clientes.find(x => x.cpf_cnpj === '35979895000132').whatsapp_cobranca, 'cliente sem marcação ficou marcado');
   });
   await passo('Contas a receber: boleto em PDF', async () => {
     const t = (await api('titulos', { filtro: 'todos' })).find(x => x.banco_id && x.status === 'aberto');
@@ -321,6 +319,22 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await ir('cobranca', 1200); await p.click('#rr'); await espera(3000);
     certo(/Régua/.test(await aviso()), await aviso());
     await api('whatsapp/fila');
+  });
+  await passo('Cobrança: WhatsApp em sequência (só clientes marcados)', async () => {
+    const hoje = await p.evaluate(() => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10));
+    for (const doc of ['32396063000103', '35979895000132'])
+      await api('titulo/novo', { cpf_cnpj: doc, valor: '123,45', descricao: 'HONORARIOS TESTE WHATSAPP', vencimento: hoje, nfse: 'nao' });
+    await ir('cobranca', 1200); await p.click('#rr'); await espera(3500);
+    const fila = await api('whatsapp/fila');
+    certo(fila.length >= 1 && fila.every(e => /RPS/.test(e.cliente_nome)), 'fila: ' + fila.map(e => e.cliente_nome).join(', '));
+    await ir('cobranca', 1200); await p.click('#wa_seq'); await espera(400);
+    for (let i = 0; i < fila.length; i++) {
+      const href = await p.getAttribute('#seq_abrir', 'href');
+      certo(/^https:\/\/wa\.me\/5521988887777\?text=/.test(href), 'link ' + href);
+      await p.click('#seq_ok'); await espera(900);
+    }
+    certo((await api('whatsapp/fila')).length === 0, 'fila não esvaziou');
+    return `${fila.length} mensagem(ns) aberta(s) em sequência`;
   });
 
   // ------------------------------------------------------------ contas a pagar
@@ -456,7 +470,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
   await passo('Validação: "Testar tudo" com as integrações (simuladas)', async () => {
     await api('ambiente', { producao: false });
     await ir('validacao', 1500); await p.click('#val_todos'); await espera(25000);
-    const s = await api('validacao'); const ruins = s.passos.filter(x => !x.ultimo || !['ok', 'alerta'].includes(x.ultimo.situacao));
+    const s = await api('validacao'); const ruins = s.passos.filter(x => !x.ultimo || !(['ok', 'alerta'].includes(x.ultimo.situacao) || (x.id === 'whatsapp' && x.ultimo.situacao === 'pulado')));
     certo(!ruins.length, ruins.map(x => `${x.id}: ${x.ultimo ? x.ultimo.situacao + ' ' + x.ultimo.mensagem : 'não rodou'}`).join(' | '));
     return `${s.concluidos}/${s.total} aprovados`;
   });

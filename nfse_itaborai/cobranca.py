@@ -447,6 +447,8 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                     except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
                         status, det = "erro", str(ex)[:300]
                         res["erros"] += 1
+            elif not cli.get("whatsapp_cobranca"):
+                continue                             # cliente não marcado para receber cobrança por WhatsApp
             elif not cli.get("telefone"):
                 status, det = "sem_contato", "cliente sem telefone"
                 res["sem_contato"] += 1
@@ -497,7 +499,7 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     cli = clientes.obter(t["cpf_cnpj"]) or {}
     out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "email": "",
            "texto": texto, "whatsapp_enviado": "", "whatsapp_erro": ""}
-    if cli.get("telefone") and whatsapp.configurado(cfg):
+    if cli.get("telefone") and cli.get("whatsapp_cobranca") and whatsapp.configurado(cfg):
         try:
             whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg)
             out["whatsapp_enviado"] = whatsapp.numero(cli["telefone"])

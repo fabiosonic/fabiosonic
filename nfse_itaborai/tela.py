@@ -218,6 +218,8 @@ ROTAS = {
     "boletos/abrir_pasta": lambda c: _abrir_pasta(cobranca.pasta_boletos()),
     # clientes
     "cliente/salvar": lambda c: clientes.salvar(c),
+    "cliente/whatsapp": lambda c: clientes.salvar({**(clientes.obter(str(c.get("cpf_cnpj", ""))) or {}),
+                                                   "whatsapp_cobranca": bool(c.get("ativo"))}),
     "cliente/excluir": lambda c: {"excluido": clientes.excluir(str(c.get("cpf_cnpj", "")))},
     # contas a receber
     "titulos": lambda c: financeiro.listar_titulos(c.get("filtro", "todos"), c.get("cpf_cnpj", ""),

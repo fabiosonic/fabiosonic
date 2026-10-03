@@ -98,14 +98,15 @@ PAGINAS.config = async el => {
     <h3 class="bloco">Cobrança recorrente dos atrasados</h3>${ck("cobranca", "recorrente_ativa", "<b>Cobrar atrasados de forma recorrente</b>")}${tx("cobranca", "recorrente_apos_dias", "Começar após quantos dias de atraso", "number", 'min="1"')}${tx("cobranca", "recorrente_a_cada_dias", "Repetir a cada quantos dias", "number", 'min="1"')}</div></div>
   <div class="card"><h2>Banco Inter — como obter as credenciais</h2><p class="sub">No Internet Banking PJ do Inter: <b>Soluções para sua empresa › Nova integração</b>, marque os escopos <b>Emissão e cancelamento de boletos</b> e <b>Consulta de boletos</b>. Baixe o certificado (.crt) e a chave (.key), copie client_id e client_secret para cá, salve e teste. Os boletos são registrados direto na conta do escritório, com PIX no próprio boleto; o sistema dá a baixa sozinho quando o cliente paga.</p>
     <p><button class="btn sec" id="teste_inter">Salvar e testar conexão com o Inter</button></p></div>
-  <div class="card"><h2>${ic("fone")}WhatsApp do escritório (API oficial da Meta)</h2>
-    <p class="sub">Ligado, a régua e o botão “Cobrar” enviam o WhatsApp <b>sozinhos</b>, pelo número do escritório, direto pela Meta (sem intermediário; a Meta cobra por mensagem entregue). Desligado, as mensagens ficam na fila da tela Cobrança para você enviar com 1 clique.</p>
+  <div class="card"><h2>${ic("fone")}WhatsApp do escritório</h2>
+    <p class="sub">A régua deixa na tela <b>Cobrança</b> as mensagens de WhatsApp prontas, só para os clientes marcados em <b>Clientes › “Cobrar por WhatsApp”</b> (os que já conversam com o escritório). Use “Enviar em sequência”: o WhatsApp abre com o texto pronto e você só aperta Enviar.</p>
+    <details><summary class="sub">Envio automático pela API oficial da Meta (opcional — não usado)</summary>
     <div class="campos">${ck("cobranca", "whatsapp_api", "<b>Enviar automaticamente pela API oficial</b>")}
       ${tx("cobranca", "whatsapp_token", "Token de acesso (permanente)", "password", 'autocomplete="new-password" placeholder="EAAG… (usuário do sistema no Gerenciador de Negócios)"')}
       ${tx("cobranca", "whatsapp_phone_id", "ID do número de telefone", "text", 'placeholder="WhatsApp Manager › API › ID do número"')}
       ${tx("cobranca", "whatsapp_modelo_lembrete", "Modelo: lembrete")}${tx("cobranca", "whatsapp_modelo_hoje", "Modelo: vence hoje")}${tx("cobranca", "whatsapp_modelo_atraso", "Modelo: em atraso")}</div>
     <details><summary class="sub"><b>Textos dos 3 modelos para cadastrar na Meta</b> (categoria Utilidade, idioma Português (BR))</summary><div id="wa_modelos"></div></details>
-    <p><button class="btn sec" id="teste_wa" type="button">Salvar e testar o WhatsApp</button></p></div>
+    <p><button class="btn sec" id="teste_wa" type="button">Salvar e testar a API</button></p></details></div>
   <div class="card"><h2>${ic("receber")}Cartão de crédito (InfinitePay)</h2>
     <p class="sub">O cliente que preferir pagar com cartão recebe, junto com o boleto/PIX, o link “Pagar com cartão” da InfinitePay. As taxas ficam por conta do cliente: o valor no cartão já inclui a taxa (Lei 13.455/2017 permite preço diferente por meio de pagamento) e o escritório recebe o honorário cheio. Quando o pagamento aparecer no app da InfinitePay, clique em <b>Pago no cartão</b> no título: o sistema dá a baixa, lança a taxa em despesas (Bancárias), cancela o boleto e, se a NFS-e ainda não saiu, emite pelo valor cobrado no cartão.</p>
     <div class="campos">${sl("cobranca", "cartao_provedor", "Cartão de crédito", [["", "Desligado"], ["infinitepay", "InfinitePay"]])}

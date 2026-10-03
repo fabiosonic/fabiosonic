@@ -402,18 +402,16 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
-### WhatsApp automático (API oficial da Meta)
+### WhatsApp do escritório (envio manual, só para clientes escolhidos)
 
-Em **Configurações › WhatsApp do escritório**, ligue "Enviar automaticamente pela API oficial" e informe o
-**token permanente** e o **ID do número de telefone** (WhatsApp Manager). A partir daí a régua e o botão
-"Cobrar" enviam o WhatsApp sozinhos, junto com o e-mail, direto pela Meta (sem intermediário; a Meta cobra por
-mensagem entregue, categoria Utilidade). Desligado, continua a fila com o botão "Enviar" (1 clique).
-- Cobrança iniciada pela empresa exige **modelos aprovados** pela Meta. O sistema mostra os 3 textos prontos
-  (`cobranca_lembrete`, `cobranca_vence_hoje`, `cobranca_atraso`) com os campos {{1}} a {{8}}: nome, valor,
-  referência, vencimento, linha digitável, PIX, pagamento com cartão e assinatura.
-- Só celulares (DDD + 9 dígitos) recebem; número inválido, modelo não aprovado ou token vencido ficam no
-  histórico de cobrança com o motivo, e o e-mail segue normalmente.
-- O boleto em PDF vai no e-mail; no WhatsApp seguem a linha digitável e o PIX copia e cola.
+O WhatsApp sai do número do próprio escritório, enviado por você, e **só para os clientes marcados** em
+**Clientes › "Cobrar por WhatsApp"** (os que já conversam com o escritório). Os demais recebem só o e-mail.
+- A régua coloca as mensagens prontas na tela **Cobrança** (lembrete, vence hoje e atraso), com linha digitável,
+  PIX copia e cola e o link do cartão.
+- **Enviar em sequência**: abre a conversa do 1º cliente com o texto pronto; você aperta Enviar no WhatsApp,
+  volta, clica "Enviado, próximo" e o sistema abre o seguinte. "Pular" deixa para depois.
+- O botão "Cobrar" de um título também oferece "Abrir no WhatsApp".
+- A API oficial da Meta continua no sistema, mas desligada e recolhida em Configurações (não é usada).
 
 ### E-mails enviados pelo sistema
 
@@ -608,7 +606,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 244 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 245 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

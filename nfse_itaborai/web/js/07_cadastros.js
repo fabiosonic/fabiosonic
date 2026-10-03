@@ -17,6 +17,7 @@ PAGINAS.clientes = async el => {
     <label data-ex hidden>Cidade (exterior)<input id="ce_cidade" maxlength="55"></label><label data-ex hidden>Estado / província<input id="ce_estado" maxlength="60"></label><label data-ex hidden>Código postal<input id="ce_postal" maxlength="11"></label>
     <label data-br>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label data-br>Cód. IBGE município<input name="codigo_municipio"></label><label data-br>UF<input name="uf" maxlength="2"></label>
     <label data-br>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
+    <label class="chk inteiro"><input type="checkbox" id="c_wa"> <b>Enviar cobrança por WhatsApp</b> <span class="sub">— para clientes que já conversam com o escritório pelo WhatsApp</span></label>
     <label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
     ${blocoFiscal("cf")}
     <p><button class="btn" id="sc">Salvar cliente</button> <button class="btn sec" id="lc">Novo</button></p></div>
@@ -29,14 +30,19 @@ PAGINAS.clientes = async el => {
     const x = c.estrangeiro || {}; chaveExt = c.estrangeiro ? c.cpf_cnpj : ""; $("#c_ext").checked = !!c.estrangeiro;
     $("#ce_pais").value = x.pais_iso ? ((ST.paises || {})[x.pais_iso] ? x.pais_iso : "outro") : ""; $("#ce_iso").value = x.pais_iso || ""; $("#ce_bacen").value = x.pais_bacen || "";
     $("#ce_nif").value = x.nif || ""; $("#ce_sem").value = x.sem_nif || ""; $("#ce_pessoa").value = x.pessoa || "1";
-    $("#ce_cidade").value = x.cidade || ""; $("#ce_estado").value = x.estado || ""; $("#ce_postal").value = x.cod_postal || ""; modoExt(); };
+    $("#ce_cidade").value = x.cidade || ""; $("#ce_estado").value = x.estado || ""; $("#ce_postal").value = x.cod_postal || ""; modoExt();
+    $("#c_wa").checked = !!c.whatsapp_cobranca; };
   $("#c_ext").onchange = modoExt; $("#ce_pais").onchange = modoExt;
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => esc(c.razao_social) }, { t: "CPF/CNPJ", f: c => fmtDoc(c.cpf_cnpj) },
-      { t: "Contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
+      { t: "Contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' },
+      { t: "Cobrar por WhatsApp", f: c => c.telefone ? `<label class="chk" title="Entra na fila de WhatsApp da régua"><input type="checkbox" data-wa="${c.cpf_cnpj}" ${c.whatsapp_cobranca ? "checked" : ""}> sim</label>` : '<span class="sub">sem telefone</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
       { t: "", f: c => `<button class="btn min sec" data-ed="${c.cpf_cnpj}">Editar</button> <button class="btn min sec" data-ex="${c.cpf_cnpj}" title="Excluir">${ic("x")}</button>` }],
       ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)));
     $$("[data-ed]").forEach(b => b.onclick = () => { preencher(ST.clientes.find(c => c.cpf_cnpj == b.dataset.ed)); scrollTo(0, 0); });
+    $$("[data-wa]").forEach(b => b.onchange = async () => { await api("cliente/whatsapp", { cpf_cnpj: b.dataset.wa, ativo: b.checked });
+      const c = ST.clientes.find(x => x.cpf_cnpj == b.dataset.wa); if (c) c.whatsapp_cobranca = b.checked;
+      aviso(b.checked ? "Cliente vai receber a cobrança por WhatsApp ✔" : "Cliente fora da cobrança por WhatsApp"); });
     $$("[data-ex]").forEach(b => b.onclick = async () => { if (confirm("Excluir do cadastro?")) { await api("cliente/excluir", { cpf_cnpj: b.dataset.ex }); await carregarEstado(); desenhar(); } }); };
   $("#c_f").oninput = desenhar; desenhar();
   $("#lc").onclick = () => preencher({});
@@ -47,7 +53,7 @@ PAGINAS.clientes = async el => {
     const estrangeiro = ext ? { pais_iso: pais == "outro" ? $("#ce_iso").value.trim() : pais, pais_bacen: pais == "outro" ? $("#ce_bacen").value.trim() : "",
       nif: $("#ce_nif").value.trim(), sem_nif: $("#ce_sem").value, pessoa: $("#ce_pessoa").value, cidade: $("#ce_cidade").value.trim(),
       estado: $("#ce_estado").value.trim(), cod_postal: $("#ce_postal").value.trim() } : null;
-    const r = await api("cliente/salvar", { ...f, cpf_cnpj: ext ? chaveExt : $("#c_doc").value, endereco: e, fiscal: lerFiscal("cf"), ...(estrangeiro ? { estrangeiro } : {}) });
+    const r = await api("cliente/salvar", { ...f, cpf_cnpj: ext ? chaveExt : $("#c_doc").value, endereco: e, fiscal: lerFiscal("cf"), whatsapp_cobranca: $("#c_wa").checked, ...(estrangeiro ? { estrangeiro } : {}) });
     if (ext) chaveExt = r.cpf_cnpj; aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
 };
 

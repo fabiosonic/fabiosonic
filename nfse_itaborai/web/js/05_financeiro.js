@@ -218,15 +218,27 @@ PAGINAS.cobranca = async el => {
   const c = ST.config.cobranca;
   el.innerHTML = `<h1>Cobrança <span class="acoes"><button class="btn" id="rr">Rodar régua agora</button></span></h1>
   <div class="card"><h2>Régua automática</h2><p>Etapas (dias em relação ao vencimento): <b>${c.regua_dias.map(d => d < 0 ? d : d == 0 ? "0 (vencimento)" : "+" + d).join(" · ")}</b> —
-    e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? (c.whatsapp_api ? "<b>automático (API oficial)</b>" : "<b>ligado</b> (fila abaixo, 1 clique)") : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
+    e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? (c.whatsapp_api ? "<b>automático (API oficial)</b>" : "<b>ligado</b> (fila abaixo) só para os clientes marcados em Clientes › “Cobrar por WhatsApp”") : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
     <a href="#" onclick="ir('config');return false">Alterar</a></p></div>
-  <div class="card"><h2>WhatsApp para enviar (${fila.length})</h2><p class="sub">Clique em “Enviar” para abrir a conversa com a mensagem pronta (linha digitável e PIX). O PDF do boleto está na pasta de boletos para anexar.</p>
+  <div class="card"><h2>WhatsApp para enviar (${fila.length}) ${fila.length ? '<button class="btn" id="wa_seq">Enviar em sequência</button>' : ""}</h2><p class="sub">“Enviar em sequência” abre a conversa de cada cliente no WhatsApp do escritório com a mensagem pronta (linha digitável, PIX e link do cartão): é só apertar Enviar no WhatsApp e voltar aqui para o próximo. Só entram os clientes marcados em Clientes › “Cobrar por WhatsApp”.</p>
     ${tabela([{ t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
       { t: "Etapa", f: e => e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias` },
       { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔")}</div>
   <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Etapa", f: e => e.etapa }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
+  if ($("#wa_seq")) $("#wa_seq").onclick = () => enviarSequencia(fila);
   $("#rr").onclick = async () => { const r = await api("regua/rodar"); aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
 };
+function enviarSequencia(fila, i = 0) {
+  if (i >= fila.length) { fechar(); aviso("WhatsApp: todas as mensagens da fila foram abertas ✔", 6000); return ir("cobranca"); }
+  const e = fila[i];
+  modal(`<h2>WhatsApp ${i + 1} de ${fila.length}</h2><p><b>${esc(e.cliente_nome)}</b> — ${brl(e.valor_cent)}, vencimento ${dt(e.vencimento)} (${e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias`})</p>
+    <p class="sub">1) Clique em “Abrir conversa”: o WhatsApp abre com a mensagem pronta. 2) Aperte Enviar lá. 3) Volte e clique em “Enviado, próximo”.</p>
+    <p><a class="btn" id="seq_abrir" href="${esc(e.detalhe)}" target="_blank">${ic("fone")}Abrir conversa</a>
+      <button class="btn sec" id="seq_ok" type="button">Enviado, próximo</button> <button class="btn sec" id="seq_pula" type="button">Pular</button>
+      <button class="btn sec" type="button" onclick="fechar();ir('cobranca')">Parar</button></p>`);
+  $("#seq_ok").onclick = async () => { await api("whatsapp/feito", { id: e.id }); enviarSequencia(fila, i + 1); };
+  $("#seq_pula").onclick = () => enviarSequencia(fila, i + 1);
+}
 async function feito(id) { await api("whatsapp/feito", { id }); if (PAG == "cobranca") ir("cobranca"); }
 
 // ---------------------------------------------------------------- contas a pagar

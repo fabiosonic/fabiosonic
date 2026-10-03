@@ -8,7 +8,7 @@ from nfse_itaborai.tela import tratar
 from test_emissor import Simulador, ambiente  # noqa: F401  (fixture)
 
 CLI_A = {"cpf_cnpj": "32396063000103", "razao_social": "RPS CONSULTORIA E SERVICOS DE ENGENHARIA LTDA",
-         "email": "fin@rps.com.br", "telefone": "21988887777",
+         "email": "fin@rps.com.br", "telefone": "21988887777", "whatsapp_cobranca": True,
          "endereco": {"tipo_logradouro": "AV", "logradouro": "PRESIDENTE VARGAS", "numero": "435", "bairro": "Centro",
                       "codigo_municipio": "3304557", "cep": "20071904"}}
 CLI_B = CLI_A | {"cpf_cnpj": "54399432000146", "razao_social": "Espaco Cultivar Fonoaudiologia Ltda", "email": "",
@@ -153,6 +153,21 @@ def test_regua_envia_email_e_enfileira_whatsapp_sem_repetir(base, monkeypatch):
     cobranca.marcar_whatsapp_feito(fila[0]["id"])
     assert cobranca.fila_whatsapp() == []
     assert b
+
+
+def test_whatsapp_so_para_clientes_marcados(base, monkeypatch):
+    monkeypatch.setattr(cobranca, "enviar_email", lambda *a, **k: None)
+    clientes.salvar(clientes.obter(CLI_A["cpf_cnpj"]) | {"whatsapp_cobranca": False})
+    assert clientes.obter(CLI_A["cpf_cnpj"])["whatsapp_cobranca"] is False
+    financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-09-25", emitir_nfse=False)
+    r = cobranca.rodar_regua(date(2026, 9, 30))
+    assert r["email"] == 1 and r["whatsapp"] == 0 and cobranca.fila_whatsapp() == []
+    # a marcação sobrevive a uma edição do cadastro que não traz o campo (ex.: importação)
+    clientes.salvar(clientes.obter(CLI_A["cpf_cnpj"]) | {"whatsapp_cobranca": True})
+    c = dict(clientes.obter(CLI_A["cpf_cnpj"]))
+    c.pop("whatsapp_cobranca")
+    clientes.salvar(c)
+    assert clientes.obter(CLI_A["cpf_cnpj"])["whatsapp_cobranca"] is True
 
 
 def test_regua_ignora_titulo_com_nota_de_teste_ou_pendente(base, monkeypatch):
