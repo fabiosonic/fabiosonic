@@ -70,3 +70,18 @@ def test_copiar_dados_da_ultima_nota(base):  # noqa: F811
     assert "pedido" not in n["extras"]                       # campo de uma nota só não é copiado
     assert tratar("nfse/ultima", {"cpf_cnpj": "54399432000146"})["nota"] is None   # outro tomador
     assert tratar("nfse/dados", {"id": n["id"]})["valor_cent"] == 40000
+
+
+def test_correcoes_do_teste_de_ponta_a_ponta(base):  # noqa: F811
+    from nfse_itaborai import clientes, config
+    config.salvar({"cobranca": {"provedor": "pix"}})
+    # emissão com "Gerar cobrança": PIX/boleto na hora (não espera o robô) e o título não fica "sem cobrança"
+    r = financeiro.emitir_avulsa(CLI_A["cpf_cnpj"], "300,00", "HONORARIOS", vencimento="2026-10-10")
+    t = financeiro.obter_titulo(r["titulo_id"])
+    assert t["pix_copia_cola"] and financeiro.situacao(t) != "sem_cobranca"
+    # a última nota emitida pelo sistema vira o valor sugerido do cliente (lote e recorrência)
+    assert clientes.obter(CLI_A["cpf_cnpj"])["ultimo_valor"] == "300.00"
+    # despesa excluída some das listas
+    d = financeiro.salvar_despesa({"descricao": "X", "valor": "10"})
+    financeiro.excluir_despesa(d)
+    assert not any(x["id"] == d for x in financeiro.listar_despesas("todos"))

@@ -34,3 +34,22 @@ def test_varredura_das_telas(tmp_path):
         assert r.returncode == 0 and "SEM PROBLEMAS" in r.stdout, r.stdout + r.stderr
     finally:
         srv.terminate()
+
+
+@pytest.mark.skipif(os.environ.get("NFSE_TESTE_TELA") != "1" or not _playwright_ok(),
+                    reason="teste funcional: defina NFSE_TESTE_TELA=1 (precisa de Node.js + Playwright)")
+def test_funcional_de_ponta_a_ponta(tmp_path):
+    """Todas as funções pela tela, com prefeitura, Sefin, Inter e e-mail simulados (tests/ui/funcional.js)."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        porta = s.getsockname()[1]
+    pasta = tmp_path / "sistema"
+    srv = subprocess.Popen([sys.executable, str(UI / "servidor_completo.py"), str(pasta), str(porta)],
+                           stdout=subprocess.PIPE, text=True)
+    try:
+        assert srv.stdout.readline().strip() == "pronto"
+        r = subprocess.run(["node", str(UI / "funcional.js"), str(porta), str(pasta)], cwd=UI, capture_output=True,
+                           text=True, timeout=1500)
+        assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-2000:]
+    finally:
+        srv.terminate()

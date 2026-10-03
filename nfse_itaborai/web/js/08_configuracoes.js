@@ -119,7 +119,7 @@ PAGINAS.config = async el => {
       else if (["categorias_despesa", "contas_bancarias"].includes(i.dataset.k)) v = v.split(",").map(s => s.trim()).filter(Boolean);
       else if (["multa_pct", "juros_mes_pct", "aliquota_simples_pct", "iss_fixo_mensal"].includes(i.dataset.k)) v = valorNum(v);
       else if (i.type == "number") v = Number(v);
-      novo[i.dataset.s][i.dataset.k] = v; });
+      (novo[i.dataset.s] ||= {})[i.dataset.k] = v; });   // qualquer seção (ex.: seguranca) entra no que é salvo
     const cred = {};
     $$("[data-cred]").forEach(i => cred[i.dataset.cred] = i.value);
     await api("config/salvar", novo); await api("empresa/credenciais/salvar", cred);

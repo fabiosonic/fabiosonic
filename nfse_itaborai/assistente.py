@@ -87,8 +87,11 @@ def _cliente_teste(c: dict) -> dict:
         cli = clientes.obter(doc)
         if not cli:
             raise ValueError("Cliente escolhido para o teste não está no cadastro.")
-        return cli
+        if not clientes.eh_exterior(cli):
+            return cli
     for cli in clientes.listar():
+        if clientes.eh_exterior(cli):
+            continue                    # sem CPF/CNPJ: não serve para boleto nem para a nota de teste padrão
         e = cli.get("endereco") or {}
         if len(clientes._digitos(cli.get("cpf_cnpj"))) in (11, 14) and e.get("logradouro") and e.get("cep"):
             return cli
@@ -242,7 +245,8 @@ def situacao() -> dict:
         out.append(p | {"ultimo": u})
     feitos = [p for p in out if p["ultimo"] and p["ultimo"]["situacao"] in ("ok", "alerta")]
     return {"passos": out, "concluidos": len(feitos), "total": len(PASSOS),
-            "clientes": [{"cpf_cnpj": c["cpf_cnpj"], "razao_social": c.get("razao_social", "")} for c in clientes.listar()]}
+            "clientes": [{"cpf_cnpj": c["cpf_cnpj"], "razao_social": c.get("razao_social", "")} for c in clientes.listar()
+                         if not clientes.eh_exterior(c)]}
 
 
 def historico(limite: int = 50) -> list[dict]:

@@ -143,6 +143,17 @@ def salvar(c: dict) -> dict:
     return c
 
 
+def registrar_ultima_nota(cpf_cnpj: str, valor, data: str, numero: str) -> None:
+    """Guarda no cadastro a última NFS-e emitida para o cliente (não volta para uma nota mais antiga)."""
+    doc = _digitos(cpf_cnpj)
+    lista = listar()
+    for c in lista:
+        if _digitos(c.get("cpf_cnpj")) == doc and str(c.get("ultima_data") or "") <= data:
+            c.update(ultimo_valor=str(valor), ultima_data=data, ultima_nfse=str(numero))
+            _gravar(lista)
+            return
+
+
 def excluir(cpf_cnpj: str) -> bool:
     doc = _digitos(cpf_cnpj)
     lista = listar()

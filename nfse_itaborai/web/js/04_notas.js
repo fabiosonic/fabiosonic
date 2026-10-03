@@ -6,7 +6,7 @@ function linhaRes(r) {
   if (r.contrato_id) r.alertas = [...(r.alertas || []), "Repetição mensal ativada: contrato nº " + r.contrato_id + " (veja em Contratos)."];
   if (r.sucesso && r.sem_nota) return `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · conta a receber lançada, sem NFS-e (regra da nota)${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`;
   if (r.sucesso && r.aguardando_pagamento) return `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · ${r.boleto ? "boleto gerado" : "conta a receber criada"}${r.link && r.link.startsWith("http") ? ` · <a href="${esc(r.link)}" target="_blank">abrir cobrança</a>` : ""} · a NFS-e será emitida automaticamente quando o pagamento for confirmado${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`;
-  return r.sucesso ? `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · NFS-e <b>${esc(r.nfse)}</b> · ${r.canal == "nacional" ? "Nacional · chave " + esc(r.chave) : "RPS " + esc(r.rps)}${r.link && r.link.startsWith("http") ? ` · <a href="${esc(r.link)}" target="_blank">abrir nota</a>` : ""}${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`
+  return r.sucesso ? `<div class="msg ok"><span class="t">✔ ${esc(r.cliente)} — ${esc(r.valor)}</span> · NFS-e <b>${esc(r.nfse)}</b> · ${r.canal == "nacional" ? "Nacional · chave " + esc(r.chave) : "RPS " + esc(r.rps)}${r.boleto ? " · boleto gerado" : ""}${r.link && r.link.startsWith("http") ? ` · <a href="${esc(r.link)}" target="_blank">abrir nota</a>` : ""}${(r.alertas || []).map(a => `<div class="sub">${esc(a)}</div>`).join("")}</div>`
     : `<div class="msg erro"><span class="t">✖ ${esc(r.cliente)} — ${esc(r.valor)}</span>${(r.erros || []).map(e => `<div>${esc(e)}</div>`).join("")}</div>`;
 }
 PAGINAS.emitir = async el => {
@@ -56,7 +56,7 @@ PAGINAS.emitir = async el => {
   if (PREENCHER) { const p = PREENCHER; PREENCHER = null; const c = ST.clientes.find(x => x.cpf_cnpj == p.doc);
     if (c) { $("#e_cli").value = `${c.razao_social} — ${fmtDoc(c.cpf_cnpj)}`; $("#e_cli").oninput(); }
     $("#e_valor").value = p.valor; if (p.servico_id) trocaServ(p.servico_id); $("#e_desc").value = p.desc || $("#e_desc").value;
-    $(".mais-nota").open = true; $('[data-nx="subst_chave"]').value = p.subst_chave;
+    $(".mais-nota").open = true; $('[data-nx="subst_chave"]').value = p.subst_chave; atuNota();   // mostra motivo/descrição
     aviso("Substituição: confira os dados, escolha o motivo e emita. A nota antiga fica cancelada por substituição.", 9000); }
   $("#e_btn").onclick = async () => {
     const doc = docDe($("#e_cli").value), cli = ST.clientes.find(c => c.cpf_cnpj == doc);

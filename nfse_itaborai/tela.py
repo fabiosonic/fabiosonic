@@ -312,9 +312,10 @@ def _novo_titulo(c: dict) -> dict:
                                   c.get("vencimento", ""), c.get("competencia", ""), nfse != "nao",
                                   servico_id=str(c.get("servico_id", "")), cobrar=c.get("cobrar", True) is not False,
                                   apos_pagamento=nfse == "pagamento")
-    if nfse == "agora":
-        return financeiro.emitir_nfse_titulo(tid) | {"titulo_id": tid}
-    return {"sucesso": True, "titulo_id": tid}
+    r = financeiro.emitir_nfse_titulo(tid) if nfse == "agora" else {"sucesso": True, "erros": [], "alertas": []}
+    if c.get("cobrar", True) is not False and r.get("sucesso"):
+        financeiro._cobrar_agora(tid, r)          # boleto/PIX na hora (não espera o robô)
+    return r | {"titulo_id": tid}
 
 
 def _conferir(c: dict) -> dict:

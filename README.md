@@ -559,7 +559,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 231 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 233 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
@@ -579,6 +579,16 @@ São 231 testes, que cobrem o emissor (municipal e nacional), o financeiro e as 
 em desktop, tema escuro, celular e notebook, acusando erro de JavaScript, erro do servidor, rolagem horizontal
 e textos que transbordam. Rodam com `NFSE_TESTE_TELA=1 python -m pytest tests/test_tela_navegador.py`
 (precisa de Node.js e de `npm install` em `tests/ui`).
+
+**Teste funcional de ponta a ponta** (`tests/ui/funcional.js` + `tests/ui/servidor_completo.py`): sobe o sistema em
+modo de teste com a prefeitura, o Sefin/ADN, o Banco Inter (TLS mútuo) e o e-mail **simulados** e usa a tela como
+um usuário, conferindo o resultado de 60 funções: clientes (inclusive do exterior e importação de XML),
+serviços, configurações e testes de conexão, emissão em homologação e em produção simulada (Itaboraí e
+Nacional), lote, cópia da última nota, cancelamento, substituição, exportação, emissão pelo tomador, contas a
+receber (boleto, baixa, estorno, cobrança, PDF, CSV, cancelamentos), recorrência, régua, contas a pagar,
+conciliação (OFX, extrato do Inter, vínculo manual), relatórios e fechamento, backup (com senha e restauração),
+PIN, multiempresa, validação, atualização e encerramento. Roda junto com a varredura quando
+`NFSE_TESTE_TELA=1`.
 
 **Integração contínua:** a cada envio ao GitHub, `.github/workflows/testes.yml` roda todos os testes em Python
 3.10 e 3.12 e a varredura de tela no Chromium.

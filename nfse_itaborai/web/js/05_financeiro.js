@@ -229,9 +229,11 @@ async function pagarDesp(id) { await api("despesa/pagar", { id }); aviso("Despes
 async function excluirDesp(id) { if (confirm("Excluir esta despesa?")) { await api("despesa/excluir", { id }); ir("pagar"); } }
 
 // ---------------------------------------------------------------- conciliação
+let ULTIMO_EXTRATO = "";       // resultado da última importação, mostrado depois que a lista é atualizada
 PAGINAS.conciliacao = async el => {
   const pend = await api("conciliacao/pendentes");
-  el.innerHTML = `<h1>Conciliação bancária</h1>
+  const res = ULTIMO_EXTRATO; ULTIMO_EXTRATO = "";
+  el.innerHTML = `<h1>Conciliação bancária</h1>${res}
   <div class="card"><h2>Importar extrato (OFX)</h2><p class="sub">Exporte o extrato em OFX no internet banking e selecione aqui. Os recebimentos são casados com as contas a receber e baixados sozinhos; pagamentos casam com contas a pagar.</p>
     <label class="soltar" id="zona"><input type="file" id="ofx" accept=".ofx,.OFX" hidden>${ic("download")}<span><b>Selecione ou arraste o extrato .ofx</b><small>O robô também importa sozinho todo .ofx novo da pasta ${esc(ST.config.pastas.extratos || "")}${(ST.config.financeiro.contas_bancarias || []).length ? ` · conta vinculada: ${esc(ST.config.financeiro.contas_bancarias.join(", "))}` : ""}</small></span></label><div id="ofx_res"></div></div>
   ${ST.config.cobranca.provedor == "inter" ? `<div class="card"><h2>${ic("banco")}Extrato do Banco Inter (automático)</h2>
@@ -243,8 +245,8 @@ PAGINAS.conciliacao = async el => {
     { t: "Sugestões", f: m => m.sugestoes.length ? m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(s.cliente.slice(0, 28))} · ${num(s.valor_cent)}</button>`).join(" ") : '<span class="sub">—</span>' }], pend, "Tudo conciliado ✔")}</div>`;
   if ($("#ext_baixar")) $("#ext_baixar").onclick = async () => { const b = $("#ext_baixar"); b.disabled = true; b.textContent = "Baixando…";
     try { const r = await api("conciliacao/inter", { dias: $("#ext_dias").value });
-      $("#ext_res").innerHTML = `<div class="msg ok">${r.lancamentos} lançamento(s) de ${dt(r.periodo.slice(0, 10))} a ${dt(r.periodo.slice(-10))} · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)</div>`;
-      await carregarEstado(); setTimeout(() => ir("conciliacao"), 3000);
+      ULTIMO_EXTRATO = `<div class="msg ok">Extrato do Inter: ${r.lancamentos} lançamento(s) de ${dt(r.periodo.slice(0, 10))} a ${dt(r.periodo.slice(-10))} · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)</div>`;
+      await carregarEstado(); ir("conciliacao");
     } catch (e) { b.disabled = false; b.innerHTML = `${ic("download")}Baixar extrato agora`; } };
   const zona = $("#zona");
   zona.ondragover = e => { e.preventDefault(); zona.classList.add("sobre"); };
@@ -253,7 +255,7 @@ PAGINAS.conciliacao = async el => {
   $("#ofx").onchange = async e => { const f = e.target.files[0]; if (!f) return;
     const buf = await f.arrayBuffer(); let txt = new TextDecoder("utf-8").decode(buf); if (txt.includes("�")) txt = new TextDecoder("windows-1252").decode(buf);
     const r = await api("conciliacao/importar", { ofx: txt });
-    $("#ofx_res").innerHTML = `<div class="msg ok">${r.lancamentos} lançamento(s) lidos · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)</div>`;
-    setTimeout(() => ir("conciliacao"), 2500); };
+    ULTIMO_EXTRATO = `<div class="msg ok">Extrato OFX: ${r.lancamentos} lançamento(s) lidos · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)</div>`;
+    ir("conciliacao"); };
 };
 async function vincular(movimento, titulo) { await api("conciliacao/vincular", { movimento, titulo }); aviso("Conciliado e baixado ✔"); ir("conciliacao"); }

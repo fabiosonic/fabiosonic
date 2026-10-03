@@ -466,6 +466,8 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
                          nfse_data=hoje().isoformat(),
                          nfse_rps=r.get("rps", ""), nfse_link=r.get("link", ""), nfse_erro="",
                          nfse_canal=r.get("canal", "municipal"), nfse_chave=r.get("chave", ""))
+        if producao:                # "última nota" do cliente (valor sugerido no lote e na recorrência)
+            clientes.registrar_ultima_nota(t["cpf_cnpj"], reais(t["valor_cent"]), hoje().isoformat(), r.get("nfse", ""))
         subst = json.loads(t.get("extras") or "{}").get("subst_chave")
         if subst and producao:      # a nota substituída deixa de valer (fica cancelada por substituição)
             for velho in db.linhas("SELECT id, status FROM titulos WHERE nfse_chave=? AND id!=?", (subst, tid)):
@@ -520,14 +522,8 @@ def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cob
                            emitir_nfse=regra == "baixa", apos_pagamento=regra == "baixa", extras=extras)
         r = {"sucesso": True, "aguardando_pagamento": regra == "baixa", "sem_nota": regra == "lancar",
              "erros": [], "alertas": [], "titulo_id": tid}
-        if cobrar and config.carregar()["cobranca"]["provedor"] != "nenhum":
-            from . import cobranca
-            try:
-                t = cobranca.preparar_pagamento(tid)
-                r["boleto"] = bool(t.get("banco_id"))
-                r["link"] = t.get("cobranca_link", "")
-            except Exception as ex:  # noqa: BLE001 — o robô cria a cobrança na próxima rodada
-                r["alertas"].append(f"Cobrança não criada agora ({ex}); o robô tenta de novo.")
+        if cobrar:
+            _cobrar_agora(tid, r)
         db.registrar("faturamento", f"Título {tid}: " + ("NFS-e após o pagamento" if regra == "baixa"
                                                           else "lançado sem NFS-e"))
         return r | {"titulo": obter_titulo(tid)}
@@ -537,7 +533,23 @@ def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cob
         cancelar_titulo(tid, "NFS-e não emitida")
     elif not emissor.em_producao():
         cancelar_titulo(tid, "teste em homologação (não entra no financeiro)")
+    elif cobrar:
+        r.setdefault("alertas", [])
+        _cobrar_agora(tid, r)          # boleto/PIX na hora, junto com a nota (não espera o robô)
     return r | {"titulo_id": tid}
+
+
+def _cobrar_agora(tid: int, r: dict) -> None:
+    if config.carregar()["cobranca"]["provedor"] == "nenhum":
+        return
+    from . import cobranca
+    try:
+        t = cobranca.preparar_pagamento(tid)
+        r["boleto"] = bool(t.get("banco_id"))
+        if not r.get("link"):                # na emissão o link é o da NFS-e; sem nota, o da cobrança
+            r["link"] = t.get("cobranca_link", "")
+    except Exception as ex:  # noqa: BLE001 — o robô cria a cobrança na próxima rodada
+        r.setdefault("alertas", []).append(f"Cobrança não criada agora ({ex}); o robô tenta de novo.")
 
 
 # ---------------------------------------------------------------- notas fiscais emitidas
@@ -621,6 +633,7 @@ def listar_despesas(filtro: str = "todos", em: date | None = None) -> list[dict]
     for d in lst:
         d["situacao"] = d["status"] if d["status"] != "aberto" else (
             "atrasado" if date.fromisoformat(d["vencimento"]) < em else "aberto")
+    lst = [d for d in lst if d["status"] != "cancelado"]          # despesa excluída some das listas
     return lst if filtro == "todos" else [d for d in lst if d["situacao"] == filtro or
                                           (filtro == "a_pagar" and d["status"] == "aberto")]
 
