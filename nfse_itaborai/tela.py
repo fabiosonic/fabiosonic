@@ -11,7 +11,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (automacao, backup, clientes, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -155,6 +155,7 @@ ROTAS = {
     "estado": lambda c: {"versao": __version__, "empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
                          "servicos": servicos.listar(), "regra_geral": financeiro.regra_geral(),
                          "regras_nfse": financeiro.regras_por_cliente(), "regras_nomes": financeiro.REGRAS_NFSE,
+                         "fiscal_resumo": fiscal.resumo(fiscal.geral()), "regimes": fiscal.REGIMES,
                          "producao": emissor.em_producao(), "config": config.publico(),
                          "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],
@@ -190,6 +191,8 @@ ROTAS = {
     "nfse/listar": lambda c: financeiro.listar_notas(str(c.get("competencia") or ""), str(c.get("situacao") or "validas"),
                                                      str(c.get("busca") or ""), str(c.get("servico_id") or "")),
     "sistema/encerrar": lambda c: _encerrar(),
+    "cliente/fiscal": lambda c: clientes.salvar({**(clientes.obter(str(c.get("cpf_cnpj", ""))) or {}),
+                                                 "fiscal": c.get("fiscal") or {"usar_geral": True}}),
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
     "titulo/emitir_nfse": lambda c: financeiro.emitir_nfse_titulo(_id(c)),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),

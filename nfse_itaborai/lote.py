@@ -24,7 +24,8 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
         raise ValueError("Valor deve ser maior que zero.")
     pct = str(p.get("ibpt_percentual") or "0").replace(",", ".")
     ibpt = (v * Decimal(pct) / 100).quantize(Decimal("0.01"))
-    return {
+    from . import fiscal
+    return fiscal.aplicar({
         "numero": "", "competencia": competencia,
         "itens": [{"descricao": (descricao or p["descricao"]).strip(), "quantidade": 1, "valor_unitario": str(v)}],
         **{k: p[k] for k in ("item_lista_servico", "codigo_nbs", "codigo_desdobro", "cnae", "aliquota_iss",
@@ -34,7 +35,7 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
         "tomador": clientes.para_dict_tomador(cli),
         # local da prestação e do recolhimento: município da empresa emissora (multiempresa)
         "local_prestacao": _municipio(), "local_recolhimento": _municipio(),
-    }
+    }, cli)
 
 
 def _municipio() -> str:
@@ -49,7 +50,9 @@ def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False,
     cli = clientes.obter(cpf_cnpj) or {}
     base = {"cpf_cnpj": cpf_cnpj, "cliente": cli.get("razao_social", cpf_cnpj), "valor": str(valor), "canal": canal}
     try:
-        rps = emissor.rps_de_dict(montar_rps(cpf_cnpj, valor, descricao, servico_id=servico_id))
+        dados = montar_rps(cpf_cnpj, valor, descricao, servico_id=servico_id)
+        alertas_fiscais = dados.pop("_alertas_fiscais", [])
+        rps = emissor.rps_de_dict(dados)
         kw = {"url": url} if url else {}
         resp = (nacional.emitir if canal == "nacional" else emissor.emitir)(rps, producao=producao, **kw)
     except ErroValidacao as ex:
@@ -59,7 +62,8 @@ def emitir_um(cpf_cnpj: str, valor, descricao: str = "", producao: bool = False,
     except OSError as ex:
         return base | {"sucesso": False, "erros": [f"Falha de comunicação: {ex}"]}
     nota = resp.notas[0] if resp.notas else None
-    return base | {"sucesso": resp.sucesso, "erros": resp.erros, "alertas": resp.alertas, "pasta": resp.pasta,
+    return base | {"sucesso": resp.sucesso, "erros": resp.erros, "alertas": alertas_fiscais + list(resp.alertas),
+                   "pasta": resp.pasta,
                    "rps": nota.numero_rps if nota else "", "nfse": nota.numero_nfse if nota else "",
                    "link": nota.link if nota else "",
                    "chave": nota.codigo_verificacao if nota and canal == "nacional" else ""}

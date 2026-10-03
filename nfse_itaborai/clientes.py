@@ -67,7 +67,13 @@ def normalizar(c: dict) -> dict:
             "cep": _digitos(e.get("cep")), "cidade": str(e.get("cidade", "")).strip(),
         },
         **{k: c[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "observacao", "servico_id") if k in c},
+        **({"fiscal": _fiscal(c["fiscal"])} if "fiscal" in c else {}),
     }
+
+
+def _fiscal(d: dict) -> dict:
+    from .fiscal import normalizar_tomador
+    return normalizar_tomador(d)
 
 
 def separar_tipo(tipo: str, logradouro: str) -> tuple[str, str]:
@@ -89,8 +95,9 @@ def salvar(c: dict) -> dict:
         raise ValueError("Razão social obrigatória.")
     lista = [x for x in listar() if _digitos(x.get("cpf_cnpj")) != c["cpf_cnpj"]]
     antigo = obter(c["cpf_cnpj"]) or {}
-    lista.append({**{k: antigo[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas")
-                     if k in antigo}, **c})
+    # regra fiscal e serviço habitual do tomador só mudam quando vierem no cadastro (importações não apagam)
+    lista.append({**{k: antigo[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "fiscal",
+                                            "servico_id") if k in antigo}, **c})
     _gravar(lista)
     return c
 

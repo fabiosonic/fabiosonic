@@ -135,6 +135,7 @@ def _rps(**kw):
 
 
 def test_dps_no_leiaute_nacional(sefin):
+    config.salvar({"fiscal": {"ibscbs": "sempre"}})       # Simples em 2026: grupo IBS/CBS só se a empresa quiser
     xml, numero, _ = nacional.preparar(_rps(observacoes="Competência 09/2026"), producao=False)
     raiz = etree.fromstring(xml.encode())
     inf = raiz.find("n:infDPS", NS)

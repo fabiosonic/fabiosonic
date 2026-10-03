@@ -62,6 +62,13 @@ PADRAO = {
         "boletos": "~/Downloads/Boletos",
         "backup_copia": "",  # segunda cópia dos backups (pendrive, HD externo, pasta sincronizada); vazio = só local  # PDF + dados de pagamento de cada boleto, em subpastas AAAA-MM
     },
+    "fiscal": {                     # regra geral (cada tomador pode ter a sua: cadastro do cliente)
+        "regime": "",               # mei | simples | presumido | real ("" = pelo opSimpNac antigo)
+        "iss_retido": False, "aliquota_iss_retido": "",
+        "ret_irrf_pct": "0", "ret_pis_pct": "0", "ret_cofins_pct": "0", "ret_csll_pct": "0", "ret_inss_pct": "0",
+        "ibscbs": "auto",           # auto (regime regular já; Simples/MEI a partir de 2027) | sempre | nunca
+        "ind_final": "auto",        # auto (CPF = consumo pessoal) | 0 | 1
+    },
     "emissao": {
         "canal": "municipal",       # municipal (webservice de Itaboraí) | nacional (Emissor Nacional, nfse.gov.br)
         "certificado_pfx": "",      # certificado A1 do escritório (.pfx) — exigido só no canal nacional
@@ -162,6 +169,8 @@ def salvar(novo: dict) -> dict:
 def publico(cfg: dict | None = None) -> dict:
     """Cópia para a tela, sem expor senhas (mostra só se estão preenchidas)."""
     c = copy.deepcopy(cfg or carregar())
+    from .fiscal import regime
+    c["fiscal"]["regime"] = regime(c)          # tela sempre mostra o regime em vigor (nunca um padrão enganoso)
     for sec, campo in SEGREDOS:
         c[sec][campo] = "••••••" if c[sec].get(campo) else ""
     return c
@@ -169,6 +178,9 @@ def publico(cfg: dict | None = None) -> dict:
 
 def salvar_da_tela(novo: dict) -> dict:
     """Salva o que veio da tela, mantendo senhas quando o campo vier mascarado."""
+    reg = (novo.get("fiscal") or {}).get("regime")
+    if reg in ("mei", "simples", "presumido", "real"):   # o regime define a situação no Simples da DPS
+        novo.setdefault("emissao", {})["op_simp_nac"] = {"mei": "2", "simples": "3"}.get(reg, "1")
     for sec, campo in SEGREDOS:
         if novo.get(sec, {}).get(campo) == "••••••":
             novo[sec].pop(campo)

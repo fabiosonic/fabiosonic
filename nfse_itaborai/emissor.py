@@ -160,9 +160,21 @@ def prestador_do_ambiente() -> Prestador:
         inscricao_municipal=so_digitos(env("ITABORAI_IM")),
         chave_webservice=env("ITABORAI_CHAVE").strip(),
         inscricao_estadual=env("ITABORAI_IE", ""),
-        optante_simples=env("ITABORAI_SIMPLES", "S").upper().startswith("S"),
+        optante_simples=_optante_simples(),
         incentivo_fiscal=env("ITABORAI_INCENTIVO", "N").upper().startswith("S"),
     )
+
+
+def _optante_simples() -> bool:
+    """Regime definido em Configurações › Regras fiscais vale; sem ele, o ITABORAI_SIMPLES do .env."""
+    try:
+        from . import config
+        reg = (config.carregar().get("fiscal") or {}).get("regime")
+    except Exception:  # noqa: BLE001 — sem configuração legível, usa o .env
+        reg = ""
+    if reg:
+        return reg in ("simples", "mei")
+    return env("ITABORAI_SIMPLES", "S").upper().startswith("S")
 
 
 def producao_autorizada(pedido_producao: bool) -> bool:
@@ -280,6 +292,7 @@ def rps_de_dict(d: dict) -> Rps:
         retencoes=Retencoes(**{k: _d(v) for k, v in ret.items()}),
         valor_total_tributos=_d(d.get("valor_total_tributos")),
         observacoes=d.get("observacoes", ""),
+        ind_final=str(d.get("ind_final", "")),
     )
 
 

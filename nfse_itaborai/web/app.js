@@ -60,6 +60,47 @@ function opcoesServ(sel, vazio) {
   return (vazio ? `<option value="">${esc(vazio)}</option>` : "") + (ST.servicos || []).map(s => `<option value="${esc(s.id)}" ${s.id == sel ? "selected" : ""}>${esc(s.nome)}${s.padrao ? " (padrão)" : ""} — item ${esc(s.item_lista_servico || "?")}</option>`).join("");
 }
 function nfseAposPagamento() { return !!((ST.config || {}).emissao || {}).nfse_apos_pagamento; }
+// ---------------------------------------------------------------- regras fiscais do tomador
+const RET_NOMES = [["ret_irrf_pct", "IRRF"], ["ret_pis_pct", "PIS"], ["ret_cofins_pct", "COFINS"], ["ret_csll_pct", "CSLL"], ["ret_inss_pct", "INSS/CP"]];
+function blocoFiscal(p) {
+  return `<div class="fiscal-tom" id="${p}_fz">
+    <div class="opc-nfse" role="radiogroup" aria-label="Regras fiscais deste tomador"><b>Regras fiscais deste tomador:</b>
+      <label class="chk"><input type="radio" name="${p}_fzg" value="1" checked> Usar regra geral</label>
+      <label class="chk"><input type="radio" name="${p}_fzg" value="0"> Regra específica deste tomador</label></div>
+    <p class="sub" data-fz-resumo></p>
+    <div class="campos" data-fz-campos hidden>
+      <label class="chk"><input type="checkbox" data-fz="iss_retido"> <b>ISS retido pelo tomador</b></label>
+      <label>Alíquota do ISS retido (%)<input data-fz="aliquota_iss_retido" inputmode="decimal" placeholder="ex.: 2,01"></label>
+      ${RET_NOMES.map(([k, t]) => `<label>Retenção ${t} (%)<input data-fz="${k}" inputmode="decimal" placeholder="0"></label>`).join("")}
+      <label>Consumo pessoal (IBS/CBS)<select data-fz="ind_final"><option value="auto">Automático (CPF = sim)</option><option value="0">Não</option><option value="1">Sim</option></select></label>
+      <label>cClassTrib específico (opcional)<input data-fz="class_trib" maxlength="6" inputmode="numeric" placeholder="ex.: 410999"></label>
+    </div>
+    <p class="sub" data-fz-dica hidden>A regra específica fica guardada neste tomador e vale nas próximas notas dele. Os demais seguem a regra geral (Configurações › Regras fiscais). Dispensa legal automática: IRRF e PIS/COFINS/CSLL de até R$ 10,00 não são retidos.</p></div>`;
+}
+function preencherFiscal(p, f) {
+  f = f || { usar_geral: true }; const box = $(`#${p}_fz`); if (!box) return;
+  $$(`[name=${p}_fzg]`).forEach(r => r.checked = (r.value == "1") == (f.usar_geral !== false));
+  $$("[data-fz]", box).forEach(i => { const v = f[i.dataset.fz]; if (i.type == "checkbox") i.checked = !!v; else i.value = v == null || v === "0" && i.tagName != "SELECT" ? (i.tagName == "SELECT" ? "auto" : "") : String(v).replace(".", ","); });
+  if (!f.ind_final) $('[data-fz="ind_final"]', box).value = "auto";
+  alternarFiscal(p);
+}
+function alternarFiscal(p) {
+  const box = $(`#${p}_fz`), geral = ($(`[name=${p}_fzg]:checked`) || {}).value != "0";
+  $("[data-fz-campos]", box).hidden = geral; $("[data-fz-dica]", box).hidden = geral;
+  $("[data-fz-resumo]", box).textContent = geral ? "Regra geral: " + (ST.fiscal_resumo || "") : "";
+}
+function ligarFiscal(p, aoMudar) { $$(`[name=${p}_fzg]`).forEach(r => r.onchange = () => { alternarFiscal(p); aoMudar && aoMudar(); }); alternarFiscal(p); }
+function lerFiscal(p) {
+  const box = $(`#${p}_fz`), f = { usar_geral: ($(`[name=${p}_fzg]:checked`) || {}).value != "0" };
+  if (f.usar_geral) return f;
+  $$("[data-fz]", box).forEach(i => f[i.dataset.fz] = i.type == "checkbox" ? i.checked : i.value.trim().replace(",", "."));
+  return f;
+}
+function mesmoFiscal(a, b) {
+  const n = f => JSON.stringify(f && f.usar_geral === false ? Object.keys(f).sort().map(k => [k, String(f[k] ?? "").replace(/^0$/, "")]) : "geral");
+  return n(a) == n(b);
+}
+
 function regraDe(doc) { return (doc && (ST.regras_nfse || {})[doc]) || ST.regra_geral || "geracao"; }
 function nomeRegra(r) { return (ST.regras_nomes || {})[r] || r; }
 function blocoFaturar(p) {
@@ -246,6 +287,7 @@ PAGINAS.emitir = async el => {
     <label class="inteiro">Serviço (atividade)<select id="e_serv">${opcoesServ(servPadrao().id)}</select></label>
     <label class="inteiro">Descrição<input id="e_desc" maxlength="190" value="${esc(servPadrao().descricao || "")}"></label></div>
     <datalist id="dl_cli">${opcoesClientes()}</datalist>
+    ${blocoFiscal("ef")}
     ${blocoFaturar("e")}
     <p class="sub">Emitindo por: <b>${nomeCanal()}</b> — troque em <a href="#config">Configurações › Emissão</a>.</p>
     <button class="btn" id="e_btn">Emitir nota</button><div id="e_res"></div></div>`;
@@ -253,14 +295,18 @@ PAGINAS.emitir = async el => {
   const trocaServ = id => { $("#e_serv").value = servDe(id).id; $("#e_desc").value = servDe(id).descricao || ""; };
   $("#e_serv").onchange = () => trocaServ($("#e_serv").value);
   $("#e_cli").oninput = () => { const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)); if (c && c.ultimo_valor && !$("#e_valor").value) $("#e_valor").value = Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-    if (c && c.servico_id) trocaServ(c.servico_id); atuRegra(); };
+    if (c && c.servico_id) trocaServ(c.servico_id); atuRegra(); if (c) preencherFiscal("ef", c.fiscal); };
+  ligarFiscal("ef");
   $("#e_btn").onclick = async () => {
     const doc = docDe($("#e_cli").value), cli = ST.clientes.find(c => c.cpf_cnpj == doc);
     if (!cli) return aviso("Escolha um cliente da lista (ou cadastre em Clientes).");
     const v = $("#e_valor").value.trim(); if (!valorNum(v)) return aviso("Informe o valor.");
+    const fz = lerFiscal("ef");
+    if (!fz.usar_geral && [fz.aliquota_iss_retido, ...RET_NOMES.map(([k]) => fz[k])].some(x => x && isNaN(Number(x)))) return aviso("Percentual inválido nas regras fiscais do tomador.");
     const fat = opcoesFaturar("e"), regra = regraDe(cli.cpf_cnpj);
     if (!confirm(`${regra == "geracao" ? (ST.producao ? "EMITIR NOTA VÁLIDA" : "Teste em homologação") + " — " + nomeCanal() : regra == "baixa" ? "GERAR COBRANÇA — a NFS-e sai sozinha quando o pagamento for confirmado" : "LANÇAR CONTA A RECEBER — sem NFS-e"}`
-      + `\n\n${cli.razao_social}\nServiço: ${servDe($("#e_serv").value).nome}\nR$ ${v}\nCobrança: ${fat.cobrar ? "sim (boleto/PIX + régua)" : "não"}`)) return;
+      + `\n\n${cli.razao_social}\nServiço: ${servDe($("#e_serv").value).nome}\nR$ ${v}\nCobrança: ${fat.cobrar ? "sim (boleto/PIX + régua)" : "não"}\nRegras fiscais: ${fz.usar_geral ? "regra geral" : "específicas deste tomador (ficam guardadas nele)"}`)) return;
+    if (!mesmoFiscal(fz, cli.fiscal)) { await api("cliente/fiscal", { cpf_cnpj: cli.cpf_cnpj, fiscal: fz }); await carregarEstado(); }
     $("#e_btn").disabled = true; $("#e_res").innerHTML = '<div class="msg">Enviando…</div>';
     try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value, ...fat }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
     finally { $("#e_btn").disabled = false; }
@@ -702,10 +748,11 @@ PAGINAS.clientes = async el => {
     <label>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label>Cód. IBGE município<input name="codigo_municipio"></label><label>UF<input name="uf" maxlength="2"></label>
     <label>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
     <label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
+    ${blocoFiscal("cf")}
     <p><button class="btn" id="sc">Salvar cliente</button> <button class="btn sec" id="lc">Novo</button></p></div>
     <div class="card"><div class="barra"><label style="flex:1">Procurar<input id="c_f" placeholder="nome ou CNPJ"></label></div><div id="c_tab"></div></div>`;
   const END = ["tipo_logradouro", "logradouro", "numero", "complemento", "bairro", "cep", "cidade", "codigo_municipio", "uf"];
-  const preencher = c => { $("#c_doc").value = c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || ""); };
+  const preencher = c => { preencherFiscal("cf", c.fiscal); $("#c_doc").value = c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || ""); };
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => esc(c.razao_social) }, { t: "CPF/CNPJ", f: c => fmtDoc(c.cpf_cnpj) },
       { t: "Contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
@@ -716,8 +763,9 @@ PAGINAS.clientes = async el => {
   $("#c_f").oninput = desenhar; desenhar();
   $("#lc").onclick = () => preencher({});
   $("#imp_xml").onclick = () => importarXml($("#imp_area"));
+  ligarFiscal("cf");
   $("#sc").onclick = async () => { const f = form($("#fcli")), e = {}; END.forEach(k => { e[k] = f[k]; delete f[k]; });
-    await api("cliente/salvar", { ...f, cpf_cnpj: $("#c_doc").value, endereco: e }); aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
+    await api("cliente/salvar", { ...f, cpf_cnpj: $("#c_doc").value, endereco: e, fiscal: lerFiscal("cf") }); aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
 };
 
 async function importarXml(area) {
@@ -849,16 +897,22 @@ PAGINAS.config = async el => {
   <div class="card"><h2>${ic("nota")}Serviços (atividades) da empresa <span class="acoes"><button class="btn min" id="novo_serv" type="button">${ic("mais")}Novo serviço</button></span></h2>
     <p class="sub">Cada atividade (contabilidade, consultoria, treinamento…) tem o próprio item da LC 116, NBS, alíquota e descrição. Na emissão você escolhe o serviço; o <b>padrão</b> vem selecionado quando o cliente não tem serviço habitual. Os serviços também são criados sozinhos ao importar os XML das notas.</p>
     <div id="lista_serv">${tabelaServicos()}</div></div>
+  <div class="card" id="regras_fiscais"><h2>${ic("nota")}Regras fiscais (regra geral)</h2><p class="sub">Valem para todos os tomadores. Um tomador com regra diferente (ex.: órgão público que retém ISS e tributos federais) tem a regra própria no cadastro dele — “Regra específica deste tomador” —, que vale primeiro. O regime define como a nota é montada: Lucro Real/Presumido informam PIS/COFINS próprios; Simples informa o percentual do Simples; MEI não informa ISS nem tributos federais.</p>
+    <div class="campos">${sl("fiscal", "regime", "Regime tributário da empresa", Object.entries(ST.regimes || {}).map(([v, t]) => [v, t]))}
+    <label id="ap_sn">Apuração no Simples<select data-s="emissao" data-k="reg_ap_trib_sn">${[["1", "Tudo no DAS"], ["2", "ISS fora do DAS (fixo)"], ["3", "Tudo fora do DAS"]].map(([v, t]) => `<option value="${v}" ${String(c.emissao.reg_ap_trib_sn) == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    ${sl("emissao", "reg_esp_trib", "Regime especial", [["0", "Nenhum"], ["1", "Ato cooperado"], ["2", "Estimativa"], ["3", "ME municipal"], ["4", "Notário/registrador"], ["5", "Autônomo"], ["6", "Soc. de profissionais"]])}
+    ${ck("fiscal", "iss_retido", "ISS retido pelo tomador (regra geral)")}${tx("fiscal", "aliquota_iss_retido", "Alíquota do ISS retido (%)")}
+    ${RET_NOMES.map(([k, t]) => tx("fiscal", k, `Retenção ${t} (%)`)).join("")}
+    ${sl("fiscal", "ibscbs", "Informar IBS/CBS na nota", [["auto", "Automático (regime regular já; Simples/MEI a partir de 2027)"], ["sempre", "Sempre"], ["nunca", "Nunca"]])}
+    ${sl("fiscal", "ind_final", "Consumo pessoal (IBS/CBS)", [["auto", "Automático (CPF = sim)"], ["0", "Não"], ["1", "Sim"]])}</div>
+    <p class="sub">Retenções usuais de serviços profissionais para Lucro Real/Presumido: IRRF 1,5% · PIS 0,65% · COFINS 3% · CSLL 1% · INSS 11% (cessão de mão de obra). Optante do Simples, em regra, não sofre retenção federal. Retenções de até R$ 10,00 são dispensadas automaticamente.</p></div>
   <div class="card"><h2>${ic("nota")}Emissão da NFS-e</h2><p class="sub">Escolha por onde as notas saem. <b>Itaboraí</b>: webservice da prefeitura (chave no .env). <b>Nacional</b>: Emissor Nacional da NFS-e (Sefin/ADN — nfse.gov.br), com o certificado digital A1 do escritório. A nota já emitida é sempre cancelada pelo canal em que saiu. Homologação no nacional = “Produção Restrita”.</p>
     <div class="campos"><label>Canal de emissão<select data-s="emissao" data-k="canal">${[["municipal", "Itaboraí (webservice)"], ["nacional", "Nacional (nfse.gov.br)"]].map(([v, t]) => `<option value="${v}" ${c.emissao.canal == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <div class="inteiro cert-box"><label class="soltar"><input type="file" id="cert_arq" accept=".pfx,.p12" hidden>${ic("download")}<span><b id="cert_nome">${c.emissao.certificado_pfx ? "Certificado A1 cadastrado nesta empresa — clique para trocar" : "Selecionar certificado digital A1 (.pfx)"}</b><small>O arquivo é copiado só para a pasta desta empresa; nenhuma outra empresa tem acesso.</small></span></label>
       <label>Senha do certificado<input type="password" id="cert_senha" autocomplete="new-password" placeholder="${c.emissao.certificado_senha ? "•••••• (já cadastrada)" : "senha do .pfx"}"></label>
       <button class="btn" id="cert_salvar" type="button">${ic("ok")}Salvar certificado</button></div>
     ${tx("emissao", "serie_dps", "Série da DPS")}${tx("emissao", "proximo_dps", "Próximo nº da DPS", "number")}
-    ${sl("emissao", "op_simp_nac", "Situação no Simples Nacional", [["1", "Não optante"], ["2", "MEI"], ["3", "ME/EPP"]])}
-    ${sl("emissao", "reg_ap_trib_sn", "Apuração no Simples", [["1", "Tudo no DAS"], ["2", "ISS fora do DAS (fixo)"], ["3", "Tudo fora do DAS"]])}
-    ${sl("emissao", "reg_esp_trib", "Regime especial", [["0", "Nenhum"], ["1", "Ato cooperado"], ["2", "Estimativa"], ["3", "ME municipal"], ["4", "Notário/registrador"], ["5", "Autônomo"], ["6", "Soc. de profissionais"]])}
-    ${ck("emissao", "informar_ibscbs", "Informar IBS/CBS (cIndOp/cClassTrib do serviço padrão)")}${ck("emissao", "informar_im", "Informar inscrição municipal")}<label class="inteiro"><span>Lançamento de serviços / emissão de NFS-e — <b>regra geral</b> (a recorrência do cliente pode ter regra própria, que vale primeiro)</span><select data-s="emissao" data-k="nfse_quando">${Object.entries(ST.regras_nomes || {}).map(([v, t]) => `<option value="${v}" ${(ST.regra_geral || "geracao") == v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+    ${ck("emissao", "informar_im", "Informar inscrição municipal")}<label class="inteiro"><span>Lançamento de serviços / emissão de NFS-e — <b>regra geral</b> (a recorrência do cliente pode ter regra própria, que vale primeiro)</span><select data-s="emissao" data-k="nfse_quando">${Object.entries(ST.regras_nomes || {}).map(([v, t]) => `<option value="${v}" ${(ST.regra_geral || "geracao") == v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
     <p><button class="btn sec" id="teste_cert">Salvar e testar certificado e conexão</button></p><div id="cert_res"></div></div>
   <div class="card"><h2>Automações de entrada</h2><div class="campos">${ck("automacao", "importar_xml", "Ler XML das notas (clientes, notas emitidas fora, contratos)")}${ck("automacao", "importar_extratos", "Importar extratos .ofx da pasta")}${ck("automacao", "despesas_do_extrato", "Débitos do extrato viram despesas")}${ck("automacao", "resumo_diario", "Resumo diário por e-mail")}${ck("automacao", "fechamento_mensal", "Fechamento mensal automático")}</div>
     <div class="campos" style="margin-top:12px">${tx("pastas", "xml_nfse", "Pasta dos XML de NFS-e")}${tx("pastas", "extratos", "Pasta dos extratos (.ofx)")}${tx("resumo", "email_dono", "E-mail do dono (resumo e fechamento)")}${tx("resumo", "dia_fechamento", "Dia do fechamento mensal", "number")}${tx("pastas", "relatorios", "Pasta dos relatórios")}${tx("financeiro", "inicio_financeiro", "Notas externas a partir de", "date")}</div>
@@ -905,6 +959,8 @@ PAGINAS.config = async el => {
   };
   $("#salvar").onclick = async () => { if (await salvarTudo()) aviso("Configurações salvas ✔"); };
   $("#novo_serv").onclick = () => editarServico({}); ligarServicos();
+  const selReg = $('[data-s="fiscal"][data-k="regime"]'), atuSN = () => { $("#ap_sn").hidden = selReg.value != "simples"; };
+  selReg.onchange = atuSN; atuSN();
   listarBackups();
   $("#bk_criar").onclick = async () => { if (!await salvarTudo()) return; aviso("Gerando o backup…", 30000); const r = await api("backup/criar");
     aviso(`Backup criado ✔ ${r.nome} (${tamanho(r.tamanho)})${r.copia ? " · cópia em " + r.copia : ""}`, 8000); listarBackups(); };

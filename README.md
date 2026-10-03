@@ -263,6 +263,15 @@ controla o financeiro.
   nota e cobrança, editáveis na própria linha. Marque "Repetir todo mês" para o cliente entrar no faturamento
   mensal; quem não estiver marcado nunca é cobrado. "Mais" abre início, fim, reajuste e descrição.
 
+## Regras fiscais (regra geral e por tomador)
+
+Em **Configurações › Regras fiscais** fica a regra geral da empresa: regime (MEI, Simples, Lucro Presumido,
+Lucro Real), apuração no Simples, regime especial, ISS retido e alíquota, retenções federais (IRRF, PIS, COFINS,
+CSLL, INSS) e IBS/CBS. Ao emitir (e no cadastro do cliente) o sistema pergunta **"Usar regra geral"** ou
+**"Regra específica deste tomador"**; a específica fica guardada só naquele tomador e vale primeiro nas próximas
+notas dele. Retenções de até R$ 10,00 são dispensadas automaticamente. Detalhes por regime em
+`docs/NFSE_NACIONAL_CAMPOS_POR_REGIME.md`.
+
 ## Notas emitidas
 
 Aba **Notas emitidas**: todas as NFS-e (do sistema e importadas dos XML), abrindo na competência atual.
@@ -431,7 +440,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 159 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 164 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

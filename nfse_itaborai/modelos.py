@@ -129,6 +129,7 @@ class Rps:
     retencoes: Retencoes = field(default_factory=Retencoes)
     valor_total_tributos: Decimal = Decimal(0)   # Lei 12.741/2012 (IBPT)
     observacoes: str = ""
+    ind_final: str = ""                          # IBS/CBS: 1 = consumo pessoal (art. 57 LC 214); vazio = 0
 
     @property
     def responsavel(self) -> str:

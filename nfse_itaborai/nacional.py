@@ -219,6 +219,37 @@ def _aliquota_sn(cfg: dict) -> Decimal:
     return Decimal(str(cfg["financeiro"].get("aliquota_simples_pct", 6))).quantize(Decimal("0.01"))
 
 
+# tpRetPisCofins (NT 007/2026) pela combinação retida de (PIS, COFINS, CSLL)
+TP_RET_PCC = {(0, 0, 0): "0", (1, 1, 1): "3", (1, 1, 0): "4", (1, 0, 0): "5", (0, 1, 0): "6",
+              (0, 1, 1): "7", (0, 0, 1): "8", (1, 0, 1): "9"}
+
+
+def _trib_federal(rps: Rps, regime: str) -> str:
+    """Grupo tribFed conforme o regime: PIS/COFINS próprio (Real/Presumido) e retenções na fonte."""
+    from . import fiscal
+    r = rps.retencoes
+    if regime == "mei":
+        return ""                # tributos federais do MEI são fixos no DAS-MEI
+    pcc = (int(bool(r.valor_pis)), int(bool(r.valor_cofins)), int(bool(r.valor_csll)))
+    if regime == "simples" and any(pcc[:2]):
+        raise ValueError("Optante do Simples Nacional não sofre retenção de PIS/COFINS (Lei 10.833/2003, art. 32, "
+                         "II): ajuste a regra fiscal deste tomador.")
+    pis_cofins = ""
+    if regime in fiscal.PIS_COFINS:
+        p_pis, p_cof = (Decimal(x) for x in fiscal.PIS_COFINS[regime])
+        base = rps.base_calculo
+        pis_cofins = ("<piscofins>" + _t("CST", "01") + _t("vBCPisCofins", _v(base))
+                      + _t("pAliqPis", _v(p_pis)) + _t("pAliqCofins", _v(p_cof))
+                      + _t("vPis", _v(dinheiro(base * p_pis / 100))) + _t("vCofins", _v(dinheiro(base * p_cof / 100)))
+                      + _t("tpRetPisCofins", TP_RET_PCC[pcc]) + "</piscofins>")
+    # NT 007/2026: vRetCSLL leva a soma de PIS + COFINS + CSLL retidos
+    soma_pcc = dinheiro(r.valor_pis + r.valor_cofins + r.valor_csll)
+    corpo = (pis_cofins + (_t("vRetCP", _v(r.valor_inss)) if r.valor_inss else "")
+             + (_t("vRetIRRF", _v(r.valor_ir)) if r.valor_ir else "")
+             + (_t("vRetCSLL", _v(soma_pcc)) if soma_pcc else ""))
+    return f"<tribFed>{corpo}</tribFed>" if corpo else ""
+
+
 def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero: str,
               cfg: dict | None = None, agora: datetime | None = None) -> str:
     from . import config
@@ -234,10 +265,13 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
     cmun = e.get("municipio_emissor") or "3301900"
     ident = id_dps(cmun, cnpj, serie, numero)
 
-    op_sn = str(e.get("op_simp_nac", "3"))
+    from . import fiscal
+    f = fiscal.geral(cfg)
+    regime = f["regime"]
+    op_sn = fiscal.OP_SIMP_NAC[regime]
     reg = (_t("opSimpNac", op_sn)
            + (_t("regApTribSN", e.get("reg_ap_trib_sn", "2")) if op_sn == "3" else "")
-           + _t("regEspTrib", e.get("reg_esp_trib", "0")))
+           + _t("regEspTrib", "0" if regime == "mei" else e.get("reg_esp_trib", "0")))
     prest = (f"<prest>{_t('CNPJ', cnpj)}"
              + (_t("IM", so_digitos(prestador.inscricao_municipal)) if e.get("informar_im") else "")
              + f"<regTrib>{reg}</regTrib></prest>")
@@ -277,17 +311,16 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
     if desc_cond or desc_inc:
         descontos = ("<vDescCondIncond>" + (_t("vDescIncond", _v(desc_inc)) if desc_inc else "")
                      + (_t("vDescCond", _v(desc_cond)) if desc_cond else "") + "</vDescCondIncond>")
+    if regime == "mei":
+        retido = False          # MEI: ISS fixo no DAS-MEI; campos de ISS não podem ser informados (E1302)
+    # alíquota só para ME/EPP com retenção (E0625); não optante em município conveniado usa a parametrizada (E0617)
     trib_mun = ("<tribMun>" + _t("tribISSQN", "1") + _t("tpRetISSQN", "2" if retido else "1")
-                + (_t("pAliq", _v(rps.aliquota_iss)) if retido and rps.aliquota_iss else "") + "</tribMun>")
-    r = rps.retencoes
-    if r.valor_pis or r.valor_cofins:
-        raise ValueError("Retenção de PIS/COFINS: emita pelo canal municipal (ainda não suportada no nacional).")
-    trib_fed = ""
-    if r.valor_inss or r.valor_ir or r.valor_csll:
-        trib_fed = ("<tribFed>" + (_t("vRetCP", _v(r.valor_inss)) if r.valor_inss else "")
-                    + (_t("vRetIRRF", _v(r.valor_ir)) if r.valor_ir else "")
-                    + (_t("vRetCSLL", _v(r.valor_csll)) if r.valor_csll else "") + "</tribFed>")
-    if op_sn == "3":
+                + (_t("pAliq", _v(rps.aliquota_iss)) if retido and op_sn == "3" and rps.aliquota_iss else "")
+                + "</tribMun>")
+    trib_fed = _trib_federal(rps, regime)
+    if regime == "mei":
+        tot = _t("indTotTrib", "0")
+    elif op_sn == "3":
         tot = _t("pTotTribSN", f"{_aliquota_sn(cfg):.2f}")
     else:
         tot = ("<vTotTrib>" + _t("vTotTribFed", _v(rps.valor_total_tributos))
@@ -297,8 +330,8 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
 
     ibscbs = ""
     ctrib = so_digitos(rps.classificacao_tributaria)
-    if e.get("informar_ibscbs", True) and ctrib and so_digitos(rps.indicador_operacao):
-        ibscbs = ("<IBSCBS>" + _t("finNFSe", "0") + _t("indFinal", "0")
+    if fiscal.informar_ibscbs(f, compet) and ctrib and so_digitos(rps.indicador_operacao):
+        ibscbs = ("<IBSCBS>" + _t("finNFSe", "0") + _t("indFinal", "1" if rps.ind_final == "1" else "0")
                   + _t("cIndOp", so_digitos(rps.indicador_operacao)) + _t("indDest", "0")
                   + "<valores><trib><gIBSCBS>" + _t("CST", ctrib[:3]) + _t("cClassTrib", ctrib)
                   + "</gIBSCBS></trib></valores></IBSCBS>")

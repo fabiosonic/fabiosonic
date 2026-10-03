@@ -127,15 +127,17 @@ regime regular, usa a redução e destaca IBS/CBS normalmente.
 
 ---
 
-## 4. Situação do emissor nacional deste sistema (`nfse_itaborai/nacional.py`)
+## 4. Como o sistema aplica (implementado em `nfse_itaborai/fiscal.py`)
 
-| Item | Hoje | Ajuste necessário |
-|---|---|---|
-| `opSimpNac` / `regApTribSN` / `regEspTrib` | OK (configurável; `regApTribSN` só para ME/EPP) | — |
-| `pAliq` com ISS retido | Envia sempre que retido | **Não enviar para `opSimpNac = 1` em município conveniado (E0617)**; nunca para MEI |
-| MEI | Trata como os demais | Não enviar `pAliq`/`tribFed`; `totTrib` próprio do MEI |
-| PIS/COFINS próprio (Real/Presumido) | Não envia `piscofins` | Enviar CST + base + alíquotas (cumulativo × não cumulativo) |
-| Retenção de PIS/COFINS/CSLL | Recusa a emissão | Implementar `tpRetPisCofins` + `vRetCSLL` = soma (NT 007/2026) |
-| `totTrib` não optante | `vTotTrib` só federal | OK; opcional usar `pTotTrib` pelo IBPT |
-| Grupo `IBSCBS` | Envia `finNFSe`, `indFinal=0`, `cIndOp`, `indDest=0`, `CST`, `cClassTrib` quando configurados | Escolher `indFinal` por cliente (PF consumidor final = 1); permitir `dest`, `gReeRepRes`, `gTribRegular`; regra por regime/data (Simples opcional até 31/12/2026) |
-| Cadastro da empresa | Só "optante ou não" | Incluir **regime: MEI / Simples / Presumido / Real** e "optou pelo IBS/CBS no regime regular" |
+- **Regra geral** (Configurações › Regras fiscais): regime (MEI, Simples, Presumido, Real), apuração no Simples,
+  regime especial, ISS retido e alíquota, retenções federais em % (IRRF, PIS, COFINS, CSLL, INSS), quando
+  informar IBS/CBS (automático: regime regular já; Simples/MEI a partir de 2027) e consumo pessoal.
+- **Regra do tomador**: no cadastro do cliente e na tela Emitir nota, "Usar regra geral" ou "Regra específica
+  deste tomador". A específica fica guardada no tomador e vale primeiro, só para ele.
+- **Montagem da DPS por regime**: Real/Presumido com `piscofins` (CST 01; 1,65/7,6 ou 0,65/3),
+  `tpRetPisCofins` e `vRetCSLL` = PIS+COFINS+CSLL retidos (NT 007); Simples com `pTotTribSN` e `pAliq` só com
+  retenção; MEI sem `pAliq`, sem `tribFed`, `regEspTrib = 0` e `indTotTrib = 0`; não optante sem `pAliq`.
+- **Dispensas legais automáticas**: IRRF ≤ R$ 10 (Lei 9.430/96, art. 67) e PIS/COFINS/CSLL ≤ R$ 10
+  (Lei 10.833/03, art. 31, §3º). Simples com retenção de PIS/COFINS é recusado (Lei 10.833/03, art. 32, II).
+- **Canal municipal (Itaboraí)**: o regime define "Optante do Simples" e o tipo de tributação; as retenções
+  calculadas vão em `ValoresRetencoes`.
