@@ -68,7 +68,45 @@ def normalizar(c: dict) -> dict:
         },
         **{k: c[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "observacao", "servico_id") if k in c},
         **({"fiscal": _fiscal(c["fiscal"])} if "fiscal" in c else {}),
+        **({"estrangeiro": _estrangeiro(c["estrangeiro"])} if c.get("estrangeiro") else {}),
     }
+
+
+PREFIXO_EXTERIOR = "99"      # chave interna (9 dígitos) do cliente do exterior, que não tem CPF/CNPJ
+
+
+def eh_exterior(c: dict | None) -> bool:
+    return bool((c or {}).get("estrangeiro"))
+
+
+def _estrangeiro(d: dict) -> dict:
+    """Cliente do exterior: NIF (ou motivo de não ter), país, cidade, estado/província e código postal."""
+    from . import paises
+    d = d if isinstance(d, dict) else {}
+    iso = str(d.get("pais_iso") or "").strip().upper()[:2]
+    out = {"pessoa": "2" if str(d.get("pessoa")) == "2" else "1", "nif": str(d.get("nif") or "").strip()[:40],
+           "sem_nif": str(d.get("sem_nif") or "").strip()[:1], "pais_iso": iso,
+           "pais_bacen": _digitos(d.get("pais_bacen"))[:4] or paises.bacen(iso),
+           "cidade": " ".join(str(d.get("cidade") or "").split())[:55],
+           "estado": " ".join(str(d.get("estado") or "").split())[:60],
+           "cod_postal": str(d.get("cod_postal") or "").strip()[:11]}
+    if len(iso) != 2 or not iso.isalpha():
+        raise ValueError("Cliente do exterior: informe o país (sigla ISO de 2 letras, ex.: US).")
+    if not out["pais_bacen"]:
+        raise ValueError("Cliente do exterior: informe o código BACEN do país (4 dígitos) — exigido pela prefeitura.")
+    if not out["cidade"]:
+        raise ValueError("Cliente do exterior: informe a cidade.")
+    if not out["nif"] and out["sem_nif"] not in ("1", "2"):
+        raise ValueError("Cliente do exterior: informe o NIF (identificação fiscal no país dele) ou o motivo de não ter.")
+    return out
+
+
+def _nova_chave_exterior(lista: list[dict]) -> str:
+    usados = {_digitos(c.get("cpf_cnpj")) for c in lista}
+    n = 1
+    while f"{PREFIXO_EXTERIOR}{n:07d}" in usados:
+        n += 1
+    return f"{PREFIXO_EXTERIOR}{n:07d}"
 
 
 def _fiscal(d: dict) -> dict:
@@ -89,7 +127,10 @@ def separar_tipo(tipo: str, logradouro: str) -> tuple[str, str]:
 
 def salvar(c: dict) -> dict:
     c = normalizar(c)
-    if len(c["cpf_cnpj"]) not in (11, 14):
+    if eh_exterior(c):
+        if not (len(c["cpf_cnpj"]) == 9 and c["cpf_cnpj"].startswith(PREFIXO_EXTERIOR)):
+            c["cpf_cnpj"] = _nova_chave_exterior(listar())
+    elif len(c["cpf_cnpj"]) not in (11, 14):
         raise ValueError("CPF/CNPJ inválido.")
     if not c["razao_social"]:
         raise ValueError("Razão social obrigatória.")
@@ -97,7 +138,7 @@ def salvar(c: dict) -> dict:
     antigo = obter(c["cpf_cnpj"]) or {}
     # regra fiscal e serviço habitual do tomador só mudam quando vierem no cadastro (importações não apagam)
     lista.append({**{k: antigo[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "fiscal",
-                                            "servico_id") if k in antigo}, **c})
+                                            "servico_id", "estrangeiro") if k in antigo}, **c})
     _gravar(lista)
     return c
 
@@ -119,13 +160,14 @@ def para_tomador(c: dict) -> Tomador:
         endereco=Endereco(logradouro=e.get("logradouro", ""), numero=e.get("numero", ""),
                           bairro=e.get("bairro", ""), codigo_municipio=e.get("codigo_municipio", ""),
                           uf=e.get("uf", ""), cep=e.get("cep", ""), tipo_logradouro=e.get("tipo_logradouro", ""),
-                          complemento=e.get("complemento", "")))
+                          complemento=e.get("complemento", "")),
+        estrangeiro=dict(c.get("estrangeiro") or {}))
 
 
 def para_dict_tomador(c: dict) -> dict:
     """Formato de 'tomador' usado nos JSON de RPS."""
     return {k: c.get(k, "") for k in ("cpf_cnpj", "razao_social", "inscricao_municipal", "email", "telefone")} \
-        | {"endereco": dict(c.get("endereco", {}))}
+        | {"endereco": dict(c.get("endereco", {}))} | ({"estrangeiro": dict(c["estrangeiro"])} if c.get("estrangeiro") else {})
 
 
 # ---------------------------------------------------------------- XML de NFS-e

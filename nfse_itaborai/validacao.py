@@ -85,7 +85,15 @@ def validar(rps: Rps, hoje: date | None = None) -> list[str]:
             erros.append(f"{nome} deve ter até 6 dígitos e ser maior que zero.")
 
     t = rps.tomador
-    doc = so_digitos(t.cpf_cnpj)
+    doc = "" if t.estrangeiro else so_digitos(t.cpf_cnpj)
+    if t.estrangeiro:
+        ext = t.estrangeiro
+        if not t.razao_social.strip():
+            erros.append("Nome do tomador do exterior não informado.")
+        if not ext.get("pais_iso") or not ext.get("cidade"):
+            erros.append("Tomador do exterior: informe país e cidade no cadastro do cliente.")
+        if not ext.get("nif") and ext.get("sem_nif") not in ("1", "2"):
+            erros.append("Tomador do exterior: informe o NIF ou o motivo de não ter.")
     if doc and len(doc) not in (11, 14):
         erros.append("CPF/CNPJ do tomador inválido.")
     if doc and not t.razao_social.strip():

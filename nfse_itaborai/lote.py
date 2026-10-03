@@ -28,6 +28,7 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
     from . import fiscal
     x = fiscal.normalizar_nota(extras)
     ded = Decimal(x.get("ded_valor") or 0) or (v * Decimal(x.get("ded_pct") or 0) / 100).quantize(Decimal("0.01"))
+    ded = ded or sum((Decimal(dd["valor_deducao"]) for dd in x.get("ded_docs") or []), Decimal(0))
     return fiscal.aplicar({
         "numero": "", "competencia": competencia,
         "itens": [{"descricao": (descricao or p["descricao"]).strip(), "quantidade": 1, "valor_unitario": str(v)}],

@@ -7,7 +7,7 @@ const brl = c => "R$ " + (Number(c || 0) / 100).toLocaleString("pt-BR", { minimu
 const num = c => (Number(c || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "";
 const mes = c => c ? `${c.slice(5, 7)}/${c.slice(0, 4)}` : "";
-const fmtDoc = d => !d ? "" : d.length == 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+const fmtDoc = d => !d ? "" : /^99\d{7}$/.test(d) ? `exterior nº ${d}` : d.length == 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 const valorNum = s => { s = String(s ?? "").trim(); if (s.includes(",")) s = s.replace(/\./g, "").replace(",", "."); return Number(s) || 0; };
 // tema: automático (segue o Windows), claro ou escuro — preferência guardada neste navegador
 const TEMAS = [["", "automático"], ["light", "claro"], ["dark", "escuro"]];
@@ -167,7 +167,8 @@ function blocoNota() {
   const G = (vis, titulo, corpo) => `<div class="grupo-nx" data-grupo${vis ? ` data-vis="${vis}"` : ""}><h3 class="bloco">${titulo}</h3><div class="campos">${corpo}</div></div>`;
   return `<details class="mais-nota"><summary>${ic("mais")}Mais campos da nota <span class="sub" data-nx-resumo></span></summary>
     ${G("", "Local e código", c("local_prestacao", "Município da prestação (IBGE)", 'inputmode="numeric" maxlength="7" placeholder="vazio = da empresa"') + c("local_recolhimento", "Município do recolhimento do ISS (IBGE)", 'inputmode="numeric" maxlength="7" placeholder="vazio = da empresa"', "local_prestacao!=") + c("c_trib_mun", "Código de tributação municipal", 'maxlength="9" placeholder="se o município exigir"'))}
-    ${G("", "Descontos" + '<span data-vis="deducao"> e dedução/redução da base</span>', c("desc_incond", "Desconto incondicionado (R$)", 'inputmode="decimal"') + c("desc_cond", "Desconto condicionado (R$)", 'inputmode="decimal"') + c("ded_valor", "Dedução/redução (R$)", 'inputmode="decimal"', "deducao") + c("ded_pct", "ou Dedução/redução (%)", 'inputmode="decimal"', "deducao"))}
+    ${G("", "Descontos" + '<span data-vis="deducao"> e dedução/redução da base</span>', c("desc_incond", "Desconto incondicionado (R$)", 'inputmode="decimal"') + c("desc_cond", "Desconto condicionado (R$)", 'inputmode="decimal"') + c("ded_valor", "Dedução/redução (R$)", 'inputmode="decimal"', "deducao") + c("ded_pct", "ou Dedução/redução (%)", 'inputmode="decimal"', "deducao")
+      + `<div class="inteiro ded-docs" data-vis="nacional deducao ded_valor= ded_pct="><p class="sub">Ou comprove a dedução por documentos (NF-e, NFS-e, recibos) — a soma vira a dedução da base:</p><div data-ded-docs></div><button class="btn min sec" type="button" data-ded-add>${ic("mais")}Adicionar documento</button></div>`)}
     ${G("obra", "Obra (construção civil)", c("obra_cno", "CNO / CEI da obra", 'maxlength="30"') + c("obra_cib", "ou CIB (8 caracteres)", 'maxlength="8"') + c("obra_insc_imob", "Inscrição imobiliária (opcional)", 'maxlength="30"'))}
     ${G("evento", "Evento", c("evento_nome", "Nome do evento", 'maxlength="255"') + c("evento_ini", "Início", 'type="date"') + c("evento_fim", "Fim", 'type="date"') + c("evento_id", "Código do evento (prefeitura)", 'maxlength="30"', "nacional") + c("evento_cep", "CEP do local", 'maxlength="8" inputmode="numeric"', "evento_id=") + c("evento_tipo_lgr", "Tipo (RUA, AV…)", 'maxlength="10"', "municipal") + c("evento_lgr", "Logradouro", "", "evento_id=") + c("evento_nro", "Número", "", "evento_id=") + c("evento_bairro", "Bairro", "", "evento_id=") + c("evento_cpl", "Complemento", "", "municipal"))}
     ${G("", "Pedido e documentos", c("pedido", "Nº do pedido / ordem de compra", 'maxlength="15"') + c("doc_ref", "Documento de referência (contrato, chave…)", 'maxlength="255"') + c("doc_tec", "ART / RRT / DRT", 'maxlength="40"', "obra"))}
@@ -183,13 +184,40 @@ function blocoNota() {
       + c("ree_fornec_doc", "Fornecedor CPF/CNPJ", 'inputmode="numeric"', "ree_valor!=") + c("ree_fornec_nome", "Fornecedor nome", "", "ree_valor!= ree_fornec_doc!=")
       + c("ree_dt_emi", "Emissão do documento", 'type="date"', "ree_valor!=") + c("ree_dt_comp", "Competência do documento", 'type="date"', "ree_valor!="))}
     ${G("", "Intermediário e notas relacionadas", c("interm_doc", "Intermediário CPF/CNPJ", 'inputmode="numeric" placeholder="se houver"') + c("interm_nome", "Intermediário nome", "", "interm_doc!=") + c("v_receb", "Valor recebido pelo intermediário (R$)", 'inputmode="decimal"', "interm_doc!=") + c("ref_nfse", "NFS-e referenciada(s) — chaves", 'placeholder="separadas por vírgula"', "ibs"))}
+    ${G("nacional", "Exterior — exportação ou serviço prestado fora do país", c("local_prestacao_pais", "País da prestação (se fora do Brasil)", 'maxlength="2" placeholder="sigla ISO, ex.: US"')
+      + `<label>Moeda<select data-nx="comext_moeda"><option value="">Não se aplica</option>${Object.entries(ST.moedas || {}).map(([k, v]) => `<option value="${k}">${k} — ${esc(v)}</option>`).join("")}</select></label>`
+      + c("comext_valor", "Valor na moeda estrangeira", 'inputmode="decimal"', "comext_moeda!=")
+      + `<label data-vis="comext_moeda!=">Modo de prestação<select data-nx="comext_md"><option value="1">1 Transfronteiriço (do Brasil para o exterior)</option><option value="2">2 Consumo no Brasil (cliente estrangeiro aqui)</option><option value="3">3 Presença comercial no exterior</option><option value="4">4 Movimento temporário de pessoas físicas</option></select></label>`
+      + `<label data-vis="comext_moeda!=">Vínculo com o cliente<select data-nx="comext_vinc"><option value="0">Sem vínculo</option><option value="1">Controlada</option><option value="2">Controladora</option><option value="3">Coligada</option><option value="4">Matriz</option><option value="5">Filial ou sucursal</option><option value="6">Outro vínculo</option></select></label>`
+      + `<label data-vis="comext_moeda!=">Apoio ao comércio exterior (prestador)<select data-nx="comext_mec_p"><option value="01">Nenhum</option><option value="02">ACC</option><option value="03">ACE</option><option value="04">BNDES-Exim pós-embarque</option><option value="05">BNDES-Exim pré-embarque</option><option value="06">FGE</option><option value="07">PROEX equalização</option><option value="08">PROEX financiamento</option></select></label>`
+      + c("comext_mec_t", "Apoio ao comércio exterior (tomador) — código", 'maxlength="2" inputmode="numeric" placeholder="01 = nenhum"', "comext_moeda!=")
+      + `<label data-vis="comext_moeda!=">Movimentação temporária de bens<select data-nx="comext_mov"><option value="1">Não</option><option value="2">Vinculada a declaração de importação</option><option value="3">Vinculada a declaração de exportação</option></select></label>`
+      + c("comext_di", "Nº da DI (se houver)", 'maxlength="12"', "comext_mov=2") + c("comext_re", "Nº do RE (se houver)", 'maxlength="12"', "comext_mov=3")
+      + `<label data-vis="comext_moeda!=">Enviar ao MDIC (Comércio Exterior)<select data-nx="comext_mdic"><option value="0">Não</option><option value="1">Sim</option></select></label>`)}
+    ${G("nacional", "Emissão pelo tomador ou intermediário (raro)", `<label>Quem emite<select data-nx="tp_emit"><option value="">Esta empresa como prestadora (normal)</option><option value="2">Esta empresa como TOMADORA (ex.: importação de serviço)</option><option value="3">Esta empresa como INTERMEDIÁRIA</option></select></label>`
+      + `<label data-vis="tp_emit!=">Motivo<select data-nx="motivo_emis_ti"><option value="1">1 Importação de serviço</option><option value="2">2 Obrigado pela legislação municipal</option><option value="3">3 Prestador se recusou a emitir</option><option value="4">4 Rejeição da NFS-e emitida pelo prestador</option></select></label>`
+      + `<label data-vis="tp_emit!=">Regime do prestador<select data-nx="prest_op_simp_nac"><option value="1">Não optante do Simples (ou do exterior)</option><option value="2">MEI</option><option value="3">ME/EPP do Simples</option></select></label>`
+      + c("toma_doc", "Tomador final CPF/CNPJ", 'inputmode="numeric"', "tp_emit=3") + c("toma_nome", "Tomador final nome", 'maxlength="150"', "tp_emit=3")
+      + `<p class="sub inteiro" data-vis="tp_emit!=">Nesse modo o <b>cliente escolhido acima é o PRESTADOR</b> do serviço. A nota não entra no contas a receber desta empresa.</p>`)}
     ${G("nacional", "Substituição de NFS-e", c("subst_chave", "Chave da NFS-e substituída", 'maxlength="50" inputmode="numeric"')
       + `<label data-vis="subst_chave!=">Motivo<select data-nx="subst_motivo"><option value="99">99 Outros</option><option value="01">01 Desenquadramento do Simples</option><option value="02">02 Enquadramento no Simples</option><option value="03">03 Inclusão retroativa de imunidade/isenção</option><option value="04">04 Exclusão retroativa de imunidade/isenção</option><option value="05">05 Rejeição pelo tomador/intermediário</option></select></label>`
       + c("subst_xmotivo", "Descrição do motivo", "", "subst_chave!="))}
   </details>`;
 }
+const TIPOS_DED = [["1", "Alimentação/frigobar"], ["2", "Materiais"], ["3", "Produção externa"], ["4", "Reembolso de despesas"], ["5", "Repasse consorciado"], ["6", "Repasse plano de saúde"], ["7", "Serviços"], ["8", "Subempreitada de mão de obra"], ["9", "Profissional parceiro"], ["99", "Outras deduções"]];
+function linhaDed(d = {}) {
+  const i = (k, t, extra = "") => `<label>${t}<input data-dd="${k}" value="${esc(d[k] || "")}" ${extra}></label>`;
+  return `<div class="ded-linha campos">${i("chave", "Chave NF-e/NFS-e ou nº do documento", 'placeholder="44/50 dígitos ou nº do recibo"')}
+    <label>Tipo<select data-dd="tp">${TIPOS_DED.map(([v, t]) => `<option value="${v}" ${d.tp == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    ${i("data", "Emissão", 'type="date"')}${i("valor_deducao", "Valor deduzido (R$)", 'inputmode="decimal"')}
+    ${i("fornec_doc", "Fornecedor CPF/CNPJ", 'inputmode="numeric"')}${i("fornec_nome", "Fornecedor nome")}
+    <button class="btn min sec" type="button" data-ded-rm title="Remover">${ic("x")}</button></div>`;
+}
 function ligarNota(el, item) {
   const box = $(".mais-nota", el); if (!box) return () => {};
+  const add = $("[data-ded-add]", box);
+  if (add) add.onclick = () => { $("[data-ded-docs]", box).insertAdjacentHTML("beforeend", linhaDed()); ligarDed(); atu(); };
+  const ligarDed = () => $$("[data-ded-rm]", box).forEach(b => b.onclick = () => { b.closest(".ded-linha").remove(); atu(); });
   const atu = () => { aplicarVis(box, ctxFiscal({ item: item() }));
     const n = Object.keys(lerNota(el)).length; $("[data-nx-resumo]", box).textContent = n ? `· ${n} campo(s) preenchido(s)` : "· opcional"; };
   $$("[data-nx]", box).forEach(i => { i.addEventListener("input", atu); i.addEventListener("change", atu); });
@@ -199,6 +227,13 @@ function lerNota(el) {
   const x = {}; $$("[data-nx]", el).forEach(i => { const v = i.value.trim(); if (v && !i.closest("[hidden]")) x[i.dataset.nx] = v.replace(/^(\d+),(\d+)$/, "$1.$2"); });
   if (!x.ree_valor) Object.keys(x).filter(k => k.startsWith("ree_")).forEach(k => delete x[k]);
   if (!x.subst_chave) { delete x.subst_motivo; delete x.subst_xmotivo; }
+  if (!x.comext_moeda) Object.keys(x).filter(k => k.startsWith("comext_")).forEach(k => delete x[k]);
+  if (!x.tp_emit) ["motivo_emis_ti", "prest_op_simp_nac", "toma_doc", "toma_nome"].forEach(k => delete x[k]);
+  const docs = $$(".ded-linha", el).filter(l => !l.closest("[hidden]")).map(l => { const d = {}; $$("[data-dd]", l).forEach(i => { const v = i.value.trim(); if (v) d[i.dataset.dd] = v.replace(/^(\d+),(\d+)$/, "$1.$2"); });
+    const dig = (d.chave || "").replace(/\D/g, "");
+    if (dig.length == 44 || dig.length == 50) d.chave = dig; else if (d.chave) { d.numero = d.chave; d.tipo = "nDoc"; delete d.chave; }
+    return d; }).filter(d => Object.keys(d).length > 1);
+  if (docs.length) x.ded_docs = docs;
   return x;
 }
 
@@ -220,7 +255,7 @@ function ligarFaturar(p, botao, docAtual, rotEmitir = "Emitir nota", rotCobrar =
   $(`#${p}_cobrar`).onchange = atualizar; atualizar(); return atualizar;
 }
 function opcoesClientes() { return ST.clientes.map(c => `<option value="${esc(c.razao_social)} — ${fmtDoc(c.cpf_cnpj)}">`).join(""); }
-function docDe(txt) { const m = String(txt).match(/(\d[\d./-]{10,})\s*$/); return m ? m[1].replace(/\D/g, "") : String(txt).replace(/\D/g, ""); }
+function docDe(txt) { const m = String(txt).match(/(\d[\d./-]{7,})\s*$/); return m ? m[1].replace(/\D/g, "") : String(txt).replace(/\D/g, ""); }
 function form(el) { const o = {}; $$("[name]", el).forEach(i => o[i.name] = i.type == "checkbox" ? i.checked : i.value); return o; }
 async function carregarEstado() {
   ST = await api("estado");
@@ -895,18 +930,34 @@ function barrasH(itens) {
 
 // ---------------------------------------------------------------- clientes
 PAGINAS.clientes = async el => {
-  el.innerHTML = `<h1>Clientes <span class="acoes"><button class="btn" id="imp_xml">${ic("download")}Importar clientes dos XML</button></span></h1><div id="imp_area"></div><div class="card"><div class="barra"><label>CNPJ / CPF<input id="c_doc" placeholder="só números"></label></div>
+  el.innerHTML = `<h1>Clientes <span class="acoes"><button class="btn" id="imp_xml">${ic("download")}Importar clientes dos XML</button></span></h1><div id="imp_area"></div><div class="card"><div class="barra"><label data-br>CNPJ / CPF<input id="c_doc" placeholder="só números"></label>
+      <label class="chk"><input type="checkbox" id="c_ext"> Cliente do exterior <span class="sub">(sem CPF/CNPJ — exportação de serviço)</span></label></div>
     <div class="campos" id="fcli"><label class="inteiro">Razão social / nome<input name="razao_social"></label>
+    <label data-ex hidden>País<select id="ce_pais"><option value="">Escolha…</option>${Object.entries(ST.paises || {}).map(([k, v]) => `<option value="${k}">${esc(v[0])} (${k})</option>`).join("")}<option value="outro">Outro país…</option></select></label>
+    <label data-ex hidden data-outro>Sigla ISO do país<input id="ce_iso" maxlength="2" placeholder="ex.: NZ"></label>
+    <label data-ex hidden data-outro>Código BACEN do país<input id="ce_bacen" maxlength="4" inputmode="numeric" placeholder="4 dígitos"></label>
+    <label data-ex hidden>NIF (identificação fiscal no país)<input id="ce_nif" maxlength="40"></label>
+    <label data-ex hidden>Sem NIF? Motivo<select id="ce_sem"><option value="">Tem NIF</option><option value="1">Dispensado do NIF</option><option value="2">País não exige NIF</option></select></label>
+    <label data-ex hidden>Pessoa<select id="ce_pessoa"><option value="1">Jurídica (empresa)</option><option value="2">Física</option></select></label>
     <label>Tipo logradouro<input name="tipo_logradouro" placeholder="RUA"></label><label>Logradouro<input name="logradouro"></label><label>Número<input name="numero"></label>
-    <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label>CEP<input name="cep"></label>
-    <label>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label>Cód. IBGE município<input name="codigo_municipio"></label><label>UF<input name="uf" maxlength="2"></label>
-    <label>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
+    <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label data-br>CEP<input name="cep"></label>
+    <label data-ex hidden>Cidade (exterior)<input id="ce_cidade" maxlength="55"></label><label data-ex hidden>Estado / província<input id="ce_estado" maxlength="60"></label><label data-ex hidden>Código postal<input id="ce_postal" maxlength="11"></label>
+    <label data-br>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label data-br>Cód. IBGE município<input name="codigo_municipio"></label><label data-br>UF<input name="uf" maxlength="2"></label>
+    <label data-br>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
     <label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
     ${blocoFiscal("cf")}
     <p><button class="btn" id="sc">Salvar cliente</button> <button class="btn sec" id="lc">Novo</button></p></div>
     <div class="card"><div class="barra"><label style="flex:1">Procurar<input id="c_f" placeholder="nome ou CNPJ"></label></div><div id="c_tab"></div></div>`;
   const END = ["tipo_logradouro", "logradouro", "numero", "complemento", "bairro", "cep", "cidade", "codigo_municipio", "uf"];
-  const preencher = c => { preencherFiscal("cf", c.fiscal); $("#c_doc").value = c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || ""); };
+  let chaveExt = "";
+  const modoExt = () => { const ext = $("#c_ext").checked, outro = $("#ce_pais").value == "outro";
+    $$("[data-ex]", el).forEach(l => l.hidden = !ext || (l.hasAttribute("data-outro") && !outro)); $$("[data-br]", el).forEach(l => l.hidden = ext); };
+  const preencher = c => { preencherFiscal("cf", c.fiscal); $("#c_doc").value = c.estrangeiro ? "" : c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || "");
+    const x = c.estrangeiro || {}; chaveExt = c.estrangeiro ? c.cpf_cnpj : ""; $("#c_ext").checked = !!c.estrangeiro;
+    $("#ce_pais").value = x.pais_iso ? ((ST.paises || {})[x.pais_iso] ? x.pais_iso : "outro") : ""; $("#ce_iso").value = x.pais_iso || ""; $("#ce_bacen").value = x.pais_bacen || "";
+    $("#ce_nif").value = x.nif || ""; $("#ce_sem").value = x.sem_nif || ""; $("#ce_pessoa").value = x.pessoa || "1";
+    $("#ce_cidade").value = x.cidade || ""; $("#ce_estado").value = x.estado || ""; $("#ce_postal").value = x.cod_postal || ""; modoExt(); };
+  $("#c_ext").onchange = modoExt; $("#ce_pais").onchange = modoExt;
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => esc(c.razao_social) }, { t: "CPF/CNPJ", f: c => fmtDoc(c.cpf_cnpj) },
       { t: "Contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
@@ -919,7 +970,12 @@ PAGINAS.clientes = async el => {
   $("#imp_xml").onclick = () => importarXml($("#imp_area"));
   ligarFiscal("cf");
   $("#sc").onclick = async () => { const f = form($("#fcli")), e = {}; END.forEach(k => { e[k] = f[k]; delete f[k]; });
-    await api("cliente/salvar", { ...f, cpf_cnpj: $("#c_doc").value, endereco: e, fiscal: lerFiscal("cf") }); aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
+    const ext = $("#c_ext").checked, pais = $("#ce_pais").value;
+    const estrangeiro = ext ? { pais_iso: pais == "outro" ? $("#ce_iso").value.trim() : pais, pais_bacen: pais == "outro" ? $("#ce_bacen").value.trim() : "",
+      nif: $("#ce_nif").value.trim(), sem_nif: $("#ce_sem").value, pessoa: $("#ce_pessoa").value, cidade: $("#ce_cidade").value.trim(),
+      estado: $("#ce_estado").value.trim(), cod_postal: $("#ce_postal").value.trim() } : null;
+    const r = await api("cliente/salvar", { ...f, cpf_cnpj: ext ? chaveExt : $("#c_doc").value, endereco: e, fiscal: lerFiscal("cf"), ...(estrangeiro ? { estrangeiro } : {}) });
+    if (ext) chaveExt = r.cpf_cnpj; aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
 };
 
 async function importarXml(area) {

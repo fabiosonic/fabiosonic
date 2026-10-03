@@ -163,14 +163,21 @@ def gerar_xml_rps(rps: Rps) -> str:
     partes.append(_tag("Observacoes", texto(rps.observacoes)))
 
     t = rps.tomador
-    partes.append("<Tomador>"
-                  + _tag("Tipo", t.tipo)
-                  + _tag("CpfCnpj", so_digitos(t.cpf_cnpj))
-                  # Sem inscrição municipal a prefeitura exige "0" (como no retorno da NFS-e 3385)
-                  + _tag("InscricaoMunicipal", texto(t.inscricao_municipal) or ("0" if t.tipo else ""))
-                  + _tag("InscricaoEstadual", texto(t.inscricao_estadual))
-                  + _tag("RazaoSocial", texto(t.razao_social))
-                  + "</Tomador>")
+    ext = t.estrangeiro or {}
+    if ext:   # manual 2026: tomador do exterior sem CPF/CNPJ/IM/IE, com NIF, país e cidade estrangeira
+        partes.append("<Tomador>" + _tag("Tipo", t.tipo) + _tag("CpfCnpj", "")
+                      + (_tag("Nif", texto(ext.get("nif"))[:33]) if ext.get("nif") else "")
+                      + _tag("InscricaoMunicipal", "") + _tag("InscricaoEstadual", "")
+                      + _tag("RazaoSocial", texto(t.razao_social)) + "</Tomador>")
+    else:
+        partes.append("<Tomador>"
+                      + _tag("Tipo", t.tipo)
+                      + _tag("CpfCnpj", so_digitos(t.cpf_cnpj))
+                      # Sem inscrição municipal a prefeitura exige "0" (como no retorno da NFS-e 3385)
+                      + _tag("InscricaoMunicipal", texto(t.inscricao_municipal) or ("0" if t.tipo else ""))
+                      + _tag("InscricaoEstadual", texto(t.inscricao_estadual))
+                      + _tag("RazaoSocial", texto(t.razao_social))
+                      + "</Tomador>")
 
     e = t.endereco
     partes.append("<Endereco>"
@@ -179,10 +186,11 @@ def gerar_xml_rps(rps: Rps) -> str:
                   + _tag("Numero", texto(e.numero))
                   + _tag("Complemento", texto(e.complemento))
                   + _tag("Bairro", texto(e.bairro))
-                  + _tag("CodigoMunicipio", so_digitos(e.codigo_municipio))
-                  + _tag("Uf", texto(e.uf).upper())
-                  + _tag("CodigoPais", str(int(e.codigo_pais)).zfill(4))
-                  + _tag("Cep", so_digitos(e.cep))
+                  + _tag("CodigoMunicipio", "" if ext else so_digitos(e.codigo_municipio))
+                  + _tag("Uf", "" if ext else texto(e.uf).upper())
+                  + _tag("CodigoPais", so_digitos(ext.get("pais_bacen")).zfill(4) if ext else str(int(e.codigo_pais)).zfill(4))
+                  + (_tag("CidadeEstrangeiro", texto(ext.get("cidade"))[:55]) if ext else "")
+                  + _tag("Cep", re.sub(r"[^0-9A-Za-z]", "", str(ext.get("cod_postal") or ""))[:8] if ext else so_digitos(e.cep))
                   + _tag("TelefoneContatoTomador", so_digitos(t.telefone))
                   + _tag("EmailTomador", texto(t.email))
                   + "</Endereco>")

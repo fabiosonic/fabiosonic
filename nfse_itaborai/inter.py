@@ -156,6 +156,9 @@ def cidade(cli: dict) -> str:
 def pagador(cpf_cnpj: str) -> dict:
     cli = clientes.obter(cpf_cnpj) or {}
     doc = clientes._digitos(cpf_cnpj)
+    if clientes.eh_exterior(cli):
+        raise ErroInter(f"{cli.get('razao_social')} é cliente do exterior (sem CPF/CNPJ): o Inter não emite boleto; "
+                        "receba por transferência internacional/câmbio e dê baixa manual.")
     e = cli.get("endereco", {})
     nome_cidade = cidade(cli)
     faltando = [r for r, v in (("endereço", e.get("logradouro")), ("CEP", clientes._digitos(e.get("cep"))),

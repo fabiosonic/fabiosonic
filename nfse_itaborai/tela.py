@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, assistente, atualizacao, automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, assistente, atualizacao, automacao, paises, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -36,6 +36,17 @@ def _emitir_item(it: dict) -> dict:
     cli = clientes.obter(str(it.get("cpf_cnpj", ""))) or {}
     base = {"cpf_cnpj": it.get("cpf_cnpj"), "cliente": cli.get("razao_social", it.get("cpf_cnpj")),
             "valor": str(it.get("valor"))}
+    if str((it.get("extras") or {}).get("tp_emit") or "") in ("2", "3"):
+        # emitida por esta empresa como tomadora/intermediária: não é receita, não vai para o contas a receber
+        r = lote.emitir_um(str(it.get("cpf_cnpj", "")), it.get("valor", 0), str(it.get("descricao", "")),
+                           producao=emissor.em_producao(), canal="nacional", servico_id=str(it.get("servico_id", "")),
+                           extras=it.get("extras"))
+        if r.get("sucesso"):
+            db.registrar("nfse_tomador", f"NFS-e emitida como {'tomador' if it['extras']['tp_emit'] == '2' else 'intermediário'}"
+                                         f" — prestador {base['cliente']}, R$ {it.get('valor')}, chave {r.get('chave')}")
+            r.setdefault("alertas", []).append("Nota emitida por esta empresa como tomadora/intermediária: não entra no "
+                                               "contas a receber. O XML ficou na pasta saida.")
+        return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "nfse", "link", "chave", "canal")}
     try:
         r = financeiro.emitir_avulsa(str(it.get("cpf_cnpj", "")), it.get("valor", 0), str(it.get("descricao", "")),
                                      str(it.get("vencimento", "")), servico_id=str(it.get("servico_id", "")),
@@ -184,7 +195,7 @@ ROTAS = {
                          "servicos": servicos.listar(), "regra_geral": financeiro.regra_geral(),
                          "regras_nfse": financeiro.regras_por_cliente(), "regras_nomes": financeiro.REGRAS_NFSE,
                          "fiscal_resumo": fiscal.resumo(fiscal.geral()), "regimes": fiscal.REGIMES,
-                         "fiscal_ctx": _ctx_fiscal(),
+                         "fiscal_ctx": _ctx_fiscal(), "paises": paises.PAISES, "moedas": paises.MOEDAS,
                          "producao": emissor.em_producao(), "config": config.publico(),
                          "canal": nacional.canal(), "cnpj": _cnpj_prestador()},
     "ambiente": lambda c: (emissor.definir_ambiente(bool(c.get("producao"))), {"producao": emissor.em_producao()})[1],

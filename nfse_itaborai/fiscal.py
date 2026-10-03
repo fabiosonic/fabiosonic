@@ -219,7 +219,44 @@ CAMPOS_NOTA = {
     "ree_xdoc": "t255", "ree_fornec_doc": 14, "ree_fornec_nome": "t150", "ree_dt_emi": "d", "ree_dt_comp": "d",
     "ref_nfse": "t1000", "interm_doc": 14, "interm_nome": "t150", "v_receb": "v",
     "subst_chave": 50, "subst_motivo": 2, "subst_xmotivo": "t255",
+    # casos raros da NFS-e Nacional: serviço no exterior, comércio exterior, emissão pelo tomador/intermediário
+    "local_prestacao_pais": "a2", "comext_md": 1, "comext_vinc": 1, "comext_moeda": 3, "comext_valor": "v",
+    "comext_mec_p": 2, "comext_mec_t": 2, "comext_mov": 1, "comext_di": "t12", "comext_re": "t12", "comext_mdic": 1,
+    "tp_emit": 1, "motivo_emis_ti": 1, "prest_op_simp_nac": 1, "toma_doc": 14, "toma_nome": "t150",
 }
+TIPOS_DED = {"1": "Alimentação e bebidas/frigobar", "2": "Materiais", "3": "Produção externa", "4": "Reembolso de despesas",
+             "5": "Repasse consorciado", "6": "Repasse plano de saúde", "7": "Serviços", "8": "Subempreitada de mão de obra",
+             "9": "Profissional parceiro", "99": "Outras deduções"}
+
+
+def _docs_deducao(lst) -> list[dict]:
+    """Documentos que comprovam a dedução/redução da base (grupo docDedRed da DPS nacional)."""
+    import re
+    out = []
+    for d in lst or []:
+        if not isinstance(d, dict) or not any(str(v).strip() for v in d.values()):
+            continue
+        doc = {k: " ".join(str(d.get(k) or "").split()) for k in ("tipo", "chave", "numero", "cmun", "cod_verif", "modelo",
+                                                                   "serie", "tp", "descricao", "data", "fornec_doc", "fornec_nome")}
+        doc["tipo"] = doc["tipo"] or ("chNFSe" if len(re.sub(r"\D", "", doc["chave"])) == 50 else
+                                      "chNFe" if len(re.sub(r"\D", "", doc["chave"])) == 44 else "nDoc")
+        doc["tp"] = doc["tp"] if doc["tp"] in TIPOS_DED else "99"
+        doc["valor_deducao"] = str(_dec(d.get("valor_deducao")))
+        doc["valor_dedutivel"] = str(_dec(d.get("valor_dedutivel")) or _dec(d.get("valor_deducao")))
+        if doc["tipo"] == "chNFSe" and len(re.sub(r"\D", "", doc["chave"])) != 50:
+            raise ValueError("Dedução: chave da NFS-e com 50 dígitos.")
+        if doc["tipo"] == "chNFe" and len(re.sub(r"\D", "", doc["chave"])) != 44:
+            raise ValueError("Dedução: chave da NF-e com 44 dígitos.")
+        if doc["tipo"] in ("nDoc", "nDocFisc", "NFSeMun", "NFNFS") and not doc["numero"]:
+            raise ValueError("Dedução: informe o número do documento.")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", doc["data"]):
+            raise ValueError("Dedução: data de emissão do documento (AAAA-MM-DD).")
+        if _dec(doc["valor_deducao"]) <= 0:
+            raise ValueError("Dedução: informe o valor deduzido de cada documento.")
+        if _dec(doc["valor_deducao"]) > _dec(doc["valor_dedutivel"]):
+            raise ValueError("Dedução: o valor deduzido não pode passar o valor dedutível do documento.")
+        out.append({k: v for k, v in doc.items() if v})
+    return out
 
 
 def normalizar_nota(d: dict | None) -> dict:
@@ -239,6 +276,8 @@ def normalizar_nota(d: dict | None) -> dict:
             v = str(n)
         elif regra == "a8":                        # CIB: 8 caracteres alfanuméricos
             v = re.sub(r"[^0-9A-Za-z]", "", v).upper()[:8]
+        elif regra == "a2":                        # país (sigla ISO de 2 letras)
+            v = re.sub(r"[^A-Za-z]", "", v).upper()[:2]
         elif regra == "d":
             if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
                 raise ValueError("Datas no formato AAAA-MM-DD.")
@@ -265,6 +304,15 @@ def normalizar_nota(d: dict | None) -> dict:
         if any(len(c) != 50 for c in chaves):
             raise ValueError("NFS-e referenciada: cada chave de acesso tem 50 dígitos.")
         out["ref_nfse"] = ",".join(chaves)
+    docs = _docs_deducao((d or {}).get("ded_docs"))
+    if docs:
+        if "ded_pct" in out or "ded_valor" in out:
+            raise ValueError("Dedução: use documentos OU percentual/valor, não os dois.")
+        out["ded_docs"] = docs
+    if out.get("tp_emit") not in (None, "2", "3"):
+        out.pop("tp_emit")
+    if "local_prestacao_pais" in out and len(out["local_prestacao_pais"]) != 2:
+        raise ValueError("País da prestação: sigla ISO com 2 letras (ex.: US).")
     if "ded_pct" in out and "ded_valor" in out:
         raise ValueError("Dedução/redução: informe percentual ou valor, não os dois.")
     return out

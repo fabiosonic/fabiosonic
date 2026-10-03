@@ -266,6 +266,70 @@ def _pessoa(tag: str, doc, nome) -> str:
     return (f"<{tag}>" + _t("CNPJ" if len(doc) == 14 else "CPF", doc) + _t("xNome", _txt(nome, 150)) + f"</{tag}>")
 
 
+def _end_ext(ext: dict, en) -> str:
+    """Endereço no exterior (endExt) + logradouro; só sai quando há logradouro (o grupo end é opcional)."""
+    if not getattr(en, "logradouro", ""):
+        return ""
+    return ("<end><endExt>" + _t("cPais", ext.get("pais_iso")) + _t("cEndPost", _txt(ext.get("cod_postal") or "0", 11))
+            + _t("xCidade", _txt(ext.get("cidade"), 60)) + _t("xEstProvReg", _txt(ext.get("estado") or ext.get("cidade"), 60))
+            + "</endExt>" + _t("xLgr", _txt(" ".join(x for x in (en.tipo_logradouro, en.logradouro) if x), 255))
+            + _t("nro", _txt(en.numero or "S/N", 60)) + _t("xCpl", _txt(en.complemento, 156))
+            + _t("xBairro", _txt(en.bairro or "-", 60)) + "</end>")
+
+
+def _id_pessoa(doc: str, ext: dict) -> str:
+    """CNPJ/CPF, ou NIF / motivo de não ter NIF (cliente do exterior)."""
+    if ext:
+        return _t("NIF", _txt(ext["nif"], 40)) if ext.get("nif") else _t("cNaoNIF", ext.get("sem_nif") or "0")
+    return _t("CNPJ" if len(doc) == 14 else "CPF", doc)
+
+
+def _end_nac(en) -> str:
+    cep, cmun_t = so_digitos(en.cep), so_digitos(en.codigo_municipio)
+    if not (len(cep) == 8 and len(cmun_t) == 7 and en.logradouro and en.bairro):
+        return ""
+    return (f"<end><endNac>{_t('cMun', cmun_t)}{_t('CEP', cep)}</endNac>"
+            + _t("xLgr", _txt(" ".join(x for x in (en.tipo_logradouro, en.logradouro) if x), 255))
+            + _t("nro", _txt(en.numero or "S/N", 60)) + _t("xCpl", _txt(en.complemento, 156))
+            + _t("xBairro", _txt(en.bairro, 60)) + "</end>")
+
+
+def _com_ext(x: dict) -> str:
+    """Comércio exterior (exportação/importação de serviço): moeda e valor na moeda são obrigatórios."""
+    if not (x.get("comext_moeda") and x.get("comext_valor")):
+        return ""
+    return ("<comExt>" + _t("mdPrestacao", x.get("comext_md") or "1") + _t("vincPrest", x.get("comext_vinc") or "0")
+            + _t("tpMoeda", so_digitos(x["comext_moeda"]).zfill(3)) + _t("vServMoeda", _v(_d(x["comext_valor"])))
+            + _t("mecAFComexP", (x.get("comext_mec_p") or "01").zfill(2)) + _t("mecAFComexT", (x.get("comext_mec_t") or "01").zfill(2))
+            + _t("movTempBens", x.get("comext_mov") or "1") + _t("nDI", _txt(x.get("comext_di"), 12))
+            + _t("nRE", _txt(x.get("comext_re"), 12)) + _t("mdic", x.get("comext_mdic") or "0") + "</comExt>")
+
+
+TIPOS_DOC_DED = ("chNFSe", "chNFe", "NFSeMun", "NFNFS", "nDocFisc", "nDoc")
+
+
+def _doc_ded(d: dict) -> str:
+    tipo = d.get("tipo") if d.get("tipo") in TIPOS_DOC_DED else "nDoc"
+    if tipo in ("chNFSe", "chNFe"):
+        ident = _t(tipo, so_digitos(d.get("chave")))
+    elif tipo == "NFSeMun":
+        ident = ("<NFSeMun>" + _t("cMunNFSeMun", so_digitos(d.get("cmun"))) + _t("nNFSeMun", so_digitos(d.get("numero")))
+                 + _t("cVerifNFSeMun", _txt(d.get("cod_verif"), 9)) + "</NFSeMun>")
+    elif tipo == "NFNFS":
+        ident = ("<NFNFS>" + _t("nNFS", so_digitos(d.get("numero"))) + _t("modNFS", so_digitos(d.get("modelo")) or "1")
+                 + _t("serieNFS", _txt(d.get("serie") or "1", 15)) + "</NFNFS>")
+    else:
+        ident = _t(tipo, _txt(d.get("numero"), 255))
+    fdoc = so_digitos(d.get("fornec_doc"))
+    fornec = (f"<fornec>{_t('CNPJ' if len(fdoc) == 14 else 'CPF', fdoc)}{_t('xNome', _txt(d.get('fornec_nome'), 150))}</fornec>"
+              if fdoc else "")
+    tp = str(d.get("tp") or "99")
+    return ("<docDedRed>" + ident + _t("tpDedRed", tp)
+            + (_t("xDescOutDed", _txt(d.get("descricao") or "Outras deduções", 150)) if tp == "99" else "")
+            + _t("dtEmiDoc", d.get("data")) + _t("vDedutivelRedutivel", _v(_d(d.get("valor_dedutivel") or d.get("valor_deducao"))))
+            + _t("vDeducaoReducao", _v(_d(d.get("valor_deducao")))) + fornec + "</docDedRed>")
+
+
 def _subst(x: dict) -> str:
     """Substituição de NFS-e (chave da nota substituída + motivo)."""
     ch = str(x.get("subst_chave") or "").strip()
@@ -380,35 +444,45 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
              + f"<regTrib>{reg}</regTrib></prest>")
 
     tom = rps.tomador
-    doc = so_digitos(tom.cpf_cnpj)
-    toma = ""
-    if doc:
-        en = tom.endereco
-        cep, cmun_t = so_digitos(en.cep), so_digitos(en.codigo_municipio)
-        end = ""
-        if len(cep) == 8 and len(cmun_t) == 7 and en.logradouro and en.bairro:
-            end = (f"<end><endNac>{_t('cMun', cmun_t)}{_t('CEP', cep)}</endNac>"
-                   + _t("xLgr", _txt(" ".join(x for x in (en.tipo_logradouro, en.logradouro) if x), 255))
-                   + _t("nro", _txt(en.numero or "S/N", 60))
-                   + _t("xCpl", _txt(en.complemento, 156))
-                   + _t("xBairro", _txt(en.bairro, 60)) + "</end>")
+    ext = tom.estrangeiro or {}
+    doc = "" if ext else so_digitos(tom.cpf_cnpj)
+    contraparte = ""
+    if doc or ext:
+        end = _end_ext(ext, tom.endereco) if ext else _end_nac(tom.endereco)
         fone = so_digitos(tom.telefone)
         email = (tom.email or "").split(";")[0].split(",")[0].strip()
         im_t = so_digitos(tom.inscricao_municipal).lstrip("0")
-        toma = ("<toma>" + _t("CNPJ" if len(doc) == 14 else "CPF", doc)
-                + (_t("IM", im_t) if im_t and e.get("informar_im") else "")
-                + _t("xNome", _txt(tom.razao_social, 300)) + end
-                + (_t("fone", fone) if 6 <= len(fone) <= 20 else "")
-                + (_t("email", email[:80]) if "@" in email else "") + "</toma>")
+        contraparte = (_id_pessoa(doc, ext)
+                       + (_t("IM", im_t) if im_t and e.get("informar_im") and not ext else "")
+                       + _t("xNome", _txt(tom.razao_social, 300)) + end
+                       + (_t("fone", fone) if 6 <= len(fone) <= 20 else "")
+                       + (_t("email", email[:80]) if "@" in email else ""))
+    toma = f"<toma>{contraparte}</toma>" if contraparte else ""
 
     x = rps.extras or {}
+    # Emissão pelo tomador (2) ou pelo intermediário (3): o cliente escolhido na tela é o PRESTADOR do serviço
+    # (ex.: importação de serviço) e esta empresa entra como tomador ou intermediário.
+    tp_emit = str(x.get("tp_emit") or "1")
+    if tp_emit in ("2", "3") and contraparte:
+        op_p = x.get("prest_op_simp_nac") or "1"
+        reg_p = (_t("opSimpNac", op_p) + (_t("regApTribSN", "1") if op_p == "3" else "") + _t("regEspTrib", "0"))
+        prest = f"<prest>{contraparte}<regTrib>{reg_p}</regTrib></prest>"
+        nome_emp = _txt(cfg.get("empresa", {}).get("nome") or "EMPRESA", 300)
+        eu = _t("CNPJ", cnpj) + _t("xNome", nome_emp)
+        if tp_emit == "2":
+            toma = f"<toma>{eu}</toma>"
+        else:
+            toma = _pessoa("toma", x.get("toma_doc"), x.get("toma_nome"))
+            x = {**x, "interm_doc": cnpj, "interm_nome": nome_emp}
     desc = _txt("; ".join(i.descricao for i in rps.itens), 2000)
     obs = _txt(rps.observacoes, 2000)
-    serv = ("<serv><locPrest>" + _t("cLocPrestacao", so_digitos(rps.local_prestacao) or "3301900") + "</locPrest>"
+    loc = (_t("cPaisPrestacao", str(x["local_prestacao_pais"]).upper()) if x.get("local_prestacao_pais")
+           else _t("cLocPrestacao", so_digitos(rps.local_prestacao) or "3301900"))
+    serv = ("<serv><locPrest>" + loc + "</locPrest>"
             + "<cServ>" + _t("cTribNac", so_digitos(rps.codigo_desdobro)[:6])
             + _t("cTribMun", so_digitos(rps.codigo_tributacao_municipio)[:3] if len(so_digitos(rps.codigo_tributacao_municipio)) == 3 else "")
             + _t("xDescServ", desc) + _t("cNBS", so_digitos(rps.codigo_nbs)) + "</cServ>"
-            + _obra(x) + _evento(x) + _info_compl(x, obs) + "</serv>")
+            + _com_ext(x) + _obra(x) + _evento(x) + _info_compl(x, obs) + "</serv>")
 
     retido = rps.iss_retido == ISS_RETIDO_SIM
     trib_issqn = str(x.get("trib_issqn") or "1")
@@ -420,7 +494,9 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
         descontos = ("<vDescCondIncond>" + (_t("vDescIncond", _v(desc_inc)) if desc_inc else "")
                      + (_t("vDescCond", _v(desc_cond)) if desc_cond else "") + "</vDescCondIncond>")
     ded = ""
-    if x.get("ded_pct"):
+    if x.get("ded_docs"):
+        ded = "<vDedRed><documentos>" + "".join(_doc_ded(d) for d in x["ded_docs"][:1000]) + "</documentos></vDedRed>"
+    elif x.get("ded_pct"):
         ded = f"<vDedRed>{_t('pDR', _v(Decimal(str(x['ded_pct']))))}</vDedRed>"
     elif rps.valor_deducoes:
         ded = f"<vDedRed>{_t('vDR', _v(rps.valor_deducoes))}</vDedRed>"
@@ -451,7 +527,9 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
     return (f'<DPS xmlns="{NS}" versao="{VERSAO}"><infDPS Id="{ident}">'
             + _t("tpAmb", "1" if producao else "2") + _t("dhEmi", dh) + _t("verAplic", VER_APLIC)
             + _t("serie", serie) + _t("nDPS", numero) + _t("dCompet", compet.isoformat())
-            + _t("tpEmit", "1") + _t("cLocEmi", cmun)
+            + _t("tpEmit", tp_emit if tp_emit in ("2", "3") else "1")
+            + (_t("cMotivoEmisTI", x.get("motivo_emis_ti") or "1") if tp_emit in ("2", "3") else "")
+            + _t("cLocEmi", cmun)
             + _subst(x) + prest + toma + interm + serv + valores + ibscbs + "</infDPS></DPS>")
 
 
@@ -601,6 +679,7 @@ def preparar(rps: Rps, producao: bool, cert: Certificado | None = None, cfg: dic
     rps.numero = str(numero)
     rps.data_emissao = rps.data_emissao or datetime.now(emissor.FUSO).replace(tzinfo=None, microsecond=0)
     alertas = validar(rps)
+    alertas += _regras_raras(rps)
     prest = prestador()
     serie = str(cfg["emissao"].get("serie_dps", "900"))
     xml = gerar_dps(rps, prest, producao, serie, str(numero), cfg)
@@ -612,6 +691,32 @@ def preparar(rps: Rps, producao: bool, cert: Certificado | None = None, cfg: dic
     assinado = assinar(xml, "infDPS", cert)
     validar_xsd(assinado)
     return assinado, str(numero), alertas
+
+
+def _regras_raras(rps: Rps) -> list[str]:
+    """Exportação/importação, emissão pelo tomador/intermediário e dedução por documentos."""
+    from .validacao import ErroValidacao
+    x, erros, alertas = rps.extras or {}, [], []
+    tp = str(x.get("tp_emit") or "1")
+    exterior = bool(rps.tomador.estrangeiro)
+    comext = bool(x.get("comext_moeda") and x.get("comext_valor"))
+    if str(x.get("trib_issqn") or "1") == "3" and not comext:
+        erros.append("Exportação de serviço: preencha Comércio exterior (moeda e valor na moeda estrangeira).")
+    if tp == "2" and exterior and not comext:
+        erros.append("Importação de serviço (emitida pelo tomador): preencha Comércio exterior (moeda e valor).")
+    if exterior and not comext and tp == "1":
+        alertas.append("Tomador do exterior: se for exportação de serviço, marque Situação do ISS = Exportação e "
+                       "preencha Comércio exterior.")
+    if tp in ("2", "3") and not so_digitos(rps.tomador.cpf_cnpj) and not exterior:
+        erros.append("Emissão pelo tomador/intermediário: escolha o PRESTADOR do serviço no campo Cliente.")
+    if tp == "3" and len(so_digitos(x.get("toma_doc"))) not in (11, 14):
+        erros.append("Emissão pelo intermediário: informe CPF/CNPJ e nome do tomador do serviço.")
+    total_ded = sum(_d(d.get("valor_deducao") or 0) for d in x.get("ded_docs") or [])
+    if total_ded > rps.valor_servicos:
+        erros.append("Dedução por documentos maior que o valor do serviço.")
+    if erros:
+        raise ErroValidacao(erros)
+    return alertas
 
 
 def emitir(rps: Rps, producao: bool = False, url: str | None = None, contexto: ssl.SSLContext | None = None,

@@ -108,6 +108,8 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
         for t in db.linhas(sql):
             if t["nfse_status"] in ("pendente", "erro", "teste"):
                 continue                      # cobra junto com a nota válida
+            if str(t["cpf_cnpj"]).startswith("99") and len(str(t["cpf_cnpj"])) == 9:
+                continue                      # cliente do exterior: sem boleto (recebe por câmbio, baixa manual)
             try:
                 financeiro_t = cobranca.preparar_pagamento(t["id"], cfg)
             except Exception as ex:  # noqa: BLE001 — um cadastro incompleto não trava os demais boletos

@@ -74,9 +74,12 @@ class Tomador:
     inscricao_estadual: str = ""
     telefone: str = ""
     email: str = ""
+    estrangeiro: dict = field(default_factory=dict)   # cliente do exterior: nif, sem_nif, pais_iso, pais_bacen, cidade...
 
     @property
     def tipo(self) -> str:
+        if self.estrangeiro:
+            return self.estrangeiro.get("pessoa") or TOMADOR_PJ
         digitos = "".join(c for c in self.cpf_cnpj if c.isdigit())
         if not digitos:
             return ""

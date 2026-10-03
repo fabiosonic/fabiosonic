@@ -402,6 +402,20 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### Casos raros da NFS-e (exterior, dedução por documentos, emissão pelo tomador)
+
+- **Cliente do exterior** (Clientes › "Cliente do exterior"): sem CPF/CNPJ, com NIF (ou o motivo de não ter),
+  país, cidade, estado/província e código postal. Na NFS-e Nacional sai com `NIF`/`cNaoNIF` e `endExt`; no
+  webservice de Itaboraí, como pede o manual: CPF/CNPJ, IM e IE vazios, `Nif`, `CodigoPais` (BACEN) e
+  `CidadeEstrangeiro`. Não gera boleto (o Inter exige CPF/CNPJ): receba por câmbio e dê baixa manual.
+- **Exportação de serviço** (Mais campos da nota › Exterior): país da prestação, moeda e valor na moeda,
+  modo de prestação, vínculo, mecanismos de apoio, DI/RE e envio ao MDIC (grupo `comExt`). Com Situação do
+  ISS = Exportação, o grupo é obrigatório e o sistema confere antes de enviar.
+- **Dedução por documentos** (canal nacional): liste as NF-e, NFS-e ou recibos que comprovam a dedução
+  (`docDedRed`); a soma vira a dedução da base do ISS.
+- **Emissão pelo tomador ou intermediário** (`tpEmit` 2/3, ex.: importação de serviço): o cliente escolhido é o
+  prestador do serviço e esta empresa entra como tomadora/intermediária. Essa nota não entra no contas a receber.
+
 ### Extrato do Banco Inter pela API (conciliação sem arquivo)
 
 Com o Inter configurado, o robô baixa o extrato da conta direto do banco (API Banking v2,
@@ -536,7 +550,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 219 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 229 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
