@@ -355,7 +355,7 @@ class _Handler(BaseHTTPRequestHandler):
             return self._responder(200, json.dumps({"sistema": "nfse_itaborai", "versao": __version__,
                                                     "pasta": str(emissor.BASE), "inicio": INICIO}).encode(),
                                    "application/json")
-        livres = caminho in ("/", "") or re.fullmatch(r"/[\w-]+\.(html|js|css|png|svg)", caminho)
+        livres = caminho in ("/", "") or re.fullmatch(r"/(js/)?[\w-]+\.(html|js|css|png|svg)", caminho)
         if not livres and not acesso.valido(acesso.token_do_cookie(self.headers.get("Cookie"))):
             return self._responder(401, "Sistema bloqueado: entre com o PIN.".encode("utf-8"), "text/plain; charset=utf-8")
         if caminho == "/export/titulos.csv":

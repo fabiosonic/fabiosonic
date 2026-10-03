@@ -1,0 +1,38 @@
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --upgrade pip pytest lxml cryptography
+      - run: python -m pytest -q
+
+  telas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: python -m pip install --upgrade pip pytest lxml cryptography
+      - run: npm install
+        working-directory: tests/ui
+      - run: npx playwright install --with-deps chromium
+        working-directory: tests/ui
+      - run: python -m pytest -q tests/test_tela_navegador.py
+        env:
+          NFSE_TESTE_TELA: "1"

@@ -133,7 +133,7 @@ def test_pin_bloqueia_api_e_downloads(servidor, multi):  # noqa: F811
     assert "clientes" in _post(servidor, "estado", cookie=ck)[0]
     # outro navegador, sem sessão
     assert _post(servidor, "estado")[0]["bloqueado"]
-    assert _get(servidor, "/export/titulos.csv") == 401 and _get(servidor, "/") == 200 and _get(servidor, "/app.js") == 200
+    assert _get(servidor, "/export/titulos.csv") == 401 and _get(servidor, "/") == 200 and _get(servidor, "/js/01_base.js") == 200
     assert _post(servidor, "acesso/entrar", {"pin": "0000"})[0]["erro"] == "PIN incorreto."
     r, ck2 = _post(servidor, "acesso/entrar", {"pin": "4321"})
     assert r["ok"] and _get(servidor, "/export/titulos.csv", ck2) == 200

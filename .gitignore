@@ -9,3 +9,5 @@ exemplos/rps_teste_homologacao.json
 /empresas/
 /empresas.json
 /dados_locais/
+tests/ui/node_modules/
+tests/ui/package-lock.json

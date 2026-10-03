@@ -1,0 +1,7 @@
+{
+  "name": "nfse-itaborai-testes-de-tela",
+  "private": true,
+  "description": "Varredura das telas no navegador (Playwright)",
+  "scripts": { "varredura": "node varredura.js" },
+  "devDependencies": { "playwright": "^1.47.0" }
+}

@@ -550,7 +550,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 229 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 230 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
@@ -566,11 +566,21 @@ São 229 testes, que cobrem o emissor (municipal e nacional), o financeiro e as 
   anexo no e-mail, baixa automática, cancelamento e cadastro incompleto;
 - a tela.
 
+**Testes de tela no navegador** (`tests/ui`): sobem o sistema com dados de exemplo e percorrem todas as páginas
+em desktop, tema escuro, celular e notebook, acusando erro de JavaScript, erro do servidor, rolagem horizontal
+e textos que transbordam. Rodam com `NFSE_TESTE_TELA=1 python -m pytest tests/test_tela_navegador.py`
+(precisa de Node.js e de `npm install` em `tests/ui`).
+
+**Integração contínua:** a cada envio ao GitHub, `.github/workflows/testes.yml` roda todos os testes em Python
+3.10 e 3.12 e a varredura de tela no Chromium.
+
+**Código da tela:** `nfse_itaborai/web/js/` em arquivos por assunto (01_base, 02_comum, 03_painel, 04_notas,
+05_financeiro, 06_relatorios, 07_cadastros, 08_configuracoes, 09_inicio), carregados em ordem pelo `index.html`.
+
 ## Limitações conhecidas
 
 - **Situação Tributária / Tipo de Retenção de PIS/COFINS/CSLL (Nota Técnica 005):** o XSD atual não tem
   esses campos. Notas **sem retenção federal**, que é o caso normal de um prestador do Simples Nacional, não
   são afetadas. Se uma nota com retenção de PIS/COFINS/CSLL for rejeitada, o erro da prefeitura aparece na
   tela e em `retorno.xml`.
-- O grupo opcional `ImovelIBSCBS` (endereço do imóvel) e o grupo `Evento` do XSD ainda não são gerados.
 - Erros de rejeição: o formato foi reproduzido do ACBr, e o retorno bruto fica sempre salvo em `retorno.xml`.
