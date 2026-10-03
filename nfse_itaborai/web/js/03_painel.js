@@ -9,30 +9,60 @@ async function ir(p) {
   $$("nav a").forEach(a => a.classList.toggle("on", a.dataset.p == p));
   $("#conteudo").innerHTML = '<div class="vazio">Carregando…</div>';
   try { await PAGINAS[p]($("#conteudo")); } catch (e) { console.error(e); }
+  subtitulo(p, $("#conteudo"));
+  if (p == "config") { indiceConfig($("#conteudo")); setTimeout(() => PAG == "config" && indiceConfig($("#conteudo")), 700); }
   if (location.hash != "#" + p) history.pushState(null, "", "#" + p);
+}
+// Subtítulo de cada página: diz em uma linha para que ela serve
+const SUBT = {
+  emitir: "Emita uma NFS-e avulsa. A nota gera a conta a receber com boleto/PIX e entra na régua de cobrança.",
+  lote: "Emita várias notas de uma vez para os clientes selecionados, com valor e serviço de cada um.",
+  notas: "Todas as NFS-e emitidas pelo sistema ou importadas dos XML, com cancelamento, substituição e cópia.",
+  receber: "Honorários a receber, com valor atualizado por multa e juros, situação da NFS-e e ações de cobrança.",
+  contratos: "Clientes cobrados todo mês: o robô gera o título, a NFS-e e o boleto/PIX no dia configurado.",
+  cobranca: "Régua automática de lembretes e cobranças por e-mail e WhatsApp, com o histórico de envios.",
+  pagar: "Despesas do escritório: vencimentos, pagamentos e despesas recorrentes.",
+  conciliacao: "Extrato do banco conferido com os títulos e despesas: baixas automáticas e vínculos manuais.",
+  relatorios: "Indicadores, DRE, fluxo de caixa, livro caixa, inadimplência e análise por cliente.",
+  clientes: "Cadastro dos tomadores: dados fiscais, endereço, contatos e regras próprias de emissão.",
+  config: "Ajustes da empresa, emissão, cobrança, integrações e segurança. Use o índice para ir direto a uma seção.",
+  validacao: "Teste cada integração com as credenciais reais antes de ligar a produção.",
+};
+function subtitulo(p, el) {
+  const h = el.querySelector(":scope > h1");
+  if (!h || !SUBT[p] || el.querySelector(":scope > .sub-pagina")) return;
+  h.insertAdjacentHTML("afterend", `<p class="sub-pagina">${SUBT[p]}</p>`);
+}
+// Configurações: seções agrupadas por assunto + índice lateral que acompanha a rolagem
+const GRUPOS_CFG = [
+  ["Empresa e notas fiscais", /Empresa emissora|Serviços|Emissão da NFS-e|Regras fiscais|Empresa e PIX/],
+  ["Cobrança e recebimento", /^Cobrança|Banco Inter|WhatsApp|Cartão|E-mail|13º|Financeiro$/],
+  ["Automação", /Robô|Automações|Regras de despesa/],
+  ["Segurança e sistema", /Backup|Acesso|PIN|Atualizar|Versão anterior/],
+];
+function indiceConfig(el) {
+  const cards = $$(":scope > .card, :scope .cfg-conteudo .card", el).filter(c => c.querySelector(":scope > h2"));
+  if (!cards.length) return;
+  let lay = $(".cfg-layout", el);
+  if (!lay) { el.querySelector(":scope > .sub-pagina").insertAdjacentHTML("afterend", '<div class="cfg-layout"><nav class="cfg-indice" aria-label="Seções das configurações"></nav><div class="cfg-conteudo"></div></div>'); lay = $(".cfg-layout", el); }
+  const cont = $(".cfg-conteudo", lay), nav = $(".cfg-indice", lay), titulo = c => { const h = c.querySelector(":scope > h2").cloneNode(true); h.querySelectorAll(".acoes, button, .selo").forEach(x => x.remove()); return h.textContent.replace(/ — .*/, "").trim(); };
+  const grupos = GRUPOS_CFG.map(([g]) => ({ g, cards: [] })).concat([{ g: "Outros", cards: [] }]);
+  cards.forEach(c => (grupos.find((x, i) => i < GRUPOS_CFG.length && GRUPOS_CFG[i][1].test(titulo(c))) || grupos.at(-1)).cards.push(c));
+  cont.innerHTML = ""; let n = 0;
+  nav.innerHTML = grupos.filter(x => x.cards.length).map(x => {
+    cont.insertAdjacentHTML("beforeend", `<h3 class="cfg-grupo">${x.g}</h3>`);
+    return `<div class="ci-grupo">${x.g}</div>` + x.cards.map(c => { c.id ||= "cfg-" + (++n); cont.append(c);
+      return `<a href="#" data-alvo="${c.id}">${esc(titulo(c).replace(/\s+/g, " "))}</a>`; }).join("");
+  }).join("") + `<button class="btn ci-salvar" type="button" onclick="$('#salvar').click()">${ic("ok")}Salvar tudo</button>`;
+  $$("a", nav).forEach(a => a.onclick = ev => { ev.preventDefault(); document.getElementById(a.dataset.alvo).scrollIntoView({ behavior: "smooth", block: "start" }); });
+  if (window.IntersectionObserver) {
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) $$("a", nav).forEach(a => a.classList.toggle("on", a.dataset.alvo == e.target.id)); }),
+      { rootMargin: "-15% 0px -75% 0px" });
+    cards.forEach(c => io.observe(c));
+  }
 }
 window.addEventListener("popstate", () => { const h = location.hash.slice(1); if (h in PAGINAS && h != PAG) ir(h); });
 $$("nav a").forEach(a => a.onclick = () => ir(a.dataset.p));
-
-// ---------------------------------------------------------------- formatação para leitura rápida
-const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const mesExtenso = c => c ? `${MESES[+c.slice(5, 7) - 1]} de ${c.slice(0, 4)}` : "";
-const mesCurto = c => c ? `${MESES[+c.slice(5, 7) - 1].slice(0, 3)}/${c.slice(2, 4)}` : "";
-// R$ compacto: 1.284 · 12,9 mil · 4,2 mi (valores em centavos)
-function compacto(c, moeda = true) {
-  const v = Number(c || 0) / 100, a = Math.abs(v), f = (x, d) => x.toLocaleString("pt-BR", { maximumFractionDigits: d });
-  const t = a >= 1e6 ? f(v / 1e6, 1) + " mi" : a >= 1e4 ? f(v / 1e3, 1) + " mil" : f(v, 0);
-  return moeda ? "R$ " + t : t;
-}
-const pct = (v, d = 1) => Number(v || 0).toLocaleString("pt-BR", { maximumFractionDigits: d }) + "%";
-// "RPS CONSULTORIA E SERVICOS LTDA" -> "RPS Consultoria e Servicos LTDA" (siglas e conectivos preservados)
-function nomeCli(n) {
-  n = String(n || "").split(" - ")[0].trim();
-  if (n != n.toUpperCase()) return n;
-  const SIG = new Set(["LTDA", "ME", "EPP", "EIRELI", "S/A", "SA", "MEI", "SS", "SLU", "TI"]), MIN = new Set(["DE", "DA", "DO", "DAS", "DOS", "E", "EM"]);
-  return n.split(/\s+/).map((w, i) => SIG.has(w) || (!/[AEIOUÁÉÍÓÚÂÊÔÃÕ]/.test(w) && w.length <= 4) ? w
-    : i && MIN.has(w) ? w.toLowerCase() : w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
-}
 
 // ---------------------------------------------------------------- tendência, variação e indicadores
 // Minigráfico de 12 pontos: linha no tom de apoio, último ponto em destaque (o mês atual).

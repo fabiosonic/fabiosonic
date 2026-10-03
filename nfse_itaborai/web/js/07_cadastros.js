@@ -3,7 +3,7 @@
 "use strict";
 // ---------------------------------------------------------------- clientes
 PAGINAS.clientes = async el => {
-  el.innerHTML = `<h1>Clientes <span class="acoes"><button class="btn" id="imp_xml">${ic("download")}Importar clientes dos XML</button></span></h1><div id="imp_area"></div><div class="card"><div class="barra"><label data-br>CNPJ / CPF<input id="c_doc" placeholder="só números"></label>
+  el.innerHTML = `<h1>Clientes <span class="acoes"><button class="btn" id="imp_xml">${ic("download")}Importar clientes dos XML</button></span></h1><div id="imp_area"></div><div class="card"><div class="card-cab"><h2 id="c_tit">${ic("clientes")}Novo cliente</h2><span class="sub">endereço completo é exigido na NFS-e e no boleto</span></div><div class="barra"><label data-br>CNPJ / CPF<input id="c_doc" placeholder="só números"></label>
       <label class="chk"><input type="checkbox" id="c_ext"> Cliente do exterior <span class="sub">(sem CPF/CNPJ — exportação de serviço)</span></label></div>
     <div class="campos" id="fcli"><label class="inteiro">Razão social / nome<input name="razao_social"></label>
     <label data-ex hidden>País<select id="ce_pais"><option value="">Escolha…</option>${Object.entries(ST.paises || {}).map(([k, v]) => `<option value="${k}">${esc(v[0])} (${k})</option>`).join("")}<option value="outro">Outro país…</option></select></label>
@@ -12,13 +12,13 @@ PAGINAS.clientes = async el => {
     <label data-ex hidden>NIF (identificação fiscal no país)<input id="ce_nif" maxlength="40"></label>
     <label data-ex hidden>Sem NIF? Motivo<select id="ce_sem"><option value="">Tem NIF</option><option value="1">Dispensado do NIF</option><option value="2">País não exige NIF</option></select></label>
     <label data-ex hidden>Pessoa<select id="ce_pessoa"><option value="1">Jurídica (empresa)</option><option value="2">Física</option></select></label>
-    <label>Tipo logradouro<input name="tipo_logradouro" placeholder="RUA"></label><label>Logradouro<input name="logradouro"></label><label>Número<input name="numero"></label>
+    <h3 class="bloco">Endereço</h3><label>Tipo logradouro<input name="tipo_logradouro" placeholder="RUA"></label><label>Logradouro<input name="logradouro"></label><label>Número<input name="numero"></label>
     <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label data-br>CEP<input name="cep"></label>
     <label data-ex hidden>Cidade (exterior)<input id="ce_cidade" maxlength="55"></label><label data-ex hidden>Estado / província<input id="ce_estado" maxlength="60"></label><label data-ex hidden>Código postal<input id="ce_postal" maxlength="11"></label>
     <label data-br>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label data-br>Cód. IBGE município<input name="codigo_municipio"></label><label data-br>UF<input name="uf" maxlength="2"></label>
-    <label data-br>Inscrição municipal<input name="inscricao_municipal"></label><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
+    <label data-br>Inscrição municipal<input name="inscricao_municipal"></label><h3 class="bloco">Contato e cobrança</h3><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
     <label class="chk inteiro"><input type="checkbox" id="c_wa"> <b>Enviar cobrança por WhatsApp</b> <span class="sub">— para clientes que já conversam com o escritório pelo WhatsApp</span></label>
-    <label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
+    <h3 class="bloco">Emissão</h3><label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
     ${blocoFiscal("cf")}
     <p><button class="btn" id="sc">Salvar cliente</button> <button class="btn sec" id="lc">Novo</button></p></div>
     <div class="card"><div class="barra"><label style="flex:1">Procurar<input id="c_f" placeholder="nome ou CNPJ"></label></div><div id="c_tab"></div></div>`;
@@ -26,7 +26,7 @@ PAGINAS.clientes = async el => {
   let chaveExt = "";
   const modoExt = () => { const ext = $("#c_ext").checked, outro = $("#ce_pais").value == "outro";
     $$("[data-ex]", el).forEach(l => l.hidden = !ext || (l.hasAttribute("data-outro") && !outro)); $$("[data-br]", el).forEach(l => l.hidden = ext); };
-  const preencher = c => { preencherFiscal("cf", c.fiscal); $("#c_doc").value = c.estrangeiro ? "" : c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || "");
+  const preencher = c => { $("#c_tit").innerHTML = `${ic("clientes")}${c.cpf_cnpj ? "Editar cliente: " + esc(nomeCli(c.razao_social)) : "Novo cliente"}`; preencherFiscal("cf", c.fiscal); $("#c_doc").value = c.estrangeiro ? "" : c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || "");
     const x = c.estrangeiro || {}; chaveExt = c.estrangeiro ? c.cpf_cnpj : ""; $("#c_ext").checked = !!c.estrangeiro;
     $("#ce_pais").value = x.pais_iso ? ((ST.paises || {})[x.pais_iso] ? x.pais_iso : "outro") : ""; $("#ce_iso").value = x.pais_iso || ""; $("#ce_bacen").value = x.pais_bacen || "";
     $("#ce_nif").value = x.nif || ""; $("#ce_sem").value = x.sem_nif || ""; $("#ce_pessoa").value = x.pessoa || "1";
@@ -34,7 +34,7 @@ PAGINAS.clientes = async el => {
     $("#c_wa").checked = !!c.whatsapp_cobranca; };
   $("#c_ext").onchange = modoExt; $("#ce_pais").onchange = modoExt;
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
-    $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => esc(c.razao_social) }, { t: "CPF/CNPJ", f: c => fmtDoc(c.cpf_cnpj) },
+    $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => celNome(c.razao_social, fmtDoc(c.cpf_cnpj)) },
       { t: "Contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' },
       { t: "Cobrar por WhatsApp", f: c => c.telefone ? `<label class="chk" title="Entra na fila de WhatsApp da régua"><input type="checkbox" data-wa="${c.cpf_cnpj}" ${c.whatsapp_cobranca ? "checked" : ""}> sim</label>` : '<span class="sub">sem telefone</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
       { t: "", f: c => `<button class="btn min sec" data-ed="${c.cpf_cnpj}">Editar</button> <button class="btn min sec" data-ex="${c.cpf_cnpj}" title="Excluir">${ic("x")}</button>` }],

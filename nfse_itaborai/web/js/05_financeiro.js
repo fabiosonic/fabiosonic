@@ -12,9 +12,8 @@ PAGINAS.receber = async el => {
     <label style="flex-direction:row;align-items:center;gap:6px;margin-left:auto">Competência <input type="month" id="r_comp" value="${comp}" style="width:160px"></label></div>
     <p class="sub">${lst.length} título(s) · ${brl(soma)}</p>
     ${tabela([
-      { t: "Cliente", f: t => `${esc(t.cliente_nome)}<div class="sub">${esc(t.descricao)}</div>` },
-      { t: "Comp.", f: t => mes(t.competencia) },
-      { t: "Vencimento", f: t => dt(t.vencimento) },
+      { t: "Cliente", f: t => celNome(t.cliente_nome, esc(frase(t.descricao))) },
+      { t: "Vencimento", f: t => `<span class="nw">${dt(t.vencimento)}</span><div class="sub nw">comp. ${mes(t.competencia)}</div>` },
       { t: "Valor", n: 1, f: t => num(t.valor_cent) + (t.situacao == "atrasado" ? `<div class="sub">atualizado ${num(t.total_cent)}</div>` : t.status == "pago" ? `<div class="sub">pago ${num(t.valor_pago_cent)} em ${dt(t.data_pagamento)}</div>` : "") },
       { t: "Situação", f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "") },
       { t: "NFS-e", f: t => selo(t.nfse_status) + (t.nfse_numero ? `<div class="sub">${t.nfse_link && t.nfse_link.startsWith("http") ? `<a href="${esc(t.nfse_link)}" target="_blank">${esc(t.nfse_numero)}</a>` : esc(t.nfse_numero)}</div>` : "") + (t.nfse_erro ? `<div class="sub" title="${esc(t.nfse_erro)}">${esc(t.nfse_erro.slice(0, 60))}…</div>` : "") },
@@ -157,7 +156,7 @@ PAGINAS.contratos = async el => {
       && (FILTRO_RECOR == "todos" || (FILTRO_RECOR == "sim" ? l.repetir : FILTRO_RECOR == "confirmar" ? l.id && !l.repetir : !l.valor_cent)));
     $("#rc_tab").innerHTML = tabela([
       { t: '<label class="chk" title="Repetir todo mês — marcar todos os visíveis"><input type="checkbox" id="rc_todos"> Repetir</label>', f: l => `<input type="checkbox" class="rc" data-c="repetir" data-k="${chave(l)}" ${l.repetir ? "checked" : ""} aria-label="Repetir todo mês">` },
-      { t: "Cliente", f: l => `${esc(l.cliente_nome)}<div class="sub">${fmtDoc(l.cpf_cnpj)}${l.id && !l.repetir ? " · a confirmar" : ""}${l.fim ? " · até " + mes(l.fim) : ""}</div>` },
+      { t: "Cliente", f: l => celNome(l.cliente_nome, `${fmtDoc(l.cpf_cnpj)}${l.id && !l.repetir ? " · a confirmar" : ""}${l.fim ? " · até " + mes(l.fim) : ""}`) },
       { t: "Valor mensal (R$)", f: l => `<input class="rc" data-c="valor" data-k="${chave(l)}" inputmode="decimal" style="width:96px" value="${l.valor_cent ? num(l.valor_cent) : ""}" placeholder="0,00">` },
       { t: "Vence dia", f: l => `<input class="rc" data-c="dia_vencimento" data-k="${chave(l)}" type="number" min="1" max="31" style="width:58px" value="${l.dia_vencimento}">` },
       { t: "Serviço", f: l => `<select class="rc" style="min-width:130px;max-width:170px" data-c="servico_id" data-k="${chave(l)}">${(ST.servicos || []).length > 1 ? opcoesServ(l.servico_id || "", "Habitual do cliente") : opcoesServ(l.servico_id || "", "Padrão")}</select>` },
@@ -222,10 +221,10 @@ PAGINAS.cobranca = async el => {
     <a href="#" onclick="ir('config');return false">Alterar</a></p></div>
   <div class="card"><h2>WhatsApp ainda não enviado (${fila.length}) ${fila.length && ww.ativo ? '<button class="btn" id="wa_auto">Enviar agora</button>' : ""} ${fila.length ? '<button class="btn sec" id="wa_seq">Enviar manualmente em sequência</button>' : ""}</h2>
     <p class="sub">${ww.ativo ? (ww.enviando ? "<b>Enviando agora pelo WhatsApp…</b> " : "") + "O robô envia esta fila sozinho a cada rodada (de hora em hora) e logo depois de “Rodar régua agora”." : "O WhatsApp do escritório não está conectado: estas mensagens saem sozinhas assim que você conectar em Configurações › WhatsApp. Enquanto isso, dá para enviar manualmente em sequência."} Só entram os clientes marcados em Clientes › “Cobrar por WhatsApp”.</p>
-    ${tabela([{ t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
+    ${tabela([{ t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
       { t: "Etapa", f: e => e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias` },
       { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔")}</div>
-  <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Etapa", f: e => e.etapa }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
+  <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Etapa", f: e => e.etapa }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
   if ($("#wa_seq")) $("#wa_seq").onclick = () => enviarSequencia(fila);
   if ($("#wa_auto")) $("#wa_auto").onclick = async () => { await api("whatsapp_web/enviar_fila"); aviso("Enviando a fila pelo WhatsApp em segundo plano…", 6000); setTimeout(() => ir("cobranca"), 4000); };
   $("#rr").onclick = async () => { const r = await api("regua/rodar"); aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp${r.whatsapp_automatico ? " (saindo sozinhos agora)" : ""}, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
@@ -252,7 +251,7 @@ PAGINAS.pagar = async el => {
   <p class="sub">${lst.length} despesa(s) · ${brl(lst.reduce((a, d) => a + d.valor_cent, 0))}</p>
   ${tabela([{ t: "Descrição", f: d => `${esc(d.descricao)}<div class="sub">${esc(d.fornecedor)}${d.recorrente ? " · recorrente" : ""}</div>` }, { t: "Categoria", f: d => esc(d.categoria) },
     { t: "Vencimento", f: d => dt(d.vencimento) }, { t: "Valor", n: 1, f: d => num(d.valor_cent) }, { t: "Situação", f: d => selo(d.situacao) },
-    { t: "", f: d => d.status == "aberto" ? `<button class="btn min" onclick="pagarDesp(${d.id})">Pagar</button> <button class="btn min sec" onclick='editarDesp(${JSON.stringify(d).replace(/'/g, "&#39;")})'>Editar</button> <button class="btn min sec" onclick="excluirDesp(${d.id})">Excluir</button>` : "" }], lst)}</div>`;
+    { t: "", f: d => d.status == "aberto" ? `<button class="btn min" onclick="pagarDesp(${d.id})">Pagar</button> <button class="btn min sec ico" title="Editar" aria-label="Editar" onclick='editarDesp(${JSON.stringify(d).replace(/'/g, "&#39;")})'>${ic("editar")}</button> <button class="btn min sec ico perigo-txt" title="Excluir" aria-label="Excluir" onclick="excluirDesp(${d.id})">${ic("lixeira")}</button>` : "" }], lst)}</div>`;
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_PAG = b.dataset.f; ir("pagar"); });
   $("#nd").onclick = () => editarDesp({});
 };

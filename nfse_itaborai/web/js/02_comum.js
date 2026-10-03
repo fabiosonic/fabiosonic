@@ -208,7 +208,7 @@ async function carregarEstado() {
   b.title = "Clique para trocar o ambiente";
   const e = ST.empresa || {}, nome = (e.nome || "Empresa").trim();
   const ini = nome.split(/\s+/).filter(w => w.length > 2 && !/^(ltda|me|epp|eireli|s\/a|de|da|do|e)$/i.test(w)).slice(0, 2).map(w => w[0]).join("").toUpperCase() || nome.slice(0, 2).toUpperCase();
-  $("#empresa").innerHTML = `<span class="selo-marca">${esc(ini)}</span><span class="marca-txt">${esc(nome)}<small>${ST.empresas.length > 1 ? `${ST.empresas.length} empresas · trocar` : "Financeiro · NFS-e"}</small></span><svg class="ic seta"><use href="#i-contratos"/></svg>`;
+  $("#empresa").innerHTML = `<span class="selo-marca">${esc(ini)}</span><span class="marca-txt">${esc(nomeCli(nome))}<small>${ST.empresas.length > 1 ? `${ST.empresas.length} empresas · trocar` : "Financeiro · NFS-e"}</small></span><svg class="ic seta"><use href="#i-contratos"/></svg>`;
   document.title = `${nome} · Financeiro e NFS-e`;
 }
 async function trocarEmpresa(pre) {

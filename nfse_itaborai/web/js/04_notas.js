@@ -10,7 +10,7 @@ function linhaRes(r) {
     : `<div class="msg erro"><span class="t">✖ ${esc(r.cliente)} — ${esc(r.valor)}</span>${(r.erros || []).map(e => `<div>${esc(e)}</div>`).join("")}</div>`;
 }
 PAGINAS.emitir = async el => {
-  el.innerHTML = `<h1>Emitir nota</h1><div class="card"><div class="campos">
+  el.innerHTML = `<h1>Emitir nota</h1><div class="emitir-layout"><div class="card emitir-form"><div class="campos">
     <label class="inteiro">Cliente<input id="e_cli" list="dl_cli" placeholder="Digite o nome ou CNPJ e escolha"></label>
     <div class="inteiro ultima-nota" id="e_ultima" hidden></div>
     <label>Valor (R$)<input id="e_valor" inputmode="decimal" placeholder="0,00"></label>
@@ -22,7 +22,22 @@ PAGINAS.emitir = async el => {
     ${blocoNota()}
     ${blocoFaturar("e")}
     <p class="sub">Emitindo por: <b>${nomeCanal()}</b> — troque em <a href="#config">Configurações › Emissão</a>.</p>
-    <button class="btn" id="e_btn">Emitir nota</button><div id="e_res"></div></div>`;
+    <button class="btn" id="e_btn">Emitir nota</button><div id="e_res"></div></div>
+    <aside class="card resumo-nota" id="e_resumo" aria-live="polite"></aside></div>`;
+  // resumo ao lado do formulário: o que vai sair na nota, atualizado a cada campo preenchido
+  const resumo = () => {
+    const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)), sv = servDe($("#e_serv").value), e = (c || {}).endereco || {};
+    const v = Math.round(Number(String($("#e_valor").value || "0").replace(/\./g, "").replace(",", ".")) * 100) || 0;
+    const linha = (rot, val) => `<div class="rn-l"><dt>${rot}</dt><dd>${val}</dd></div>`;
+    $("#e_resumo").innerHTML = `<div class="rn-cab"><span>Resumo da nota</span><span class="estado ${ST.producao ? "critico" : "atencao"}">${ic(ST.producao ? "alerta" : "relogio")}${ST.producao ? "Produção · com validade fiscal" : "Homologação · teste"}</span></div>
+      <div class="rn-valor">${v ? brl(v) : '<span class="sub">R$ 0,00</span>'}</div>
+      <dl>${linha("Tomador", c ? `<b>${esc(nomeCli(c.razao_social))}</b><span>${[c.estrangeiro ? "exterior" : fmtDoc(c.cpf_cnpj), [e.cidade, e.uf].filter(Boolean).map(esc).join("/")].filter(Boolean).join(" · ")}</span>${c.email ? `<span>${esc(c.email.split(";")[0])}</span>` : '<span class="neg">sem e-mail para a cobrança</span>'}` : '<span class="sub">escolha o cliente</span>')}
+        ${linha("Serviço", `<b>${esc(sv.nome || "")}</b><span>item ${esc(sv.item_lista_servico || "?")} · ${esc(frase($("#e_desc").value).slice(0, 80))}</span>`)}
+        ${linha("Vencimento", $("#e_venc").value ? dt($("#e_venc").value) : '<span class="sub">prazo padrão do sistema</span>')}
+        ${linha("Cobrança", $("#e_cobrar").checked ? "boleto/PIX + régua de cobrança" : '<span class="sub">sem cobrança (só a nota)</span>')}
+        ${linha("Emissão", esc(nomeCanal()))}</dl>`;
+  };
+  el.addEventListener("input", resumo); el.addEventListener("change", resumo); setTimeout(resumo);
   const atuRegra = ligarFaturar("e", "#e_btn", () => (ST.clientes.find(c => c.cpf_cnpj == docDe($("#e_cli").value)) || {}).cpf_cnpj || "");
   const trocaServ = id => { $("#e_serv").value = servDe(id).id; $("#e_desc").value = servDe(id).descricao || ""; };
   $("#e_serv").onchange = () => trocaServ($("#e_serv").value);
@@ -82,7 +97,7 @@ PAGINAS.lote = async el => {
     <div id="l_tab"></div><p><button class="btn" id="l_btn">Emitir selecionadas</button> <span id="l_tot" class="sub"></span></p><div id="l_res"></div></div>`;
   const desenhar = () => { const f = $("#l_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#l_tab").innerHTML = tabela([{ t: '<input type="checkbox" id="l_todos">', f: c => `<input type="checkbox" class="lc" data-doc="${c.cpf_cnpj}">` },
-      { t: "Cliente", f: c => `${esc(c.razao_social)}<div class="sub">${fmtDoc(c.cpf_cnpj)}</div>` },
+      { t: "Cliente", f: c => celNome(c.razao_social, fmtDoc(c.cpf_cnpj)) },
       { t: "Valor (R$)", f: c => `<input class="lv" data-doc="${c.cpf_cnpj}" style="width:120px" value="${c.ultimo_valor ? Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : ""}">` },
       { t: "Última nota", f: c => dt(c.ultima_data) }], ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)));
     $("#l_todos") && ($("#l_todos").onclick = e => { $$(".lc").forEach(x => x.checked = e.target.checked); somar(); });
@@ -124,14 +139,12 @@ PAGINAS.notas = async el => {
       <div class="kpi"><div class="r">Canceladas</div><div class="v">${r.canceladas}</div></div>`;
     $("#nf_tab").innerHTML = tabela([
       { t: "Nº NFS-e", f: n => `<b>${esc(n.nfse_numero)}</b>${n.nfse_link && n.nfse_link.startsWith("http") ? `<div class="sub"><a href="${esc(n.nfse_link)}" target="_blank">abrir nota</a></div>` : ""}` },
-      { t: "Emissão", f: n => dt(n.data) }, { t: "Comp.", f: n => mes(n.competencia) },
-      { t: "Cliente", f: n => `${esc(n.cliente_nome)}<div class="sub">${fmtDoc(n.cpf_cnpj)}</div>` },
-      { t: "Serviço", f: n => `<span class="sub">${esc(n.descricao)}</span>` },
+      { t: "Emissão", f: n => `<span class="nw">${dt(n.data)}</span><div class="sub nw">comp. ${mes(n.competencia)}</div>` },
+      { t: "Cliente", f: n => celNome(n.cliente_nome, `${fmtDoc(n.cpf_cnpj)} · ${esc(frase(n.descricao))}`) },
       { t: "Valor", n: 1, f: n => num(n.valor_cent) },
       { t: "Situação", f: n => n.nfse_status == "emitida" ? selo("emitida") : n.nfse_status == "cancelada" ? selo("nf_cancelada") : selo("teste") },
-      { t: "Origem", f: n => `<span class="sub">${n.origem == "importado" ? "importada (XML)" : n.nfse_canal == "nacional" ? "sistema · Nacional" : "sistema · Itaboraí"}</span>` },
-      { t: "", f: n => `<div class="acoes-linha"><button class="btn min sec" data-cp="${n.id}" title="Abre Emitir nota com os dados desta nota">Copiar</button></div>` },
-      { t: "", f: n => n.pode_cancelar ? `<div class="acoes-linha">${n.nfse_canal == "nacional" && n.nfse_chave ? `<button class="btn min sec" data-sb="${n.id}" title="Emite uma nova nota que substitui esta">Substituir</button> ` : ""}<button class="btn min sec perigo-txt" data-cn="${n.id}">${ic("x")}Cancelar NFS-e</button></div>` : n.nfse_status == "emitida" && n.origem == "importado" ? '<span class="sub" title="Emitida fora do sistema">cancelar no portal</span>' : "" }],
+      { t: "Origem", f: n => `<span class="sub nw">${n.origem == "importado" ? "importada (XML)" : n.nfse_canal == "nacional" ? "Nacional" : "Itaboraí"}</span>` },
+      { t: "", f: n => `<div class="acoes-linha"><button class="btn min sec" data-cp="${n.id}" title="Abre Emitir nota com os dados desta nota">${ic("copiar")}Copiar</button>` + (n.pode_cancelar ? `${n.nfse_canal == "nacional" && n.nfse_chave ? `<button class="btn min sec" data-sb="${n.id}" title="Emite uma nova nota que substitui esta">Substituir</button>` : ""}<button class="btn min sec ico perigo-txt" data-cn="${n.id}" title="Cancelar esta NFS-e" aria-label="Cancelar esta NFS-e">${ic("x")}</button>` : n.nfse_status == "emitida" && n.origem == "importado" ? '<span class="sub nw" title="Emitida fora do sistema">cancelar no portal</span>' : "") + "</div>" }],
       r.notas, FILTRO_NF.competencia ? `Nenhuma nota em ${mes(FILTRO_NF.competencia)} com esses filtros.` : "Nenhuma nota com esses filtros.");
     $$("[data-cn]", el).forEach(b => b.onclick = () => cancelarNota(r.notas.find(n => n.id == b.dataset.cn)));
     $$("[data-cp]", el).forEach(b => b.onclick = () => { PREENCHER = { copiar: Number(b.dataset.cp) }; ir("emitir"); });

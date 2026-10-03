@@ -41,7 +41,12 @@ async function api(rota, corpo) {
   return d;
 }
 function aviso(t, ms = 3500) { const a = $("#aviso"); a.textContent = t; a.hidden = false; clearTimeout(a._t); a._t = setTimeout(() => a.hidden = true, ms); }
-function modal(html) { $("#modal_corpo").innerHTML = html; $("#modal").hidden = false; }
+function modal(html) {
+  $("#modal_corpo").innerHTML = `<button class="modal-x" type="button" onclick="fechar()" aria-label="Fechar" title="Fechar (Esc)">${ic("x")}</button>` + html;
+  const novo = $("#modal").hidden; $("#modal").hidden = false;
+  if (novo) { const f = $("#modal_corpo").querySelector("input:not([type=hidden]):not([disabled]), select, textarea"); if (f) setTimeout(() => f.focus(), 30); }
+}
+document.addEventListener("keydown", e => { if (e.key == "Escape" && !$("#modal").hidden) fechar(); });
 function fechar() { $("#modal").hidden = true; }
 $("#modal").addEventListener("click", e => { if (e.target.id == "modal") fechar(); });
 function selo(sit) {
@@ -57,6 +62,29 @@ function tabela(cols, linhas, vazio = "Nada por aqui.") {
   return `<div class="tabela"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${c.t}</th>`).join("")}</tr></thead><tbody>${
     linhas.map(l => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}" data-r="${esc(String(c.t).replace(/<[^>]*>/g, ""))}">${c.f(l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
+// ---------------------------------------------------------------- formatação para leitura rápida
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const mesExtenso = c => c ? `${MESES[+c.slice(5, 7) - 1]} de ${c.slice(0, 4)}` : "";
+const mesCurto = c => c ? `${MESES[+c.slice(5, 7) - 1].slice(0, 3)}/${c.slice(2, 4)}` : "";
+// R$ compacto: 1.284 · 12,9 mil · 4,2 mi (valores em centavos)
+function compacto(c, moeda = true) {
+  const v = Number(c || 0) / 100, a = Math.abs(v), f = (x, d) => x.toLocaleString("pt-BR", { maximumFractionDigits: d });
+  const t = a >= 1e6 ? f(v / 1e6, 1) + " mi" : a >= 1e4 ? f(v / 1e3, 1) + " mil" : f(v, 0);
+  return moeda ? "R$ " + t : t;
+}
+const pct = (v, d = 1) => Number(v || 0).toLocaleString("pt-BR", { maximumFractionDigits: d }) + "%";
+// "RPS CONSULTORIA E SERVICOS LTDA" -> "RPS Consultoria e Servicos LTDA" (siglas e conectivos preservados)
+function nomeCli(n) {
+  n = String(n || "").split(" - ")[0].trim();
+  if (n != n.toUpperCase()) return n;
+  const SIG = new Set(["LTDA", "ME", "EPP", "EIRELI", "S/A", "SA", "MEI", "SS", "SLU", "TI"]), MIN = new Set(["DE", "DA", "DO", "DAS", "DOS", "E", "EM"]);
+  return n.split(/\s+/).map((w, i) => SIG.has(w) || (!/[AEIOUÁÉÍÓÚÂÊÔÃÕ]/.test(w) && w.length <= 4) ? w
+    : i && MIN.has(w) ? w.toLowerCase() : w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
+}
+
+const frase = s => { s = String(s || "").trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
+// Célula de cliente: nome legível numa linha (nome completo ao passar o mouse) + complemento
+const celNome = (nome, sub = "") => `<div class="cel-nome"><span class="nome" title="${esc(nome)}">${esc(nomeCli(nome))}</span>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
 function servPadrao() { return (ST.servicos || []).find(s => s.padrao) || ST.padrao || {}; }
 function servDe(id) { return (ST.servicos || []).find(s => s.id == id) || servPadrao(); }
 function opcoesServ(sel, vazio) {
