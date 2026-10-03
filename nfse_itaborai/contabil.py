@@ -1,6 +1,14 @@
 """Relatórios contábeis e financeiros no padrão profissional: DRE estruturada, indicadores, livro caixa e fluxo de caixa.
 
-DRE (regime de competência, Lei 6.404/76 art. 187 e NBC TG 26 — adaptada à ME/EPP do Simples Nacional):
+A DRE segue o regime tributário da empresa (Configurações › Regras fiscais):
+- MEI: DAS-MEI de valor fixo mensal (INSS + ISS), sem outras deduções;
+- Simples Nacional: DAS pela alíquota efetiva do Anexo III + ISS (estrutura abaixo);
+- Lucro Presumido: PIS 0,65% e COFINS 3% (cumulativos) + ISS; IRPJ (15% + adicional de 10%) e CSLL (9%) sobre a
+  base presumida (32% para serviços, configurável);
+- Lucro Real: PIS 1,65% e COFINS 7,6% (não cumulativos, sem créditos — estimativa conservadora) + ISS; IRPJ e CSLL
+  sobre o lucro antes dos tributos.
+
+DRE (regime de competência, Lei 6.404/76 art. 187 e NBC TG 26):
   RECEITA OPERACIONAL BRUTA
   (−) Deduções da receita: Simples Nacional (DAS) e ISS
   (=) RECEITA OPERACIONAL LÍQUIDA
@@ -28,6 +36,8 @@ GRUPOS = {
 }
 FINANCEIRAS = ["Bancárias", "Juros", "Tarifas"]
 _DEDUCAO = re.compile(r"\b(DAS|SIMPLES|PGDAS|ISS|ISSQN)\b", re.IGNORECASE)
+# Presumido/Real: PIS, COFINS, IRPJ e CSLL já estão calculados na DRE; o pagamento (DARF) não entra de novo
+_DEDUCAO_REG = re.compile(r"\b(DAS|ISS|ISSQN|PIS|COFINS|IRPJ|CSLL)\b", re.IGNORECASE)
 RECEITA_VALIDA = ("emitida", "nao_emitir")
 
 
@@ -41,8 +51,9 @@ def _competencia(d: dict) -> str:
     return d.get("competencia") or d["vencimento"][:7]
 
 
-def _eh_deducao(d: dict) -> bool:
-    return d["categoria"] == "Impostos" and bool(_DEDUCAO.search(f"{d['descricao']} {d.get('fornecedor', '')}"))
+def _eh_deducao(d: dict, regime: str = "simples") -> bool:
+    padrao = _DEDUCAO if regime in ("simples", "mei") else _DEDUCAO_REG
+    return d["categoria"] == "Impostos" and bool(padrao.search(f"{d['descricao']} {d.get('fornecedor', '')}"))
 
 
 def _pct(parte: int, todo: int) -> float:
@@ -51,9 +62,33 @@ def _pct(parte: int, todo: int) -> float:
 
 # ---------------------------------------------------------------- DRE
 
+def _regime() -> str:
+    from . import fiscal
+    return fiscal.regime(config.carregar())
+
+
+def _aliq_iss() -> float:
+    from . import servicos
+    try:
+        return float(str(servicos.padrao().get("aliquota_iss") or 0).replace(",", "."))
+    except ValueError:
+        return 0.0
+
+
+def _irpj_csll(base: int, adicional_limite: int = 20_000_00) -> tuple[int, int]:
+    """IRPJ 15% + adicional de 10% sobre o que passar de R$ 20 mil/mês; CSLL 9% (bases em centavos)."""
+    if base <= 0:
+        return 0, 0
+    irpj = round(base * 0.15) + round(max(base - adicional_limite, 0) * 0.10)
+    return irpj, round(base * 0.09)
+
+
 def dre(ano: int, em: date | None = None) -> dict:
     em = em or financeiro.hoje()
     cfg = config.carregar()["financeiro"]
+    regime = _regime()
+    if regime != "simples":
+        return _dre_regime(ano, em, regime, cfg)
     ts = relatorios._titulos(em)
     desp = db.linhas("SELECT * FROM despesas WHERE status!='cancelado'")
     meses = [f"{ano}-{m:02d}" for m in range(1, 13)]
@@ -128,6 +163,116 @@ def dre(ano: int, em: date | None = None) -> dict:
     }
 
 
+def _dre_regime(ano: int, em: date, regime: str, cfg: dict) -> dict:
+    """DRE do MEI, do Lucro Presumido e do Lucro Real (o Simples tem a função própria, acima)."""
+    ts = relatorios._titulos(em)
+    desp = db.linhas("SELECT * FROM despesas WHERE status!='cancelado'")
+    meses = [f"{ano}-{m:02d}" for m in range(1, 13)]
+    receita = [sum(t["valor_cent"] for t in ts if t["competencia"] == m and t["nfse_status"] in RECEITA_VALIDA)
+               for m in meses]
+    zeros = [0] * 12
+    soma = lambda *ls: [sum(x) for x in zip(*ls)]  # noqa: E731
+    deducoes: list[tuple[str, list[int]]] = []
+    aliq_iss = _aliq_iss()
+    iss = [round(r * aliq_iss / 100) for r in receita]
+    if regime == "mei":
+        das_mei = financeiro.cent(cfg.get("das_mei_mensal") or 0)
+        deducoes.append(("DAS-MEI (INSS + ISS, valor fixo)", [das_mei if r else 0 for r in receita]))
+    else:
+        p_pis, p_cof = (0.65, 3.0) if regime == "presumido" else (1.65, 7.6)
+        deducoes += [(f"PIS ({str(p_pis).replace('.', ',')}%)", [round(r * p_pis / 100) for r in receita]),
+                     (f"COFINS ({str(p_cof).replace('.', ',')}%)", [round(r * p_cof / 100) for r in receita]),
+                     (f"ISS ({str(aliq_iss).replace('.', ',')}%)", iss)]
+    total_ded = soma(*[v for _, v in deducoes]) if deducoes else zeros
+    grupos: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0] * 12))
+    for d in desp:
+        m = _competencia(d)
+        if m[:4] != str(ano) or _eh_deducao(d, regime):
+            continue
+        grupos[_grupo(d["categoria"])][d["categoria"]][int(m[5:]) - 1] += d["valor_cent"]
+
+    linhas: list[dict] = []
+
+    def add(conta, valores, tipo="item", nivel=1, sinal=1):
+        linhas.append({"conta": conta, "tipo": tipo, "nivel": nivel, "valores": [v * sinal for v in valores],
+                       "total": sum(valores) * sinal})
+
+    add("RECEITA OPERACIONAL BRUTA", receita, "grupo", 0)
+    add("Prestação de serviços", receita)
+    add("(−) DEDUÇÕES DA RECEITA BRUTA", total_ded, "grupo", 0, -1)
+    for nome, v in deducoes:
+        add(nome, v, sinal=-1)
+    liquida = [r - d for r, d in zip(receita, total_ded)]
+    add("(=) RECEITA OPERACIONAL LÍQUIDA", liquida, "total", 0)
+    total_oper = zeros
+    for g in GRUPOS:
+        if g not in grupos:
+            continue
+        vg = soma(*grupos[g].values())
+        total_oper = soma(total_oper, vg)
+        add(f"(−) {g.upper()}", vg, "grupo", 0, -1)
+        for cat, v in sorted(grupos[g].items()):
+            add(cat, v, sinal=-1)
+    oper = [l - d for l, d in zip(liquida, total_oper)]
+    add("(=) RESULTADO OPERACIONAL", oper, "total", 0)
+    fin = soma(*grupos["financeiras"].values()) if "financeiras" in grupos else zeros
+    add("(−) DESPESAS FINANCEIRAS", fin, "grupo", 0, -1)
+    for cat, v in sorted(grupos.get("financeiras", {}).items()):
+        add(cat, v, sinal=-1)
+    lair = [o - f for o, f in zip(oper, fin)]
+    irpj, csll = zeros, zeros
+    if regime in ("presumido", "real"):
+        add("(=) RESULTADO ANTES DO IRPJ E DA CSLL", lair, "total", 0)
+        if regime == "presumido":
+            presuncao = float(str(cfg.get("presuncao_pct") or 32).replace(",", "."))
+            bases = [round(r * presuncao / 100) for r in receita]
+        else:
+            bases = lair
+        pares = [_irpj_csll(b) for b in bases]
+        irpj, csll = [p[0] for p in pares], [p[1] for p in pares]
+        add("(−) PROVISÃO PARA IRPJ E CSLL", soma(irpj, csll), "grupo", 0, -1)
+        add("IRPJ (15% + adicional de 10%)", irpj, sinal=-1)
+        add("CSLL (9%)", csll, sinal=-1)
+    liquido = [a - i - c for a, i, c in zip(lair, irpj, csll)]
+    add("(=) RESULTADO LÍQUIDO DO PERÍODO", liquido, "resultado", 0)
+
+    rb = sum(receita)
+    for l in linhas:
+        l["av"] = _pct(l["total"], rb)
+    notas = {
+        "mei": "MEI: o DAS-MEI é fixo por mês (Configurações › Financeiro); não há outras deduções sobre a receita.",
+        "presumido": f"Lucro Presumido: PIS/COFINS cumulativos; IRPJ e CSLL sobre a base presumida de "
+                     f"{cfg.get('presuncao_pct') or 32}% da receita (adicional de IRPJ estimado mês a mês).",
+        "real": "Lucro Real: PIS/COFINS não cumulativos sem considerar créditos (estimativa conservadora); IRPJ e CSLL "
+                "sobre o resultado do mês (adicional estimado mês a mês). A apuração oficial é do contador.",
+    }
+    tributos = sum(total_ded) + sum(irpj) + sum(csll)
+    return {
+        "ano": ano, "meses": meses, "linhas": linhas, "aliquotas_das": [], "regime": regime,
+        "resumo": {"receita_bruta": rb, "receita_liquida": sum(liquida), "despesas_operacionais": sum(total_oper),
+                   "resultado_operacional": sum(oper), "resultado_liquido": sum(liquido),
+                   "margem_operacional": _pct(sum(oper), rb), "margem_liquida": _pct(sum(liquido), rb),
+                   "carga_tributaria": _pct(tributos, rb)},
+        "serie": [{"mes": m, "receita_liquida": liquida[i], "despesas": total_oper[i] + fin[i], "resultado": liquido[i]}
+                  for i, m in enumerate(meses)],
+        "nota": notas[regime] + " Pagamentos de tributos lançados como despesa não são deduzidos de novo.",
+    }
+
+
+def carga_sobre_receita_pct(r12: int) -> float:
+    """Percentual de tributos que incide sobre a receita (para margem de contribuição e ponto de equilíbrio)."""
+    regime = _regime()
+    if regime == "simples":
+        return relatorios.aliquota_efetiva_anexo3(r12) if r12 else 0
+    if regime == "mei":
+        return 0.0
+    iss = _aliq_iss()
+    if regime == "presumido":
+        presuncao = float(str(config.carregar()["financeiro"].get("presuncao_pct") or 32).replace(",", "."))
+        return round(3.65 + iss + presuncao * 0.24, 2)          # PIS+COFINS + ISS + (IRPJ 15% + CSLL 9%) da base
+    return round(9.25 + iss, 2)                                 # Real: PIS+COFINS + ISS (IRPJ/CSLL sobre o lucro)
+
+
 # ---------------------------------------------------------------- indicadores
 
 def indicadores(em: date | None = None) -> dict:
@@ -177,7 +322,7 @@ def indicadores(em: date | None = None) -> dict:
     meses3 = set(relatorios._meses(em.replace(day=1) - timedelta(days=1), 3))
     fixas = sum(d["valor_cent"] for d in d3 if _competencia(d) in meses3 and not _eh_deducao(d)) / 3
     r12 = relatorios.rbt12(em, ts)
-    aliq = relatorios.aliquota_efetiva_anexo3(r12) if r12 else 0
+    aliq = carga_sobre_receita_pct(r12)
     margem_contrib = 1 - aliq / 100
     equilibrio = round(fixas / margem_contrib) if margem_contrib > 0 else 0
     receita_mes_media = round(fat12 / 12)

@@ -325,7 +325,7 @@ PAGINAS.painel = async el => {
   if (p.atrasado_qtd) A("serio", "relogio", `<b>${p.atrasado_qtd}</b> título(s) em atraso de <b>${p.clientes_atrasados}</b> cliente(s): <b>${brl(p.atrasado)}</b>`);
   if (p.criticos.length) A("critico", "bloqueio", `<b>${p.criticos.length}</b> cliente(s) com atraso crítico (≥ ${ST.config.cobranca.bloquear_apos_dias} dias): ${p.criticos.slice(0, 3).map(esc).join(", ")}${p.criticos.length > 3 ? ` e mais ${p.criticos.length - 3} — <a href="#" onclick="ABA_REL='aging';ir('relatorios');return false">ver todos</a>` : ""}`);
   if (p.a_pagar_atrasado) A("serio", "pagar", `Contas a pagar vencidas: <b>${brl(p.a_pagar_atrasado)}</b>`);
-  if (p.sublimite_pct >= 80) A("critico", "alerta", `RBT12 em ${p.sublimite_pct}% do sublimite de R$ 3,6 mi do Simples`);
+  if (p.sublimite_pct >= 80 && (ST.fiscal_ctx || {}).regime == "simples") A("critico", "alerta", `RBT12 em ${p.sublimite_pct}% do sublimite de R$ 3,6 mi do Simples`);
   if (!ST.config.automacao.ativa) A("alerta", "play", `O robô financeiro está desligado — <a href="#" onclick="ir('config');return false">ligar em Configurações</a>`);
   const robo = ST.config.automacao.ativa ? `<span class="selo bom">Robô ligado</span><span>${p.ultima_execucao_robo ? "última execução " + dt(p.ultima_execucao_robo.slice(0, 10)) + " às " + p.ultima_execucao_robo.slice(11, 16) : "ainda não executou"}</span>` : `<span class="selo critico">Robô desligado</span>`;
   const kpi = (cls, icone, rot, val, sub = "") => `<div class="kpi ${cls}"><div class="r">${ic(icone)}${rot}</div><div class="v">${val}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
@@ -1018,7 +1018,8 @@ PAGINAS.config = async el => {
     ${RET_NOMES.map(([k, t]) => tx("fiscal", k, `Retenção ${t} (%)`)).join("")}
     ${sl("fiscal", "ibscbs", "Informar IBS/CBS na nota", [["auto", "Automático (regime regular já; Simples/MEI a partir de 2027)"], ["sempre", "Sempre"], ["nunca", "Nunca"]])}
     ${sl("fiscal", "ind_final", "Consumo pessoal (IBS/CBS)", [["auto", "Automático (CPF = sim)"], ["0", "Não"], ["1", "Sim"]])}
-    ${sl("fiscal", "incentivo_fiscal", "Incentivo fiscal / imunidade do prestador", [["", "Não (padrão)"], ["sim", "Sim"], ["nao", "Não"]])}</div>
+    ${sl("fiscal", "incentivo_fiscal", "Incentivo fiscal / imunidade do prestador", [["", "Não (padrão)"], ["sim", "Sim"], ["nao", "Não"]])}
+    ${tx("financeiro", "das_mei_mensal", "DAS-MEI do mês (R$, para a DRE)")}${tx("financeiro", "presuncao_pct", "Presunção do IRPJ/CSLL (%) — serviços: 32")}</div>
     <details class="mais-fz"><summary>Campos avançados (carga aproximada, PIS/COFINS próprio, IBS/CBS: tributação regular, diferimento e crédito presumido)</summary><div class="campos">
     ${sl("fiscal", "tot_trib_modo", "Carga aproximada (Lei 12.741)", [["auto", "Automático pelo regime"], ["valor", "Valor (IBPT do serviço)"], ["percentual", "Percentuais federal/estadual/municipal"], ["simples", "Percentual do Simples"], ["nao", "Não informar"]])}
     ${tx("fiscal", "p_tot_fed", "% federal")}${tx("fiscal", "p_tot_est", "% estadual")}${tx("fiscal", "p_tot_mun", "% municipal")}
@@ -1087,7 +1088,7 @@ PAGINAS.config = async el => {
     ret_irrf_pct: "regular", ret_pis_pct: "regular", ret_cofins_pct: "regular", ret_csll_pct: "regular", ret_inss_pct: "simples,regular",
     p_tot_fed: "tot_trib_modo=percentual", p_tot_est: "tot_trib_modo=percentual", p_tot_mun: "tot_trib_modo=percentual",
     pis_cofins_cst: "regular", p_pis: "regular", p_cofins: "regular", cst_reg: "simples", class_trib_reg: "simples",
-    c_cred_pres: "regular", p_dif_uf: "regular", p_dif_mun: "regular", p_dif_cbs: "regular", incentivo_fiscal: "municipal" };
+    c_cred_pres: "regular", p_dif_uf: "regular", p_dif_mun: "regular", p_dif_cbs: "regular", incentivo_fiscal: "municipal", das_mei_mensal: "mei", presuncao_pct: "presumido" };
   const rf = $("#regras_fiscais"), selReg = $('[data-s="fiscal"][data-k="regime"]', rf);
   $$("[data-k]", rf).forEach(i => { const v = VIS_CFG[i.dataset.k]; if (v) (i.closest("label") || i).dataset.vis = v; });
   const atuReg = () => aplicarVis(rf, ctxFiscal({ regime: selReg.value }));
