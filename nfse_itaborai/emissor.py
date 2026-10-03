@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import cliente
 from .modelos import Endereco, ItemServico, Prestador, Retencoes, Rps, Tomador
-from .validacao import validar
+from .validacao import ErroValidacao, validar
 from .xsd import validar_xsd
 from .xml_rps import gerar_cancelamento, gerar_envio, so_digitos
 
@@ -165,16 +165,27 @@ def prestador_do_ambiente() -> Prestador:
     )
 
 
-def _incentivo_fiscal() -> bool:
-    """Incentivo fiscal/imunidade do prestador: Configurações › Regras fiscais (ou ITABORAI_INCENTIVO no .env)."""
+def _incentivo_fiscal() -> str:
+    """IncentivoFiscalImunidade (manual 2026): 1 incentivo fiscal, 2 não, 3 imunidade/isenção.
+    Vem de Configurações › Regras fiscais (ou ITABORAI_INCENTIVO no .env)."""
     try:
         from . import config
         v = str((config.carregar().get("fiscal") or {}).get("incentivo_fiscal") or "")
     except Exception:  # noqa: BLE001
         v = ""
-    if v in ("sim", "nao"):
-        return v == "sim"
-    return env("ITABORAI_INCENTIVO", "N").upper().startswith("S")
+    if v in ("sim", "nao", "imune"):
+        return {"sim": "1", "nao": "2", "imune": "3"}[v]
+    return "1" if env("ITABORAI_INCENTIVO", "N").upper().startswith("S") else "2"
+
+
+def _regime() -> str:
+    """Regime do prestador (Configurações › Regras fiscais); sem ele, Simples ou Presumido pelo .env."""
+    try:
+        from . import config
+        reg = (config.carregar().get("fiscal") or {}).get("regime")
+    except Exception:  # noqa: BLE001
+        reg = ""
+    return reg or ("simples" if _optante_simples() else "presumido")
 
 
 def _optante_simples() -> bool:
@@ -326,6 +337,13 @@ def preparar(rps: Rps, prestador: Prestador, producao: bool) -> tuple[str, str, 
         rps.numero = str(seq["proximo_rps"])
     lote = str(seq["proximo_lote"])
     alertas = validar(rps)
+    from . import itaborai_regras
+    erros = itaborai_regras.validar(rps, _regime())
+    if erros:
+        raise ErroValidacao(erros)
+    if so_digitos(rps.tomador.cpf_cnpj) == itaborai_regras.PETROBRAS:
+        alertas.append("Petrobras: emitida pelas regras normais; o webservice ajusta para \"Retido no Município\" "
+                       "quando o item prevê retenção (manual do webservice).")
     xml = gerar_envio(prestador, [rps], lote=lote, producao=producao, agora=agora)
     validar_xsd(xml)
     return xml, lote, alertas

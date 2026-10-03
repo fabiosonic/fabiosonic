@@ -165,4 +165,4 @@ class Prestador:
     chave_webservice: str
     inscricao_estadual: str = ""
     optante_simples: bool = True
-    incentivo_fiscal: bool = False
+    incentivo_fiscal: bool | str = False        # "1" incentivo, "2" não, "3" imunidade/isenção

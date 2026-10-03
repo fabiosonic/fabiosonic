@@ -103,6 +103,8 @@ def gerar_xml_rps(rps: Rps) -> str:
                       + f"</Servico{i + 1}>")
 
     liquido = rps.valor_liquido
+    # manual 2026: Simples Nacional no item 17.19 não destaca alíquota nem valor do ISS
+    sem_iss = rps.tipo_tributacao == "4" and formatar_item_lista(rps.item_lista_servico) == "17.19"
     carga = (rps.valor_total_tributos / liquido * 100) if liquido > 0 else Decimal(0)
     partes.append("<Valores>"
                   + _tag("ValorTotalDosServicos", dec(rps.valor_servicos))
@@ -110,8 +112,8 @@ def gerar_xml_rps(rps: Rps) -> str:
                   + _tag("DescontoIncondicionado", dec(rps.desconto_incondicionado))
                   + _tag("DescontoCondicionado", dec(rps.desconto_condicionado))
                   + _tag("BaseDeCalculoDoISS", dec(rps.base_calculo))
-                  + _tag("Aliquota", dec(rps.aliquota_iss))
-                  + _tag("ValorIss", dec(rps.valor_iss))
+                  + _tag("Aliquota", dec(Decimal(0) if sem_iss else rps.aliquota_iss))
+                  + _tag("ValorIss", dec(Decimal(0) if sem_iss else rps.valor_iss))
                   + _tag("ValorLiquidoNota", dec(liquido))
                   + _tag("CargaTributariaTotal", dec(carga))
                   + _tag("ValorCargaTributariaTotal", dec(rps.valor_total_tributos))
@@ -124,7 +126,8 @@ def gerar_xml_rps(rps: Rps) -> str:
                   + _tag("CodigoNbs", so_digitos(rps.codigo_nbs))
                   + _tag("CodigoLsnDesdobro", formatar_desdobro(rps.codigo_desdobro))
                   + _tag("ClassificacaoCNAE", so_digitos(rps.cnae))
-                  + _tag("CodigoTributacaoMunicipio", texto(rps.codigo_tributacao_municipio))
+                  # manual 2026: "Não se aplica em Itaboraí" — vai sempre vazio
+                  + _tag("CodigoTributacaoMunicipio", "")
                   + "</Informacoes>")
 
     x = rps.extras or {}
@@ -214,7 +217,8 @@ def gerar_envio(prestador: Prestador, lista_rps: list[Rps], lote: str,
             + _tag("InscricaoEstadual", texto(prestador.inscricao_estadual))
             + _tag("InscricaoMunicipal", so_digitos(prestador.inscricao_municipal))
             + _tag("OptanteSimplesNacional", sim_nao(prestador.optante_simples))
-            + _tag("IncentivoFiscalImunidade", sim_nao(prestador.incentivo_fiscal))
+            + _tag("IncentivoFiscalImunidade", prestador.incentivo_fiscal if prestador.incentivo_fiscal in ("1", "2", "3")
+                   else sim_nao(prestador.incentivo_fiscal))
             + "</Prestador>"
             + "<ListaRps>" + "".join(gerar_xml_rps(r) for r in lista_rps) + "</ListaRps>"
             + "</RpsNfse>")

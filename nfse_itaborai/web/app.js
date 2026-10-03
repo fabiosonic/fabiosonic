@@ -1018,7 +1018,7 @@ PAGINAS.config = async el => {
     ${RET_NOMES.map(([k, t]) => tx("fiscal", k, `Retenção ${t} (%)`)).join("")}
     ${sl("fiscal", "ibscbs", "Informar IBS/CBS na nota", [["auto", "Automático (regime regular já; Simples/MEI a partir de 2027)"], ["sempre", "Sempre"], ["nunca", "Nunca"]])}
     ${sl("fiscal", "ind_final", "Consumo pessoal (IBS/CBS)", [["auto", "Automático (CPF = sim)"], ["0", "Não"], ["1", "Sim"]])}
-    ${sl("fiscal", "incentivo_fiscal", "Incentivo fiscal / imunidade do prestador", [["", "Não (padrão)"], ["sim", "Sim"], ["nao", "Não"]])}
+    ${sl("fiscal", "incentivo_fiscal", "Incentivo fiscal / imunidade do prestador", [["", "Não (padrão)"], ["sim", "Sim — incentivo fiscal"], ["imune", "Imunidade / isenção"], ["nao", "Não"]])}
     ${tx("financeiro", "das_mei_mensal", "DAS-MEI do mês (R$, para a DRE)")}${tx("financeiro", "presuncao_pct", "Presunção do IRPJ/CSLL (%) — serviços: 32")}</div>
     <details class="mais-fz"><summary>Campos avançados (carga aproximada, PIS/COFINS próprio, IBS/CBS: tributação regular, diferimento e crédito presumido)</summary><div class="campos">
     ${sl("fiscal", "tot_trib_modo", "Carga aproximada (Lei 12.741)", [["auto", "Automático pelo regime"], ["valor", "Valor (IBPT do serviço)"], ["percentual", "Percentuais federal/estadual/municipal"], ["simples", "Percentual do Simples"], ["nao", "Não informar"]])}

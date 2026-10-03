@@ -388,6 +388,34 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### Regras do Manual do Webservice de Itaboraí (versão 2026 — XML a partir de 28/09/2026)
+
+O XSD novo publicado pela prefeitura é idêntico ao que já usamos; o que muda são as **regras de negócio**,
+aplicadas automaticamente pelo sistema (`nfse_itaborai/itaborai_regras.py`):
+
+| Situação | TipoDeTributacao | ISS retido / responsável | Alíquota |
+|---|---|---|---|
+| MEI (qualquer item) ou prestador imune | **2** Isento/Imune | não / prestador | não informa |
+| Simples Nacional (padrão) | **4** | não / prestador | **alíquota efetiva do DAS (2% a 5%)**; no item **17.19** não destaca alíquota nem ISS |
+| Simples com ISS retido pelo tomador em Itaboraí | **5** Retido no Município | sim / tomador | efetiva |
+| Simples com ISS retido fora | **1** | sim / tomador | efetiva |
+| Lucro Presumido/Real | **0** Tributado no Município | não / prestador | da Tabela de Atividades |
+| Presumido/Real com retenção em Itaboraí | **5** | sim / tomador | da Tabela de Atividades |
+| Item da lista do art. 3º da LC 116 prestado fora (ex.: 7.02, 7.05, 12.xx) | **1** | conforme a regra | — |
+| Exigibilidade suspensa | **3** | — | — |
+
+- **Retenção obrigatória (tipo 5) para:** Prefeitura de Itaboraí, fundos municipais, COMDIT, Banco do Brasil e
+  Caixa — o sistema força a retenção mesmo que o cadastro diga o contrário e avisa na tela. A **Petrobras**
+  é emitida pelas regras normais: o próprio webservice ajusta quando o item prevê retenção.
+- **Deduções** só com **Código da Obra** (6 caracteres) e limitadas a **40%** do valor da nota.
+- **Imóvel (IBS/CBS)** obrigatório para os Indicadores de Operação 020101, 020201, 020202, 020301 e 020401
+  (exceto nos desdobros dispensados pelo manual). **Evento** obrigatório para os desdobros 12.xx listados.
+- **Tomador pessoa jurídica:** tipo de logradouro, logradouro, bairro, município e UF obrigatórios.
+- **CodigoTributacaoMunicipio** "não se aplica em Itaboraí": vai sempre vazio.
+- **IncentivoFiscalImunidade:** 1 incentivo fiscal, 2 não, **3 imunidade/isenção** (Configurações › Regras fiscais).
+
+Esses erros são apontados **antes** do envio, com a explicação em português, para a nota não ser recusada.
+
 A escolha vale para tudo: emissão avulsa, emissão em lote, recorrência e robô. O título guarda o canal e a
 chave de acesso, e **o cancelamento sempre usa o canal em que a nota saiu** (evento 101101 no nacional).
 
@@ -456,7 +484,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 169 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 190 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

@@ -13,7 +13,7 @@ from test_financeiro import CLI_A, CLI_B, base  # noqa: F401  (fixture)
 from test_importador import MORAES, nacional
 
 CONSULTORIA = {"nome": "Consultoria", "descricao": "CONSULTORIA EMPRESARIAL", "item_lista_servico": "17.01",
-               "codigo_desdobro": "170101", "codigo_nbs": "113011000", "cnae": "7020400", "aliquota_iss": "0.00",
+               "codigo_desdobro": "170101", "codigo_nbs": "113011000", "cnae": "7020400", "aliquota_iss": "2.00",
                "tipo_tributacao": "4", "iss_retido": "2", "indicador_operacao": "100301",
                "classificacao_tributaria": "200052"}
 

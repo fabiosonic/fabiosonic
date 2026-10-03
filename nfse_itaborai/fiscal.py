@@ -126,20 +126,25 @@ def aplicar(rps: dict, cli: dict | None, cfg: dict | None = None) -> dict:
     if retido and reg != "mei":
         aliq = _dec(r.get("aliquota_iss_retido")) or _dec(rps.get("aliquota_iss"))
         rps["aliquota_iss"] = str(aliq)
-    # Tipo de tributação do webservice de Itaboraí (0 no município, 1 fora, 2 isento/imune, 3 exigibilidade
-    # suspensa, 4 Simples Nacional)
+    # Tipo de tributação do webservice de Itaboraí (manual 2026): 0 no município, 1 fora, 2 isento/imune/MEI,
+    # 3 exigibilidade suspensa, 4 Simples Nacional, 5 retido no município
+    from . import itaborai_regras
     nota = rps.get("extras") or {}
-    fora = nota.get("local_recolhimento") and nota["local_recolhimento"] != rps.get("local_prestacao_empresa")
-    if r.get("exig_susp_tp"):
-        rps["tipo_tributacao"] = "3"
-    elif str(r.get("trib_issqn") or "1") != "1":
-        rps["tipo_tributacao"] = "2"
-    elif reg in ("simples", "mei"):
-        rps["tipo_tributacao"] = "4"
-    elif fora:
-        rps["tipo_tributacao"] = "1"
-    else:                                        # retido ou não: tributado no município (comportamento já aceito)
-        rps["tipo_tributacao"] = "0"
+    doc_tom = "".join(ch for ch in str((rps.get("tomador") or {}).get("cpf_cnpj", "")) if ch.isdigit())
+    tipo, retido, local_rec = itaborai_regras.tipo_tributacao(
+        reg, rps.get("item_lista_servico", ""), retido, nota.get("local_prestacao") or rps.get("local_prestacao_empresa"),
+        nota.get("local_recolhimento") or rps.get("local_prestacao_empresa"), doc_tom,
+        imune=str(r.get("trib_issqn") or "1") != "1", suspensa=bool(r.get("exig_susp_tp")),
+        casa=rps.get("local_prestacao_empresa") or itaborai_regras.ITABORAI)
+    rps["tipo_tributacao"] = tipo
+    rps["local_recolhimento"] = local_rec
+    if retido and rps["iss_retido"] != "1":
+        alertas.append("Tomador obrigado a reter o ISS em Itaboraí (Prefeitura, fundos municipais, COMDIT, Banco do "
+                       "Brasil ou Caixa): nota emitida como \"Retido no Município\".")
+        if reg != "mei":
+            rps["aliquota_iss"] = str(_dec(r.get("aliquota_iss_retido")) or _dec(rps.get("aliquota_iss")))
+    rps["iss_retido"] = "1" if retido else "2"
+    rps["responsavel_recolhimento"] = "1" if retido else "2"
     rps.pop("local_prestacao_empresa", None)
     if reg == "mei":
         rps["aliquota_iss"] = "0"
