@@ -886,7 +886,8 @@ async function importarXml(area) {
     <p class="sub">Coloque os XML (ou ZIP) das notas emitidas na pasta <b>${esc(a.pasta)}</b>, de qualquer empresa. Cada nota é ligada à empresa que a emitiu (CNPJ do prestador): os clientes de uma empresa nunca vão para outra. Depois de importados, os arquivos ficam guardados em “importados”, separados por empresa. O robô também importa sozinho as notas novas que você colocar na pasta.</p>
     <p><button class="btn sec" onclick="api('importador/abrir_pasta')">${ic("download")}Abrir a pasta</button> <button class="btn sec" id="imp_reler">Ler a pasta de novo</button></p>
     ${a.grupos.length ? "" : '<div class="vazio">Nenhum XML novo na pasta.</div>'}
-    ${a.grupos.map((g, j) => `<div class="imp-grupo" data-j="${j}"><div class="imp-cab"><div><b>${esc(g.nome || "Prestador sem nome")}</b><span class="sub">CNPJ ${fmtDoc(g.cnpj)} · ${g.notas} nota(s) · ${g.clientes} cliente(s), ${g.clientes_novos} novo(s)</span></div>
+    ${a.grupos.map((g, j) => `<div class="imp-grupo" data-j="${j}"><div class="imp-cab"><div><b>${esc(g.nome || "Prestador sem nome")}</b><span class="sub">CNPJ ${fmtDoc(g.cnpj)} · ${g.notas} nota(s) · ${g.clientes} cliente(s), ${g.clientes_novos} novo(s)</span>
+        ${g.fiscal ? `<span class="sub">Lido das notas: ${g.fiscal.regime ? "regime <b>" + esc(g.fiscal.regime) + "</b>" : "regime não identificado"}${g.fiscal.tomadores_especiais ? ` · ${g.fiscal.tomadores_especiais} tomador(es) com regra própria (ISS retido, retenções, órgão público…)` : ""}${g.fiscal.ibscbs ? " · notas com IBS/CBS" : ""}</span>` : ""}</div>
       ${g.empresa_id ? `<label>Cadastrar os clientes na empresa<select class="imp-emp">${opcoes(g.empresa_id)}</select></label>` : `<div class="msg erro">Nenhuma empresa cadastrada com este CNPJ. <a href="#" class="imp-nova">Cadastrar esta empresa</a> e depois leia a pasta de novo.</div>`}</div>
       ${g.empresa_id ? `<details class="imp-padroes" open><summary><b>${(g.servicos || []).length} serviço(s) / atividade(s) encontrados nas notas</b> — marque os que devem ficar cadastrados para emitir</summary>
         ${(g.servicos || []).map((sv, k) => `<div class="imp-serv" data-k="${k}"><div class="imp-serv-cab"><label class="chk"><input type="checkbox" class="imp-sv-usar" ${sv.existente_id ? "" : "checked"}> Cadastrar</label>
@@ -906,7 +907,7 @@ async function importarXml(area) {
         return { nome: $(".imp-sv-nome", x).value.trim(), campos, padrao: $(".imp-sv-pad", x).checked }; });
       const r = await api("importador/importar", { empresa_id: $(".imp-emp", div).value, cnpj: g.cnpj, servicos });
       if (r.erro) return;
-      aviso(`${r.empresa}: ${r.xml} XML importado(s), ${r.clientes_novos} cliente(s) novo(s)${r.servicos ? ` · ${r.servicos} serviço(s) cadastrado(s)` : ""}${r.clientes_com_servico ? ` · ${r.clientes_com_servico} cliente(s) ligados ao serviço habitual` : ""} ✔`, 9000);
+      aviso(`${r.empresa}: ${r.xml} XML importado(s), ${r.clientes_novos} cliente(s) novo(s)${r.servicos ? ` · ${r.servicos} serviço(s) cadastrado(s)` : ""}${r.clientes_com_servico ? ` · ${r.clientes_com_servico} cliente(s) ligados ao serviço habitual` : ""}${(r.regra_geral || []).length ? " · regra geral completada pelas notas (" + r.regra_geral.length + " campo(s))" : ""}${r.regras_tomadores ? ` · ${r.regras_tomadores} tomador(es) com regra fiscal própria` : ""} ✔`, 12000);
       await carregarEstado(); ir("clientes"); }; });
 }
 

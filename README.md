@@ -277,7 +277,15 @@ referenciada, intermediário e substituição (também pelo botão **Substituir*
 que o regime da empresa e o caso exigem**: MEI quase nada; Simples só ISS retido e INSS; Presumido/Real as
 retenções federais, PIS/COFINS e IBS/CBS. Obra só para serviços do item 7, evento para itens de eventos,
 dedução para itens 7, 9 e 12, substituição só no canal nacional; campos que dependem de outro aparecem quando
-ele é preenchido. Campo escondido não é enviado. Detalhes por regime em
+ele é preenchido. Campo escondido não é enviado.
+
+**Leitura das notas antigas (IMPORTAR XML):** além de clientes e serviços, o leitor tira das notas o regime da
+empresa (MEI, Simples, Presumido ou Real — este pelas alíquotas de PIS/COFINS), apuração no Simples, regime
+especial, forma da carga aproximada, PIS/COFINS próprio e IBS/CBS (tributação regular, diferimento, crédito
+presumido) para completar a **regra geral** (só o que estiver vazio, uma única vez). De cada tomador, pela nota mais
+recente, lê ISS retido (e por quem), alíquota, retenções de IRRF/PIS/COFINS/CSLL/INSS em %, imunidade,
+exportação, ISS suspenso, benefício municipal, CST de PIS/COFINS, consumo pessoal, órgão público e destinatário;
+quem difere da regra geral ganha **regra específica** — tomador que já tem regra gravada não é alterado. Detalhes por regime em
 `docs/NFSE_NACIONAL_CAMPOS_POR_REGIME.md`.
 
 ## Notas emitidas
@@ -448,7 +456,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 167 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 169 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

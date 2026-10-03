@@ -16,7 +16,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from . import clientes, config, db, emissor, empresas, servicos
+from . import clientes, config, db, emissor, empresas, leitura_fiscal, servicos
 from .clientes import _achar, _digitos, _local, _texto
 
 NOME_PASTA = "IMPORTAR XML"
@@ -117,6 +117,7 @@ def analisar() -> dict:
         if cli:
             g["clientes"].add(cli["cpf_cnpj"])
         g["servicos"].append(servico_de_xml(raiz))
+        g.setdefault("fatos", []).append(leitura_fiscal.fatos(raiz))
     cadastradas = {e["cnpj"]: e for e in empresas.listar() if e.get("cnpj")}
     saida = []
     for g in grupos.values():
@@ -129,10 +130,23 @@ def analisar() -> dict:
         saida.append({"cnpj": g["cnpj"], "nome": g["nome"], "notas": g["notas"],
                       "empresa_id": emp["id"] if emp else "", "empresa_nome": emp["nome"] if emp else "",
                       "clientes": len(g["clientes"]), "clientes_novos": len(g["clientes"] - existentes),
-                      "padroes": padroes(g["servicos"]), "servicos": separar_servicos(g["servicos"], catalogo)})
+                      "padroes": padroes(g["servicos"]), "servicos": separar_servicos(g["servicos"], catalogo),
+                      "fiscal": _resumo_fiscal([f for f in g.get("fatos", []) if f])})
     return {"pasta": str(caixa()), "zips_descompactados": zips, "invalidos": invalidos,
             "grupos": sorted(saida, key=lambda x: -x["notas"]),
             "empresas": [{"id": e["id"], "nome": e["nome"], "cnpj": e["cnpj"]} for e in cadastradas.values()]}
+
+
+def _resumo_fiscal(notas: list[dict]) -> dict:
+    """Prévia do que as notas mostram: regime e tomadores com particularidades (ISS retido, retenções...)."""
+    from .fiscal import REGIMES
+    g = leitura_fiscal.regra_geral(notas)
+    especiais = {n["doc"] for n in notas if n.get("doc") and (
+        n["tomador"].get("iss_retido") or any(n["tomador"].get(k) for k in
+        ("ret_irrf_pct", "ret_pis_pct", "ret_cofins_pct", "ret_csll_pct", "ret_inss_pct", "exig_susp_tp", "n_bm",
+         "tp_ente_gov", "dest_doc")) or n["tomador"].get("trib_issqn") not in ("1", "", None))}
+    return {"regime": REGIMES.get(g.get("regime", ""), ""), "tomadores_especiais": len(especiais),
+            "ibscbs": bool(g.get("tem_ibscbs"))}
 
 
 def separar_servicos(lista: list[dict], catalogo: list[dict]) -> list[dict]:
@@ -195,12 +209,26 @@ def importar(empresa_id: str, cnpj_prestador: str, servico: dict | None = None,
                 servicos.salvar({**s, "padrao": True})
             cadastrados += 1
         ligados = _ligar_clientes_aos_servicos(destino, cnpj) if destino.exists() else 0
+        notas = _fatos_fiscais(destino, cnpj) if destino.exists() else []
+        regra_geral = leitura_fiscal.aplicar_geral(notas)
+        regras_tomadores = leitura_fiscal.aplicar_tomadores(notas)
         if not str(config.carregar()["pastas"].get("xml_nfse") or "").strip():
             config.salvar({"pastas": {"xml_nfse": str(destino)}})
         db.registrar("importacao", f"{movidos} XML importado(s) da pasta {NOME_PASTA}: {r['clientes_novos']} cliente(s) novo(s)")
     return {"empresa": emp["nome"], "xml": movidos, "clientes_novos": r["clientes_novos"],
             "clientes_total": r["clientes_total"], "padrao_salvo": bool(servico), "servicos": cadastrados,
-            "clientes_com_servico": ligados}
+            "clientes_com_servico": ligados, "regra_geral": regra_geral, "regras_tomadores": regras_tomadores}
+
+
+def _fatos_fiscais(pasta: Path, cnpj: str) -> list[dict]:
+    out = []
+    for arq in pasta.rglob("*.xml"):
+        raiz = _ler(arq)
+        if raiz is not None and _prestador(raiz)[0] == cnpj:
+            f = leitura_fiscal.fatos(raiz)
+            if f:
+                out.append(f)
+    return out
 
 
 def _ligar_clientes_aos_servicos(pasta: Path, cnpj: str) -> int:
