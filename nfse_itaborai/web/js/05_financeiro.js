@@ -214,19 +214,21 @@ async function encerrar(id) { if (confirm("Tirar este cliente da recorrência? E
 
 // ---------------------------------------------------------------- cobrança
 PAGINAS.cobranca = async el => {
-  const [fila, hist] = await Promise.all([api("whatsapp/fila"), api("regua/historico")]);
+  const [fila, hist, ww] = await Promise.all([api("whatsapp/fila"), api("regua/historico"), api("whatsapp_web/estado")]);
   const c = ST.config.cobranca;
   el.innerHTML = `<h1>Cobrança <span class="acoes"><button class="btn" id="rr">Rodar régua agora</button></span></h1>
   <div class="card"><h2>Régua automática</h2><p>Etapas (dias em relação ao vencimento): <b>${c.regua_dias.map(d => d < 0 ? d : d == 0 ? "0 (vencimento)" : "+" + d).join(" · ")}</b> —
-    e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? (c.whatsapp_api ? "<b>automático (API oficial)</b>" : "<b>ligado</b> (fila abaixo) só para os clientes marcados em Clientes › “Cobrar por WhatsApp”") : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
+    e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? (c.whatsapp_api ? "<b>automático (API oficial)</b>" : ww.ativo ? "<b>automático</b> (WhatsApp do escritório conectado) para os clientes marcados em Clientes › “Cobrar por WhatsApp”" : "<b>ligado</b>, mas o WhatsApp <b>não está conectado</b> — <a href=\"#\" onclick=\"ir('config');return false\">conectar</a>; até lá as mensagens ficam na fila abaixo") : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
     <a href="#" onclick="ir('config');return false">Alterar</a></p></div>
-  <div class="card"><h2>WhatsApp para enviar (${fila.length}) ${fila.length ? '<button class="btn" id="wa_seq">Enviar em sequência</button>' : ""}</h2><p class="sub">“Enviar em sequência” abre a conversa de cada cliente no WhatsApp do escritório com a mensagem pronta (linha digitável, PIX e link do cartão): é só apertar Enviar no WhatsApp e voltar aqui para o próximo. Só entram os clientes marcados em Clientes › “Cobrar por WhatsApp”.</p>
+  <div class="card"><h2>WhatsApp ainda não enviado (${fila.length}) ${fila.length && ww.ativo ? '<button class="btn" id="wa_auto">Enviar agora</button>' : ""} ${fila.length ? '<button class="btn sec" id="wa_seq">Enviar manualmente em sequência</button>' : ""}</h2>
+    <p class="sub">${ww.ativo ? (ww.enviando ? "<b>Enviando agora pelo WhatsApp…</b> " : "") + "O robô envia esta fila sozinho a cada rodada (de hora em hora) e logo depois de “Rodar régua agora”." : "O WhatsApp do escritório não está conectado: estas mensagens saem sozinhas assim que você conectar em Configurações › WhatsApp. Enquanto isso, dá para enviar manualmente em sequência."} Só entram os clientes marcados em Clientes › “Cobrar por WhatsApp”.</p>
     ${tabela([{ t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
       { t: "Etapa", f: e => e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias` },
       { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔")}</div>
   <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Etapa", f: e => e.etapa }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
   if ($("#wa_seq")) $("#wa_seq").onclick = () => enviarSequencia(fila);
-  $("#rr").onclick = async () => { const r = await api("regua/rodar"); aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
+  if ($("#wa_auto")) $("#wa_auto").onclick = async () => { await api("whatsapp_web/enviar_fila"); aviso("Enviando a fila pelo WhatsApp em segundo plano…", 6000); setTimeout(() => ir("cobranca"), 4000); };
+  $("#rr").onclick = async () => { const r = await api("regua/rodar"); aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp${r.whatsapp_automatico ? " (saindo sozinhos agora)" : ""}, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
 };
 function enviarSequencia(fila, i = 0) {
   if (i >= fila.length) { fechar(); aviso("WhatsApp: todas as mensagens da fila foram abertas ✔", 6000); return ir("cobranca"); }

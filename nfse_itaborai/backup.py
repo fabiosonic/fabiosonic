@@ -72,7 +72,7 @@ def _arquivos(raiz: Path):
             continue
         for arq in sorted(base.rglob("*")):
             rel = arq.relative_to(raiz).as_posix()
-            if not arq.is_file() or rel.startswith("dados/backup/") or rel == "dados/sistema.db" \
+            if not arq.is_file() or rel.startswith(("dados/backup/", "dados/whatsapp_web/")) or rel == "dados/sistema.db" \
                     or rel.endswith(("-journal", "-wal", "-shm")):
                 continue
             yield rel
@@ -223,7 +223,7 @@ def _caminho_permitido(nome: str) -> bool:
         return False
     if nome in ARQUIVOS_RAIZ or nome in (MANIFESTO, SEGREDOS_ARQ):
         return True
-    return p.parts[0] in PASTAS and not nome.startswith("dados/backup/")
+    return p.parts[0] in PASTAS and not nome.startswith(("dados/backup/", "dados/whatsapp_web/"))
 
 
 def ler_manifesto(zip_path: Path) -> dict:

@@ -18,7 +18,7 @@ from datetime import date
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, inter, pix, whatsapp
+from . import clientes, config, db, emissor, financeiro, inter, pix, whatsapp, whatsapp_web
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -506,6 +506,11 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
             whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg)
             out["whatsapp_enviado"] = whatsapp.numero(cli["telefone"])
         except Exception as ex:  # noqa: BLE001 — mostra o motivo na tela; o link manual continua disponível
+            out["whatsapp_erro"] = str(ex)
+    elif cli.get("telefone") and cli.get("whatsapp_cobranca") and whatsapp_web.ativo(cfg):
+        try:                                   # WhatsApp Web do escritório: envia na hora, sozinho
+            out["whatsapp_enviado"] = whatsapp_web.enviar_um(cli["telefone"], mensagem(t, etapa, cfg, canal="whatsapp")[1], cfg)
+        except Exception as ex:  # noqa: BLE001
             out["whatsapp_erro"] = str(ex)
     if cli.get("email") and cfg["smtp"].get("host"):
         pdf_ = _pdf_boleto(t, cfg)

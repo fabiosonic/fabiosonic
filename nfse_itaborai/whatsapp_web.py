@@ -1,0 +1,316 @@
+"""Envio AUTOMÁTICO da cobrança pelo WhatsApp do escritório, via WhatsApp Web no próprio computador — sem API
+oficial, sem intermediário e sem custo por mensagem.
+
+Como funciona:
+- Uma única vez, em Configurações › WhatsApp, o escritório clica em "Conectar" e lê o QR Code com o celular
+  (WhatsApp › Aparelhos conectados), como faz no WhatsApp Web. A sessão fica guardada na pasta da empresa
+  (dados/whatsapp_web), separada por empresa e fora dos backups.
+- Depois disso o robô (de hora em hora), a régua e o botão "Cobrar" enviam sozinhos: o sistema abre o WhatsApp Web
+  num navegador controlado por ele (Edge ou Chrome já instalados no Windows, fora da tela), abre a conversa do
+  cliente com a mensagem pronta e aperta Enviar. Só vai para os clientes marcados em "Cobrar por WhatsApp".
+- Mensagem que não sai (computador desligado, sessão desconectada) continua na fila e sai na próxima rodada.
+  Número sem WhatsApp vira erro no histórico de cobrança (o e-mail segue normalmente).
+
+Cuidados que o sistema toma para o número não ser tratado como spam: só clientes marcados (que já conversam com o
+escritório), intervalo aleatório entre as mensagens e limite por rodada.
+
+Requer o pacote Python "playwright" (o INICIAR.bat instala sozinho).
+"""
+
+from __future__ import annotations
+
+import json
+import random
+import shutil
+import threading
+import time
+import urllib.parse
+from datetime import datetime
+from pathlib import Path
+
+from . import config, db, emissor
+
+URL_WEB = "https://web.whatsapp.com"
+
+# seletores do WhatsApp Web (com alternativas, porque a página muda de tempos em tempos)
+LOGADO = ('#pane-side, [data-testid="chat-list"], div[aria-label="Lista de conversas"], div[aria-label="Chat list"], '
+          'div[aria-label="Lista de chats"]')
+QR = 'canvas[aria-label], div[data-ref] canvas, [data-testid="qrcode"]'
+CAIXA = ('footer div[contenteditable="true"], div[contenteditable="true"][data-tab="10"], '
+         'div[contenteditable="true"][aria-label="Digite uma mensagem"], div[contenteditable="true"][aria-placeholder]')
+DIALOGO = 'div[role="dialog"], [data-animate-modal-popup="true"]'
+SAIDA = "div.message-out"
+PENDENTE = 'span[data-icon="msg-time"]'
+
+_trava = threading.Lock()
+_situacao: dict = {"conectando": False, "enviando": False, "mensagem": ""}
+
+
+class ErroWhatsAppWeb(RuntimeError):
+    pass
+
+
+class Desconectado(ErroWhatsAppWeb):
+    pass
+
+
+class NumeroInvalido(ErroWhatsAppWeb):
+    pass
+
+
+def _cfg(cfg: dict | None = None) -> dict:
+    return (cfg or config.carregar())["cobranca"]
+
+
+def pasta() -> Path:
+    """Sessão do WhatsApp Web DESTA empresa (nunca compartilhada com outra empresa)."""
+    return emissor.raiz() / "dados" / "whatsapp_web"
+
+
+def _marca() -> Path:
+    return emissor.raiz() / "dados" / "whatsapp_web.json"
+
+
+def disponivel() -> bool:
+    try:
+        import playwright.sync_api  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def conectado() -> dict:
+    try:
+        return json.loads(_marca().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def ativo(cfg: dict | None = None) -> bool:
+    """Envio automático ligado e sessão conectada (QR Code já lido)."""
+    return bool(_cfg(cfg).get("whatsapp_web")) and bool(conectado()) and disponivel()
+
+
+def estado(cfg: dict | None = None) -> dict:
+    c = conectado()
+    return {"disponivel": disponivel(), "conectado": bool(c), "desde": c.get("desde", ""),
+            "verificado": c.get("verificado", ""), "ligado": bool(_cfg(cfg).get("whatsapp_web")),
+            "ativo": ativo(cfg), **_situacao}
+
+
+# ---------------------------------------------------------------- navegador
+
+def _abrir(p, cfg: dict | None, visivel: bool):
+    c = _cfg(cfg)
+    pasta().mkdir(parents=True, exist_ok=True)
+    args = ["--disable-notifications", "--no-first-run", "--no-default-browser-check"]
+    if not visivel:
+        args += ["--window-position=-32000,-32000", "--window-size=1200,900"]
+    kw = {"user_data_dir": str(pasta()), "headless": False, "args": args, "locale": "pt-BR", "no_viewport": True}
+    tentativas = ([{"executable_path": c["whatsapp_web_navegador"]}] if c.get("whatsapp_web_navegador")
+                  else [{"channel": "msedge"}, {"channel": "chrome"}, {}])
+    erro = None
+    for t in tentativas:
+        try:
+            return p.chromium.launch_persistent_context(**kw, **t)
+        except Exception as ex:  # noqa: BLE001 — tenta o próximo navegador
+            erro = ex
+            if "user data directory is already in use" in str(ex).lower() or "processsingleton" in str(ex).lower():
+                raise ErroWhatsAppWeb("WhatsApp Web já está aberto por outra rotina do sistema; tento de novo depois.") from ex
+    raise ErroWhatsAppWeb(f"Não consegui abrir o navegador (Edge/Chrome) para o WhatsApp Web: {erro}")
+
+
+def _url(cfg: dict | None) -> str:
+    return (_cfg(cfg).get("whatsapp_web_url") or URL_WEB).rstrip("/")
+
+
+def _gravar_marca(**k) -> None:
+    m = conectado() | k
+    _marca().write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+
+
+def conectar(cfg: dict | None = None, espera: int = 180) -> dict:
+    """Abre o WhatsApp Web numa janela VISÍVEL para ler o QR Code (uma vez). Fecha sozinho quando conectar."""
+    from playwright.sync_api import sync_playwright
+    if not disponivel():
+        raise ErroWhatsAppWeb("Falta o componente do WhatsApp Web: feche e abra o sistema pelo INICIAR.bat (ele instala).")
+    with _trava:
+        _situacao.update(conectando=True, mensagem="Leia o QR Code na janela do WhatsApp Web que abriu.")
+        try:
+            with sync_playwright() as p:
+                ctx = _abrir(p, cfg, visivel=True)
+                try:
+                    pg = ctx.pages[0] if ctx.pages else ctx.new_page()
+                    pg.goto(_url(cfg), wait_until="domcontentloaded")
+                    try:
+                        pg.wait_for_selector(LOGADO, timeout=espera * 1000)
+                    except Exception as ex:  # noqa: BLE001
+                        raise ErroWhatsAppWeb("O QR Code não foi lido a tempo. Clique em Conectar de novo.") from ex
+                    time.sleep(3)                       # deixa o WhatsApp Web terminar de sincronizar a sessão
+                finally:
+                    ctx.close()
+        finally:
+            _situacao.update(conectando=False, mensagem="")
+    agora = datetime.now().isoformat(timespec="seconds")
+    _gravar_marca(desde=conectado().get("desde") or agora, verificado=agora)
+    c = config.carregar()
+    if not c["cobranca"].get("whatsapp_web"):
+        c["cobranca"]["whatsapp_web"] = True
+        config.salvar(c)
+    db.registrar("whatsapp", "WhatsApp Web conectado (QR Code lido)")
+    return {"ok": True, "mensagem": "WhatsApp conectado. A cobrança por WhatsApp agora sai sozinha."}
+
+
+def desconectar() -> dict:
+    with _trava:
+        shutil.rmtree(pasta(), ignore_errors=True)
+        _marca().unlink(missing_ok=True)
+    db.registrar("whatsapp", "WhatsApp Web desconectado pelo sistema")
+    return {"ok": True, "mensagem": "WhatsApp desconectado deste computador. Remova também em Aparelhos conectados no celular."}
+
+
+def _enviar_na_pagina(pg, url: str, numero: str, texto: str) -> str:
+    pg.goto(f"{url}/send?phone={numero}&text={urllib.parse.quote(texto)}", wait_until="domcontentloaded")
+    pg.wait_for_selector(f"{CAIXA}, {DIALOGO}, {QR}", timeout=90000)
+    if pg.locator(QR).count() and not pg.locator(LOGADO).count():
+        raise Desconectado("WhatsApp desconectado: leia o QR Code de novo em Configurações › WhatsApp.")
+    fim = time.time() + 30
+    while not pg.locator(CAIXA).count():                 # diálogo "carregando" ou "número inválido"
+        if pg.locator(DIALOGO).count():
+            txt = pg.locator(DIALOGO).first.inner_text().lower()
+            if "inválido" in txt or "invalid" in txt or "não está no whatsapp" in txt:
+                raise NumeroInvalido(f"O número {numero} não tem WhatsApp.")
+        if time.time() > fim:
+            raise ErroWhatsAppWeb("A conversa não abriu no WhatsApp Web.")
+        time.sleep(0.5)
+    pg.wait_for_function("s => { const e = document.querySelector(s); return e && e.innerText.trim().length > 0 }",
+                         arg=CAIXA, timeout=20000)
+    antes = pg.locator(SAIDA).count()
+    time.sleep(random.uniform(0.6, 1.5))
+    pg.locator(CAIXA).first.press("Enter")
+    fim = time.time() + 60
+    while time.time() < fim:
+        n = pg.locator(SAIDA).count()
+        if n > antes and not pg.locator(SAIDA).nth(n - 1).locator(PENDENTE).count():
+            return "enviado"
+        time.sleep(0.5)
+    return "enviado (sem confirmação de entrega)"
+
+
+def enviar(itens: list[dict], cfg: dict | None = None) -> list[dict]:
+    """Envia [{numero, texto, ...}] numa só sessão do navegador. Devolve cada item com 'resultado' ou 'erro'.
+    Para tudo se a sessão estiver desconectada (o restante continua na fila)."""
+    from playwright.sync_api import sync_playwright
+    c = _cfg(cfg)
+    if not disponivel():
+        raise ErroWhatsAppWeb("Falta o componente do WhatsApp Web: abra o sistema pelo INICIAR.bat (ele instala).")
+    if not conectado():
+        raise Desconectado("WhatsApp não conectado: leia o QR Code em Configurações › WhatsApp.")
+    intervalo = float(c.get("whatsapp_web_intervalo", 15) or 0)
+    saida = []
+    if not _trava.acquire(timeout=600):
+        raise ErroWhatsAppWeb("WhatsApp Web ocupado com outro envio; tento de novo depois.")
+    _situacao.update(enviando=True)
+    try:
+        with sync_playwright() as p:
+            ctx = _abrir(p, cfg, visivel=bool(c.get("whatsapp_web_visivel")))
+            try:
+                pg = ctx.pages[0] if ctx.pages else ctx.new_page()
+                for i, it in enumerate(itens):
+                    if i and intervalo:
+                        time.sleep(random.uniform(intervalo * 0.6, intervalo * 1.4))
+                    try:
+                        saida.append(it | {"resultado": _enviar_na_pagina(pg, _url(cfg), it["numero"], it["texto"])})
+                    except Desconectado as ex:
+                        _marca().unlink(missing_ok=True)
+                        saida.append(it | {"erro": str(ex), "desconectado": True})
+                        break
+                    except NumeroInvalido as ex:
+                        saida.append(it | {"erro": str(ex), "invalido": True})
+                    except Exception as ex:  # noqa: BLE001 — um cliente com problema não trava os outros
+                        saida.append(it | {"erro": str(ex)[:300]})
+            finally:
+                ctx.close()
+    finally:
+        _situacao.update(enviando=False)
+        _trava.release()
+    if any("resultado" in s for s in saida):
+        _gravar_marca(verificado=datetime.now().isoformat(timespec="seconds"))
+    return saida
+
+
+def numero_de(telefone: str) -> str:
+    from . import clientes
+    d = clientes._digitos(telefone)
+    if d.startswith("55") and len(d) in (12, 13):
+        return d
+    return "55" + d if len(d) in (10, 11) else ""
+
+
+def _do_link(link: str) -> tuple[str, str]:
+    u = urllib.parse.urlparse(link)
+    return u.path.strip("/"), (urllib.parse.parse_qs(u.query).get("text") or [""])[0]
+
+
+def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
+    """Envia sozinho as mensagens de WhatsApp que a régua deixou na fila (status 'pendente')."""
+    from . import cobranca
+    cfg = cfg or config.carregar()
+    fila = cobranca.fila_whatsapp()[: limite or int(_cfg(cfg).get("whatsapp_web_limite", 40) or 40)]
+    res = {"enviados": 0, "erros": 0, "pendentes": 0}
+    if not fila:
+        return res
+    itens = []
+    for e in fila:
+        numero, texto = _do_link(e["detalhe"])
+        itens.append({"evento": e["id"], "numero": numero, "texto": texto, "cliente": e["cliente_nome"]})
+    try:
+        saida = enviar(itens, cfg)
+    except Desconectado as ex:
+        db.registrar("whatsapp", f"Fila de WhatsApp não enviada: {ex}")
+        return res | {"pendentes": len(itens), "aviso": str(ex)}
+    feitos = set()
+    with db.conexao() as con:
+        for s in saida:
+            feitos.add(s["evento"])
+            if "resultado" in s:
+                con.execute("UPDATE eventos_cobranca SET status='enviado', detalhe=? WHERE id=?",
+                            (f"WhatsApp Web {s['numero']}: {s['resultado']}", s["evento"]))
+                res["enviados"] += 1
+            elif s.get("desconectado"):
+                res["pendentes"] += 1
+                res["aviso"] = s["erro"]
+            elif s.get("invalido"):
+                con.execute("UPDATE eventos_cobranca SET status='erro', detalhe=? WHERE id=?", (s["erro"], s["evento"]))
+                res["erros"] += 1
+            else:
+                res["erros"] += 1                       # erro passageiro: continua na fila para a próxima rodada
+    res["pendentes"] += len(itens) - len(feitos)
+    db.registrar("whatsapp", f"WhatsApp Web: {res}")
+    return res
+
+
+def enviar_um(telefone: str, texto: str, cfg: dict | None = None) -> str:
+    """Envio imediato (botão "Cobrar" e mensagem de teste). Devolve o número usado."""
+    numero = numero_de(telefone)
+    if not numero:
+        raise ErroWhatsAppWeb("Telefone do cliente inválido para WhatsApp (DDD + número).")
+    s = enviar([{"numero": numero, "texto": texto}], cfg)[0]
+    if "erro" in s:
+        raise ErroWhatsAppWeb(s["erro"])
+    db.registrar("whatsapp", f"WhatsApp Web: mensagem enviada para {numero}")
+    return numero
+
+
+def em_segundo_plano(funcao, *args) -> None:
+    """Roda o envio numa thread, na pasta da empresa que pediu (a tela não fica travada)."""
+    raiz = emissor.raiz()
+
+    def _rodar():
+        with emissor.usar_empresa(raiz):
+            try:
+                funcao(*args)
+            except Exception as ex:  # noqa: BLE001 — registra no log da empresa
+                _situacao["mensagem"] = str(ex)[:300]
+                db.registrar("whatsapp", f"WhatsApp Web: {ex}")
+    threading.Thread(target=_rodar, daemon=True).start()

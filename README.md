@@ -402,16 +402,30 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
-### WhatsApp do escritório (envio manual, só para clientes escolhidos)
+### WhatsApp do escritório (automático, sem API oficial)
 
-O WhatsApp sai do número do próprio escritório, enviado por você, e **só para os clientes marcados** em
-**Clientes › "Cobrar por WhatsApp"** (os que já conversam com o escritório). Os demais recebem só o e-mail.
-- A régua coloca as mensagens prontas na tela **Cobrança** (lembrete, vence hoje e atraso), com linha digitável,
-  PIX copia e cola e o link do cartão.
-- **Enviar em sequência**: abre a conversa do 1º cliente com o texto pronto; você aperta Enviar no WhatsApp,
-  volta, clica "Enviado, próximo" e o sistema abre o seguinte. "Pular" deixa para depois.
-- O botão "Cobrar" de um título também oferece "Abrir no WhatsApp".
-- A API oficial da Meta continua no sistema, mas desligada e recolhida em Configurações (não é usada).
+A cobrança por WhatsApp **sai sozinha**, pelo número do próprio escritório, via **WhatsApp Web** controlado pelo
+sistema no computador do escritório. Sem API da Meta, sem intermediário e sem custo por mensagem.
+
+1. **Uma vez só:** em **Configurações › WhatsApp do escritório**, clique em **Conectar (ler QR Code)**. No celular
+   do escritório: WhatsApp › **Aparelhos conectados › Conectar um aparelho** e leia o QR Code da janela que abrir.
+   A janela fecha sozinha e o envio automático é ligado.
+2. Em **Clientes**, marque **"Cobrar por WhatsApp"** nos clientes que devem receber (os que já conversam com o
+   escritório). Os demais recebem só o e-mail.
+3. Pronto: o robô (de hora em hora), o botão **Rodar régua agora** e o botão **Cobrar** enviam sozinhos, com
+   linha digitável, PIX copia e cola e o link do cartão. O navegador trabalha fora da tela (Edge ou Chrome já
+   instalados); o computador só precisa estar ligado.
+
+- **Mensagem de teste:** em Configurações › WhatsApp, informe um celular e clique em "Enviar mensagem de teste".
+- O que não sai (computador desligado, celular sem internet, sessão desconectada) **fica na fila** da tela
+  Cobrança e sai na próxima rodada; número sem WhatsApp vira erro no histórico de cobrança.
+- Se a sessão cair (aparelho removido no celular), a tela avisa "não conectado": é só ler o QR Code de novo.
+- Cuidados contra bloqueio por spam: só clientes marcados, intervalo aleatório entre mensagens (média de 15 s,
+  ajustável) e no máximo 40 por rodada.
+- A sessão fica na pasta da empresa (`dados/whatsapp_web`), separada por empresa e **fora dos backups**.
+- Sem conexão, ainda dá para enviar manualmente pela tela Cobrança ("Enviar manualmente em sequência").
+- O INICIAR.bat instala sozinho o componente necessário (pacote Python `playwright`, que usa o Edge do Windows).
+- A API oficial da Meta continua disponível em Configurações, recolhida e desligada.
 
 ### E-mails enviados pelo sistema
 
@@ -606,7 +620,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 245 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 251 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

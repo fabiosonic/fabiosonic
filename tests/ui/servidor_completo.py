@@ -104,6 +104,11 @@ from test_whatsapp import FakeMeta  # noqa: E402
 
 p_meta = _servir(FakeMeta)
 
+# ---- WhatsApp Web do escritório (envio automático; QR Code simulado)
+from test_whatsapp_web import FakeWhatsAppWeb, _navegador  # noqa: E402
+
+p_waweb = _servir(FakeWhatsAppWeb)
+
 # ---- e-mail (SMTP simulado: guarda as mensagens em dados/emails_enviados.json)
 caixa = pasta / "dados" / "emails_enviados.json"
 
@@ -143,6 +148,8 @@ config.salvar({
                  "inter_url": f"https://127.0.0.1:{p_inter}", "inter_ca": str(cert / "inter_srv.pem"), "inter_sandbox": True,
                  "whatsapp_api": False, "whatsapp_token": "EAAG-teste", "whatsapp_phone_id": "123456",
                  "whatsapp_api_url": f"http://127.0.0.1:{p_meta}",
+                 "whatsapp_web_url": f"http://127.0.0.1:{p_waweb}", "whatsapp_web_navegador": _navegador(),
+                 "whatsapp_web_intervalo": 0,
                  "cartao_provedor": "infinitepay", "cartao_infinitepay_tag": "moraes_contab",
                  "cartao_infinitepay_url": f"http://127.0.0.1:{p_infinite}"},
     "emissao": {"certificado_pfx": "dados/certificados/cert.pfx", "certificado_senha": "senha123"},
@@ -161,6 +168,8 @@ for c in [{"cpf_cnpj": "32396063000103", "razao_social": "RPS CONSULTORIA E SERV
 tela.ROTAS["teste/infinitepay_pagar"] = lambda c: (FakeInfinitePay.pagos.__setitem__(
     (c["order_nsu"], c["transaction_nsu"], c["slug"]), int(c["valor"])), {"ok": True})[1]
 tela.ROTAS["teste/whatsapp_enviados"] = lambda c: {"enviados": FakeMeta.enviados}
+tela.ROTAS["teste/whatsapp_web_logar"] = lambda c: (setattr(FakeWhatsAppWeb, "logado", True), {"ok": True})[1]
+tela.ROTAS["teste/whatsapp_web_enviados"] = lambda c: {"enviados": FakeWhatsAppWeb.enviados}
 srv = ThreadingHTTPServer(("127.0.0.1", porta), tela._Handler)
 print("pronto", flush=True)
 srv.serve_forever()

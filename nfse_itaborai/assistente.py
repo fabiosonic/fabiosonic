@@ -32,8 +32,8 @@ PASSOS = [
      "descricao": "Emite uma DPS de teste na Produção Restrita e registra o evento de cancelamento."},
     {"id": "inter", "titulo": "Banco Inter",
      "descricao": "Autentica e consulta cobranças. No sandbox também registra e cancela um boleto de teste."},
-    {"id": "whatsapp", "titulo": "WhatsApp (API oficial)",
-     "descricao": "Confere o token e o número do WhatsApp do escritório na Meta (não envia mensagem)."},
+    {"id": "whatsapp", "titulo": "WhatsApp do escritório",
+     "descricao": "Confere se o WhatsApp Web está conectado (QR Code lido) para o envio automático da cobrança."},
     {"id": "cartao", "titulo": "Cartão de crédito (InfinitePay)",
      "descricao": "Confere a InfiniteTag criando um link de teste de R$ 1,00 (não é enviado) e mostra a taxa repassada."},
     {"id": "backup", "titulo": "Backup",
@@ -208,9 +208,22 @@ def _backup(c: dict) -> dict:
 
 
 def _whatsapp(c: dict) -> dict:
-    from . import whatsapp
+    from . import whatsapp, whatsapp_web
     if not whatsapp.configurado():
-        raise Pulado("WhatsApp pela API desligado: a régua deixa as mensagens na fila para envio manual.")
+        from . import config
+        if not config.carregar()["cobranca"].get("regua_whatsapp"):
+            raise Pulado("Régua por WhatsApp desligada em Configurações.")
+        e = whatsapp_web.estado()
+        if not e["disponivel"]:
+            return _resultado("erro", "Falta o componente do WhatsApp Web: abra o sistema pelo INICIAR.bat (ele instala).", [])
+        if not e["conectado"]:
+            return _resultado("erro", "WhatsApp não conectado: em Configurações › WhatsApp, clique em Conectar e leia o "
+                                      "QR Code com o celular do escritório.", [])
+        if not e["ligado"]:
+            return _resultado("alerta", "WhatsApp conectado, mas o envio automático está desligado (Configurações › WhatsApp).", [])
+        return _resultado("ok", f"WhatsApp conectado desde {e['desde'][:10]}: a cobrança sai sozinha.",
+                          [f"Última conferência da sessão: {e['verificado'][:16].replace('T', ' ')}",
+                           "Use \"Enviar mensagem de teste\" em Configurações › WhatsApp para ver o modelo no celular."])
     r = whatsapp.testar()
     return _resultado("ok", r["mensagem"], ["Lembre de aprovar na Meta os 3 modelos (Configurações › WhatsApp)."])
 

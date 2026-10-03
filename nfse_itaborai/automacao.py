@@ -129,6 +129,8 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     etapa("extrato_inter", auto.get("extrato_inter", True) and cfg["cobranca"]["provedor"] == "inter"
           and inter.configurado(cfg), importacao.importar_extrato_inter)
     etapa("regua", auto["regua"], lambda: cobranca.rodar_regua(em, cfg))
+    from . import whatsapp_web
+    etapa("whatsapp_web", auto["regua"] and whatsapp_web.ativo(cfg), lambda: whatsapp_web.enviar_fila(cfg))
     etapa("resumo", auto.get("resumo_diario"), lambda: importacao.resumo_diario(res, em))
     etapa("fechamento", auto.get("fechamento_mensal", True), lambda: saude.fechamento_mensal(em))
     db.registrar("robo", f"Rotina executada: { {k: v for k, v in res.items() if k not in ('executado', 'data')} }")

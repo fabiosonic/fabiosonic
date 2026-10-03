@@ -99,7 +99,13 @@ PAGINAS.config = async el => {
   <div class="card"><h2>Banco Inter — como obter as credenciais</h2><p class="sub">No Internet Banking PJ do Inter: <b>Soluções para sua empresa › Nova integração</b>, marque os escopos <b>Emissão e cancelamento de boletos</b> e <b>Consulta de boletos</b>. Baixe o certificado (.crt) e a chave (.key), copie client_id e client_secret para cá, salve e teste. Os boletos são registrados direto na conta do escritório, com PIX no próprio boleto; o sistema dá a baixa sozinho quando o cliente paga.</p>
     <p><button class="btn sec" id="teste_inter">Salvar e testar conexão com o Inter</button></p></div>
   <div class="card"><h2>${ic("fone")}WhatsApp do escritório</h2>
-    <p class="sub">A régua deixa na tela <b>Cobrança</b> as mensagens de WhatsApp prontas, só para os clientes marcados em <b>Clientes › “Cobrar por WhatsApp”</b> (os que já conversam com o escritório). Use “Enviar em sequência”: o WhatsApp abre com o texto pronto e você só aperta Enviar.</p>
+    <p class="sub">A cobrança por WhatsApp <b>sai sozinha</b>, pelo número do escritório, para os clientes marcados em <b>Clientes › “Cobrar por WhatsApp”</b>. Basta conectar <b>uma vez</b>: clique em “Conectar”, e no celular do escritório abra o WhatsApp › <b>Aparelhos conectados › Conectar um aparelho</b> e leia o QR Code da janela que abrir. Depois disso o robô, a régua e o botão “Cobrar” enviam sem você precisar fazer nada (o computador precisa estar ligado).</p>
+    <div id="ww_estado" class="msg">Verificando…</div>
+    <div class="campos">${ck("cobranca", "whatsapp_web", "<b>Enviar a cobrança por WhatsApp automaticamente</b>")}${tx("cobranca", "whatsapp_web_intervalo", "Intervalo médio entre mensagens (segundos)", "number", 'min="5"')}${ck("cobranca", "whatsapp_web_visivel", "Mostrar a janela do WhatsApp Web durante o envio")}</div>
+    <p><button class="btn" id="ww_conectar" type="button">${ic("fone")}Conectar (ler QR Code)</button>
+      <button class="btn sec" id="ww_desconectar" type="button">Desconectar</button></p>
+    <div class="campos"><label>Celular para teste<input id="ww_tel" placeholder="(21) 9xxxx-xxxx"></label></div>
+    <p><button class="btn sec" id="ww_teste" type="button">Enviar mensagem de teste (modelo da cobrança)</button></p>
     <details><summary class="sub">Envio automático pela API oficial da Meta (opcional — não usado)</summary>
     <div class="campos">${ck("cobranca", "whatsapp_api", "<b>Enviar automaticamente pela API oficial</b>")}
       ${tx("cobranca", "whatsapp_token", "Token de acesso (permanente)", "password", 'autocomplete="new-password" placeholder="EAAG… (usuário do sistema no Gerenciador de Negócios)"')}
@@ -184,6 +190,27 @@ PAGINAS.config = async el => {
     } catch (e) { $("#cert_res").innerHTML = ""; }
   };
   $("#teste_inter").onclick = async () => { if (!await salvarTudo()) return; const r = await api("inter/testar"); aviso(r.mensagem || "OK", 6000); };
+  const wwMostrar = async () => {
+    const e = await api("whatsapp_web/estado"); const box = $("#ww_estado"); if (!box) return e;
+    box.className = "msg " + (e.ativo ? "ok" : e.conectando ? "" : "erro");
+    box.innerHTML = !e.disponivel ? "Falta o componente do WhatsApp Web neste computador: feche o sistema e abra pelo <b>INICIAR.bat</b> (ele instala sozinho)."
+      : e.conectando ? "Janela do WhatsApp Web aberta: leia o QR Code com o celular do escritório (WhatsApp › Aparelhos conectados)…"
+      : e.enviando ? "Enviando mensagens pelo WhatsApp…"
+      : e.ativo ? `WhatsApp conectado ✔ desde ${dt(e.desde.slice(0, 10))} — a cobrança sai sozinha.`
+      : e.conectado ? "WhatsApp conectado, mas o envio automático está desligado (marque a opção abaixo e salve)."
+      : "WhatsApp não conectado. Clique em “Conectar” e leia o QR Code." + (e.mensagem ? ` <br><small>${esc(e.mensagem)}</small>` : "");
+    return e;
+  };
+  wwMostrar();
+  $("#ww_conectar").onclick = async () => {
+    await api("whatsapp_web/conectar"); aviso("Abrindo o WhatsApp Web: leia o QR Code com o celular do escritório.", 8000);
+    for (let i = 0; i < 100; i++) { await new Promise(r => setTimeout(r, 2500)); const e = await wwMostrar(); if (!e || (!e.conectando && i > 1)) break; }
+    const e = await api("whatsapp_web/estado"); if (e.conectado) { aviso("WhatsApp conectado ✔ A cobrança agora sai sozinha.", 8000); ST.config = (await api("estado")).config || ST.config; ir("config"); }
+  };
+  $("#ww_desconectar").onclick = async () => { if (!confirm("Desconectar o WhatsApp deste computador? A cobrança por WhatsApp para de sair sozinha.")) return;
+    const r = await api("whatsapp_web/desconectar"); aviso(r.mensagem, 8000); wwMostrar(); };
+  $("#ww_teste").onclick = async () => { const tel = $("#ww_tel").value.trim(); if (!tel) return aviso("Informe o celular para o teste.");
+    aviso("Enviando a mensagem de teste pelo WhatsApp…", 20000); const r = await api("whatsapp_web/teste", { telefone: tel }); aviso(r.mensagem || "OK", 8000); };
   $("#teste_wa").onclick = async () => { if (!await salvarTudo()) return; const r = await api("whatsapp/testar"); aviso(r.mensagem || "OK", 6000); };
   api("whatsapp/modelos").then(m => { $("#wa_modelos").innerHTML = Object.values(m).map(x => `<div class="wa-modelo"><p><b>Nome do modelo:</b> <code>${esc(x.nome)}</code> <button class="btn min sec" type="button" data-copia="${esc(x.texto)}">Copiar texto</button></p><pre>${esc(x.texto)}</pre></div>`).join("")
     + '<p class="sub">Exemplos para a Meta: {{1}} Empresa Exemplo Ltda · {{2}} R$ 374,40 · {{3}} Honorários contábeis - competência 10/2026 · {{4}} 10/10/2026 · {{5}} 07790.00116 12345.678901 · {{6}} 00020101021226… · {{7}} Também aceitamos PIX e boleto, sem acréscimo. · {{8}} Moraes &amp; Oliveira Contabilidade</p>';

@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, assistente, atualizacao, automacao, cartao, paises, whatsapp, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, assistente, atualizacao, automacao, cartao, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -244,6 +244,11 @@ ROTAS = {
     "cartao/simular": lambda c: cartao.valor_no_cartao(financeiro.cent(c.get("valor") or 0), int(c.get("parcelas") or 1)),
     "cartao/testar": lambda c: cartao.testar(),
     "whatsapp/testar": lambda c: whatsapp.testar(),
+    "whatsapp_web/estado": lambda c: whatsapp_web.estado(),
+    "whatsapp_web/conectar": lambda c: (whatsapp_web.em_segundo_plano(whatsapp_web.conectar), {"ok": True})[1],
+    "whatsapp_web/desconectar": lambda c: whatsapp_web.desconectar(),
+    "whatsapp_web/enviar_fila": lambda c: (whatsapp_web.em_segundo_plano(whatsapp_web.enviar_fila), {"ok": True})[1],
+    "whatsapp_web/teste": lambda c: _whatsapp_teste(str(c.get("telefone", ""))),
     "whatsapp/modelos": lambda c: {k: {"nome": n, "texto": t} for k, (n, t) in whatsapp.MODELOS.items()},
     "titulo/pago_cartao": lambda c: cartao.confirmar_pagamento(_id(c), c.get("valor"), str(c.get("data") or ""),
                                                                str(c.get("comprovante") or "")),
@@ -263,7 +268,7 @@ ROTAS = {
     "resumo/enviar": lambda c: {"resultado": importacao.resumo_diario({}, forcar=True)},
     "whatsapp/fila": lambda c: cobranca.fila_whatsapp(),
     "whatsapp/feito": lambda c: (cobranca.marcar_whatsapp_feito(_id(c)), {"ok": True})[1],
-    "regua/rodar": lambda c: cobranca.rodar_regua(),
+    "regua/rodar": lambda c: _rodar_regua(),
     "regua/historico": lambda c: db.linhas(
         "SELECT e.*, t.cliente_nome FROM eventos_cobranca e JOIN titulos t ON t.id=e.titulo_id "
         "ORDER BY e.id DESC LIMIT 200"),
@@ -313,6 +318,31 @@ def _sem_duplicadas(itens: list[dict]) -> list[dict]:
             vistos.add(chave)
             out.append(it)
     return out
+
+
+def _rodar_regua() -> dict:
+    r = cobranca.rodar_regua()
+    if whatsapp_web.ativo() and cobranca.fila_whatsapp():
+        whatsapp_web.em_segundo_plano(whatsapp_web.enviar_fila)      # WhatsApp sai sozinho, sem travar a tela
+        r["whatsapp_automatico"] = True
+    return r
+
+
+def _whatsapp_teste(telefone: str) -> dict:
+    """Mensagem de teste com o modelo real da cobrança (dados de exemplo), enviada pelo WhatsApp Web."""
+    from datetime import date as _d
+    cfg = config.carregar()
+    venc = financeiro.hoje().isoformat()
+    t = {"id": 0, "cliente_nome": "CLIENTE EXEMPLO LTDA", "descricao": "HONORARIOS CONTABEIS", "valor_cent": 35000,
+         "vencimento": venc, "competencia": venc[:7], "status": "aberto", "nfse_numero": "", "nfse_link": "",
+         "cobranca_link": "", "banco_id": "", "linha_digitavel": "07790.00116 12345.678901 23456.789012 1 99990000035000",
+         "pix_copia_cola": "(PIX copia e cola do boleto)", "cartao_link": "", "cartao_status": ""}
+    if cartao.configurado(cfg):
+        t |= {"cartao_link": "(link do cartão do título)", "cartao_status": "aberto",
+              "cartao_total_cent": cartao.valor_no_cartao(35000, 1, cfg)["total_cent"]}
+    texto = "*[TESTE — modelo de cobrança do sistema]*\n\n" + cobranca.mensagem(t, 0, cfg, _d.fromisoformat(venc), "whatsapp")[1]
+    numero = whatsapp_web.enviar_um(telefone, texto, cfg)
+    return {"ok": True, "mensagem": f"Mensagem de teste enviada pelo WhatsApp para {numero}."}
 
 
 def _novo_titulo(c: dict) -> dict:

@@ -36,6 +36,12 @@ PADRAO = {
         "regua_whatsapp": True,
         "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado
         "bloquear_apos_dias": 60,   # alerta de cliente para suspensão/negociação
+        # WhatsApp automático pelo WhatsApp Web do escritório (QR Code lido uma vez; sem API oficial)
+        "whatsapp_web": False,          # liga sozinho quando o QR Code é lido em Configurações › WhatsApp
+        "whatsapp_web_intervalo": 15,   # segundos (em média) entre uma mensagem e outra
+        "whatsapp_web_limite": 40,      # máximo de mensagens por rodada do robô
+        "whatsapp_web_visivel": False,  # mostrar a janela do navegador durante o envio
+        "whatsapp_web_navegador": "",   # caminho do navegador (vazio = Edge ou Chrome instalados)
         # WhatsApp pela API oficial da Meta (Cloud API): a régua envia sozinha, com modelos aprovados
         "whatsapp_api": False,      # desligado = fila com o link "Enviar" (envio manual pelo WhatsApp do escritório)
         "whatsapp_token": "",       # token permanente (usuário do sistema no Gerenciador de Negócios)

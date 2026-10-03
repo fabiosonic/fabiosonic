@@ -8,6 +8,7 @@ dependencies = []
 [project.optional-dependencies]
 xsd = ["lxml"]
 nacional = ["lxml", "cryptography"]
+whatsapp = ["playwright"]
 teste = ["pytest", "lxml", "cryptography"]
 
 [tool.pytest.ini_options]

@@ -336,6 +336,36 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     certo((await api('whatsapp/fila')).length === 0, 'fila não esvaziou');
     return `${fila.length} mensagem(ns) aberta(s) em sequência`;
   });
+  await passo('WhatsApp automático: conectar (QR Code) pela tela', async () => {
+    await ir('config', 1500);
+    certo(/não conectado/.test(await p.textContent('#ww_estado')), await p.textContent('#ww_estado'));
+    await p.click('#ww_conectar'); await espera(3000);
+    certo((await api('whatsapp_web/estado')).conectando, 'janela do QR Code não abriu');
+    await api('teste/whatsapp_web_logar');                    // "celular leu o QR Code"
+    let e; for (let i = 0; i < 30 && !(e = await api('whatsapp_web/estado')).ativo; i++) await espera(1000);
+    certo(e.ativo, JSON.stringify(e)); await espera(3000);
+    certo(/conectado ✔/.test(await p.textContent('#ww_estado')), await p.textContent('#ww_estado'));
+  });
+  await passo('WhatsApp automático: régua envia sozinha (só cliente marcado)', async () => {
+    const d = new Date(Date.now() + 3 * 864e5 - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    for (const doc of ['32396063000103', '35979895000132'])
+      await api('titulo/novo', { cpf_cnpj: doc, valor: '222,22', descricao: 'HONORARIOS WHATSAPP AUTOMATICO', vencimento: d, nfse: 'nao' });
+    await ir('cobranca', 1200); await p.click('#rr'); await espera(1500);
+    certo(/saindo sozinhos/.test(await aviso()), await aviso());
+    let env = []; for (let i = 0; i < 40 && !(env = (await api('teste/whatsapp_web_enviados')).enviados).length; i++) await espera(1000);
+    await espera(2000); env = (await api('teste/whatsapp_web_enviados')).enviados;
+    certo(env.length === 1 && env[0].fone === '5521988887777' && /222,22/.test(env[0].texto) && !/anexo/.test(env[0].texto),
+      JSON.stringify(env).slice(0, 300));
+    for (let i = 0; i < 10 && (await api('whatsapp/fila')).length; i++) await espera(1000);
+    certo((await api('whatsapp/fila')).length === 0, 'fila não esvaziou');
+    return 'lembrete enviado sozinho para 5521988887777';
+  });
+  await passo('WhatsApp automático: mensagem de teste para 21 97186-7366', async () => {
+    await ir('config', 1500); await p.fill('#ww_tel', '21 97186-7366'); await p.click('#ww_teste'); await espera(8000);
+    certo(/Mensagem de teste enviada/.test(await aviso()), await aviso());
+    const env = (await api('teste/whatsapp_web_enviados')).enviados.at(-1);
+    certo(env.fone === '5521971867366' && /TESTE/.test(env.texto), JSON.stringify(env).slice(0, 200));
+  });
 
   // ------------------------------------------------------------ contas a pagar
   await passo('Contas a pagar: nova, editar, pagar e excluir', async () => {
@@ -470,7 +500,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
   await passo('Validação: "Testar tudo" com as integrações (simuladas)', async () => {
     await api('ambiente', { producao: false });
     await ir('validacao', 1500); await p.click('#val_todos'); await espera(25000);
-    const s = await api('validacao'); const ruins = s.passos.filter(x => !x.ultimo || !(['ok', 'alerta'].includes(x.ultimo.situacao) || (x.id === 'whatsapp' && x.ultimo.situacao === 'pulado')));
+    const s = await api('validacao'); const ruins = s.passos.filter(x => !x.ultimo || !(['ok', 'alerta'].includes(x.ultimo.situacao)));
     certo(!ruins.length, ruins.map(x => `${x.id}: ${x.ultimo ? x.ultimo.situacao + ' ' + x.ultimo.mensagem : 'não rodou'}`).join(' | '));
     return `${s.concluidos}/${s.total} aprovados`;
   });
