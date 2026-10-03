@@ -420,3 +420,7 @@ details.mais-nota[open] > summary, details.mais-fz[open] > summary { margin-bott
   padding: 10px 12px; border: 1px dashed var(--borda-forte); border-radius: var(--raio-p); background: var(--superficie2); font-size: 14px; }
 .ultima-nota > span { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
 .ultima-nota .ic { flex: none; }
+
+/* modelos do WhatsApp */
+.wa-modelo { margin: 10px 0; }
+.wa-modelo pre { white-space: pre-wrap; background: var(--superficie2); border: 1px solid var(--borda); border-radius: var(--raio-p); padding: 10px 12px; font-size: 13px; margin: 6px 0 0; }

@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, assistente, atualizacao, automacao, cartao, paises, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, assistente, atualizacao, automacao, cartao, paises, whatsapp, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -241,6 +241,8 @@ ROTAS = {
     "titulo/cartao": lambda c: cartao.gerar_link(_id(c), int(c.get("parcelas") or 0)),
     "cartao/simular": lambda c: cartao.valor_no_cartao(financeiro.cent(c.get("valor") or 0), int(c.get("parcelas") or 1)),
     "cartao/testar": lambda c: cartao.testar(),
+    "whatsapp/testar": lambda c: whatsapp.testar(),
+    "whatsapp/modelos": lambda c: {k: {"nome": n, "texto": t} for k, (n, t) in whatsapp.MODELOS.items()},
     "titulo/pago_cartao": lambda c: cartao.confirmar_pagamento(_id(c), c.get("valor"), str(c.get("data") or ""),
                                                                str(c.get("comprovante") or "")),
     "titulo/cobrar": lambda c: cobranca.cobrar_agora(_id(c)),

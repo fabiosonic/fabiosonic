@@ -32,6 +32,8 @@ PASSOS = [
      "descricao": "Emite uma DPS de teste na Produção Restrita e registra o evento de cancelamento."},
     {"id": "inter", "titulo": "Banco Inter",
      "descricao": "Autentica e consulta cobranças. No sandbox também registra e cancela um boleto de teste."},
+    {"id": "whatsapp", "titulo": "WhatsApp (API oficial)",
+     "descricao": "Confere o token e o número do WhatsApp do escritório na Meta (não envia mensagem)."},
     {"id": "cartao", "titulo": "Cartão de crédito (InfinitePay)",
      "descricao": "Confere a InfiniteTag criando um link de teste de R$ 1,00 (não é enviado) e mostra a taxa repassada."},
     {"id": "backup", "titulo": "Backup",
@@ -205,6 +207,14 @@ def _backup(c: dict) -> dict:
     return _resultado("ok", "Backup gerado e conferido.", det)
 
 
+def _whatsapp(c: dict) -> dict:
+    from . import whatsapp
+    if not whatsapp.configurado():
+        raise Pulado("WhatsApp pela API desligado: a régua deixa as mensagens na fila para envio manual.")
+    r = whatsapp.testar()
+    return _resultado("ok", r["mensagem"], ["Lembre de aprovar na Meta os 3 modelos (Configurações › WhatsApp)."])
+
+
 def _cartao(c: dict) -> dict:
     from . import cartao
     if not cartao.configurado():
@@ -216,7 +226,7 @@ def _cartao(c: dict) -> dict:
 
 
 FUNCOES = {"email": _email, "certificado": _certificado, "itaborai": _itaborai, "nacional": _nacional,
-           "inter": _inter, "cartao": _cartao, "backup": _backup}
+           "inter": _inter, "whatsapp": _whatsapp, "cartao": _cartao, "backup": _backup}
 
 
 # ---------------------------------------------------------------- execução e histórico

@@ -18,7 +18,7 @@ from datetime import date
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, inter, pix
+from . import clientes, config, db, emissor, financeiro, inter, pix, whatsapp
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -450,6 +450,14 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             elif not cli.get("telefone"):
                 status, det = "sem_contato", "cliente sem telefone"
                 res["sem_contato"] += 1
+            elif whatsapp.configurado(cfg):          # API oficial: envia sozinho
+                try:
+                    whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg, em)
+                    status, det = "enviado", whatsapp.numero(cli["telefone"])
+                    res["whatsapp"] += 1
+                except Exception as ex:  # noqa: BLE001 — registra a falha; o e-mail segue normalmente
+                    status, det = "erro", str(ex)[:300]
+                    res["erros"] += 1
             else:
                 status, det = "pendente", link_whatsapp(cli["telefone"], texto)
                 res["whatsapp"] += 1
@@ -488,7 +496,13 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     assunto, texto = mensagem(t, etapa, cfg)
     cli = clientes.obter(t["cpf_cnpj"]) or {}
     out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), texto), "email": "",
-           "texto": texto}
+           "texto": texto, "whatsapp_enviado": "", "whatsapp_erro": ""}
+    if cli.get("telefone") and whatsapp.configurado(cfg):
+        try:
+            whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg)
+            out["whatsapp_enviado"] = whatsapp.numero(cli["telefone"])
+        except Exception as ex:  # noqa: BLE001 — mostra o motivo na tela; o link manual continua disponível
+            out["whatsapp_erro"] = str(ex)
     if cli.get("email") and cfg["smtp"].get("host"):
         pdf_ = _pdf_boleto(t, cfg)
         enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [], html=mensagem_html(t, etapa, cfg))

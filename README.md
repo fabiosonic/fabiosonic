@@ -402,6 +402,19 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### WhatsApp automático (API oficial da Meta)
+
+Em **Configurações › WhatsApp do escritório**, ligue "Enviar automaticamente pela API oficial" e informe o
+**token permanente** e o **ID do número de telefone** (WhatsApp Manager). A partir daí a régua e o botão
+"Cobrar" enviam o WhatsApp sozinhos, junto com o e-mail, direto pela Meta (sem intermediário; a Meta cobra por
+mensagem entregue, categoria Utilidade). Desligado, continua a fila com o botão "Enviar" (1 clique).
+- Cobrança iniciada pela empresa exige **modelos aprovados** pela Meta. O sistema mostra os 3 textos prontos
+  (`cobranca_lembrete`, `cobranca_vence_hoje`, `cobranca_atraso`) com os campos {{1}} a {{8}}: nome, valor,
+  referência, vencimento, linha digitável, PIX, pagamento com cartão e assinatura.
+- Só celulares (DDD + 9 dígitos) recebem; número inválido, modelo não aprovado ou token vencido ficam no
+  histórico de cobrança com o motivo, e o e-mail segue normalmente.
+- O boleto em PDF vai no e-mail; no WhatsApp seguem a linha digitável e o PIX copia e cola.
+
 ### E-mails enviados pelo sistema
 
 | E-mail | Para | Quando |
@@ -595,7 +608,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 239 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 244 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
@@ -618,7 +631,7 @@ e textos que transbordam. Rodam com `NFSE_TESTE_TELA=1 python -m pytest tests/te
 
 **Teste funcional de ponta a ponta** (`tests/ui/funcional.js` + `tests/ui/servidor_completo.py`): sobe o sistema em
 modo de teste com a prefeitura, o Sefin/ADN, o Banco Inter (TLS mútuo) e o e-mail **simulados** e usa a tela como
-um usuário, conferindo o resultado de 62 funções: clientes (inclusive do exterior e importação de XML),
+um usuário, conferindo o resultado de 63 funções: clientes (inclusive do exterior e importação de XML),
 serviços, configurações e testes de conexão, emissão em homologação e em produção simulada (Itaboraí e
 Nacional), lote, cópia da última nota, cancelamento, substituição, exportação, emissão pelo tomador, contas a
 receber (boleto, baixa, estorno, cobrança, PDF, CSV, cancelamentos), recorrência, régua, contas a pagar,

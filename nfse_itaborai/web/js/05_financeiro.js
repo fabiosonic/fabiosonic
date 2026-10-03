@@ -114,7 +114,8 @@ async function gerarCobranca(id) {
 async function cobrar(id) {
   const r = await api("titulo/cobrar", { id });
   modal(`<h2>Cobrança</h2>${r.email ? `<div class="msg ok">E-mail enviado para ${esc(r.email)}</div>` : '<div class="msg">E-mail não enviado (cliente sem e-mail ou SMTP não configurado).</div>'}
-    ${r.whatsapp ? `<p><a class="btn" href="${esc(r.whatsapp)}" target="_blank">Abrir no WhatsApp</a></p>` : '<p class="sub">Cliente sem telefone para WhatsApp.</p>'}
+    ${r.whatsapp_enviado ? `<div class="msg ok">WhatsApp enviado automaticamente para ${esc(r.whatsapp_enviado)}</div>` : r.whatsapp_erro ? `<div class="msg erro">WhatsApp não enviado: ${esc(r.whatsapp_erro)}</div>` : ""}
+    ${r.whatsapp && !r.whatsapp_enviado ? `<p><a class="btn" href="${esc(r.whatsapp)}" target="_blank">Abrir no WhatsApp</a></p>` : !r.whatsapp ? '<p class="sub">Cliente sem telefone para WhatsApp.</p>' : ""}
     ${r.pdf ? `<p class="sub">PDF do boleto para anexar no WhatsApp: ${esc(r.pdf)} <button class="btn min sec" onclick="api('boletos/abrir_pasta')">Abrir pasta</button> <a class="btn min sec" href="/boleto/${id}.pdf" target="_blank">Ver PDF</a></p>` : ""}
     <label>Mensagem<textarea rows="12" id="txt">${esc(r.texto)}</textarea></label>
     <p><button class="btn sec" onclick="navigator.clipboard.writeText($('#txt').value);aviso('Copiado')">Copiar texto</button> <button class="btn sec" onclick="fechar()">Fechar</button></p>`);
@@ -217,7 +218,7 @@ PAGINAS.cobranca = async el => {
   const c = ST.config.cobranca;
   el.innerHTML = `<h1>Cobrança <span class="acoes"><button class="btn" id="rr">Rodar régua agora</button></span></h1>
   <div class="card"><h2>Régua automática</h2><p>Etapas (dias em relação ao vencimento): <b>${c.regua_dias.map(d => d < 0 ? d : d == 0 ? "0 (vencimento)" : "+" + d).join(" · ")}</b> —
-    e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? "<b>ligado</b>" : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
+    e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? (c.whatsapp_api ? "<b>automático (API oficial)</b>" : "<b>ligado</b> (fila abaixo, 1 clique)") : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
     <a href="#" onclick="ir('config');return false">Alterar</a></p></div>
   <div class="card"><h2>WhatsApp para enviar (${fila.length})</h2><p class="sub">Clique em “Enviar” para abrir a conversa com a mensagem pronta (linha digitável e PIX). O PDF do boleto está na pasta de boletos para anexar.</p>
     ${tabela([{ t: "Cliente", f: e => esc(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },

@@ -207,8 +207,19 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
   await passo('Contas a receber: cobrar (e-mail + WhatsApp)', async () => {
     const t = (await api('titulos', { filtro: 'a_receber' }))[0];
     await ir('receber'); await p.evaluate(id => cobrar(id), t.id); await espera(2500);
-    certo(/E-mail enviado|WhatsApp/.test(await p.textContent('#modal_corpo')), (await p.textContent('#modal_corpo')).slice(0, 200));
+    certo(/E-mail enviado/.test(await p.textContent('#modal_corpo')), (await p.textContent('#modal_corpo')).slice(0, 200));
     await p.evaluate(() => fechar());
+  });
+  await passo('WhatsApp (API oficial): "Cobrar" envia sozinho e régua usa os modelos', async () => {
+    const t = (await api('titulos', { filtro: 'a_receber' }))[0];
+    await ir('receber'); await p.evaluate(id => cobrar(id), t.id); await espera(2500);
+    certo(/WhatsApp enviado automaticamente/.test(await p.textContent('#modal_corpo')), (await p.textContent('#modal_corpo')).slice(0, 200));
+    await p.evaluate(() => fechar());
+    const env = (await api('teste/whatsapp_enviados')).enviados;
+    certo(env.length && /^cobranca_/.test(env.at(-1).template.name), 'nenhum modelo enviado');
+    await ir('config', 1500); await p.click('#teste_wa'); await espera(2000);
+    certo(/WhatsApp OK/.test(await aviso()), await aviso());
+    return `${env.length} mensagem(ns) pela API`;
   });
   await passo('Contas a receber: boleto em PDF', async () => {
     const t = (await api('titulos', { filtro: 'todos' })).find(x => x.banco_id && x.status === 'aberto');

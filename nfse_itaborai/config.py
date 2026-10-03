@@ -36,6 +36,14 @@ PADRAO = {
         "regua_whatsapp": True,
         "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado
         "bloquear_apos_dias": 60,   # alerta de cliente para suspensão/negociação
+        # WhatsApp pela API oficial da Meta (Cloud API): a régua envia sozinha, com modelos aprovados
+        "whatsapp_api": False,      # desligado = fila com o link "Enviar" (envio manual pelo WhatsApp do escritório)
+        "whatsapp_token": "",       # token permanente (usuário do sistema no Gerenciador de Negócios)
+        "whatsapp_phone_id": "",    # ID do número de telefone (WhatsApp Manager › API)
+        "whatsapp_idioma": "pt_BR",
+        "whatsapp_modelo_lembrete": "cobranca_lembrete",
+        "whatsapp_modelo_hoje": "cobranca_vence_hoje",
+        "whatsapp_modelo_atraso": "cobranca_atraso",
         # cartão de crédito (InfinitePay): link por título; as taxas do cartão ficam sempre por conta do cliente
         "cartao_provedor": "",      # "" desligado | infinitepay
         "cartao_infinitepay_tag": "",  # InfiniteTag da conta (no app, canto superior esquerdo, sem o $)
@@ -134,7 +142,7 @@ PADRAO = {
 
 
 SEGREDOS = (("smtp", "senha"), ("cobranca", "inter_client_secret"), ("emissao", "certificado_senha"),
-            ("seguranca", "backup_senha"))
+            ("seguranca", "backup_senha"), ("cobranca", "whatsapp_token"))
 
 
 def _arquivo():

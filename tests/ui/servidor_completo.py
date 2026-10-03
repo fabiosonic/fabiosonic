@@ -99,6 +99,11 @@ from test_cartao import FakeInfinitePay  # noqa: E402
 
 p_infinite = _servir(FakeInfinitePay)
 
+# ---- WhatsApp (API oficial da Meta)
+from test_whatsapp import FakeMeta  # noqa: E402
+
+p_meta = _servir(FakeMeta)
+
 # ---- e-mail (SMTP simulado: guarda as mensagens em dados/emails_enviados.json)
 caixa = pasta / "dados" / "emails_enviados.json"
 
@@ -136,6 +141,8 @@ config.salvar({
     "cobranca": {"provedor": "inter", "inter_client_id": "cli", "inter_client_secret": "segredo",
                  "inter_certificado": "dados/certificados/inter.crt", "inter_chave": "dados/certificados/inter.key",
                  "inter_url": f"https://127.0.0.1:{p_inter}", "inter_ca": str(cert / "inter_srv.pem"), "inter_sandbox": True,
+                 "whatsapp_api": True, "whatsapp_token": "EAAG-teste", "whatsapp_phone_id": "123456",
+                 "whatsapp_api_url": f"http://127.0.0.1:{p_meta}",
                  "cartao_provedor": "infinitepay", "cartao_infinitepay_tag": "moraes_contab",
                  "cartao_infinitepay_url": f"http://127.0.0.1:{p_infinite}"},
     "emissao": {"certificado_pfx": "dados/certificados/cert.pfx", "certificado_senha": "senha123"},
@@ -153,6 +160,7 @@ for c in [{"cpf_cnpj": "32396063000103", "razao_social": "RPS CONSULTORIA E SERV
 
 tela.ROTAS["teste/infinitepay_pagar"] = lambda c: (FakeInfinitePay.pagos.__setitem__(
     (c["order_nsu"], c["transaction_nsu"], c["slug"]), int(c["valor"])), {"ok": True})[1]
+tela.ROTAS["teste/whatsapp_enviados"] = lambda c: {"enviados": FakeMeta.enviados}
 srv = ThreadingHTTPServer(("127.0.0.1", porta), tela._Handler)
 print("pronto", flush=True)
 srv.serve_forever()
