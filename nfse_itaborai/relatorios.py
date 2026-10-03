@@ -80,10 +80,20 @@ def painel(em: date | None = None) -> dict:
     desp_abertas = [d for d in financeiro.listar_despesas("a_pagar", em)]
     r12 = rbt12(em, ts)
     serie = []
+    despesas = db.linhas("SELECT valor_cent, data_pagamento FROM despesas WHERE status='pago'")
+    cobrados = [t for t in ts if t["status"] == "pago" or financeiro.tem_cobranca(t)]
     for m in _meses(em, 12):
+        a, mm = int(m[:4]), int(m[5:])
+        fim = min(em, (date(a + mm // 12, mm % 12 + 1, 1) - timedelta(days=1))).isoformat()
+        # posição no fim do mês: o que estava emitido e ainda não tinha sido pago naquela data
+        em_aberto = [t for t in cobrados if t["competencia"] <= m and not (t["status"] == "pago" and t["data_pagamento"] <= fim)]
+        vencidos = [t for t in em_aberto if t["vencimento"] < fim]
         serie.append({"mes": m, "faturado": sum(t["valor_cent"] for t in ts if t["competencia"] == m),
                       "recebido": sum(t["valor_pago_cent"] for t in ts if t["status"] == "pago"
-                                      and t["data_pagamento"][:7] == m)})
+                                      and t["data_pagamento"][:7] == m),
+                      "despesas": sum(d["valor_cent"] for d in despesas if (d["data_pagamento"] or "")[:7] == m),
+                      "a_receber": sum(t["valor_cent"] for t in em_aberto),
+                      "atrasado": sum(t["valor_cent"] for t in vencidos)})
     proximos = sorted((t for t in abertos if em.isoformat() <= t["vencimento"] <= (em + timedelta(days=7)).isoformat()),
                       key=lambda t: t["vencimento"])
     cob = config.carregar()["cobranca"]
@@ -101,7 +111,7 @@ def painel(em: date | None = None) -> dict:
         "sem_nfse": sum(1 for t in ts if t["nfse_status"] in ("pendente", "erro")),
         "rbt12": r12, "aliquota_simples_estimada": aliquota_efetiva_anexo3(r12),
         "sublimite_pct": round(r12 / 3_600_000_00 * 100, 1),
-        "serie": serie, "proximos_7_dias": proximos[:10], "criticos": criticos,
+        "serie": serie, "proximos_7_dias": proximos[:10], "criticos": criticos, "aging": aging(em)["faixas"],
         "ultima_execucao_robo": (db.linhas("SELECT quando FROM log WHERE tipo='robo' ORDER BY id DESC LIMIT 1")
                                  or [{"quando": ""}])[0]["quando"],
         "maiores_devedores": sorted(

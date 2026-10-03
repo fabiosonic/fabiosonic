@@ -18,31 +18,36 @@ PAGINAS.relatorios = async el => {
   $$(".abas button", el).forEach(b => b.onclick = () => { ABA_REL = b.dataset.a; ir("relatorios"); });
   const r = $("#rel");
   if (ABA_REL == "indicadores") {
-    const i = await api("rel/indicadores"), pc = v => String(v).replace(".", ",") + "%";
-    const card = (icone, rot, val, sub, cls = "") => `<div class="kpi ${cls}"><div class="r">${ic(icone)}${rot}</div><div class="v">${val}</div><div class="s">${sub}</div></div>`;
-    const cresc = i.crescimento_pct == null ? "sem base anterior" : `${i.crescimento_pct >= 0 ? "▲" : "▼"} ${pc(Math.abs(i.crescimento_pct))} sobre os 12 meses anteriores`;
-    r.innerHTML = cabImpressao("Indicadores de desempenho", `Posição em ${dt(hojeISO())}`) + `<div class="kpis">
-      ${card("nota", "Faturamento 12 meses", brl(i.faturamento_12m), cresc, "destaque")}
-      ${card("contratos", "Receita recorrente (MRR)", brl(i.mrr), `média faturada ${brl(i.receita_media_mensal)}/mês`, "destaque")}
-      ${card("pagar", "Ponto de equilíbrio mensal", brl(i.ponto_equilibrio), `despesas ${brl(i.despesa_media_mensal)}/mês · folga ${pc(i.folga_equilibrio_pct)}`, i.folga_equilibrio_pct < 10 ? "critico" : "destaque")}
-      ${card("alerta", "Inadimplência (90 dias)", pc(i.inadimplencia_90d), `${i.dias_a_receber} dias de faturamento a receber`, i.inadimplencia_90d > 5 ? "critico" : "destaque")}</div>
-      <div class="kpis secundarios">
-      ${card("relogio", "Atraso médio ponderado", `${String(i.atraso_medio_ponderado).replace(".", ",")} dias`, `${pc(i.recebido_em_dia_pct)} do valor recebido em dia`)}
-      ${card("clientes", "Clientes ativos", i.clientes_ativos, i.clientes_perdidos.length ? `${i.clientes_perdidos.length} sem faturamento nos últimos 2 meses` : "nenhum cliente perdido")}
-      ${card("relatorios", "Concentração (top 5)", pc(i.concentracao_top5), `${i.clientes_classe_a} cliente(s) fazem 80% da receita`)}
-      ${card("receber", "Ticket médio por nota", brl(i.ticket_medio), "últimos 12 meses")}</div>
-      <div class="grid2"><div class="card"><h2>${ic("clientes")}Maiores clientes — participação na receita de 12 meses</h2>${barrasH(i.top_clientes.map(c => ({ rot: c.cliente, v: c.valor, extra: pc(c.pct) })))}</div>
-      <div class="card"><h2>${ic("alerta")}Clientes sem faturamento recente</h2>${i.clientes_perdidos.length ? `<p class="sub">Faturavam entre 3 e 6 meses atrás e não têm nota nos últimos 2 meses. Confirme se houve rescisão ou falta de emissão.</p><ul class="lista">${i.clientes_perdidos.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : `<div class="tudo-ok">${ic("ok")}Nenhum cliente parou de faturar</div>`}</div></div>`;
+    const [i, pn] = await Promise.all([api("rel/indicadores"), api("painel")]), fat = pn.serie.map(x => x.faturado);
+    const folgaCls = i.folga_equilibrio_pct < 0 ? "critico" : i.folga_equilibrio_pct < 10 ? "atencao" : "bom";
+    const inadCls = i.inadimplencia_90d > 5 ? "critico" : i.inadimplencia_90d > 2 ? "atencao" : "bom";
+    const cresc = i.crescimento_pct == null ? "" : variacao(100 + i.crescimento_pct, 100, true, "12 meses anteriores", "ano anterior");
+    r.innerHTML = cabImpressao("Indicadores de desempenho", `Posição em ${dt(hojeISO())}`) + `<section class="stats">
+      ${statTile({ rot: "Faturamento 12 meses", icone: "nota", valor: brl(i.faturamento_12m), delta: cresc, tendencia: fat, rotTend: "Faturamento mensal, 12 meses", sub: i.crescimento_pct == null ? "sem base anterior para comparar" : "" })}
+      ${statTile({ rot: "Recorrência (MRR)", icone: "contratos", valor: brl(i.mrr), sub: `média faturada ${brl(i.receita_media_mensal)}/mês` })}
+      ${statTile({ rot: "Ponto de equilíbrio", icone: "pagar", valor: brl(i.ponto_equilibrio), estado: estadoSelo(folgaCls, `folga ${pct(i.folga_equilibrio_pct)}`), sub: `despesas ${brl(i.despesa_media_mensal)}/mês` })}
+      ${statTile({ rot: "Inadimplência (90 dias)", icone: "alerta", valor: pct(i.inadimplencia_90d), estado: estadoSelo(inadCls, inadCls == "bom" ? "saudável" : inadCls == "atencao" ? "atenção" : "alta"), sub: `${i.dias_a_receber} dias de faturamento a receber` })}
+      </section><section class="stats">
+      ${statTile({ rot: "Atraso médio ponderado", icone: "relogio", valor: `${String(i.atraso_medio_ponderado).replace(".", ",")} dias`, sub: `${pct(i.recebido_em_dia_pct)} do valor recebido em dia` })}
+      ${statTile({ rot: "Clientes ativos", icone: "clientes", valor: i.clientes_ativos, sub: i.clientes_perdidos.length ? `${i.clientes_perdidos.length} sem faturamento nos últimos 2 meses` : "nenhum cliente perdido" })}
+      ${statTile({ rot: "Concentração (top 5)", icone: "relatorios", valor: pct(i.concentracao_top5), sub: `${i.clientes_classe_a} cliente(s) fazem 80% da receita` })}
+      ${statTile({ rot: "Ticket médio por nota", icone: "receber", valor: brl(i.ticket_medio), sub: "últimos 12 meses" })}</section>
+      <div class="grid-ind"><div class="card"><div class="card-cab"><h2>${ic("clientes")}Maiores clientes</h2><span class="sub">participação na receita de 12 meses</span></div>
+        <div class="conc"><span>Os 5 maiores somam <b>${pct(i.concentracao_top5)}</b> da receita</span>${medidor(i.concentracao_top5, i.concentracao_top5 > 60 ? "atencao" : "", "Concentração da receita nos 5 maiores clientes")}</div>
+        ${ranking(i.top_clientes.map(c => ({ rot: c.cliente, v: c.valor, extra: pct(c.pct) })))}</div>
+      <div class="card"><div class="card-cab"><h2>${ic("alerta")}Clientes sem faturamento recente</h2></div>${i.clientes_perdidos.length ? `<p class="sub">Faturavam entre 3 e 6 meses atrás e não têm nota nos últimos 2 meses. Confirme se houve rescisão ou falta de emissão.</p><ul class="lista">${i.clientes_perdidos.map(n => `<li>${esc(nomeCli(n))}</li>`).join("")}</ul>` : `<div class="tudo-ok">${ic("ok")}Nenhum cliente parou de faturar</div>`}</div></div>`;
   } else if (ABA_REL == "dre") {
     const ano = el._ano || new Date().getFullYear(), d = await api("rel/dre", { ano }), R = d.resumo, pc = v => String(v).replace(".", ",") + "%";
     r.innerHTML = cabImpressao("Demonstração do Resultado do Exercício (DRE)", `Exercício de ${ano} · regime de competência · valores em R$`) +
       `<div class="card"><div class="barra"><label>Exercício<select id="ano">${[0, 1, 2].map(k => new Date().getFullYear() - k).map(a => `<option ${a == ano ? "selected" : ""}>${a}</option>`).join("")}</select></label></div>
-      <div class="kpis">${[["Receita bruta", brl(R.receita_bruta), "nota"], ["Resultado líquido", brl(R.resultado_liquido), "relatorios"], ["Margem líquida", pc(R.margem_liquida), "receber"], ["Carga tributária", pc(R.carga_tributaria), "banco"]]
-        .map(([t, v, i]) => `<div class="kpi"><div class="r">${ic(i)}${t}</div><div class="v">${v}</div></div>`).join("")}</div>
+      <section class="stats">${statTile({ rot: "Receita bruta", icone: "nota", valor: brl(R.receita_bruta), tendencia: d.serie.map(x => x.receita_liquida), rotTend: "Receita líquida por mês" })}
+        ${statTile({ rot: "Resultado líquido", icone: "relatorios", valor: `<span class="${R.resultado_liquido < 0 ? "neg" : ""}">${brl(R.resultado_liquido)}</span>`, tendencia: d.serie.map(x => x.resultado), rotTend: "Resultado por mês" })}
+        ${statTile({ rot: "Margem líquida", icone: "receber", valor: pc(R.margem_liquida), estado: estadoSelo(R.margem_liquida < 0 ? "critico" : R.margem_liquida < 10 ? "atencao" : "bom", R.margem_liquida < 0 ? "prejuízo" : R.margem_liquida < 10 ? "margem baixa" : "saudável") })}
+        ${statTile({ rot: "Carga tributária", icone: "banco", valor: pc(R.carga_tributaria), sub: "sobre a receita bruta" })}</section>
       <div class="tabela dre"><table><thead><tr><th>Conta</th>${d.meses.map(m => `<th class="n">${mes(m).slice(0, 2)}/${m.slice(2, 4)}</th>`).join("")}<th class="n">Total</th><th class="n">AV %</th></tr></thead>
       <tbody>${d.linhas.map(l => `<tr class="${l.tipo}"><td style="padding-left:${12 + l.nivel * 0 + (l.tipo == "item" ? 18 : 0)}px">${esc(l.conta)}</td>${l.valores.map(v => `<td class="n">${contab(v)}</td>`).join("")}<td class="n">${contab(l.total)}</td><td class="n">${l.total ? pc(l.av) : ""}</td></tr>`).join("")}</tbody></table></div>
       <p class="sub nota-rodape">${esc(d.nota)} AV % = análise vertical sobre a receita bruta. Valores entre parênteses são reduções.</p></div>
-      <div class="card"><h2>${ic("relatorios")}Evolução mensal</h2><div id="g_dre"></div></div>`;
+      <div class="card"><div class="card-cab"><h2>${ic("relatorios")}Evolução mensal</h2><span class="sub">regime de competência</span></div><div id="g_dre"></div></div>`;
     const ateMes = ano < new Date().getFullYear() ? 12 : ano > new Date().getFullYear() ? 0 : new Date().getMonth() + 1;
     montarGrafico($("#g_dre"), d.serie.slice(0, ateMes), [{ k: "receita_liquida", rot: "Receita líquida", cor: "--serie-1" }, { k: "despesas", rot: "Despesas", cor: "--serie-2" }, { k: "resultado", rot: "Resultado", cor: "--serie-3", linha: true }], { aria: "Receita líquida, despesas e resultado por mês" });
     $("#ano").onchange = e => { el._ano = e.target.value; ir("relatorios"); };
@@ -50,13 +55,15 @@ PAGINAS.relatorios = async el => {
     const [m, sem] = await Promise.all([api("rel/fluxo_mensal"), api("rel/fluxo", { dias: 90 })]);
     const proj = m.filter(x => x.tipo != "realizado");
     r.innerHTML = cabImpressao("Fluxo de caixa", "Realizado (6 meses) e projetado (3 meses)") +
-      `<div class="kpis">${proj.map(x => `<div class="kpi ${x.saldo < 0 ? "critico" : "destaque"}"><div class="r">${ic(x.tipo == "atual" ? "relogio" : "relatorios")}${mes(x.mes)} · ${x.tipo == "atual" ? "mês atual" : "projetado"}</div><div class="v">${brl(x.saldo)}</div><div class="s">entradas ${brl(x.entradas)} · saídas ${brl(x.saidas)}${x.saidas_estimadas ? " (média)" : ""}</div></div>`).join("")}</div>
-      <div class="card"><h2>${ic("relatorios")}Entradas x saídas por mês</h2><div id="g_fluxo"></div>
+      `<section class="stats">${proj.map(x => statTile({ rot: `Saldo de ${mesCurto(x.mes)} · ${x.tipo == "atual" ? "mês atual" : "projetado"}`, icone: x.tipo == "atual" ? "relogio" : "relatorios",
+        valor: `<span class="${x.saldo < 0 ? "neg" : ""}">${brl(x.saldo)}</span>`, estado: x.saldo < 0 ? estadoSelo("critico", "saldo negativo") : "",
+        sub: `entradas ${compacto(x.entradas)} · saídas ${compacto(x.saidas)}${x.saidas_estimadas ? " (média)" : ""}` })).join("")}</section>
+      <div class="card"><div class="card-cab"><h2>${ic("relatorios")}Entradas x saídas por mês</h2><span class="sub">6 meses realizados · 3 projetados</span></div><div id="g_fluxo"></div>
       <p class="sub">Realizado pelo caixa (pagamentos efetivos). Projeção: títulos em aberto (atrasos acima de 60 dias ficam de fora), contratos ainda não faturados e contas a pagar; sem despesas lançadas para o mês, usa a média dos últimos 3 meses.</p></div>
       <div class="card"><h2>${ic("relogio")}Próximas semanas</h2>${tabela([{ t: "Semana de", f: s => dt(s.semana) }, { t: "Entradas", n: 1, f: s => num(s.entradas) },
         { t: "Saídas", n: 1, f: s => num(s.saidas) }, { t: "Saldo acumulado", n: 1, f: s => `<b class="${s.saldo_acumulado < 0 ? "neg" : ""}">${contab(s.saldo_acumulado)}</b>` }], sem, "Nada previsto.")}</div>`;
     montarGrafico($("#g_fluxo"), m, [{ k: "entradas", rot: "Entradas", cor: "--serie-1" }, { k: "saidas", rot: "Saídas", cor: "--serie-2" }, { k: "saldo", rot: "Saldo do mês", cor: "--serie-3", linha: true }],
-      { projetado: p => p.tipo == "projetado", aria: "Entradas, saídas e saldo por mês", legendaExtra: `<span><i class="proj-leg"></i>Projetado</span>` });
+      { projetado: p => p.tipo == "projetado", aria: "Entradas, saídas e saldo por mês", legendaExtra: `<span><i class="proj-leg"></i>Projetado (cor esmaecida)</span>` });
   } else if (ABA_REL == "livro") {
     const ini = el._ini || hojeISO().slice(0, 8) + "01", fim = el._fim || hojeISO();
     const lc = await api("rel/livro_caixa", { inicio: ini, fim });
@@ -70,13 +77,16 @@ PAGINAS.relatorios = async el => {
   } else if (ABA_REL == "aging") {
     const a = await api("rel/aging"), f = a.faixas, nomes = [["a_vencer", "A vencer"], ["1_30", "1–30 dias"], ["31_60", "31–60 dias"], ["61_90", "61–90 dias"], ["90_mais", "Mais de 90 dias"]];
     r.innerHTML = cabImpressao("Inadimplência por faixa de atraso (aging)", `Posição em ${dt(hojeISO())}`) +
-      `<div class="kpis">${nomes.map(([k, t], j) => `<div class="kpi ${j >= 3 && f[k] ? "critico" : ""}"><div class="r">${t}</div><div class="v">${brl(f[k])}</div></div>`).join("")}</div>
-      <div class="card">${tabela([{ t: "Cliente", f: c => esc(c.cliente) }, ...nomes.map(([k, t]) => ({ t, n: 1, f: c => c[k] ? num(c[k]) : "" }))], a.clientes)}</div>`;
+      `<div class="card"><div class="card-cab"><h2>${ic("relogio")}Contas a receber por idade</h2><span class="sub">${brl(Object.values(f).reduce((x, y) => x + y, 0))} em aberto</span></div>
+        ${empilhada(nomes.map(([k, t], j) => ({ rot: t, v: f[k], cor: `--idade-${j}` })))}</div>
+      <div class="card"><div class="card-cab"><h2>${ic("clientes")}Por cliente</h2><span class="sub">${a.clientes.length} cliente(s) com títulos em aberto</span></div>${tabela([{ t: "Cliente", f: c => `<span title="${esc(c.cliente)}">${esc(nomeCli(c.cliente))}</span>` }, ...nomes.map(([k, t]) => ({ t, n: 1, f: c => c[k] ? num(c[k]) : "" })),
+        { t: "Total", n: 1, f: c => `<b>${num(nomes.reduce((s, [k]) => s + (c[k] || 0), 0))}</b>` }], a.clientes)}</div>`;
   } else if (ABA_REL == "clientes") {
     const l = await api("rel/clientes");
+    l.forEach(c => c.cliente = nomeCli(c.cliente));
     r.innerHTML = cabImpressao("Análise por cliente", "Últimos 12 meses") + `<div class="card"><p class="sub">Score de pagamento: 100 = paga sempre em dia; cai com a média de dias de atraso e com títulos vencidos em aberto.</p>` + tabela([{ t: "Cliente", f: c => esc(c.cliente) }, { t: "Faturado 12m", n: 1, f: c => num(c.faturado_12m) },
       { t: "Recebido", n: 1, f: c => num(c.recebido_total) }, { t: "Em aberto", n: 1, f: c => num(c.em_aberto) }, { t: "Atrasado (atualizado)", n: 1, f: c => c.atrasado ? num(c.atrasado) : "" },
-      { t: "Atraso médio", n: 1, f: c => c.media_atraso + " d" }, { t: "Score", n: 1, f: c => `${c.score} ${selo(c.faixa)}` }], l) + `</div>`;
+      { t: "Atraso médio", n: 1, f: c => String(c.media_atraso).replace(".", ",") + " d" }, { t: "Score", f: c => `<span class="score">${medidor(c.score, c.faixa == "risco" ? "critico" : c.faixa == "atenção" ? "atencao" : "", "Score de pagamento")}<b>${c.score}</b>${selo(c.faixa)}</span>` }], l) + `</div>`;
   } else if (ABA_REL == "fechamento") {
     const meses = []; const h = new Date(hojeISO() + "T12:00"); for (let k = 1; k <= 12; k++) { const d = new Date(h.getFullYear(), h.getMonth() - k, 1); meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
     const c = ST.config;
