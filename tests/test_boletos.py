@@ -26,6 +26,9 @@ class FakeInter(BaseHTTPRequestHandler):
     cobrancas: dict = {}
     pedidos: list = []
     tokens = 0
+    transacoes: list = []          # extrato (API Banking v2)
+    extrato_liberado = True        # integração com o escopo extrato.read
+    consultas_extrato: list = []
 
     def log_message(self, *a):
         pass
@@ -43,7 +46,8 @@ class FakeInter(BaseHTTPRequestHandler):
         return self.rfile.read(n) if n else b""
 
     def _autorizado(self):
-        if self.headers.get("Authorization") != "Bearer tok-123":
+        esperado = "Bearer tok-ext" if self.path.startswith("/banking/") else "Bearer tok-123"
+        if self.headers.get("Authorization") != esperado:
             self._json({"title": "Não autorizado"}, 401)
             return False
         return True
@@ -53,6 +57,10 @@ class FakeInter(BaseHTTPRequestHandler):
         if self.path == "/oauth/v2/token":
             f = urllib.parse.parse_qs(corpo.decode())
             assert f["grant_type"] == ["client_credentials"] and f["client_secret"] == ["segredo"]
+            if f["scope"] == ["extrato.read"]:
+                if not FakeInter.extrato_liberado:
+                    return self._json({"title": "Forbidden", "detail": "invalid scope"}, 403)
+                return self._json({"access_token": "tok-ext", "expires_in": 3600})
             assert set(f["scope"][0].split()) == {"boleto-cobranca.read", "boleto-cobranca.write"}
             FakeInter.tokens += 1
             return self._json({"access_token": "tok-123", "expires_in": 3600})
@@ -75,6 +83,13 @@ class FakeInter(BaseHTTPRequestHandler):
         if not self._autorizado():
             return
         caminho = self.path.split("?")[0]
+        if caminho == "/banking/v2/extrato/completo":
+            q = urllib.parse.parse_qs(self.path.split("?", 1)[1])
+            FakeInter.consultas_extrato.append(q)
+            ini, fim, pag = q["dataInicio"][0], q["dataFim"][0], int(q["pagina"][0])
+            dentro = [t for t in FakeInter.transacoes if ini <= t["dataTransacao"] <= fim]
+            tam = int(q["tamanhoPagina"][0])
+            return self._json({"totalPaginas": max(1, -(-len(dentro) // tam)), "transacoes": dentro[pag * tam:(pag + 1) * tam]})
         if caminho == "/cobranca/v3/cobrancas":
             return self._json({"totalElementos": 0, "cobrancas": []})
         partes = caminho.split("/")
@@ -107,6 +122,7 @@ def banco(base, monkeypatch):  # noqa: F811
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     FakeInter.cobrancas, FakeInter.pedidos, FakeInter.tokens = {}, [], 0
+    FakeInter.transacoes, FakeInter.extrato_liberado, FakeInter.consultas_extrato = [], True, []
     inter._TOKEN.clear()
     config.salvar({"cobranca": {"provedor": "inter", "inter_client_id": "cli", "inter_client_secret": "segredo",
                                 "inter_certificado": str(pasta / "inter.crt"), "inter_chave": str(pasta / "inter.key"),

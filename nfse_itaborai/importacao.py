@@ -225,6 +225,35 @@ def importar_extratos() -> dict:
     return total
 
 
+def importar_extrato_inter(dias: int | None = None, em: date | None = None) -> dict:
+    """Baixa o extrato da conta do Inter pela API e concilia (sem arquivo OFX).
+    Sem `dias`, continua de onde parou (com 3 dias de folga para lançamentos que entram atrasados)."""
+    from datetime import timedelta
+    from . import inter
+    cfg = config.carregar()
+    if not inter.configurado(cfg):
+        return {"inter": "não configurado"}
+    hoje = em or inter._hoje()
+    ultimo = cfg["financeiro"].get("extrato_inter_ate") or ""
+    if dias:
+        inicio = hoje - timedelta(days=int(dias) - 1)
+    elif ultimo:
+        inicio = date.fromisoformat(ultimo) - timedelta(days=3)
+    else:
+        inicio = hoje - timedelta(days=29)
+    if not dias and cfg["financeiro"].get("extrato_inter_sem_permissao") == hoje.isoformat():
+        return {"inter": "sem permissão de extrato (aviso já registrado hoje)"}
+    try:
+        movs = inter.extrato(inicio, hoje, cfg)
+    except inter.ErroInter as ex:
+        if "extrato e saldo" in str(ex):        # o robô avisa uma vez por dia, não a cada hora
+            config.salvar({"financeiro": {"extrato_inter_sem_permissao": hoje.isoformat()}})
+        raise
+    r = conciliacao.importar("", movs, origem="Extrato Inter (API)")
+    config.salvar({"financeiro": {"extrato_inter_ate": hoje.isoformat()}})
+    return r | {"periodo": f"{inicio.isoformat()} a {hoje.isoformat()}"}
+
+
 # ---------------------------------------------------------------- resumo diário
 
 def resumo_diario(resultado_robo: dict, em: date | None = None, forcar: bool = False) -> str:

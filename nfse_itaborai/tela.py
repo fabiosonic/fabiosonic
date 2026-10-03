@@ -240,6 +240,7 @@ ROTAS = {
     "despesa/excluir": lambda c: (financeiro.excluir_despesa(_id(c)), {"ok": True})[1],
     # conciliação
     "conciliacao/importar": lambda c: importacao.importar_manual(str(c.get("ofx", ""))),
+    "conciliacao/inter": lambda c: importacao.importar_extrato_inter(int(c.get("dias") or 0) or None),
     "conciliacao/pendentes": lambda c: conciliacao.nao_conciliados(),
     "conciliacao/vincular": lambda c: (conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo")), {"ok": True})[1],
     # assistente de validação com credenciais reais

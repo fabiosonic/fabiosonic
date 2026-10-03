@@ -42,16 +42,41 @@ def conta_ofx(conteudo: str) -> str:
     return "-".join(x for x in (tag("BANKID"), tag("BRANCHID"), tag("ACCTID")) if x)
 
 
-def importar(conteudo: str) -> dict:
-    movs = ler_ofx(conteudo)
+def _fonte(fitid: str) -> str:
+    return "inter" if str(fitid).startswith("inter:") else "ofx"
+
+
+def gravar_movimentos(movs: list[dict]) -> int:
+    """Grava lançamentos sem duplicar. Na mesma fonte, o identificador (FITID / idTransacao) decide. Entre fontes
+    diferentes (OFX e API do Inter) o identificador muda: para cada dia e valor, lançamentos já vindos da outra
+    fonte contam como os mesmos — só entra o que o extrato novo tiver a mais."""
     novos = 0
+    por_chave: dict = {}
+    for m in movs:
+        por_chave.setdefault((m["data"], m["valor_cent"], _fonte(m["fitid"])), []).append(m)
     with db.conexao() as con:
-        for m in movs:
-            cur = con.execute("INSERT OR IGNORE INTO movimentos (data, valor_cent, descricao, fitid, importado_em)"
-                              " VALUES (?,?,?,?,?)", (m["data"], m["valor_cent"], m["descricao"], m["fitid"], db.agora()))
-            novos += cur.rowcount
+        for (data, valor, fonte), lote in por_chave.items():
+            presentes = [m for m in lote if con.execute("SELECT 1 FROM movimentos WHERE fitid=?", (m["fitid"],)).fetchone()]
+            outra = sum(1 for r in con.execute("SELECT fitid FROM movimentos WHERE data=? AND valor_cent=?", (data, valor))
+                        if _fonte(r[0]) != fonte)
+            vagas = len(lote) - len(presentes) - outra
+            for m in lote:
+                if vagas <= 0:
+                    break
+                if m in presentes:
+                    continue
+                con.execute("INSERT INTO movimentos (data, valor_cent, descricao, fitid, importado_em) VALUES (?,?,?,?,?)",
+                            (data, valor, m["descricao"], m["fitid"], db.agora()))
+                novos += 1
+                vagas -= 1
+    return novos
+
+
+def importar(conteudo: str, movs: list[dict] | None = None, origem: str = "OFX") -> dict:
+    movs = ler_ofx(conteudo) if movs is None else movs
+    novos = gravar_movimentos(movs)
     r = conciliar()
-    db.registrar("conciliacao", f"OFX: {len(movs)} lançamentos, {novos} novos, {r['titulos']} título(s) baixado(s), "
+    db.registrar("conciliacao", f"{origem}: {len(movs)} lançamentos, {novos} novos, {r['titulos']} título(s) baixado(s), "
                                 f"{r['despesas']} despesa(s) paga(s)")
     return {"lancamentos": len(movs), "novos": novos} | r
 

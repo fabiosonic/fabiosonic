@@ -10,6 +10,11 @@ Fluxo (https://developers.inter.co/references/cobranca-bolepix):
 - consultar: GET /cobranca/v3/cobrancas/{codigoSolicitacao} → cobranca.situacao, boleto.linhaDigitavel, pix.pixCopiaECola;
 - PDF: GET /cobranca/v3/cobrancas/{codigoSolicitacao}/pdf → {"pdf": base64};
 - cancelar: POST /cobranca/v3/cobrancas/{codigoSolicitacao}/cancelar {"motivoCancelamento"}.
+
+Extrato (API Banking v2, escopo "extrato.read" — marcar "Consultar extrato e saldo" na integração):
+- GET /banking/v2/extrato/completo?dataInicio&dataFim&pagina&tamanhoPagina → transacoes[] com idTransacao,
+  dataTransacao, tipoOperacao (C crédito / D débito), valor, titulo e descricao. O token do extrato é pedido
+  separado, para que uma integração só de boletos continue funcionando.
 """
 
 from __future__ import annotations
@@ -28,6 +33,8 @@ from . import clientes, config, emissor
 URL_PRODUCAO = "https://cdpj.partners.bancointer.com.br"
 URL_SANDBOX = "https://cdpj-sandbox.partners.uatinter.co"
 ESCOPO = "boleto-cobranca.read boleto-cobranca.write"
+ESCOPO_EXTRATO = "extrato.read"
+DIAS_POR_CONSULTA = 30
 PAGOS = {"RECEBIDO", "MARCADO_RECEBIDO"}
 BAIXADOS = {"CANCELADO", "EXPIRADO"}
 
@@ -107,17 +114,17 @@ def _http(metodo: str, url: str, c: dict, dados: bytes | None, cab: dict) -> dic
         return {}
 
 
-def token(cfg: dict | None = None) -> str:
+def token(cfg: dict | None = None, escopo: str = ESCOPO) -> str:
     c = _cfg(cfg)
     if not configurado(cfg):
         raise ErroInter("Banco Inter não configurado: informe client_id, client_secret, certificado (.crt) e "
                         "chave (.key) em Configurações › Cobrança.")
-    chave = (str(emissor.raiz()), _base(c), c["inter_client_id"])  # token nunca é reaproveitado entre empresas
+    chave = (str(emissor.raiz()), _base(c), c["inter_client_id"], escopo)  # nunca reaproveitado entre empresas
     t = _TOKEN.get(chave)
     if t and t[1] > time.time() + 60:
         return t[0]
     corpo = urllib.parse.urlencode({"client_id": c["inter_client_id"], "client_secret": c["inter_client_secret"],
-                                    "scope": ESCOPO, "grant_type": "client_credentials"}).encode()
+                                    "scope": escopo, "grant_type": "client_credentials"}).encode()
     js = _http("POST", _base(c) + "/oauth/v2/token", c, corpo, {"Content-Type": "application/x-www-form-urlencoded"})
     if not js.get("access_token"):
         raise ErroInter("Inter não devolveu o token de acesso.")
@@ -238,3 +245,49 @@ def testar(cfg: dict | None = None) -> dict:
     _api("GET", f"/cobrancas?dataInicial={hoje}&dataFinal={hoje}&itensPorPagina=1", cfg=cfg)
     c = _cfg(cfg)
     return {"ok": True, "mensagem": f"Conexão com o Banco Inter OK ({'sandbox' if c.get('inter_sandbox') else 'produção'})."}
+
+
+# ---------------------------------------------------------------- extrato (conciliação automática)
+
+def _sem_escopo(ex: Exception) -> bool:
+    t = str(ex).lower()
+    return any(x in t for x in ("scope", "escopo", "forbidden", "403", "unauthorized", "401"))
+
+
+def extrato(inicio: date, fim: date, cfg: dict | None = None) -> list[dict]:
+    """Lançamentos da conta no período, no mesmo formato do OFX (data, valor_cent, descricao, fitid)."""
+    from datetime import timedelta
+    c = _cfg(cfg)
+    try:
+        tk = token(cfg, ESCOPO_EXTRATO)
+    except ErroInter as ex:
+        if _sem_escopo(ex):
+            raise ErroInter("A integração do Inter não tem permissão de extrato: no Internet Banking PJ, edite a "
+                            "integração e marque \"Consultar extrato e saldo\" (escopo extrato.read).") from ex
+        raise
+    cab = {"Authorization": f"Bearer {tk}"}
+    if c.get("inter_conta"):
+        cab["x-conta-corrente"] = clientes._digitos(c["inter_conta"])
+    movs, ini = [], inicio
+    while ini <= fim:
+        ate = min(fim, ini + timedelta(days=DIAS_POR_CONSULTA - 1))
+        pagina, total = 0, 1
+        while pagina < total:
+            q = urllib.parse.urlencode({"dataInicio": ini.isoformat(), "dataFim": ate.isoformat(),
+                                        "pagina": pagina, "tamanhoPagina": 50})
+            js = _http("GET", f"{_base(c)}/banking/v2/extrato/completo?{q}", c, None, cab)
+            for t in js.get("transacoes") or []:
+                valor = round(float(str(t.get("valor") or 0).replace(",", ".")) * 100)
+                if not valor:
+                    continue
+                sinal = -1 if str(t.get("tipoOperacao", "")).upper().startswith("D") else 1
+                data = str(t.get("dataTransacao") or t.get("dataEntrada") or t.get("dataInclusao") or "")[:10]
+                desc = " ".join(x for x in (str(t.get("titulo") or "").strip(), str(t.get("descricao") or "").strip()) if x)
+                ident = t.get("idTransacao") or f"{data}-{sinal * valor}-{desc}"[:100]
+                movs.append({"data": data, "valor_cent": sinal * abs(valor), "descricao": desc[:250],
+                             "fitid": f"inter:{ident}"})
+            total = int(js.get("totalPaginas") or 1)
+            pagina += 1
+        ini = ate + timedelta(days=1)
+    return movs
+

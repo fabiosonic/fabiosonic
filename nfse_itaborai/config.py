@@ -47,6 +47,7 @@ PADRAO = {
         "presuncao_pct": "32",      # Lucro Presumido: presunção do IRPJ/CSLL para serviços (32%)
         "iss_fixo_mensal": 0,       # ISS fixo pago à prefeitura por mês (R$), dedução na DRE quando não houver lançamento
         "iss_fixo": True,           # escritório contábil: ISS fixo fora do DAS (LC 123, art. 18, § 22-A)
+        "extrato_inter_ate": "",    # último dia já baixado pela API de extrato do Inter
         "contas_bancarias": [],     # contas (banco-agência-conta) dos extratos desta empresa; preenchida no 1º OFX
         "categorias_despesa": ["Aluguel", "Folha", "Pró-labore", "Impostos", "Sistemas", "Energia/Internet",
                                "Contador/Assessoria", "Marketing", "Bancárias", "Outras"],
@@ -110,6 +111,7 @@ PADRAO = {
         "ativa": True,              # liga o robô (só emite NFS-e em produção)
         "importar_xml": True,       # clientes, contratos detectados e notas emitidas fora do sistema
         "importar_extratos": True,  # importa .ofx novos da pasta de extratos
+        "extrato_inter": True,      # baixa o extrato do Inter pela API (escopo extrato.read) e concilia
         "despesas_do_extrato": True,  # débitos sem conta a pagar viram despesa paga, classificada por regra
         "resumo_diario": True,      # e-mail diário com o resumo para o dono
         "fechamento_mensal": True,  # relatório gerencial do mês anterior (DRE, indicadores, aging), salvo e enviado

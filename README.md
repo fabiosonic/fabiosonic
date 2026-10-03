@@ -388,6 +388,16 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### Extrato do Banco Inter pela API (conciliação sem arquivo)
+
+Com o Inter configurado, o robô baixa o extrato da conta direto do banco (API Banking v2,
+`/banking/v2/extrato/completo`) de hora em hora, continua de onde parou e concilia sozinho, como no OFX.
+Na tela **Conciliação** há o botão **Baixar extrato agora** (últimos 7, 30, 60 ou 90 dias).
+- A integração do Inter precisa da permissão **"Consultar extrato e saldo"** (escopo `extrato.read`). O token do
+  extrato é separado: sem essa permissão, os boletos continuam funcionando e o robô avisa uma vez por dia.
+- Não duplica: o mesmo lançamento baixado de novo é ignorado, e o que já entrou por OFX não é repetido pela API
+  (nem o contrário).
+
 ### Segurança
 
 - **Senhas protegidas no disco:** senha do e-mail, do certificado, segredo da API do Inter, senha do backup e
@@ -512,7 +522,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 210 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 215 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;
