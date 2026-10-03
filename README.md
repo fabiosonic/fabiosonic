@@ -388,6 +388,22 @@ Em **Configurações › Emissão da NFS-e** você escolhe o canal:
 | **Itaboraí** (padrão) | webservice da prefeitura (provedor CTA 2.00) | chave privada no `.env` | RPS (`ITABORAI_PROXIMO_RPS`) |
 | **Nacional** | Sefin Nacional / ADN (Sistema Nacional NFS-e, leiaute v1.01) | certificado digital **A1 (.pfx)** do escritório e a senha dele | DPS, com série própria (padrão 900) e contador separado |
 
+### Validação com credenciais reais (menu Validação)
+
+Antes de ligar a produção, o menu **Validação** testa cada integração com os dados verdadeiros da empresa e
+grava o resultado (data, aprovado/falhou e detalhes):
+
+| Teste | O que faz |
+|---|---|
+| E-mail (SMTP) | envia um e-mail de teste |
+| Certificado A1 e Sefin | confere titular, CNPJ e validade e conecta ao ADN |
+| Itaboraí | emite um RPS em **homologação** e cancela a nota (não usa a numeração real) |
+| NFS-e Nacional | emite uma DPS na **Produção Restrita** com número próprio e cancela |
+| Banco Inter | autentica e consulta; no **sandbox** também cria e cancela um boleto de R$ 2,50 |
+| Backup | gera o backup e confere o .zip, o manifesto e a integridade do banco |
+
+Integrações não configuradas aparecem como "Não configurado". Nenhum teste usa o ambiente de produção.
+
 ### Regras do Manual do Webservice de Itaboraí (versão 2026 — XML a partir de 28/09/2026)
 
 O XSD novo publicado pela prefeitura é idêntico ao que já usamos; o que muda são as **regras de negócio**,
@@ -484,7 +500,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 190 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 197 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

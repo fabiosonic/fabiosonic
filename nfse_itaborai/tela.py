@@ -11,7 +11,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (assistente, automacao, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -237,6 +237,10 @@ ROTAS = {
     "conciliacao/importar": lambda c: importacao.importar_manual(str(c.get("ofx", ""))),
     "conciliacao/pendentes": lambda c: conciliacao.nao_conciliados(),
     "conciliacao/vincular": lambda c: (conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo")), {"ok": True})[1],
+    # assistente de validação com credenciais reais
+    "validacao": lambda c: assistente.situacao(),
+    "validacao/rodar": lambda c: assistente.rodar(str(c.get("passo", "")), c),
+    "validacao/historico": lambda c: assistente.historico(),
     # relatórios
     "rel/aging": lambda c: relatorios.aging(),
     "rel/clientes": lambda c: relatorios.por_cliente(),

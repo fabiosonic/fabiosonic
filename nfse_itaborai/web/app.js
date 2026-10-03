@@ -508,6 +508,38 @@ function cancelarNota(n) {
   };
 }
 
+// ---------------------------------------------------------------- assistente de validação
+const SIT_VAL = { ok: ["bom", "Aprovado"], alerta: ["alerta", "Aprovado com ressalva"], erro: ["critico", "Falhou"], pulado: ["neutro", "Não configurado"] };
+PAGINAS.validacao = async el => {
+  const r = await api("validacao");
+  const cliPadrao = (r.clientes[0] || {}).cpf_cnpj || "";
+  el.innerHTML = `<h1>Validação com credenciais reais <span class="acoes"><button class="btn" id="val_todos">${ic("play")}Testar tudo</button></span></h1>
+  <div class="msg">Cada teste usa as credenciais verdadeiras desta empresa. <b>Nenhuma nota vale de verdade:</b> as emissões saem em
+  <b>homologação</b> (Itaboraí) ou na <b>Produção Restrita</b> (Nacional) e são canceladas em seguida, sem usar a numeração real.
+  O boleto de teste só é criado no <b>sandbox</b> do Inter. ${r.concluidos} de ${r.total} testes aprovados.</div>
+  <div class="card"><div class="campos">
+    <label>Cliente usado nas notas de teste<select id="val_cli">${r.clientes.map(c => `<option value="${esc(c.cpf_cnpj)}">${esc(c.razao_social)} — ${fmtDoc(c.cpf_cnpj)}</option>`).join("")}</select></label>
+    <label>E-mail que recebe o teste<input id="val_para" type="email" placeholder="vazio = o usuário do SMTP" value="${esc(((ST.config || {}).smtp || {}).usuario || "")}"></label>
+  </div></div>
+  <div class="val-lista">${r.passos.map(p => { const u = p.ultimo; const [c, t] = u ? SIT_VAL[u.situacao] || ["neutro", u.situacao] : ["neutro", "Ainda não testado"];
+    return `<div class="card val-passo" data-passo="${p.id}"><div class="val-topo"><div><h2>${esc(p.titulo)}</h2><p class="sub">${esc(p.descricao)}</p></div>
+      <div class="val-acao"><span class="selo ${c}">${t}</span><button class="btn sec" data-rodar="${p.id}">${ic("play")}Testar</button></div></div>
+      <div class="val-res">${u ? `<p><b>${esc(u.mensagem)}</b> <span class="sub">— ${esc(u.quando.slice(8, 10) + "/" + u.quando.slice(5, 7) + "/" + u.quando.slice(0, 4) + " " + u.quando.slice(11, 16))}</span></p>${u.detalhes.length ? `<ul class="sub">${u.detalhes.map(d => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}` : ""}</div></div>`; }).join("")}</div>`;
+  if (cliPadrao) $("#val_cli").value = cliPadrao;
+  const rodar = async id => {
+    const b = $(`[data-rodar="${id}"]`, el); b.disabled = true; b.textContent = "Testando…";
+    try { await api("validacao/rodar", { passo: id, cpf_cnpj: $("#val_cli").value, para: $("#val_para").value.trim() }); }
+    catch (e) { /* o erro já foi avisado */ }
+  };
+  $$("[data-rodar]", el).forEach(b => b.onclick = async () => { await rodar(b.dataset.rodar); ir("validacao"); });
+  $("#val_todos").onclick = async () => {
+    if (!confirm("Rodar todos os testes? Serão emitidas e canceladas notas de TESTE (homologação/Produção Restrita) e enviado um e-mail de teste.")) return;
+    $("#val_todos").disabled = true;
+    for (const p of r.passos) await rodar(p.id);
+    ir("validacao");
+  };
+};
+
 // ---------------------------------------------------------------- contas a receber
 let FILTRO_REC = "a_receber";
 PAGINAS.receber = async el => {

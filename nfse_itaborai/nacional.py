@@ -614,16 +614,17 @@ def preparar(rps: Rps, producao: bool, cert: Certificado | None = None, cfg: dic
     return assinado, str(numero), alertas
 
 
-def emitir(rps: Rps, producao: bool = False, url: str | None = None, contexto: ssl.SSLContext | None = None
-           ) -> Resposta:
+def emitir(rps: Rps, producao: bool = False, url: str | None = None, contexto: ssl.SSLContext | None = None,
+           numero: int | None = None) -> Resposta:
+    """`numero` fixo (assistente de validação) não usa nem avança o contador de DPS da empresa."""
     from . import config
     cfg = config.carregar()
     producao = emissor.producao_autorizada(producao)
     cert = carregar_certificado(cfg)
     base = url or URLS[producao][0]
     for tentativa in range(2):
-        xml, numero, alertas = preparar(rps, producao, cert, cfg)
-        pasta = emissor.RAIZ / "saida" / datetime.now(emissor.FUSO).strftime("%Y-%m") / f"DPS_{numero}"
+        xml, n_dps, alertas = preparar(rps, producao, cert, cfg, numero=numero)
+        pasta = emissor.RAIZ / "saida" / datetime.now(emissor.FUSO).strftime("%Y-%m") / f"DPS_{n_dps}"
         pasta.mkdir(parents=True, exist_ok=True)
         (pasta / "dps.xml").write_text(xml, encoding="utf-8")
         status, bruto = _requisicao("POST", base.rstrip("/") + "/nfse", cert, {"dpsXmlGZipB64": _gz64(xml)}, contexto)
@@ -631,13 +632,13 @@ def emitir(rps: Rps, producao: bool = False, url: str | None = None, contexto: s
         resp = interpretar(status, bruto, xml)
         # O nº da DPS é consumido mesmo com rejeição por duplicidade (E0014: DPS já existente): avança e repete.
         duplicada = any("E0014" in e or "já exist" in e.lower() for e in resp.erros)
-        if resp.sucesso or duplicada:
-            _avancar_dps(int(numero))
+        if (resp.sucesso or duplicada) and not numero:
+            _avancar_dps(int(n_dps))
         for nota in resp.notas:
             if nota.xml:
                 (pasta / f"NFSe_{nota.codigo_verificacao}.xml").write_text(nota.xml, encoding="utf-8")
         (pasta / "resumo.json").write_text(json.dumps({
-            "canal": "nacional", "ambiente": "producao" if producao else "producao_restrita", "dps": numero,
+            "canal": "nacional", "ambiente": "producao" if producao else "producao_restrita", "dps": n_dps,
             "sucesso": resp.sucesso, "erros": resp.erros, "chave": resp.notas[0].codigo_verificacao if resp.notas else "",
         }, indent=2, ensure_ascii=False), encoding="utf-8")
         resp.alertas = alertas + resp.alertas
@@ -647,6 +648,7 @@ def emitir(rps: Rps, producao: bool = False, url: str | None = None, contexto: s
                 resp.alertas.insert(0, "A DPS anterior já existia no Sefin; reenviada com o número seguinte.")
             return resp
         rps.numero = ""
+        numero = numero + 1 if numero else None
     return resp  # pragma: no cover
 
 

@@ -396,3 +396,11 @@ details.mais-nota > summary, details.mais-fz > summary { cursor: pointer; font-w
 details.mais-nota[open] > summary, details.mais-fz[open] > summary { margin-bottom: 8px; }
 .grupo-nx + .grupo-nx { margin-top: 10px; }
 .grupo-nx h3.bloco { margin: 6px 0; font-size: 13px; font-weight: 650; color: var(--texto2); }
+
+/* assistente de validação */
+.val-lista { display: grid; gap: 12px; }
+.val-topo { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.val-topo h2 { margin: 0 0 4px; }
+.val-acao { display: flex; gap: 10px; align-items: center; }
+.val-res ul { margin: 6px 0 0; padding-left: 18px; }
+.val-res p { margin: 10px 0 0; }
