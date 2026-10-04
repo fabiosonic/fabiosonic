@@ -33,8 +33,9 @@ const ic = n => `<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`
 const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 let ST = { clientes: [], padrao: {}, producao: false, config: {} };
 
+const API_CAB = { "X-Requested-With": "EmissorItaborai", "Content-Type": "application/json" };   // identifica a própria tela
 async function api(rota, corpo) {
-  const r = await fetch("/api/" + rota, { method: "POST", body: JSON.stringify(corpo || {}) });
+  const r = await fetch("/api/" + rota, { method: "POST", headers: API_CAB, body: JSON.stringify(corpo || {}) });
   const d = await r.json();
   if (d && d.bloqueado) { telaPin(); throw new Error(d.erro); }
   if (d && d.erro && !Array.isArray(d)) { aviso("⚠ " + d.erro, 7000); destravar(); throw new Error(d.erro); }

@@ -170,3 +170,28 @@ def test_senhas_antigas_protegidas_ao_abrir(multi):  # noqa: F811
     assert "antiga" not in arq.read_text(encoding="utf-8") and "=abc" not in (multi / ".env").read_text(encoding="utf-8")
     assert emissor.env("ITABORAI_CHAVE") == "abc" and config.carregar()["smtp"]["senha"] == "antiga"
     assert empresas.proteger_senhas() == 0
+
+
+def test_api_recusa_pedido_de_outro_site(servidor):
+    """Uma página de outro site aberta no mesmo computador não pode comandar a tela (CSRF → atualização maliciosa)."""
+    import urllib.error
+    import urllib.request
+    porta = servidor.rsplit(":", 1)[1]
+    def post(cab):
+        req = urllib.request.Request(f"{servidor}/api/acesso/estado", data=b"{}", method="POST", headers=cab)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return r.status, json.loads(r.read().decode())
+        except urllib.error.HTTPError as ex:
+            return ex.code, json.loads(ex.read().decode())
+    nossa = {"X-Requested-With": "EmissorItaborai", "Origin": f"http://127.0.0.1:{porta}", "Sec-Fetch-Site": "same-origin",
+             "Sec-Fetch-Mode": "cors"}
+    assert post(nossa)[0] == 200                                                   # a própria tela
+    assert post({})[0] == 200                                                      # cliente local sem navegador (robô, testes)
+    for cab in ({"Origin": "https://site-malicioso.exemplo", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"},
+                {"Origin": "http://127.0.0.1:9", "Sec-Fetch-Site": "same-site"},
+                {"Sec-Fetch-Site": "cross-site"},
+                {"Origin": f"http://127.0.0.1:{porta}", "Sec-Fetch-Mode": "cors"},          # navegador sem o cabeçalho da tela
+                {"Host": "sistema.exemplo.com", "X-Requested-With": "EmissorItaborai"}):   # DNS rebinding
+        codigo, corpo = post(cab)
+        assert codigo == 403 and "origem não autorizada" in corpo["erro"], cab

@@ -3,7 +3,7 @@
 "use strict";
 // ---------------------------------------------------------------- início
 (async () => {
-  const st = await (await fetch("/api/acesso/estado", { method: "POST", body: "{}" })).json();
+  const st = await (await fetch("/api/acesso/estado", { method: "POST", headers: API_CAB, body: "{}" })).json();
   if (st.ativo && !st.logado) return telaPin();
   await carregarEstado(); const h = location.hash.slice(1); ir(h in PAGINAS ? h : "painel");
 })();

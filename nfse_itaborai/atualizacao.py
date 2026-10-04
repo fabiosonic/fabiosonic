@@ -104,8 +104,12 @@ def aplicar(dados: bytes, permitir_anterior: bool = False) -> dict:
         rel = n[len(prefixo):] if n.startswith(prefixo) else ""
         if not rel or not _do_programa(rel):
             continue
+        if ".." in Path(rel).parts or Path(rel).is_absolute() or "\\" in rel:
+            raise ValueError(f"Pacote inválido: caminho fora da pasta do programa ({rel}).")
         novos.add(rel)
-        alvo = base / rel
+        alvo = (base / rel).resolve()
+        if base.resolve() not in alvo.parents:
+            raise ValueError(f"Pacote inválido: caminho fora da pasta do programa ({rel}).")
         alvo.parent.mkdir(parents=True, exist_ok=True)
         alvo.write_bytes(z.read(n))
     # módulos que deixaram de existir na versão nova saem (evita código velho sendo importado)

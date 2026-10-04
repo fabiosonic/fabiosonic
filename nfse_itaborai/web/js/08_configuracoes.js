@@ -240,7 +240,7 @@ function telaPin() {
   document.body.appendChild(d);
   $("#pin_v").focus();
   $("form", d).onsubmit = async e => { e.preventDefault();
-    const r = await (await fetch("/api/acesso/entrar", { method: "POST", body: JSON.stringify({ pin: $("#pin_v").value }) })).json();
+    const r = await (await fetch("/api/acesso/entrar", { method: "POST", headers: API_CAB, body: JSON.stringify({ pin: $("#pin_v").value }) })).json();
     if (r.ok) location.reload(); else { $("#pin_msg").textContent = r.erro; $("#pin_v").value = ""; $("#pin_v").focus(); } };
 }
 async function cartaoPin(box) {

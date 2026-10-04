@@ -15,7 +15,7 @@ const resultados = [];
 let p, respostas = [], errosJS = [];
 
 const espera = ms => new Promise(r => setTimeout(r, ms));
-const api = (rota, corpo) => p.evaluate(([r, c]) => fetch('/api/' + r, { method: 'POST', body: JSON.stringify(c || {}) }).then(x => x.json()), [rota, corpo || {}]);
+const api = (rota, corpo) => p.evaluate(([r, c]) => fetch('/api/' + r, { method: 'POST', headers: API_CAB, body: JSON.stringify(c || {}) }).then(x => x.json()), [rota, corpo || {}]);
 const ir = async (pg, ms = 1000) => { await p.goto(`${URL}/#${pg}`); await p.reload(); await espera(ms); };
 const aviso = () => p.evaluate(() => { const a = document.querySelector('#aviso'); return a && !a.hidden ? a.textContent : ''; });
 const certo = (cond, msg) => { if (!cond) throw new Error(msg); };

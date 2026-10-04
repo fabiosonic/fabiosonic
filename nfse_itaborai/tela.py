@@ -468,9 +468,29 @@ class _Handler(BaseHTTPRequestHandler):
         self._responder(200, arq.read_bytes(), tipo + ("; charset=utf-8" if tipo.startswith("text") or
                                                         tipo.endswith("javascript") else ""))
 
+    def _origem_confiavel(self) -> bool:
+        """Só a própria tela (http://127.0.0.1:porta) pode chamar a API. Uma página de outro site aberta no mesmo
+        computador não consegue: o navegador manda Origin/Sec-Fetch-Site de fora, e o pedido é recusado. Também
+        barra "DNS rebinding" (Host que não é o endereço local)."""
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host.split(":")[0] not in ("127.0.0.1", "localhost"):
+            return False
+        origem = (self.headers.get("Origin") or "").strip().lower()
+        if origem and origem not in (f"http://{host}", "http://127.0.0.1:" + host.split(":")[-1], "http://localhost:" + host.split(":")[-1]):
+            return False
+        sfs = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if sfs and sfs not in ("same-origin", "none"):
+            return False
+        if (self.headers.get("Sec-Fetch-Mode") or origem) and self.headers.get("X-Requested-With") != "EmissorItaborai":
+            return False                     # veio de um navegador, mas não da nossa tela (ela sempre manda esse cabeçalho)
+        return True
+
     def do_POST(self):  # noqa: N802
         if not self.path.startswith("/api/"):
             return self._responder(404, b"{}", "application/json")
+        if not self._origem_confiavel():
+            return self._responder(403, json.dumps({"sucesso": False, "erro": "Pedido recusado: origem não autorizada."},
+                                                   ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
         tamanho = int(self.headers.get("Content-Length", 0))
         corpo = json.loads(self.rfile.read(tamanho) or b"{}")
         rota = self.path[len("/api/"):]
