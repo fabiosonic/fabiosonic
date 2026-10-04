@@ -43,7 +43,7 @@ PAGINAS.config = async el => {
       <label class="btn sec"><input type="file" id="bk_arq" accept=".zip,.protegido" hidden>Restaurar de um arquivo…</label></p>
     <p class="sub">Restaurar volta a empresa ao estado do backup. Antes, o sistema faz um backup do estado atual (dá para desfazer). A numeração do RPS/DPS nunca volta atrás e o ambiente (homologação/produção) não muda. Backup de uma empresa nunca é restaurado em outra.</p>
     <div id="bk_lista"><div class="vazio">Carregando…</div></div></div>
-  <div id="card_lic"></div>
+  <div class="card" id="card_lic"><h2>${ic("cadeado")}Licença de uso</h2></div>
   <div class="card" id="card_pin"></div>
   <div class="card" id="card_atual"></div>
   <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
@@ -266,11 +266,11 @@ async function cartaoLicenca(box) {
   const s = await api("licenca/status");
   const cls = { ativa: "bom", aviso: "atencao", carencia: "critico", teste: "info", bloqueada: "critico" }[s.status] || "neutro";
   const rot = { ativa: "Ativa", aviso: "Vence em breve", carencia: "Vencida (carência)", teste: "Avaliação", bloqueada: "Bloqueada" }[s.status] || s.status;
-  box.innerHTML = `<div class="card"><h2>${ic("cadeado")}Licença de uso</h2>
+  box.innerHTML = `<h2>${ic("cadeado")}Licença de uso</h2>
     <p>${estadoSelo(cls, rot)} ${esc(s.mensagem)}</p>
     ${s.cliente ? `<p class="sub">Licenciado: <b>${esc(s.cliente)}</b> · CNPJ ${fmtDoc(s.cnpj || "")}${s.empresas ? ` · até ${s.empresas} empresa(s)` : " · empresas ilimitadas"}${s.id ? ` · licença ${esc(s.id)}` : ""}</p>` : ""}
     <p class="sub">CNPJ desta instalação: <b>${s.cnpj_instalacao ? fmtDoc(s.cnpj_instalacao) : "não configurado"}</b>. Para renovar, cole a nova chave abaixo.</p>
-    ${contatoFornecedor(s.fornecedor)}<div class="campos">${formLicenca("cl")}</div></div>`;
+    ${contatoFornecedor(s.fornecedor)}${formLicenca("cl")}`;
   ligarFormLicenca("cl", () => { carregarEstado(); cartaoLicenca(box); });
 }
 function telaPin() {

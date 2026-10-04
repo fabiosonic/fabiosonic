@@ -38,7 +38,7 @@ const GRUPOS_CFG = [
   ["Empresa e notas fiscais", /Empresa emissora|Serviços|Emissão da NFS-e|Regras fiscais|Empresa e PIX/],
   ["Cobrança e recebimento", /^Cobrança|Banco Inter|WhatsApp|Cartão|E-mail|13º|Financeiro$/],
   ["Automação", /Robô|Automações|Regras de despesa/],
-  ["Segurança e sistema", /Backup|Acesso|PIN|Atualizar|Versão anterior/],
+  ["Segurança e sistema", /Backup|Acesso|PIN|Atualizar|Versão anterior|Licença/],
 ];
 function indiceConfig(el) {
   const cards = $$(":scope > .card, :scope .cfg-conteudo .card", el).filter(c => c.querySelector(":scope > h2"));
