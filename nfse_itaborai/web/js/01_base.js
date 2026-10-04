@@ -193,3 +193,6 @@ new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
   if (n.nodeType != 1) return;
   (n.matches('input[type="date"]') ? [n] : n.querySelectorAll('input[type="date"]')).forEach(campoData);
 }))).observe(document.documentElement, { childList: true, subtree: true });
+
+// menu compacto (notebook): o nome de cada item aparece ao passar o mouse
+document.querySelectorAll("#menu nav a, #menu .tema").forEach(a => { if (!a.title) a.title = a.textContent.trim(); });

@@ -474,6 +474,13 @@ O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR C
 junto (anexo no e-mail ou documento no WhatsApp automático), o PIX copia e cola não é repetido no texto. Ele continua
 quando não há PDF (cobrança só PIX, link manual de WhatsApp) e pode ser religado em Configurações › Cobrança.
 
+### Tela adaptativa
+
+O conteúdo ocupa a largura toda do monitor. Em notebooks e monitores menores (até 1700px) o menu lateral vira só
+ícones (o nome aparece ao passar o mouse), as margens diminuem e as tabelas largas encolhem os campos — a Recorrência,
+por exemplo, cabe inteira de 1280px para cima, sem rolagem lateral. No celular o menu vai para cima e as tabelas viram
+cartões.
+
 ### E-mails e WhatsApp dos clientes (planilha)
 
 Em **Clientes › Importar e-mails e WhatsApp (CSV)**, escolha a planilha (colunas CPF/CNPJ, Celular e E-mail, ou a

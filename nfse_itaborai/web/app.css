@@ -366,6 +366,37 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
   a { color: inherit !important; text-decoration: none; }
 }
 
+/* ------------------------------------------------------------------ tela adaptativa (notebook / monitor menor)
+   Entre o celular (até 760px) e os monitores grandes: o menu vira só ícones (nome ao passar o mouse), as margens
+   diminuem e as tabelas largas encolhem os campos — o conteúdo se ajusta à tela, sem rolagem lateral. */
+@media (min-width: 761px) and (max-width: 1699px) {
+  #menu { width: 68px; }
+  .marca { justify-content: center; margin: 10px 6px 6px; padding: 6px; }
+  .marca .marca-txt, .marca > :not(.selo-marca) { display: none; }
+  nav { padding: 4px 8px; }
+  nav .grupo { font-size: 0; padding: 8px 0 2px; border-top: 1px solid rgba(255, 255, 255, .07); margin: 6px 4px 0; }
+  nav .grupo:first-child { border-top: 0; margin-top: 0; }
+  nav a { font-size: 0; gap: 0; justify-content: center; padding: 10px 0; }
+  nav a .ic { width: 20px; height: 20px; }
+  .tema { margin: 0 8px 4px; justify-content: center; padding: 8px 0; }
+  .tema span { display: none; }
+  .amb { margin: 8px; justify-content: center; padding: 10px 0; }
+  .amb > :not(.ponto) { display: none; }
+  main { padding: 22px 20px 56px; }
+  .recor td, .recor th { padding-left: 4px; padding-right: 4px; }
+  .recor td:nth-child(2) { min-width: 150px; }
+  .recor td:nth-child(2) .cel-nome { max-width: 190px; }
+  .recor select.rc[data-c="nfse_quando"] { width: 110px !important; }
+  .recor select.rc[data-c="servico_id"] { width: 100px !important; }
+  .recor input.rc[data-c="valor"] { width: 84px !important; }
+  .tabela td, .tabela th { padding-left: 8px; padding-right: 8px; }
+}
+@media (min-width: 761px) and (max-width: 1360px) {
+  body { font-size: 13.5px; }
+  .recor .mes-pt select + select { flex-basis: 4.7em; width: 4.7em; }
+  .recor td:nth-child(2) .cel-nome { max-width: 160px; }
+}
+
 @media (max-width: 760px) {
   body { flex-direction: column; }
   #menu { width: 100%; height: auto; position: static; }
@@ -724,3 +755,9 @@ td .data-pt input[type="text"], label[style*="row"] .data-pt input[type="text"],
 
 /* textos longos sem espaço (caminhos de pasta, registros do robô) quebram a linha em vez de alargar a tela */
 .quebra { overflow-wrap: anywhere; word-break: break-word; }
+
+/* recorrência: pares de campos (início/fim, serviço/nota) lado a lado quando cabe, um embaixo do outro quando não */
+.par { display: flex; flex-wrap: nowrap; gap: 4px 8px; align-items: center; }
+.par > label { display: flex; align-items: center; gap: 4px; margin: 0; font-weight: 400; }
+.par small { color: var(--muted); font-size: 11px; width: 2.6em; }
+@media (max-width: 1500px) { .recor .par { flex-wrap: wrap; } .recor .par small { width: auto; min-width: 2.6em; } }
