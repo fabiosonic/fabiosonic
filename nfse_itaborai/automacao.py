@@ -104,7 +104,8 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     def cobrancas():
         n, erros = 0, []
         boleto = cfg["cobranca"]["provedor"] == "inter" and inter.configurado(cfg)
-        sql = ("SELECT * FROM titulos WHERE status='aberto' AND cobrar=1 AND banco_id='' AND COALESCE(boleto_situacao,'')=''"
+        sql = ("SELECT * FROM titulos WHERE status='aberto' AND cobrar=1 AND COALESCE(juridico_em,'')='' AND banco_id=''"
+               " AND COALESCE(boleto_situacao,'')=''"
                + ("" if boleto else " AND pix_copia_cola=''"))
         for t in db.linhas(sql):
             if t["nfse_status"] in ("pendente", "erro", "teste"):

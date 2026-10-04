@@ -235,10 +235,15 @@ def _enviar_na_pagina(pg, url: str, numero: str, texto: str, pdf: str = "") -> s
     return res
 
 
-def enviar(itens: list[dict], cfg: dict | None = None) -> list[dict]:
+def enviar(itens: list[dict], cfg: dict | None = None, so_horario_comercial: bool = True) -> list[dict]:
     """Envia [{numero, texto, ...}] numa só sessão do navegador. Devolve cada item com 'resultado' ou 'erro'.
-    Para tudo se a sessão estiver desconectada (o restante continua na fila)."""
+    Para tudo se a sessão estiver desconectada (o restante continua na fila).
+    Toda mensagem do sistema passa por aqui: fora do horário comercial nada sai (só a mensagem de teste da tela)."""
     from playwright.sync_api import sync_playwright
+
+    from . import horario
+    if so_horario_comercial and not horario.comercial(cfg=cfg):
+        raise ErroWhatsAppWeb(horario.motivo(cfg=cfg))
     c = _cfg(cfg)
     if not disponivel():
         raise ErroWhatsAppWeb("Falta o componente do WhatsApp Web: abra o sistema pelo INICIAR.bat (ele instala).")
@@ -255,7 +260,7 @@ def enviar(itens: list[dict], cfg: dict | None = None) -> list[dict]:
             try:
                 pg = ctx.pages[0] if ctx.pages else ctx.new_page()
                 for i, it in enumerate(itens):
-                    if i and intervalo:
+                    if i and intervalo and it["numero"] != itens[i - 1]["numero"]:   # mesmo cliente: segue direto
                         time.sleep(random.uniform(intervalo * 0.6, intervalo * 1.4))
                     try:
                         saida.append(it | {"resultado": _enviar_na_pagina(pg, _url(cfg), it["numero"], it["texto"], it.get("pdf", ""))})
@@ -291,42 +296,70 @@ def _do_link(link: str) -> tuple[str, str]:
 
 
 def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
-    """Envia sozinho as mensagens de WhatsApp que a régua deixou na fila (status 'pendente')."""
-    from . import cobranca, horario
+    """Envia sozinho as mensagens de WhatsApp que a régua deixou na fila (status 'pendente').
+    Cobrança: UMA mensagem por cliente com TODOS os títulos em aberto dele (soma e valor atualizado), montada na hora
+    do envio, e um PDF de boleto por título logo em seguida. Agradecimento e nota fiscal continuam por título."""
+    from . import cobranca, financeiro, horario
     cfg = cfg or config.carregar()
     if not horario.comercial(cfg=cfg):
         return {"enviados": 0, "erros": 0, "pendentes": len(cobranca.fila_whatsapp()), "aviso": horario.motivo(cfg=cfg)}
-    fila = cobranca.fila_whatsapp()[: limite or int(_cfg(cfg).get("whatsapp_web_limite", 40) or 40)]
+    fila = cobranca.fila_whatsapp()
     res = {"enviados": 0, "erros": 0, "pendentes": 0}
     if not fila:
         return res
+    maximo = limite or int(_cfg(cfg).get("whatsapp_web_limite", 40) or 40)
+    grupos: dict[str, list[dict]] = {}
     itens = []
-    for e in fila:
-        numero, texto = _do_link(e["detalhe"])
-        itens.append({"evento": e["id"], "numero": numero, "texto": texto, "cliente": e["cliente_nome"],
-                      "pdf": _pdf_do_titulo(e["titulo_id"], cfg) if e["etapa"] < cobranca.ETAPA_PAGO else ""})
+    for e in fila:                                             # cobranças: agrupa por cliente, na ordem da fila
+        t = financeiro.obter_titulo(e["titulo_id"])
+        e["_t"] = t
+        if e["etapa"] < cobranca.ETAPA_PAGO:
+            grupos.setdefault(t["cpf_cnpj"], []).append(e)
+        else:
+            numero, texto = _do_link(e["detalhe"])
+            itens.append({"eventos": [e["id"]], "numero": numero, "texto": texto, "cliente": e["cliente_nome"], "pdf": ""})
+    for cpf, evs in grupos.items():
+        numero, texto_antigo = _do_link(evs[0]["detalhe"])
+        devidos = cobranca.todos_do_cliente(cpf, [(e["_t"], e["etapa"]) for e in evs])
+        if len(devidos) == 1:
+            t, etapa = devidos[0]
+            texto = cobranca.mensagem(t, etapa, cfg, canal="whatsapp")[1] if t["status"] == "aberto" else texto_antigo
+        else:
+            texto = cobranca.mensagem_grupo(devidos, cfg, canal="whatsapp")[1]
+        pdfs = [(t, p) for t, _ in devidos for p in [_pdf_do_titulo(t["id"], cfg)] if p]
+        itens.append({"eventos": [e["id"] for e in evs], "numero": numero, "texto": texto, "cliente": evs[0]["cliente_nome"],
+                      "pdf": pdfs[0][1] if pdfs else ""})
+        for t, p in pdfs[1:]:                                  # os demais boletos, um documento por título
+            itens.append({"eventos": [], "numero": numero, "cliente": evs[0]["cliente_nome"], "pdf": p,
+                          "texto": f"Boleto com vencimento em {t['vencimento'][8:]}/{t['vencimento'][5:7]}/{t['vencimento'][:4]}"})
+    itens = itens[:maximo]
     try:
         saida = enviar(itens, cfg)
     except Desconectado as ex:
         db.registrar("whatsapp", f"Fila de WhatsApp não enviada: {ex}")
-        return res | {"pendentes": len(itens), "aviso": str(ex)}
+        return res | {"pendentes": len(fila), "aviso": str(ex)}
     feitos = set()
     with db.conexao() as con:
         for s in saida:
-            feitos.add(s["evento"])
+            ids = s.get("eventos") or []
+            feitos.update(ids)
             if "resultado" in s:
-                con.execute("UPDATE eventos_cobranca SET status='enviado', detalhe=? WHERE id=?",
-                            (f"WhatsApp Web {s['numero']}: {s['resultado']}", s["evento"]))
-                res["enviados"] += 1
+                for i in ids:
+                    con.execute("UPDATE eventos_cobranca SET status='enviado', detalhe=? WHERE id=?",
+                                (f"WhatsApp Web {s['numero']}: {s['resultado']}", i))
+                res["enviados"] += 1 if ids else 0
             elif s.get("desconectado"):
-                res["pendentes"] += 1
+                res["pendentes"] += len(ids)
                 res["aviso"] = s["erro"]
+                feitos.difference_update(ids)
             elif s.get("invalido"):
-                con.execute("UPDATE eventos_cobranca SET status='erro', detalhe=? WHERE id=?", (s["erro"], s["evento"]))
-                res["erros"] += 1
+                for i in ids:
+                    con.execute("UPDATE eventos_cobranca SET status='erro', detalhe=? WHERE id=?", (s["erro"], i))
+                res["erros"] += 1 if ids else 0
             else:
-                res["erros"] += 1                       # erro passageiro: continua na fila para a próxima rodada
-    res["pendentes"] += len(itens) - len(feitos)
+                res["erros"] += 1 if ids else 0            # erro passageiro: continua na fila para a próxima rodada
+                feitos.difference_update(ids)
+    res["pendentes"] = len([e for e in fila if e["id"] not in feitos])
     db.registrar("whatsapp", f"WhatsApp Web: {res}")
     return res
 
@@ -350,7 +383,7 @@ def enviar_um(telefone: str, texto: str, cfg: dict | None = None, so_horario_com
     numero = numero_de(telefone)
     if not numero:
         raise ErroWhatsAppWeb("Telefone do cliente inválido para WhatsApp (DDD + número).")
-    s = enviar([{"numero": numero, "texto": texto, "pdf": pdf}], cfg)[0]
+    s = enviar([{"numero": numero, "texto": texto, "pdf": pdf}], cfg, so_horario_comercial=so_horario_comercial)[0]
     if "erro" in s:
         raise ErroWhatsAppWeb(s["erro"])
     db.registrar("whatsapp", f"WhatsApp Web: mensagem enviada para {numero}")

@@ -64,7 +64,7 @@ def _email(c: dict) -> dict:
     if "@" not in para:
         raise ValueError("Informe o e-mail que vai receber o teste.")
     cobranca.enviar_email(para, "Teste do assistente de validação",
-                          "Se você recebeu este e-mail, o envio de cobranças e notas por e-mail está funcionando.")
+                          "Se você recebeu este e-mail, o envio de cobranças e notas por e-mail está funcionando.", teste=True)
     return _resultado("ok", f"E-mail enviado para {para}. Confira a caixa de entrada (e o spam).")
 
 

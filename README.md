@@ -548,6 +548,23 @@ pagar**; título já lançado não repete. A conferência mostra a situação de
 cobrança, **fora da cobrança**, pago) e o lançamento **recoloca em cobrança** os que estavam fora — reimportar o
 relatório garante que toda a inadimplência esteja lançada e sendo cobrada.
 
+### Cobrança jurídica (aba Jurídico)
+
+Quando o escritório decide levar um cliente ao jurídico, em **Contas a receber › Mais › Enviar para o jurídico**
+(em qualquer título em aberto do cliente) o sistema:
+
+- **suspende a cobrança na hora**: as mensagens de e-mail e WhatsApp ainda pendentes são canceladas e a régua, a
+  cobrança recorrente, o botão "Cobrar" e o robô não mexem mais nesses títulos;
+- por padrão envia **todos os títulos em aberto do cliente** (desmarque a opção para enviar só um);
+- guarda a data e uma observação (advogado, nº do processo, acordo);
+- mantém o valor **registrado e devido**: os títulos saem das abas "A receber" e "Atrasados" e passam para a aba
+  **Jurídico**, com multa e juros correndo e o valor atualizado; o Painel mostra o total em cobrança jurídica e a
+  inadimplência continua contando esses valores.
+
+O boleto já registrado no banco **não é cancelado**: se o cliente pagar, a baixa cai normalmente (e a NFS-e "após o
+pagamento" sai pelo valor pago). A baixa manual também funciona. **Voltar do jurídico** (menu Mais da aba Jurídico)
+retoma a cobrança normal.
+
 ### Conciliação: extrato completo
 
 A Conciliação mostra **todo o extrato** importado (entradas e saídas), com o que cada lançamento virou: recebimento

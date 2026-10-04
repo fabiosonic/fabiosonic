@@ -70,10 +70,12 @@ def painel(em: date | None = None) -> dict:
     mes_ini = em.replace(day=1).isoformat()
     abertos = [t for t in ts if t["situacao"] in ("aberto", "atrasado")]   # sem cobrança não entra
     atrasados = [t for t in abertos if t["situacao"] == "atrasado"]
+    juridicos = [t for t in ts if t["situacao"] == "juridico"]          # cobrança jurídica: registrados, sem mensagens
     recebido_mes = sum(t["valor_pago_cent"] for t in ts if t["status"] == "pago" and t["data_pagamento"] >= mes_ini)
     faturado_mes = sum(t["valor_cent"] for t in ts if t["competencia"] == comp)
     vencido_total = sum(t["valor_cent"] for t in ts if t["vencimento"] < em.isoformat() and (t["status"] == "pago" or financeiro.tem_cobranca(t)))
     vencido_aberto = sum(t["valor_cent"] for t in atrasados)
+    inadimplente = vencido_aberto + sum(t["valor_cent"] for t in juridicos)      # a inadimplência inclui o que está no jurídico
     contratos = db.linhas("SELECT valor_cent FROM contratos WHERE ativo=1 AND confirmado=1")
     a_confirmar = db.linhas("SELECT COUNT(*) n FROM contratos WHERE ativo=1 AND confirmado=0")[0]["n"]
     mrr = sum(c["valor_cent"] for c in contratos)
@@ -103,7 +105,9 @@ def painel(em: date | None = None) -> dict:
         "faturado_mes": faturado_mes, "recebido_mes": recebido_mes,
         "a_receber": sum(t["valor_cent"] for t in abertos), "atrasado": vencido_aberto,
         "atrasado_qtd": len(atrasados), "clientes_atrasados": len({t["cpf_cnpj"] for t in atrasados}),
-        "inadimplencia_pct": round(vencido_aberto / vencido_total * 100, 1) if vencido_total else 0.0,
+        "juridico": sum(t["total_cent"] for t in juridicos), "juridico_qtd": len(juridicos),
+        "clientes_juridico": len({t["cpf_cnpj"] for t in juridicos}),
+        "inadimplencia_pct": round(inadimplente / vencido_total * 100, 1) if vencido_total else 0.0,
         "mrr": mrr, "contratos_ativos": len(contratos), "contratos_a_confirmar": a_confirmar,
         "parciais_pendentes": db.linhas("SELECT COUNT(*) n FROM titulos WHERE parcial_status='pendente'")[0]["n"],
         "ticket_medio": mrr // len(contratos) if contratos else 0,

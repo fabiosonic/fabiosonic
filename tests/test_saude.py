@@ -35,7 +35,7 @@ def test_checklist_completo(base):  # noqa: F811
 
 def test_fechamento_mensal_salva_envia_e_nao_repete(base, monkeypatch, tmp_path):  # noqa: F811
     enviados = []
-    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, html="":
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, html="", **k:
                         enviados.append((para, assunto, html)))
     config.salvar({"smtp": {"host": "smtp.x"}, "resumo": {"email_dono": "dono@x.com"},
                    "pastas": {"relatorios": str(tmp_path / "rel")}})

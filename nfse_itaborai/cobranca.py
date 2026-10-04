@@ -172,7 +172,8 @@ def _pdf_boleto(t: dict, cfg: dict) -> str:
         return ""
     try:
         return salvar_boleto(t["id"], cfg)
-    except Exception:  # noqa: BLE001 — sem o PDF a mensagem sai com a linha digitável e o PIX
+    except Exception as ex:  # noqa: BLE001 — sem o PDF a mensagem sai com a linha digitável e o PIX
+        db.registrar("boleto", f"Título {t['id']} ({t['cliente_nome']}): PDF do boleto não veio do banco ({str(ex)[:160]})")
         return ""
 
 
@@ -409,8 +410,12 @@ def link_whatsapp(telefone: str, texto: str) -> str:
 
 
 def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, anexos: list[str] | None = None,
-                 html: str = "") -> None:
+                 html: str = "", teste: bool = False) -> None:
+    """Todo e-mail do sistema passa por aqui. Fora do horário comercial (fim de semana, noite) nada sai —
+    exceto os testes que o próprio escritório dispara na tela (teste=True)."""
     cfg = cfg or config.carregar()
+    if not teste and not horario.comercial(cfg=cfg):
+        raise RuntimeError(horario.motivo(cfg=cfg))
     s = cfg["smtp"]
     if not s.get("host"):
         raise RuntimeError("SMTP não configurado.")
@@ -537,23 +542,38 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
     return res
 
 
+def titulos_em_cobranca(cpf_cnpj: str) -> list[dict]:
+    """Todos os títulos em aberto e em cobrança do cliente, do mais antigo para o mais novo."""
+    return db.linhas("SELECT * FROM titulos WHERE status='aberto' AND cpf_cnpj=? AND " + financeiro.SQL_COBRADO +
+                     " ORDER BY vencimento, id", (cpf_cnpj,))
+
+
+def todos_do_cliente(cpf_cnpj: str, itens: list[tuple[dict, int]]) -> list[tuple[dict, int]]:
+    """A mensagem ao cliente sempre cobra TUDO que ele tem em aberto (não só o título cuja etapa venceu hoje):
+    os títulos da vez entram com a etapa deles; os demais, como 'boleto' (em dia ou vencido, conforme a data)."""
+    etapas = {t["id"]: etapa for t, etapa in itens}
+    return [(t, etapas.get(t["id"], ETAPA_BOLETO)) for t in titulos_em_cobranca(cpf_cnpj)] or itens
+
+
 def _email_cobranca(cli: dict, itens: list[tuple[dict, int]], em: date, cfg: dict, res: dict) -> None:
-    """Um e-mail por cliente: um título usa a mensagem da etapa; vários vão juntos, com todos os boletos anexados."""
+    """Um e-mail por cliente com TODOS os títulos em aberto dele (soma e valor atualizado) e todos os boletos
+    anexados; um título só usa a mensagem da etapa."""
     if not cli.get("email"):
         status, det = "sem_contato", "cliente sem e-mail"
         res["sem_contato"] += 1
     else:
         try:
-            pdfs = [p for p in (_pdf_boleto(t, cfg) for t, _ in itens) if p]
-            if len(itens) == 1:
-                t, etapa = itens[0]
+            todos = todos_do_cliente(itens[0][0]["cpf_cnpj"], itens)
+            pdfs = [p for p in (_pdf_boleto(t, cfg) for t, _ in todos) if p]
+            if len(todos) == 1:
+                t, etapa = todos[0]
                 assunto, texto = mensagem(t, etapa, cfg, em)
                 html = mensagem_html(t, etapa, cfg, em)
             else:
-                assunto, texto = mensagem_grupo(itens, cfg, em)
-                html = mensagem_grupo_html(itens, cfg, em)
+                assunto, texto = mensagem_grupo(todos, cfg, em)
+                html = mensagem_grupo_html(todos, cfg, em)
             enviar_email(cli["email"], assunto, texto, cfg, pdfs, html=html)
-            status, det = "enviado", cli["email"] + (f" (e-mail com {len(itens)} títulos)" if len(itens) > 1 else "")
+            status, det = "enviado", cli["email"] + (f" (e-mail com {len(todos)} títulos)" if len(todos) > 1 else "")
             res["email"] += 1
         except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
             status, det = "erro", str(ex)[:300]
@@ -564,7 +584,7 @@ def _email_cobranca(cli: dict, itens: list[tuple[dict, int]], em: date, cfg: dic
                         " VALUES (?,?,?,?,?,?)", (t["id"], etapa, "email", em.isoformat(), status, det))
 
 
-def _grupo(itens: list[tuple[dict, int]], cfg: dict, em: date | None) -> tuple[list[dict], dict]:
+def _grupo(itens: list[tuple[dict, int]], cfg: dict, em: date | None, canal: str = "email") -> tuple[list[dict], dict]:
     cs = sorted((_conteudo(t, etapa, cfg, em) | {"_t": financeiro.enriquecer(t, em)} for t, etapa in itens),
                 key=lambda c: c["_t"]["vencimento"])
     atraso = any(c["atraso"] for c in cs)
@@ -579,13 +599,14 @@ def _grupo(itens: list[tuple[dict, int]], cfg: dict, em: date | None) -> tuple[l
         abertura = f"Seguem os {n} títulos de honorários em seu nome, no total de {_brl(total)}."
     return cs, {"assunto": assunto, "abertura": abertura, "atraso": atraso, "total": _brl(total),
                 "nome": cs[0]["nome"], "assinatura": cs[0]["assinatura"], "whatsapp": cs[0]["whatsapp"],
-                "pdf": any(_pdf_vai(c, cfg) for c in cs)}
+                "pdf": any(_pdf_vai(c, cfg, canal) for c in cs)}
 
 
-def mensagem_grupo(itens: list[tuple[dict, int]], cfg: dict | None = None, em: date | None = None) -> tuple[str, str]:
-    """(assunto, texto) de um e-mail com vários títulos do mesmo cliente."""
+def mensagem_grupo(itens: list[tuple[dict, int]], cfg: dict | None = None, em: date | None = None,
+                   canal: str = "email") -> tuple[str, str]:
+    """(assunto, texto) de uma mensagem com vários títulos do mesmo cliente (e-mail ou WhatsApp)."""
     cfg = cfg or config.carregar()
-    cs, g = _grupo(itens, cfg, em)
+    cs, g = _grupo(itens, cfg, em, canal)
     linhas = [f"Olá, {g['nome']}!", "", g["abertura"]]
     if g["atraso"]:
         linhas.append("Se já pagou, por favor desconsidere e nos envie o comprovante.")
@@ -599,14 +620,15 @@ def mensagem_grupo(itens: list[tuple[dict, int]], cfg: dict | None = None, em: d
             linhas.append(f"   Boleto/PIX: {c['boleto_link']}")
         if c["linha"]:
             linhas.append(f"   Linha digitável: {c['linha']}")
-        if _pix_na_mensagem(c, cfg):
+        if _pix_na_mensagem(c, cfg, canal):
             linhas.append(f"   PIX copia e cola: {c['pix']}")
         if c["cartao"]:
             linhas.append(f"   Cartão de crédito ({_brl(c['cartao']['valor'])}, taxa por conta de quem paga com cartão): "
                           f"{c['cartao']['link']}")
     linhas += ["", f"Total: {g['total']}"]
     if g["pdf"]:
-        linhas.append("Os boletos em PDF seguem em anexo (pague pelo código de barras ou pelo QR Code do PIX impresso em cada boleto).")
+        linhas.append(("Os boletos em PDF seguem em anexo" if canal == "email" else "Os boletos em PDF vão logo a seguir")
+                      + " (pague pelo código de barras ou pelo QR Code do PIX impresso em cada boleto).")
     linhas += ["", "Atenciosamente,", g["assinatura"]]
     if g["whatsapp"]:
         linhas.append(f"WhatsApp: {g['whatsapp']}")
@@ -764,7 +786,7 @@ def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
 def fila_whatsapp() -> list[dict]:
     lst = db.linhas("SELECT e.*, t.cliente_nome, t.valor_cent, t.vencimento FROM eventos_cobranca e "
                     "JOIN titulos t ON t.id=e.titulo_id WHERE e.canal='whatsapp' AND e.status='pendente' "
-                    f"AND (t.status='aberto' OR e.etapa>={ETAPA_PAGO}) ORDER BY e.data, e.etapa")
+                    f"AND COALESCE(t.juridico_em,'')='' AND (t.status='aberto' OR e.etapa>={ETAPA_PAGO}) ORDER BY e.data, e.etapa")
     return lst
 
 
@@ -782,6 +804,9 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     cfg = cfg or config.carregar()
     if not horario.comercial(cfg=cfg):
         raise ValueError(horario.motivo(cfg=cfg).replace("O robô envia", "A régua cobra sozinha"))
+    if financeiro.no_juridico(financeiro.obter_titulo(tid) or {}):
+        raise ValueError("Este título está no jurídico: a cobrança por e-mail e WhatsApp está suspensa. "
+                         "Para voltar a cobrar, use 'Voltar do jurídico' na aba Jurídico.")
     t = preparar_pagamento(tid, cfg)
     dias = (financeiro.hoje() - date.fromisoformat(t["vencimento"])).days
     etapa = max(dias, -1) if dias < 0 else dias

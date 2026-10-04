@@ -259,6 +259,8 @@ ROTAS = {
     "titulo/estornar": lambda c: _estornar(_id(c)),
     "titulo/cancelar": lambda c: _cancelar_titulo(_id(c), c.get("motivo", "")),
     "titulo/sem_cobranca": lambda c: _tirar_da_cobranca(_id(c)),
+    "titulo/juridico": lambda c: financeiro.enviar_juridico(_id(c), str(c.get("obs") or ""), bool(c.get("todos"))),
+    "titulo/juridico_voltar": lambda c: financeiro.voltar_do_juridico(_id(c)),
     "titulo/gerar_cobranca": lambda c: _gerar_cobranca(_id(c)),
     "nfse/listar": lambda c: financeiro.listar_notas(str(c.get("competencia") or ""), str(c.get("situacao") or "validas"),
                                                      str(c.get("busca") or ""), str(c.get("servico_id") or "")),
@@ -308,7 +310,7 @@ ROTAS = {
         "SELECT e.*, t.cliente_nome FROM eventos_cobranca e JOIN titulos t ON t.id=e.titulo_id "
         "ORDER BY e.id DESC LIMIT 200"),
     "email/testar": lambda c: (cobranca.enviar_email(str(c.get("para", "")), "Teste do emissor NFS-e",
-                                                     "E-mail de teste: a configuração SMTP está funcionando."),
+                                                     "E-mail de teste: a configuração SMTP está funcionando.", teste=True),
                                {"ok": True})[1],
     # contas a pagar
     "despesas": lambda c: financeiro.listar_despesas(c.get("filtro", "todos")),

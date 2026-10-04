@@ -99,3 +99,24 @@ def test_titulos_do_mesmo_cliente_vao_num_unico_email(base, monkeypatch):  # noq
     ev = db.linhas("SELECT titulo_id, etapa, status FROM eventos_cobranca WHERE canal='email' ORDER BY titulo_id")
     assert [e["titulo_id"] for e in ev] == ids and {e["status"] for e in ev} == {"enviado"}
     assert cobranca.rodar_regua(date(2026, 10, 2))["email"] == 0   # nada repete
+
+
+def test_email_cobra_tudo_que_o_cliente_tem_em_aberto_mesmo_quando_so_um_vence_hoje(base, monkeypatch):  # noqa: F811
+    """Caso real (Espaço Acolher): o cliente tinha vários débitos e a mensagem cobrava só o título cuja etapa venceu
+    naquele dia. Agora a mensagem traz todos os títulos em aberto, somados e com o valor atualizado."""
+    env = _cap(monkeypatch)
+    velho = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "400", vencimento="2026-07-10", emitir_nfse=False)
+    novo = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento="2026-10-20", emitir_nfse=False)
+    for tid in (velho, novo):
+        financeiro.atualizar_titulo(tid, pix_copia_cola=f"000201pix{tid}")
+    with db.conexao() as con:                                     # o título novo já recebeu o boleto; etapa dele não vence hoje
+        con.execute("INSERT INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe) VALUES (?,?,?,?,?,?)",
+                    (novo, cobranca.ETAPA_BOLETO, "email", "2026-09-20", "enviado", "x"))
+    r = cobranca.rodar_regua(date(2026, 10, 1))
+    assert r["email"] == 1 and len(env) == 1
+    _, assunto, texto, _ = env[0]
+    assert "2 títulos" in assunto and "10/07/2026" in texto and "20/10/2026" in texto
+    assert "Total: R$" in texto and "dia(s) em atraso" in texto                    # soma e valor atualizado
+    assert all(f"000201pix{tid}" in texto for tid in (velho, novo))
+    ev = db.linhas("SELECT titulo_id FROM eventos_cobranca WHERE canal='email' AND data='2026-10-01'")
+    assert [e["titulo_id"] for e in ev] == [velho]                               # só a etapa do título da vez é registrada

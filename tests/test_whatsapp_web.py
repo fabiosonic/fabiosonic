@@ -262,3 +262,34 @@ def test_boleto_em_pdf_vai_junto_da_mensagem(wa, tmp_path, monkeypatch):
     assert ev.endswith("enviado com o boleto em PDF")
     c = config.carregar(); c["cobranca"]["whatsapp_web_pdf"] = False; config.salvar(c)
     assert whatsapp_web._pdf_do_titulo(tid, config.carregar()) == ""
+
+
+def test_fila_junta_todos_os_titulos_do_cliente_numa_mensagem_com_um_pdf_por_boleto(wa, tmp_path, monkeypatch):
+    """Caso real: cliente com vários débitos recebia uma mensagem cobrando só um boleto; os de vencimento normal
+    saíam sem o PDF. Agora: um texto por cliente (soma + valor atualizado) e, logo a seguir, um PDF por título."""
+    _conectar(wa)
+    monkeypatch.setattr(cobranca, "enviar_email", lambda *a, **k: None)
+    ids = [financeiro.criar_titulo(CLI_A["cpf_cnpj"], v, vencimento=d, emitir_nfse=False)
+           for v, d in (("400", "2026-07-10"), ("500", "2026-08-10"), ("600", "2026-10-20"))]
+    pdfs = {}
+    for tid in ids:
+        p = tmp_path / f"Boleto {tid}.pdf"
+        p.write_bytes(b"%PDF-1.4 " + str(tid).encode())
+        pdfs[tid] = str(p)
+        financeiro.atualizar_titulo(tid, banco_id=f"inter-{tid}", linha_digitavel=f"0779{tid}", pix_copia_cola=f"000201pix{tid}")
+    monkeypatch.setattr(cobranca, "_pdf_boleto", lambda t, cfg: pdfs.get(t["id"], ""))
+    cobranca.rodar_regua(date(2026, 10, 1))
+    assert len(cobranca.fila_whatsapp()) == 3
+    antes = len(FakeWhatsAppWeb.enviados)
+    r = whatsapp_web.enviar_fila()
+    assert r == {"enviados": 1, "erros": 0, "pendentes": 0} and cobranca.fila_whatsapp() == []
+    env = FakeWhatsAppWeb.enviados[antes:]
+    assert [e.get("arquivo") for e in env] == [None, f"Boleto {ids[0]}.pdf", None, f"Boleto {ids[1]}.pdf", None, f"Boleto {ids[2]}.pdf"]
+    texto = env[0]["texto"]
+    assert "10/07/2026" in texto and "10/08/2026" in texto and "20/10/2026" in texto
+    assert "Total: R$" in texto and "dia(s) em atraso" in texto and "vão logo a seguir" in texto
+    assert "copia e cola" not in texto                              # o QR Code do PIX já vai impresso em cada boleto
+    assert env[2]["texto"].startswith("Boleto com vencimento em 10/08/2026")
+    ev = db.linhas("SELECT titulo_id, status, detalhe FROM eventos_cobranca WHERE canal='whatsapp' ORDER BY titulo_id")
+    assert [e["titulo_id"] for e in ev] == ids and {e["status"] for e in ev} == {"enviado"}
+    assert all("enviado com o boleto em PDF" in e["detalhe"] for e in ev)

@@ -8,14 +8,15 @@ PAGINAS.receber = async el => {
   const lst = await api("titulos", { filtro: FILTRO_REC, competencia: comp });
   const soma = lst.reduce((a, t) => a + (t.status == "aberto" ? t.total_cent : t.status == "pago" ? t.valor_pago_cent : 0), 0);
   el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">${ic("mais")}Título avulso</button><button class="btn sec" id="imp_nitrus" title="Lança os títulos em aberto do relatório de Inadimplência do Nitrus (PDF)">${ic("download")}Importar do Nitrus</button><button class="btn sec" id="pdf_bol">${ic("download")}PDFs dos boletos</button><a class="btn sec" href="/export/titulos.csv">${ic("download")}Exportar CSV</a></span></h1>
-  <div class="card"><div class="abas">${[["a_receber", "A receber"], ["atrasado", "Atrasados"], ["pago", "Pagos"], ["sem_cobranca", "Sem cobrança"], ["sem_nfse", "Sem NFS-e"], ["cancelado", "Cancelados"], ["todos", "Todos"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_REC ? "on" : ""}">${t}</button>`).join("")}
+  <div class="card"><div class="abas">${[["a_receber", "A receber"], ["atrasado", "Atrasados"], ["juridico", "Jurídico"], ["pago", "Pagos"], ["sem_cobranca", "Sem cobrança"], ["sem_nfse", "Sem NFS-e"], ["cancelado", "Cancelados"], ["todos", "Todos"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_REC ? "on" : ""}">${t}</button>`).join("")}
     <label style="flex-direction:row;align-items:center;gap:6px;margin-left:auto">Competência <input type="month" id="r_comp" value="${comp}" style="width:160px"></label></div>
-    <p class="sub">${lst.length} título(s) · ${brl(soma)}</p>
+    <p class="sub">${lst.length} título(s) · ${brl(soma)}${FILTRO_REC == "juridico" ? " · cobrança jurídica: nenhuma mensagem de cobrança sai para estes títulos; multa e juros continuam correndo e a baixa funciona normalmente" : ""}</p>
     ${tabela([
       { t: "Cliente", f: t => celNome(t.cliente_nome, esc(frase(t.descricao))) },
       { t: "Vencimento", f: t => `<span class="nw">${dt(t.vencimento)}</span><div class="sub nw">comp. ${mes(t.competencia)}</div>` },
       { t: "Valor", n: 1, f: t => num(t.valor_cent) + (t.situacao == "atrasado" ? `<div class="sub">atualizado ${num(t.total_cent)}</div>` : t.status == "pago" ? `<div class="sub">pago ${num(t.valor_pago_cent)} em ${dt(t.data_pagamento)}</div>` : "") },
       { t: "Situação", f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "")
+        + (t.situacao == "juridico" ? `<div class="sub">no jurídico desde ${dt(t.juridico_em)}</div>${t.juridico_obs ? `<div class="sub quebra" title="${esc(t.juridico_obs)}">${esc(t.juridico_obs.slice(0, 80))}</div>` : ""}` : "")
         + (t.status == "aberto" && t.cobrar && t.boleto_situacao == "dispensado" ? `<div class="sub">cobrança sem boleto (PIX do escritório)</div>`
           : t.status == "aberto" && t.cobrar && !t.banco_id && !t.pix_copia_cola && !t.linha_digitavel
           ? `<div class="sub neg quebra" title="${esc(t.cobranca_erro || "")}">${t.cobranca_erro ? "boleto não gerado: " + esc(t.cobranca_erro.slice(0, 90)) : "boleto ainda não gerado"}</div>` : "")
@@ -39,8 +40,13 @@ function acoesTitulo(t) {
   const prin = [], mais = [];
   const it = (txt, js) => `<button onclick="this.closest('details').open=false;${js}">${txt}</button>`;
   if (t.parcial_status == "pendente") prin.push(`<button class="btn min" onclick="decidirParcial(${t.id})" title="O cliente pagou menos que o devido">Decidir diferença</button>`);
-  if (t.status == "aberto") {
+  if (t.status == "aberto" && t.situacao == "juridico") {
     prin.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
+    mais.push(it(`${ic("receber")}Voltar do jurídico (retomar a cobrança)`, `voltarJuridico(${t.id})`));
+    if (t.banco_id) mais.push(`<a href="/boleto/${t.id}.pdf" target="_blank">${ic("download")}Boleto em PDF</a>`);
+  } else if (t.status == "aberto") {
+    prin.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
+    if (t.situacao != "sem_cobranca") mais.push(it(`${ic("bloqueio")}Enviar para o jurídico (suspende a cobrança)`, `enviarJuridico(${t.id},'${esc(t.cliente_nome).replace(/'/g, "\\'")}')`));
     const semBoleto = !t.banco_id && !t.pix_copia_cola && !t.linha_digitavel && t.boleto_situacao != "dispensado";
     if (t.boleto_situacao == "dispensado") mais.push(it(`${ic("receber")}Gerar boleto (registra no banco)`, `gerarCobranca(${t.id})`));
     if (t.situacao != "sem_cobranca" && semBoleto) prin.push(`<button class="btn min" onclick="gerarCobranca(${t.id})" title="O boleto ainda não foi gerado: gera agora (boleto/PIX) e coloca na régua">Gerar boleto</button>`)
@@ -144,6 +150,21 @@ async function cancelarTitulo(id, nfse) {
 async function tirarDaCobranca(id) {
   if (!confirm("Tirar este título da cobrança? O boleto (se houver) é cancelado e ele sai da régua e do “a receber”. A NFS-e continua válida.")) return;
   await api("titulo/sem_cobranca", { id }); aviso("Título retirado da cobrança ✔", 5000); ir(PAG);
+}
+async function enviarJuridico(id, nome) {
+  modal(`<h2>Enviar para o jurídico</h2><p>Cliente: <b>${esc(nome)}</b></p>
+    <p class="sub">A cobrança por e-mail e WhatsApp é <b>suspensa na hora</b> (mensagens pendentes são canceladas e a régua não mexe mais no título). O valor continua registrado, com multa e juros correndo, na aba <b>Jurídico</b> do contas a receber. O boleto que já existe não é cancelado: se o cliente pagar, a baixa cai normalmente.</p>
+    <div class="campos" id="fj"><label class="chk"><input type="checkbox" name="todos" checked> Enviar <b>todos os títulos em aberto</b> deste cliente</label>
+    <label>Observação (advogado, nº do processo, acordo…)<input name="obs" maxlength="300" placeholder="opcional"></label></div>
+    <p><button class="btn" id="ok">Enviar para o jurídico</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#ok").onclick = async () => { $("#ok").disabled = true;
+    const r = await api("titulo/juridico", { id, obs: $("#fj [name=obs]").value, todos: $("#fj [name=todos]").checked }); fechar();
+    aviso(`${r.titulos} título(s) enviado(s) ao jurídico ✔ Cobrança suspensa${r.suspensos ? ` (${r.suspensos} mensagem(ns) pendente(s) cancelada(s))` : ""}.`, 8000);
+    FILTRO_REC = "juridico"; ir("receber"); };
+}
+async function voltarJuridico(id) {
+  if (!confirm("Tirar este título do jurídico e voltar a cobrar normalmente por e-mail e WhatsApp?")) return;
+  await api("titulo/juridico_voltar", { id }); aviso("Título voltou para a cobrança normal ✔", 5000); ir(PAG);
 }
 async function gerarCobranca(id) {
   if (!confirm("Gerar a cobrança (boleto/PIX) deste título e colocá-lo na régua?")) return;

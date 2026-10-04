@@ -71,8 +71,13 @@ def encargos(titulo: dict, em: date | None = None) -> dict:
 
 # Mensagens de cobrança (régua) saem para título com meio de pagamento: boleto registrado, PIX, ou cobrança sem
 # boleto (boleto_situacao 'dispensado', ex.: inadimplência que já vinha sendo cobrada — paga pelo PIX do escritório).
-SQL_COBRADO = ("cobrar=1 AND (banco_id!='' OR pix_copia_cola!='' OR linha_digitavel!=''"
-               " OR COALESCE(boleto_situacao,'')='dispensado')")
+SQL_COBRADO = ("cobrar=1 AND COALESCE(juridico_em,'')='' AND (banco_id!='' OR pix_copia_cola!='' OR linha_digitavel!=''"
+               " OR COALESCE(boleto_situacao,'')='dispensado')")      # em cobrança pela régua (fora: o que está no jurídico)
+
+
+def no_juridico(t: dict) -> bool:
+    """Título enviado ao jurídico: continua registrado e devido, mas nenhuma mensagem de cobrança sai."""
+    return bool(t.get("juridico_em"))
 
 
 def tem_cobranca(t: dict) -> bool:
@@ -94,11 +99,49 @@ def situacao(titulo: dict, em: date | None = None) -> str:
         return titulo["status"]
     if not tem_cobranca(titulo):
         return "sem_cobranca"   # sem boleto/PIX: não é cobrado, não entra em a receber, atraso nem régua
+    if no_juridico(titulo):
+        return "juridico"       # cobrança jurídica: fora da régua e das abas a receber/atrasados; aba própria
     return "atrasado" if date.fromisoformat(titulo["vencimento"]) < (em or hoje()) else "aberto"
 
 
 def enriquecer(t: dict, em: date | None = None) -> dict:
     return t | encargos(t, em) | {"situacao": situacao(t, em)}
+
+
+def enviar_juridico(tid: int, obs: str = "", todos: bool = False, em: date | None = None) -> dict:
+    """ENVIAR PARA O JURÍDICO: o título (ou todos os títulos em aberto do cliente) sai da cobrança NA HORA —
+    e-mails e WhatsApp pendentes são suspensos, a régua e o robô não mexem mais nele. O valor continua registrado
+    (com multa e juros correndo) na aba 'Jurídico' do contas a receber, para o controle do escritório.
+    O boleto que já existe no banco não é cancelado: se o cliente pagar, a baixa cai normalmente."""
+    t = obter_titulo(tid)
+    if not t:
+        raise ValueError("Título não encontrado.")
+    if t["status"] != "aberto":
+        raise ValueError("Só título em aberto pode ir para o jurídico.")
+    alvo = ([x for x in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND cpf_cnpj=? AND cobrar=1 ORDER BY vencimento, id",
+                                  (t["cpf_cnpj"],)) if not no_juridico(x)] if todos else [t])
+    if not alvo:
+        return {"titulos": 0, "suspensos": 0}
+    quando = (em or hoje()).isoformat()
+    suspensos = 0
+    with db.conexao() as con:
+        for x in alvo:
+            con.execute("UPDATE titulos SET juridico_em=?, juridico_obs=?, cobrar=1 WHERE id=?", (quando, obs.strip()[:300], x["id"]))
+            suspensos += con.execute("UPDATE eventos_cobranca SET status='suspenso', detalhe='suspenso: título enviado ao jurídico' "
+                                     "WHERE titulo_id=? AND status='pendente'", (x["id"],)).rowcount
+    db.registrar("cobranca", f"{len(alvo)} título(s) de {t['cliente_nome']} enviado(s) ao jurídico em {quando}"
+                 + (f" — {obs.strip()[:120]}" if obs.strip() else "") + f"; {suspensos} mensagem(ns) pendente(s) suspensa(s)")
+    return {"titulos": len(alvo), "suspensos": suspensos, "ids": [x["id"] for x in alvo]}
+
+
+def voltar_do_juridico(tid: int) -> dict:
+    """Retoma a cobrança normal do título (volta para a régua)."""
+    t = obter_titulo(tid)
+    if not t or not no_juridico(t):
+        raise ValueError("Este título não está no jurídico.")
+    atualizar_titulo(tid, juridico_em="", juridico_obs="")
+    db.registrar("cobranca", f"Título {tid} ({t['cliente_nome']}) voltou do jurídico para a cobrança normal")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- contratos
@@ -509,7 +552,7 @@ def listar_titulos(filtro: str = "todos", cpf_cnpj: str = "", competencia: str =
         sql += " AND competencia=?"
         p.append(competencia)
     lst = [enriquecer(t, em) for t in db.linhas(sql + " ORDER BY vencimento, id", p)]
-    if filtro in ("aberto", "atrasado", "pago", "cancelado"):
+    if filtro in ("aberto", "atrasado", "pago", "cancelado", "juridico"):
         lst = [t for t in lst if t["situacao"] == filtro]
     elif filtro == "a_receber":
         lst = [t for t in lst if t["situacao"] in ("aberto", "atrasado")]

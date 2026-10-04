@@ -159,7 +159,9 @@ MIGRACOES = {
                 "nfse_data": "TEXT DEFAULT ''", "extras": "TEXT DEFAULT ''",
                 # cartão de crédito (InfinitePay): nº do pedido, link, valor com a taxa repassada e situação
                 "cartao_id": "TEXT DEFAULT ''", "cartao_link": "TEXT DEFAULT ''", "cartao_total_cent": "INTEGER DEFAULT 0",
-                "cartao_parcelas": "INTEGER DEFAULT 0", "cartao_status": "TEXT DEFAULT ''"},
+                "cartao_parcelas": "INTEGER DEFAULT 0", "cartao_status": "TEXT DEFAULT ''",
+                # cobrança jurídica: data em que o título foi enviado ao jurídico (suspende e-mails/WhatsApp) e observação
+                "juridico_em": "TEXT DEFAULT ''", "juridico_obs": "TEXT DEFAULT ''"},
     # lançamento do extrato que não é título nem despesa: transferencia | aporte | outra_receita | outra_saida
     "movimentos": {"classificacao": "TEXT DEFAULT ''"},
 }

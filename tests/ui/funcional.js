@@ -271,7 +271,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     certo(d.status === 'cancelado' && d.nfse_status === 'cancelada', `${d.status}/${d.nfse_status}`);
   });
   await passo('Contas a receber: todas as abas abrem', async () => {
-    await ir('receber'); for (const f of ['a_receber', 'atrasado', 'pago', 'sem_cobranca', 'sem_nfse', 'cancelado', 'todos']) { await p.click(`.abas button[data-f="${f}"]`); await espera(500); }
+    await ir('receber'); for (const f of ['a_receber', 'atrasado', 'juridico', 'pago', 'sem_cobranca', 'sem_nfse', 'cancelado', 'todos']) { await p.click(`.abas button[data-f="${f}"]`); await espera(500); }
   });
 
   await passo('Cartão de crédito (InfinitePay): link com a taxa repassada e "Pago no cartão"', async () => {
@@ -371,9 +371,10 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     const txt = env.filter(e => e.texto), docs = env.filter(e => e.arquivo);
     certo(txt.length === 1 && txt[0].fone === '5521988887777' && /222,22/.test(txt[0].texto) && !/anexo/.test(txt[0].texto),
       JSON.stringify(env).slice(0, 300));
-    certo(docs.length === 1 && /\.pdf$/i.test(docs[0].arquivo), 'boleto em PDF não foi junto: ' + JSON.stringify(docs));
-    for (let i = 0; i < 10 && (await api('whatsapp/fila')).length; i++) await espera(1000);
-    certo((await api('whatsapp/fila')).length === 0, 'fila não esvaziou');
+    certo(docs.length >= 1 && docs.every(d => /\.pdf$/i.test(d.arquivo)), 'boleto em PDF não foi junto: ' + JSON.stringify(docs));
+    certo(/títulos|Total/.test(txt[0].texto) || docs.length === 1, 'cliente com vários títulos deveria receber a cobrança somada: ' + txt[0].texto.slice(0, 200));
+    for (let i = 0; i < 40 && (await api('whatsapp/fila')).length; i++) await espera(1000);
+    certo((await api('whatsapp/fila')).length === 0, 'fila não esvaziou: ' + JSON.stringify(await api('whatsapp/fila')).slice(0, 300));
     return `lembrete e boleto em PDF (${docs[0].arquivo}) enviados sozinhos para 5521988887777`;
   });
   await passo('WhatsApp automático: mensagem de teste para 21 97186-7366', async () => {
