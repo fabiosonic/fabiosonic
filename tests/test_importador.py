@@ -131,3 +131,76 @@ def test_importacao_completa_o_cadastro_da_empresa(multi):  # noqa: F811
         config.salvar({"empresa": {"nome": "PADARIA NOVA"}, "emissao": {"proximo_dps": 100}})
         assert importador.completar_empresa(importador.arquivo_da_empresa(PADARIA), PADARIA) == []
         assert config.carregar()["empresa"]["nome"] == "PADARIA NOVA" and nac._proximo_dps() == 100
+
+
+def _psicologia(prest: str, toma: str, n: int, nbs: bool = True) -> str:
+    """Nota do Emissor Nacional como a de uma clínica de psicologia (dados fictícios)."""
+    return f"""<?xml version="1.0" encoding="utf-8"?><NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+<infNFSe><xTribNac>Psicologia.</xTribNac><nNFSe>{100 + n}</nNFSe><emit><CNPJ>{prest}</CNPJ><xNome>CLINICA EXEMPLO PSICOLOGIA LTDA</xNome>
+<enderNac><cMun>3304557</cMun><UF>RJ</UF></enderNac></emit><DPS versao="1.01"><infDPS><serie>70000</serie><nDPS>{80 + n}</nDPS>
+<dCompet>2026-09-01</dCompet><cLocEmi>3304557</cLocEmi><prest><CNPJ>{prest}</CNPJ><regTrib><opSimpNac>3</opSimpNac><regApTribSN>1</regApTribSN>
+<regEspTrib>0</regEspTrib></regTrib></prest><toma><CPF>{toma}</CPF><xNome>PACIENTE {n}</xNome></toma><serv><locPrest><cLocPrestacao>3304557</cLocPrestacao></locPrest>
+<cServ><cTribNac>041601</cTribNac><cTribMun>001</cTribMun><xDescServ>PRESTAÇÃO DE SERVIÇO</xDescServ>{"<cNBS>123019800</cNBS>" if nbs else ""}</cServ></serv>
+<valores><vServPrest><vServ>640.00</vServ></vServPrest><trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun>
+<tribFed><piscofins><CST>08</CST></piscofins></tribFed><totTrib><pTotTribSN>6.00</pTotTribSN></totTrib></trib></valores></infDPS></DPS></infNFSe></NFSe>"""
+
+
+def test_importacao_cadastra_o_servico_completo_e_troca_o_modelo_de_fabrica(multi):  # noqa: F811
+    """Caso real (clínica de psicologia, Emissor Nacional): o serviço da empresa vem completo das notas — item 04.16,
+    desdobro 041601, NBS, código municipal, carga tributária e nome 'Psicologia' — uma nota sem NBS não cria serviço
+    duplicado, e o modelo 'Contabilidade' de fábrica deixa de ser o padrão."""
+    import re
+    from nfse_itaborai import lote, nacional as nac, servicos
+    empresas.criar({"nome": "CLINICA EXEMPLO PSICOLOGIA LTDA", "cnpj": PADARIA, "canal": "nacional", "municipio": "3304557"})
+    pasta = multi / "empresas" / PADARIA
+    c = importador.caixa()
+    for n, cpf, nbs in ((1, "52998224725", True), (2, "11144477735", True), (3, "39053344705", False)):
+        (c / f"n{n}.xml").write_text(_psicologia(PADARIA, cpf, n, nbs), encoding="utf-8")
+    g = next(x for x in tratar("importador/analisar", {})["grupos"] if x["cnpj"] == PADARIA)
+    assert len(g["servicos"]) == 1 and g["servicos"][0]["nome"] == "Psicologia" and g["servicos"][0]["notas"] == 3
+    sv = [{"nome": s["nome"], "campos": s["campos"], "padrao": k == 0} for k, s in enumerate(g["servicos"])]
+    r = tratar("importador/importar", {"empresa_id": PADARIA, "cnpj": PADARIA, "servicos": sv})
+    assert r["clientes_novos"] == 3 and "aliquota_simples_pct" in r["regra_geral"]
+    with emissor.usar_empresa(pasta):
+        cat = servicos.listar()
+        assert [(s["nome"], s["padrao"]) for s in cat] == [("Psicologia", True)]          # o modelo de fábrica saiu
+        s = cat[0]
+        assert (s["item_lista_servico"], s["codigo_desdobro"], s["codigo_nbs"], s["codigo_tributacao_municipio"],
+                s["ibpt_percentual"]) == ("04.16", "041601", "123019800", "001", "6.00")
+        xml = nac.gerar_dps(emissor.rps_de_dict(lote.montar_rps("52998224725", "640", "", "2026-10")),
+                            emissor.prestador_do_ambiente(), False, "900", "84")
+        campos = {t: re.search(rf"<{t}>([^<]*)</{t}>", xml).group(1) for t in ("cTribNac", "cTribMun", "cNBS", "pTotTribSN", "cLocEmi")}
+        assert campos == {"cTribNac": "041601", "cTribMun": "001", "cNBS": "123019800", "pTotTribSN": "6.00", "cLocEmi": "3304557"}
+
+
+def _presumido(prest: str, toma: str, n: int) -> str:
+    return f"""<?xml version="1.0" encoding="utf-8"?><NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+<infNFSe><xTribNac>Engenharia.</xTribNac><emit><CNPJ>{prest}</CNPJ><xNome>ENGENHARIA EXEMPLO LTDA</xNome><IM>778899</IM></emit><DPS versao="1.01"><infDPS>
+<serie>1</serie><nDPS>{200 + n}</nDPS><cLocEmi>3303302</cLocEmi><prest><CNPJ>{prest}</CNPJ><regTrib><opSimpNac>1</opSimpNac><regEspTrib>0</regEspTrib></regTrib></prest>
+<toma><CNPJ>{toma}</CNPJ><xNome>CONSTRUTORA {n}</xNome></toma><serv><cServ><cTribNac>070101</cTribNac><xDescServ>PROJETO DE ENGENHARIA</xDescServ>
+<cNBS>114012100</cNBS></cServ></serv><valores><vServPrest><vServ>10000.00</vServ></vServPrest><trib><tribMun><tribISSQN>1</tribISSQN>
+<pAliq>5.00</pAliq><tpRetISSQN>1</tpRetISSQN></tribMun><tribFed><piscofins><CST>01</CST><vBCPisCofins>10000.00</vBCPisCofins><pAliqPis>0.65</pAliqPis>
+<pAliqCofins>3.00</pAliqCofins><vPis>65.00</vPis><vCofins>300.00</vCofins></piscofins></tribFed>
+<totTrib><pTotTrib><pTotTribFed>13.33</pTotTribFed><pTotTribEst>0.00</pTotTribEst><pTotTribMun>5.00</pTotTribMun></pTotTrib></totTrib></trib></valores>
+</infDPS></DPS></infNFSe></NFSe>"""
+
+
+def test_importar_clientes_bat_lucro_presumido_completo(multi, capsys):  # noqa: F811
+    """IMPORTAR_CLIENTES.bat (importação completa sem a tela) numa empresa do Lucro Presumido: regime, ISS 5%,
+    PIS/COFINS, carga tributária por esfera, serviço, inscrição municipal e numeração."""
+    from nfse_itaborai import __main__ as cli, servicos
+    empresas.criar({"nome": "ENGENHARIA EXEMPLO LTDA", "cnpj": PADARIA, "canal": "nacional", "municipio": "3303302"})
+    pasta = multi / "empresas" / PADARIA
+    for n, toma in ((1, "33000167000101"), (2, "54399432000146")):
+        (importador.caixa() / f"e{n}.xml").write_text(_presumido(PADARIA, toma, n), encoding="utf-8")
+    assert cli.importar_clientes() == 0
+    saida = capsys.readouterr().out
+    assert "Serviço PADRÃO: Engenharia — item 07.01, desdobro 070101, NBS 114012100" in saida and "ISS 5.00%" in saida
+    assert "regime tributário" in saida and "forma da carga tributária" in saida
+    with emissor.usar_empresa(pasta):
+        cfg = config.carregar()
+        assert cfg["fiscal"]["regime"] == "presumido" and cfg["fiscal"]["tot_trib_modo"] == "percentual"
+        assert (cfg["fiscal"]["p_tot_fed"], cfg["fiscal"]["p_tot_mun"]) == ("13.33", "5.00")
+        s = servicos.padrao()
+        assert (s["nome"], s["aliquota_iss"], s["ibpt_percentual"]) == ("Engenharia", "5.00", "18.33")
+        assert emissor.env("ITABORAI_IM") == "778899" and len(clientes.listar()) == 2

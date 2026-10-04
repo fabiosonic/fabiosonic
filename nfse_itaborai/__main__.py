@@ -97,6 +97,43 @@ def configurar() -> int:
     return 0
 
 
+def importar_clientes(pasta: Path | None = None) -> int:
+    """Importação completa pelos XML (IMPORTAR_CLIENTES.bat), com o resumo do que foi preenchido."""
+    from . import importador, licenca
+    if not licenca.liberado():
+        print("Licença: " + licenca.situacao()["mensagem"])
+        return 3
+    res = importador.importar_tudo(pasta)
+    if not res:
+        print(f"Nenhum XML de NFS-e na pasta {importador.caixa()}.")
+        return 1
+    for r in res:
+        print()
+        print(f"== {r['nome'] or 'Prestador'} (CNPJ {r['cnpj']}) — {r['notas']} nota(s)")
+        if r.get("erro"):
+            print(f"   NÃO IMPORTADO: {r['erro']}")
+            continue
+        print(f"   Clientes: {r['clientes_novos']} novo(s), {r['clientes_total']} no cadastro"
+              + (f", {r['clientes_com_servico']} ligado(s) ao serviço habitual" if r.get("clientes_com_servico") else ""))
+        from . import empresas, servicos
+        emp = next(e for e in empresas.listar() if e["cnpj"] == r["cnpj"])
+        with emissor.usar_empresa(empresas.pasta(emp)):
+            for s in servicos.listar():
+                print(f"   Serviço{' PADRÃO' if s.get('padrao') else ''}: {s['nome']} — item {s['item_lista_servico']}, "
+                      f"desdobro {s['codigo_desdobro']}, NBS {s['codigo_nbs'] or '-'}, cód. municipal "
+                      f"{s.get('codigo_tributacao_municipio') or '-'}, ISS {s['aliquota_iss'] or '-'}%, carga {s['ibpt_percentual'] or '-'}%")
+        for f in r.get("empresa_completada") or []:
+            print(f"   Empresa: {f}")
+        fiscais = [importador.NOMES_FISCAIS.get(k, k) for k in r.get("regra_geral") or []]
+        if fiscais:
+            print("   Regras fiscais do regime lidas das notas: " + ", ".join(fiscais))
+        if r.get("regras_tomadores"):
+            print(f"   {r['regras_tomadores']} tomador(es) com regra fiscal própria (retenções, ISS retido, órgão público)")
+    print()
+    print("Pronto. Confira em Configurações > Serviços e Regras fiscais antes de emitir em produção.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     for fluxo in (sys.stdout, sys.stderr):
         try:
@@ -120,8 +157,8 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("configurar", help="cria/atualiza o arquivo .env perguntando os dados")
 
-    ic = sub.add_parser("importar-clientes", help="cadastra os tomadores encontrados em XMLs de NFS-e")
-    ic.add_argument("pasta", type=Path)
+    ic = sub.add_parser("importar-clientes", help="importa dos XML de NFS-e: clientes, serviços, empresa e regras fiscais")
+    ic.add_argument("pasta", type=Path, nargs="?", help="pasta com os XML (padrão: IMPORTAR XML)")
 
     sub.add_parser("robo", help="roda a rotina financeira (para o Agendador do Windows)")
 
@@ -151,11 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd == "configurar":
             return configurar()
         if a.cmd == "importar-clientes":
-            from . import clientes
-            r = clientes.importar_xmls(a.pasta, emissor.prestador_do_ambiente().cnpj)
-            print(f"XML lidos: {r['xml_lidos']} | ignorados: {r['xml_ignorados']} | "
-                  f"clientes novos: {r['clientes_novos']} | total no cadastro: {r['clientes_total']}")
-            return 0
+            return importar_clientes(a.pasta)
         if a.cmd == "robo":
             from . import automacao
             r = automacao.rodar_todas()

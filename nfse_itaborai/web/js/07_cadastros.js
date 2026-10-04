@@ -62,7 +62,8 @@ async function importarXml(area) {
   area.innerHTML = '<div class="card"><div class="vazio">Lendo a pasta IMPORTAR XML…</div></div>';
   const a = await api("importador/analisar");
   const rot = { descricao: "Descrição", item_lista_servico: "Item LC 116", codigo_desdobro: "Desdobro", codigo_nbs: "NBS", cnae: "CNAE",
-    aliquota_iss: "Alíquota ISS (%)", tipo_tributacao: "Tipo de tributação", iss_retido: "ISS retido (1/2)", indicador_operacao: "IBS/CBS cIndOp", classificacao_tributaria: "IBS/CBS cClassTrib" };
+    aliquota_iss: "Alíquota ISS (%)", tipo_tributacao: "Tipo de tributação", iss_retido: "ISS retido (1/2)", indicador_operacao: "IBS/CBS cIndOp", classificacao_tributaria: "IBS/CBS cClassTrib",
+    codigo_tributacao_municipio: "Código tributação municipal", ibpt_percentual: "Carga tributária aprox. (%)" };
   const opcoes = sel => a.empresas.map(e => `<option value="${esc(e.id)}" ${e.id == sel ? "selected" : ""}>${esc(e.nome)} — ${fmtDoc(e.cnpj)}</option>`).join("");
   area.innerHTML = `<div class="card"><h2>${ic("download")}Importar clientes dos XML</h2>
     <p class="sub">Coloque os XML (ou ZIP) das notas emitidas na pasta <b>${esc(a.pasta)}</b>, de qualquer empresa. Cada nota é ligada à empresa que a emitiu (CNPJ do prestador): os clientes de uma empresa nunca vão para outra. Depois de importados, os arquivos ficam guardados em “importados”, separados por empresa. O robô também importa sozinho as notas novas que você colocar na pasta.</p>
@@ -74,7 +75,7 @@ async function importarXml(area) {
       ${g.empresa_id ? `<details class="imp-padroes" open><summary><b>${(g.servicos || []).length} serviço(s) / atividade(s) encontrados nas notas</b> — marque os que devem ficar cadastrados para emitir</summary>
         ${(g.servicos || []).map((sv, k) => `<div class="imp-serv" data-k="${k}"><div class="imp-serv-cab"><label class="chk"><input type="checkbox" class="imp-sv-usar" ${sv.existente_id ? "" : "checked"}> Cadastrar</label>
           <label>Nome da atividade<input class="imp-sv-nome" value="${esc(sv.nome)}" maxlength="60"></label>
-          <label class="chk"><input type="radio" name="imp_pad_${j}" class="imp-sv-pad"> Tornar padrão</label>
+          <label class="chk"><input type="radio" name="imp_pad_${j}" class="imp-sv-pad" ${k == 0 && !(g.servicos || []).some(x => x.existente_id) ? "checked" : ""}> Tornar padrão</label>
           <span class="sub">${sv.notas} nota(s)${sv.existente_id ? " · já cadastrado (completa só o que faltar)" : ""}</span></div>
           <div class="campos">${Object.entries(rot).map(([c, t]) => `<label class="${c == "descricao" ? "inteiro" : ""}">${t}<input data-pad="${c}" value="${esc(sv.campos[c] || "")}"></label>`).join("")}</div></div>`).join("")}
         <p class="sub">Códigos detectados nas notas (valor mais frequente de cada atividade). Confira com o cadastro municipal antes de emitir. Cada cliente fica ligado à atividade que mais aparece nas notas dele.</p></details>
@@ -131,7 +132,7 @@ function editarServico(s) {
   modal(`<h2>${s.id ? "Editar serviço" : "Novo serviço"}</h2><div class="campos" id="fsv">
     ${f("nome", "Nome da atividade", 'placeholder="ex.: Consultoria" maxlength="60"')}<label class="chk"><input type="checkbox" name="padrao" ${s.padrao ? "checked" : ""}> Serviço padrão da empresa</label>
     <label class="inteiro">Descrição que vai na nota<input name="descricao" maxlength="190" value="${esc(base.descricao || "")}"></label>
-    ${f("item_lista_servico", "Item LC 116 (ex.: 17.19)")}${f("codigo_desdobro", "Desdobro nacional (6 dígitos)")}${f("codigo_nbs", "NBS (9 dígitos)")}${f("cnae", "CNAE")}
+    ${f("item_lista_servico", "Item LC 116 (ex.: 17.19)")}${f("codigo_desdobro", "Desdobro nacional (6 dígitos)")}${f("codigo_nbs", "NBS (9 dígitos)")}${f("codigo_tributacao_municipio", "Código de tributação municipal", 'maxlength="9" placeholder="se o município exigir"')}${f("cnae", "CNAE")}
     ${f("aliquota_iss", "Alíquota ISS (%)")}${f("tipo_tributacao", "Tipo de tributação (4 = Simples)")}${f("iss_retido", "ISS retido (1 sim / 2 não)")}${f("indicador_operacao", "IBS/CBS: cIndOp")}${f("classificacao_tributaria", "IBS/CBS: cClassTrib")}${f("ibpt_percentual", "Carga tributária IBPT (%)")}
     <label class="inteiro">Observações na nota<input name="observacoes" value="${esc(base.observacoes || "")}"></label></div>
     <p class="sub">Confira os códigos com o cadastro municipal da empresa e a Tabela IBS x CBS. Item, NBS e alíquota errados geram rejeição da nota.</p>

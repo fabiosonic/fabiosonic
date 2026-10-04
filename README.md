@@ -216,6 +216,10 @@ na correção.
 
 ## Importar clientes dos XML
 
+**Jeito mais rápido:** dê dois cliques em **`IMPORTAR_CLIENTES.bat`**, coloque os XML/ZIP na pasta que abrir e tecle
+Enter. Ele importa tudo de uma vez (clientes, serviços, empresa, numeração e regras fiscais do regime) e mostra o
+resumo do que foi preenchido. Pela tela, o caminho é o abaixo.
+
 1. Coloque os XML (ou ZIP) das notas já emitidas na pasta **IMPORTAR XML**, dentro da pasta do sistema. Pode
    misturar notas de várias empresas. O `IMPORTAR_CLIENTES.bat` abre essa pasta.
 2. No sistema, em **Clientes › Importar clientes dos XML**:
@@ -226,13 +230,18 @@ na correção.
 3. Regras da importação:
    - os clientes só entram na empresa que emitiu as notas, nunca em outra;
    - se o prestador ainda não estiver cadastrado, o link "Cadastrar esta empresa" abre o cadastro já preenchido.
-4. **Cadastro da empresa completado pelas notas:** na importação, o que ainda estiver vazio é preenchido com o que
+4. **Serviços completos pelas notas:** cada atividade das notas vira um serviço com item da LC 116, desdobro
+   nacional, NBS, código de tributação municipal, alíquota, carga tributária aproximada e o nome que o próprio Emissor
+   Nacional dá ao código (ex.: "Psicologia"). Nota sem NBS entra na atividade de mesmo código (não duplica). O serviço
+   mais usado vira o **padrão**, e o modelo "Contabilidade" que vem no sistema sai da lista quando a empresa não o usa.
+   A alíquota efetiva do Simples informada nas notas passa a ser usada até o sistema ter 12 meses de faturamento.
+5. **Cadastro da empresa completado pelas notas:** na importação, o que ainda estiver vazio é preenchido com o que
    as notas emitidas mostram — nome da empresa (e assinatura das mensagens), inscrição municipal e, no Emissor
    Nacional, o código IBGE do município. A numeração continua de onde parou: o próximo RPS/DPS passa a ser o maior
    número já usado + 1 (nunca volta). Nada que já esteja preenchido é trocado.
-5. Depois de importados, os arquivos vão para `IMPORTAR XML\importados\<CNPJ>`. Essa passa a ser a pasta de
+6. Depois de importados, os arquivos vão para `IMPORTAR XML\importados\<CNPJ>`. Essa passa a ser a pasta de
    XML daquela empresa para o robô (notas emitidas fora do sistema e contratos detectados).
-6. O robô também importa sozinho os clientes das notas novas que aparecerem na pasta, cada uma na sua empresa.
+7. O robô também importa sozinho os clientes das notas novas que aparecerem na pasta, cada uma na sua empresa.
    Os padrões da nota só mudam quando você confirma na tela.
 
 ## 13º honorário

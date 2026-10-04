@@ -59,7 +59,7 @@ def _nacional(raiz) -> dict:
          "p_pis": str(p_pis.normalize()) if p_pis else "", "p_cofins": str(p_cof.normalize()) if p_cof else ""}
     tot = _achar(dps, "totTrib")
     if _achar(tot, "pTotTribSN") is not None:
-        g["tot_trib_modo"] = "simples"
+        g |= {"tot_trib_modo": "simples", "p_tot_sn": _texto(tot, "pTotTribSN")}
     elif _achar(tot, "pTotTrib") is not None:
         g |= {"tot_trib_modo": "percentual", "p_tot_fed": _texto(tot, "pTotTribFed"),
               "p_tot_est": _texto(tot, "pTotTribEst"), "p_tot_mun": _texto(tot, "pTotTribMun")}
@@ -187,9 +187,20 @@ def aplicar_geral(notas: list[dict]) -> list[str]:
             novo_f[k] = g[k]
     if g.get("tem_ibscbs") and regime in ("simples", "mei") and f.get("ibscbs", "auto") == "auto":
         novo_f["ibscbs"] = "sempre"            # a empresa já informava IBS/CBS antes de ser obrigatório
+    novo_fin: dict = {}
+    # alíquota efetiva do Simples que a empresa vinha informando (pTotTribSN): usada enquanto o sistema não tem
+    # 12 meses de faturamento para calcular pelo RBT12 — só troca o valor de fábrica, nunca um ajuste do escritório
+    if g.get("p_tot_sn"):
+        try:
+            atual = float(cfg["financeiro"].get("aliquota_simples_pct") or 0)
+            if atual == float(config.PADRAO["financeiro"]["aliquota_simples_pct"]) and float(g["p_tot_sn"]) != atual:
+                novo_fin["aliquota_simples_pct"] = float(g["p_tot_sn"])
+        except ValueError:
+            pass
     novo_f["lido_dos_xml"] = True
-    config.salvar({"fiscal": novo_f, "emissao": novo_e} if novo_e else {"fiscal": novo_f})
-    return [k for k in list(novo_f) + list(novo_e) if k != "lido_dos_xml"]
+    salvar = {"fiscal": novo_f} | ({"emissao": novo_e} if novo_e else {}) | ({"financeiro": novo_fin} if novo_fin else {})
+    config.salvar(salvar)
+    return [k for k in list(novo_f) + list(novo_e) + list(novo_fin) if k != "lido_dos_xml"]
 
 
 CAMPOS_COMPARAR = ("iss_retido", "aliquota_iss_retido", "ret_iss_por", "ret_irrf_pct", "ret_pis_pct", "ret_cofins_pct",

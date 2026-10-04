@@ -17,7 +17,7 @@ from . import emissor
 ARQ_FABRICA = Path(__file__).resolve().parent.parent / "servico_padrao.json"
 CAMPOS = ("descricao", "item_lista_servico", "codigo_desdobro", "codigo_nbs", "cnae", "aliquota_iss",
           "tipo_tributacao", "iss_retido", "indicador_operacao", "classificacao_tributaria", "ibpt_percentual",
-          "observacoes")
+          "observacoes", "codigo_tributacao_municipio")
 
 
 def _arquivo() -> Path:

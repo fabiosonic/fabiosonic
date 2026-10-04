@@ -40,7 +40,7 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
         # local da prestação e do recolhimento: município da empresa emissora (multiempresa)
         "local_prestacao": x.get("local_prestacao") or _municipio(),
         "local_recolhimento": x.get("local_recolhimento") or _municipio(), "local_prestacao_empresa": _municipio(),
-        "codigo_tributacao_municipio": x.get("c_trib_mun", ""),
+        "codigo_tributacao_municipio": x.get("c_trib_mun") or p.get("codigo_tributacao_municipio", ""),
         "desconto_incondicionado": x.get("desc_incond", "0"), "desconto_condicionado": x.get("desc_cond", "0"),
         "valor_deducoes": str(ded), "codigo_obra": x.get("obra_cno", "") if len(x.get("obra_cno", "")) <= 6 else "",
         "extras": x,
