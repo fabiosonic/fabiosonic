@@ -157,9 +157,9 @@ com erro nunca entram na régua.
 **Pela tela:** preencha o tomador e os itens e clique em **Conferir XML**. Depois use
 **Emitir em homologação** e, por fim, **Emitir em PRODUÇÃO**.
 
-Item, NBS, desdobro, CNAE, alíquota e IBS/CBS vêm de `servico_padrao.json`, com os
-dados da Moraes & Oliveira: 17.19 / NBS 113022100 / desdobro 17.19.01 / CNAE 6920601 / cIndOp 100301 /
-cClassTrib 200052. Os códigos de IBS/CBS seguem a **Tabela IBS x CBS** da prefeitura para o item 17.19. O
+Item, NBS, desdobro, CNAE, alíquota e IBS/CBS vêm de `servico_padrao.json`, que já vem preenchido para escritório
+de contabilidade: 17.19 / NBS 113022100 / desdobro 17.19.01 / CNAE 6920601 / cIndOp 100301 /
+cClassTrib 200052 (revise para a atividade da sua empresa). Os códigos de IBS/CBS seguem a **Tabela IBS x CBS** da prefeitura para o item 17.19. O
 cClassTrib 200052 corresponde à redução de 30% para profissões intelectuais (LC 214/2025, art. 127). Outros
 serviços devem usar o par cIndOp/cClassTrib que a tabela indica para o respectivo item e NBS.
 
@@ -247,8 +247,8 @@ Configurações › Cobrança.
 
 ## Várias empresas
 
-O sistema atende quantas empresas você quiser: a Moraes & Oliveira e as empresas para as quais você emite nota e
-controla o financeiro.
+O sistema atende quantas empresas você quiser: a sua e as empresas para as quais você emite nota e controla o
+financeiro (dentro do limite da licença).
 
 - **Trocar ou cadastrar:** clique no nome da empresa, no topo do menu. Na nova empresa informe razão social, CNPJ
   (validado), inscrição municipal, canal da NFS-e (Itaboraí ou Nacional) e município.
@@ -481,9 +481,8 @@ cartão ou **baixa manual** (botão *Baixar* em Contas a receber): se a NFS-e do
 "Emitir na baixa") ou ainda não saiu, ela é emitida na hora, em produção, e a tela mostra o número da nota (ou o
 motivo, se a prefeitura recusar — o robô tenta de novo). Em homologação a nota fica pendente.
 
-A regra é **por empresa** (Configurações › Emissão). Na **Moraes & Oliveira** ela é **"Emitir quando o cliente
-pagar"**: a nota só sai na baixa do título, automática (boleto/PIX recebido no Inter, extrato) ou manual. A atualização
-aplica essa regra uma única vez e só nessa empresa; as demais mantêm a regra de cada uma. Clientes com regra própria na
+A regra é **por empresa** (Configurações › Emissão). Com **"Emitir quando o cliente pagar"** a nota só sai na baixa do
+título, automática (boleto/PIX recebido no Inter, extrato) ou manual. Cada empresa tem a sua regra. Clientes com regra própria na
 Recorrência continuam com a deles, e a regra pode ser trocada a qualquer momento em Configurações.
 
 O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR Code do PIX. Por isso, quando o PDF vai
@@ -553,6 +552,20 @@ financeira, fora da base do ISS.
 Os campos de data são digitados no padrão brasileiro (**dd/mm/aaaa**, com máscara e botão de calendário) e os de mês
 são escolhidos por extenso (janeiro…dezembro + ano), qualquer que seja o idioma do navegador ou do Windows. Data
 impossível (ex.: 31/02) fica marcada em vermelho e não é aceita.
+
+### Licença de uso (mensalidade)
+
+O sistema funciona por licença com período, emitida pelo fornecedor:
+
+- **Avaliação:** instalação nova funciona por 15 dias sem licença.
+- **Ativar:** em Configurações › Licença de uso (ou na tela que aparece quando a licença vence), cole a chave
+  `NFSE1-…` ou abra o arquivo `.lic` recebido. A chave vale para o **CNPJ da empresa principal** desta instalação.
+- **Aviso:** 10 dias antes do vencimento o Painel avisa. Depois de vencida, há 5 dias de carência com aviso.
+- **Bloqueio:** passada a carência, emissão de notas, cobrança, conciliação e o robô param. Os dados continuam
+  guardados; dá para abrir a tela, fazer backup e ativar a nova chave, e tudo volta na hora.
+- **Proteções:** a chave é assinada digitalmente pelo fornecedor (alterar validade ou CNPJ invalida a chave); data do
+  computador atrasada de propósito é detectada; apagar o arquivo de controle não reinicia a avaliação.
+- A licença pode limitar a quantidade de empresas da instalação.
 
 ### Importar inadimplência do Nitrus
 

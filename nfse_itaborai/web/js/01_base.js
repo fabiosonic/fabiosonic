@@ -38,6 +38,7 @@ async function api(rota, corpo) {
   const r = await fetch("/api/" + rota, { method: "POST", headers: API_CAB, body: JSON.stringify(corpo || {}) });
   const d = await r.json();
   if (d && d.bloqueado) { telaPin(); throw new Error(d.erro); }
+  if (d && d.licenca_bloqueada) { telaLicenca(d.licenca); throw new Error(d.erro); }
   if (d && d.erro && !Array.isArray(d)) { aviso("⚠ " + d.erro, 7000); destravar(); throw new Error(d.erro); }
   return d;
 }

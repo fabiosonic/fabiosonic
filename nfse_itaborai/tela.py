@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, contatos, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, contatos, licenca, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -212,12 +212,14 @@ ROTAS = {
     "backup/restaurar": lambda c: backup.restaurar(backup.arquivo(str(c.get("nome", ""))), senha=str(c.get("senha") or "")),
     "backup/restaurar_arquivo": _restaurar_arquivo,
     "backup/abrir_pasta": lambda c: _abrir_pasta(backup.pasta_backups()),
-    "empresa/criar": lambda c: (empresas.criar(c), {"empresas": empresas.listar()})[1],
+    "empresa/criar": lambda c: (_limite_empresas(), empresas.criar(c), {"empresas": empresas.listar()})[2],
+    "licenca/status": lambda c: licenca.situacao(),
+    "licenca/ativar": lambda c: licenca.ativar(str(c.get("chave") or "")),
     "empresa/ativar": lambda c: (empresas.ativar(str(c.get("id", ""))), {"ok": True})[1],
     "empresa/credenciais": lambda c: empresas.credenciais(),
     "empresa/credenciais/salvar": lambda c: empresas.salvar_credenciais(c),
     "servico/salvar": lambda c: empresas.salvar_servico(c),
-    "estado": lambda c: {"versao": __version__, "empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
+    "estado": lambda c: {"versao": __version__, "licenca": licenca.situacao(), "empresa": empresas.ativa(), "empresas": empresas.listar(),"clientes": clientes.listar(), "padrao": lote.servico_padrao(),
                          "servicos": servicos.listar(), "regra_geral": financeiro.regra_geral(),
                          "regras_nfse": financeiro.regras_por_cliente(), "regras_nomes": financeiro.REGRAS_NFSE,
                          "fiscal_resumo": fiscal.resumo(fiscal.geral()), "regimes": fiscal.REGIMES,
@@ -406,6 +408,12 @@ def _editar_titulo(c: dict) -> dict:
     return r
 
 
+def _limite_empresas() -> None:
+    lim = licenca.limite_empresas()
+    if lim and len(empresas.listar()) >= lim:
+        raise ValueError(f"A licença permite {lim} empresa(s) nesta instalação. Fale com o fornecedor para ampliar.")
+
+
 def _novo_titulo(c: dict) -> dict:
     nfse = c.get("nfse") or ("agora" if c.get("emitir_nfse") else "nao")   # agora | pagamento | nao
     tid = financeiro.criar_titulo(c.get("cpf_cnpj", ""), c.get("valor"), c.get("descricao", ""),
@@ -429,6 +437,10 @@ def tratar(rota: str, corpo: dict):
     func = ROTAS.get(rota)
     if not func:
         return {"erro": "Rota inválida"}
+    if rota not in licenca.ROTAS_LIVRES and not rota.startswith("teste/"):
+        lic = licenca.situacao()
+        if not lic["liberado"]:
+            return {"sucesso": False, "licenca_bloqueada": True, "licenca": lic, "erro": lic["mensagem"]}
     try:
         return func(corpo or {})
     except ErroValidacao as ex:

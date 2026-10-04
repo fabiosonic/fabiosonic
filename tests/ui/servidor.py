@@ -17,7 +17,7 @@ pasta.mkdir(parents=True, exist_ok=True)
 os.environ.update({"ITABORAI_CNPJ": "24875410000144", "ITABORAI_IM": "1034265", "ITABORAI_CHAVE": "chave-de-teste-123",
                    "ITABORAI_PROXIMO_RPS": "3509", "ITABORAI_AMBIENTE": "homologacao",
                    "ITABORAI_CIENTE_IRREVERSIVEL": "NAO", "ITABORAI_PASTA": str(pasta),
-                   "NFSE_CHAVE_LOCAL": str(pasta / "chave_local.bin")})
+                   "NFSE_CHAVE_LOCAL": str(pasta / "chave_local.bin"), "APPDATA": str(pasta / "appdata")})
 
 from nfse_itaborai import cliente, clientes, emissor, tela  # noqa: E402
 from test_emissor import Simulador  # noqa: E402

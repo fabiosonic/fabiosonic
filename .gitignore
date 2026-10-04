@@ -11,3 +11,9 @@ exemplos/rps_teste_homologacao.json
 /dados_locais/
 tests/ui/node_modules/
 tests/ui/package-lock.json
+
+# licença: a chave PRIVADA do fornecedor nunca vai para o repositório
+chave_privada*.json
+GeradorLicencas/
+licencas_emitidas.csv
+/servicos.json

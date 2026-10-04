@@ -41,6 +41,10 @@ def _trava():
 
 
 def rodar(em: date | None = None, forcar: bool = False, url: str | None = None) -> dict:
+    from . import licenca
+    lic = licenca.situacao()
+    if not lic["liberado"]:
+        return {"executado": False, "motivo": lic["mensagem"]}
     with _trava() as livre:
         if not livre:
             return {"executado": False, "motivo": "Outra execução do robô está em andamento."}
@@ -49,7 +53,11 @@ def rodar(em: date | None = None, forcar: bool = False, url: str | None = None) 
 
 def rodar_todas(em: date | None = None, forcar: bool = False) -> dict:
     """Multiempresa: roda a rotina de cada empresa cadastrada, cada uma com a sua pasta (dados e credenciais)."""
-    from . import empresas
+    from . import empresas, licenca
+    lic = licenca.situacao()
+    if not lic["liberado"]:          # licença vencida: o robô não emite, não cobra e não envia nada
+        db.registrar("licenca", f"Robô parado: {lic['mensagem']}")
+        return {"executado": False, "motivo": lic["mensagem"]}
     res = {}
     for e in empresas.listar():
         with emissor.usar_empresa(empresas.pasta(e)):

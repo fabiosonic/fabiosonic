@@ -11,3 +11,13 @@ def _chave_local(tmp_path_factory, monkeypatch):
 def _envio_sempre(monkeypatch):
     """Os testes rodam a qualquer hora: o horário comercial dos envios é testado à parte (test_horario.py)."""
     monkeypatch.setenv("NFSE_ENVIO_SEMPRE", "1")
+
+
+@pytest.fixture(autouse=True)
+def _licenca_liberada(request, monkeypatch):
+    """Os testes rodam com a licença liberada; a licença em si é testada em test_licenca.py (marca 'licenca_real')."""
+    if request.node.get_closest_marker("licenca_real"):
+        return
+    from nfse_itaborai import licenca
+    monkeypatch.setattr(licenca, "situacao", lambda hoje=None: {"liberado": True, "status": "ativa", "mensagem": "",
+                                                                 "cnpj_instalacao": "", "fornecedor": {}})

@@ -21,6 +21,7 @@ pasta, porta = Path(sys.argv[1]), int(sys.argv[2])
                             "ITABORAI_PROXIMO_RPS=3509\nITABORAI_AMBIENTE=homologacao\nITABORAI_CIENTE_IRREVERSIVEL=NAO\n",
                             encoding="utf-8")
 os.environ.update({"ITABORAI_PASTA": str(pasta), "NFSE_CHAVE_LOCAL": str(pasta / "chave_local.bin"),
+                   "APPDATA": str(pasta / "appdata"),
                    "NFSE_ENVIO_SEMPRE": "1"})       # o teste roda a qualquer hora (horário comercial testado à parte)
 
 from cryptography.hazmat.primitives import serialization  # noqa: E402
@@ -171,6 +172,14 @@ tela.ROTAS["teste/infinitepay_pagar"] = lambda c: (FakeInfinitePay.pagos.__setit
 tela.ROTAS["teste/whatsapp_enviados"] = lambda c: {"enviados": FakeMeta.enviados}
 tela.ROTAS["teste/whatsapp_web_logar"] = lambda c: (setattr(FakeWhatsAppWeb, "logado", True), {"ok": True})[1]
 tela.ROTAS["teste/whatsapp_web_enviados"] = lambda c: {"enviados": FakeWhatsAppWeb.enviados}
+
+# licença: chave de teste (a do fornecedor nunca entra nos testes); a tela começa em avaliação
+from nfse_itaborai import licenca  # noqa: E402
+_PUB, _PRIV = licenca.gerar_chaves(1024)
+licenca.CHAVE_PUBLICA = _PUB
+tela.ROTAS["teste/licenca"] = lambda c: {"chave": licenca.emitir(
+    {"id": "T-1", "cliente": "ESCRITORIO DE TESTE", "cnpj": str(c.get("cnpj", "24875410000144")),
+     "validade": str(c.get("validade", "2027-10-31")), "empresas": int(c.get("empresas", 0))}, _PRIV)}
 srv = ThreadingHTTPServer(("127.0.0.1", porta), tela._Handler)
 print("pronto", flush=True)
 srv.serve_forever()

@@ -451,7 +451,7 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
     msg = EmailMessage()
     usuario = str(s.get("usuario") or "").strip()
     remetente = str(s.get("remetente") or "").strip()
-    # "MORAES" sozinho não é endereço: vira o nome de exibição do e-mail do usuário (MORAES <usuario@...>)
+    # "FULANO" sozinho não é endereço: vira o nome de exibição do e-mail do usuário (FULANO <usuario@...>)
     msg["From"] = remetente if "@" in remetente else formataddr((remetente, usuario)) if remetente else usuario
     msg["To"] = para
     if s.get("copia_para"):

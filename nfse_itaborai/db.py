@@ -193,7 +193,7 @@ def _migrar(con: sqlite3.Connection) -> None:
         con.execute("PRAGMA user_version=3")
         con.commit()
     if con.execute("PRAGMA user_version").fetchone()[0] < 4:
-        # pedido do escritório (Moraes & Oliveira): a recorrência começa em outubro/2026
+        # migração única (empresas de CNPJ_REGRA_BAIXA): a recorrência começa em outubro/2026
         from . import config
         if config._cnpj_da_pasta() in config.CNPJ_REGRA_BAIXA:
             # só as que começariam até nov/2026; uma recorrência marcada de propósito para mais tarde não é puxada

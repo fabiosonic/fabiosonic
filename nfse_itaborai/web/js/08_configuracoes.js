@@ -43,6 +43,7 @@ PAGINAS.config = async el => {
       <label class="btn sec"><input type="file" id="bk_arq" accept=".zip,.protegido" hidden>Restaurar de um arquivo…</label></p>
     <p class="sub">Restaurar volta a empresa ao estado do backup. Antes, o sistema faz um backup do estado atual (dá para desfazer). A numeração do RPS/DPS nunca volta atrás e o ambiente (homologação/produção) não muda. Backup de uma empresa nunca é restaurado em outra.</p>
     <div id="bk_lista"><div class="vazio">Carregando…</div></div></div>
+  <div id="card_lic"></div>
   <div class="card" id="card_pin"></div>
   <div class="card" id="card_atual"></div>
   <div class="card"><h2>${ic("play")}Robô financeiro</h2><p class="sub">Com o robô ligado, o sistema roda sozinho ao abrir e a cada hora (e todo dia pelo Agendador do Windows, se você rodar INSTALAR.bat): gera os títulos dos contratos, emite as NFS-e (só em produção), cria o PIX/boleto, envia a régua de cobrança, dá baixa nos pagamentos e faz backup.</p>
@@ -164,7 +165,7 @@ PAGINAS.config = async el => {
   $$("[data-k]", rf).forEach(i => { const v = VIS_CFG[i.dataset.k]; if (v) (i.closest("label") || i).dataset.vis = v; });
   const atuReg = () => aplicarVis(rf, ctxFiscal({ regime: selReg.value }));
   $$("[data-k]", rf).forEach(i => i.addEventListener("change", atuReg)); atuReg();
-  listarBackups(); cartaoPin($("#card_pin")); cartaoAtualizacao($("#card_atual"));
+  listarBackups(); cartaoLicenca($("#card_lic")); cartaoPin($("#card_pin")); cartaoAtualizacao($("#card_atual"));
   $("#bk_criar").onclick = async () => { if (!await salvarTudo()) return; aviso("Gerando o backup…", 30000); const r = await api("backup/criar");
     aviso(`Backup criado ✔ ${r.nome} (${tamanho(r.tamanho)})${r.copia ? " · cópia em " + r.copia : ""}`, 8000); listarBackups(); };
   $("#bk_pasta").onclick = () => api("backup/abrir_pasta");
@@ -215,7 +216,7 @@ PAGINAS.config = async el => {
     aviso("Enviando a mensagem de teste pelo WhatsApp…", 20000); const r = await api("whatsapp_web/teste", { telefone: tel }); aviso(r.mensagem || "OK", 8000); };
   $("#teste_wa").onclick = async () => { if (!await salvarTudo()) return; const r = await api("whatsapp/testar"); aviso(r.mensagem || "OK", 6000); };
   api("whatsapp/modelos").then(m => { $("#wa_modelos").innerHTML = Object.values(m).map(x => `<div class="wa-modelo"><p><b>Nome do modelo:</b> <code>${esc(x.nome)}</code> <button class="btn min sec" type="button" data-copia="${esc(x.texto)}">Copiar texto</button></p><pre>${esc(x.texto)}</pre></div>`).join("")
-    + '<p class="sub">Exemplos para a Meta: {{1}} Empresa Exemplo Ltda · {{2}} R$ 374,40 · {{3}} Honorários contábeis - competência 10/2026 · {{4}} 10/10/2026 · {{5}} 07790.00116 12345.678901 · {{6}} 00020101021226… · {{7}} Também aceitamos PIX e boleto, sem acréscimo. · {{8}} Moraes &amp; Oliveira Contabilidade</p>';
+    + '<p class="sub">Exemplos para a Meta: {{1}} Empresa Exemplo Ltda · {{2}} R$ 374,40 · {{3}} Honorários contábeis - competência 10/2026 · {{4}} 10/10/2026 · {{5}} 07790.00116 12345.678901 · {{6}} 00020101021226… · {{7}} Também aceitamos PIX e boleto, sem acréscimo. · {{8}} Escritório Exemplo Contabilidade</p>';
     $$("[data-copia]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copia); aviso("Texto copiado"); }); });
   $("#teste_cartao").onclick = async () => { if (!await salvarTudo()) return; const r = await api("cartao/testar"); aviso(r.mensagem || "OK", 6000); };
   const simCartao = async () => { const x = await api("cartao/simular", { valor: "1000", parcelas: 1 });
@@ -229,6 +230,49 @@ PAGINAS.config = async el => {
 };
 
 // ---------------------------------------------------------------- PIN de acesso
+// ---------------------------------------------------------------- licença de uso
+function contatoFornecedor(f) {
+  f = f || {};
+  const partes = [f.nome && `<b>${esc(f.nome)}</b>`, f.whatsapp && `WhatsApp ${esc(f.whatsapp)}`, f.email && esc(f.email)].filter(Boolean);
+  return partes.length ? `<p class="sub">Fornecedor: ${partes.join(" · ")}</p>` : "";
+}
+function formLicenca(id) {
+  return `<label class="inteiro">Chave de licença<textarea id="${id}_chave" rows="3" placeholder="NFSE1-…" spellcheck="false" style="font-family:Consolas,Menlo,monospace;font-size:12px"></textarea></label>
+    <p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" id="${id}_ok" type="button">${ic("ok")}Ativar licença</button>
+    <label class="btn sec" style="cursor:pointer">${ic("download")}Abrir arquivo .lic<input type="file" id="${id}_arq" accept=".lic,.txt" hidden></label></p><p id="${id}_msg" class="sub"></p>`;
+}
+function ligarFormLicenca(id, depois) {
+  $(`#${id}_arq`).onchange = async e => { const f = e.target.files[0]; if (f) $(`#${id}_chave`).value = (await f.text()).trim(); };
+  $(`#${id}_ok`).onclick = async () => {
+    const chave = $(`#${id}_chave`).value.trim(); if (!chave) return;
+    const r = await (await fetch("/api/licenca/ativar", { method: "POST", headers: API_CAB, body: JSON.stringify({ chave }) })).json();
+    if (r.erro) { $(`#${id}_msg`).innerHTML = `<span class="neg">${esc(r.erro)}</span>`; return; }
+    $(`#${id}_msg`).textContent = r.mensagem; aviso("Licença ativada ✔ " + r.mensagem, 8000); depois(r);
+  };
+}
+function telaLicenca(lic) {
+  lic = lic || {};
+  if ($("#tela_lic")) return;
+  const d = document.createElement("div");
+  d.id = "tela_lic"; d.className = "tela-pin";
+  d.innerHTML = `<div class="caixa-pin" style="max-width:560px"><h1>${ic("cadeado")} Licença</h1>
+    <p>${esc(lic.mensagem || "Ative a licença para usar o sistema.")}</p>
+    <p class="sub">Envie ao fornecedor o CNPJ desta instalação: <b>${lic.cnpj_instalacao ? fmtDoc(lic.cnpj_instalacao) : "(configure o CNPJ da empresa)"}</b>. Seus dados continuam guardados; consultas e backup seguem disponíveis.</p>
+    ${contatoFornecedor(lic.fornecedor)}${formLicenca("tl")}</div>`;
+  document.body.appendChild(d);
+  ligarFormLicenca("tl", r => { if (r.liberado) location.reload(); });
+}
+async function cartaoLicenca(box) {
+  const s = await api("licenca/status");
+  const cls = { ativa: "bom", aviso: "atencao", carencia: "critico", teste: "info", bloqueada: "critico" }[s.status] || "neutro";
+  const rot = { ativa: "Ativa", aviso: "Vence em breve", carencia: "Vencida (carência)", teste: "Avaliação", bloqueada: "Bloqueada" }[s.status] || s.status;
+  box.innerHTML = `<div class="card"><h2>${ic("cadeado")}Licença de uso</h2>
+    <p>${estadoSelo(cls, rot)} ${esc(s.mensagem)}</p>
+    ${s.cliente ? `<p class="sub">Licenciado: <b>${esc(s.cliente)}</b> · CNPJ ${fmtDoc(s.cnpj || "")}${s.empresas ? ` · até ${s.empresas} empresa(s)` : " · empresas ilimitadas"}${s.id ? ` · licença ${esc(s.id)}` : ""}</p>` : ""}
+    <p class="sub">CNPJ desta instalação: <b>${s.cnpj_instalacao ? fmtDoc(s.cnpj_instalacao) : "não configurado"}</b>. Para renovar, cole a nova chave abaixo.</p>
+    ${contatoFornecedor(s.fornecedor)}<div class="campos">${formLicenca("cl")}</div></div>`;
+  ligarFormLicenca("cl", () => { carregarEstado(); cartaoLicenca(box); });
+}
 function telaPin() {
   if ($("#tela_pin")) return;
   const d = document.createElement("div");

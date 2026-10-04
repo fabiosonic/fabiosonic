@@ -99,6 +99,20 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await ir('config', 1500); certo(await p.isVisible('#lista_serv'), 'lista de serviços não aparece');
     certo((await api('servicos')).length === antes + 1, 'serviço não cadastrado');
   });
+  await passo('Licença: avaliação, chave adulterada recusada e ativação pela tela', async () => {
+    let s = await api('licenca/status');
+    certo(s.liberado && s.status === 'teste', 'instalação nova deveria estar em avaliação: ' + JSON.stringify(s));
+    await ir('config', 1500);
+    certo(/Licença de uso/.test(await p.textContent('#card_lic')), 'cartão da licença não apareceu');
+    const { chave } = await api('teste/licenca', { validade: '2027-10-31' });
+    const adulterada = chave.replace(/\.(.)/, (m, c) => '.' + (c === 'A' ? 'B' : 'A'));
+    await p.fill('#cl_chave', adulterada); await p.click('#cl_ok'); await espera(800);
+    certo(/inválida/.test(await p.textContent('#cl_msg')), 'chave adulterada não foi recusada: ' + await p.textContent('#cl_msg'));
+    await p.fill('#cl_chave', chave); await p.click('#cl_ok'); await espera(1200);
+    s = await api('licenca/status');
+    certo(s.liberado && s.status === 'ativa' && s.validade === '2027-10-31' && s.cliente === 'ESCRITORIO DE TESTE', JSON.stringify(s));
+    return 'licença ativa até 31/10/2027';
+  });
   await passo('Configurações: salvar tudo', async () => {
     await ir('config', 1500); await p.click('#salvar'); await espera(1200);
     certo(/salv/i.test(await aviso()), 'sem confirmação: ' + await aviso());

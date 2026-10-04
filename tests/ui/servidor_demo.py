@@ -18,7 +18,8 @@ pasta, porta = Path(sys.argv[1]), int(sys.argv[2])
 pasta.mkdir(parents=True, exist_ok=True)
 (pasta / ".env").write_text("ITABORAI_CNPJ=24875410000144\nITABORAI_IM=1034265\nITABORAI_CHAVE=chave-de-teste-123\n"
                             "ITABORAI_PROXIMO_RPS=3509\nITABORAI_AMBIENTE=homologacao\n", encoding="utf-8")
-os.environ.update({"ITABORAI_PASTA": str(pasta), "NFSE_CHAVE_LOCAL": str(pasta / "chave_local.bin")})
+os.environ.update({"ITABORAI_PASTA": str(pasta), "NFSE_CHAVE_LOCAL": str(pasta / "chave_local.bin"),
+                   "APPDATA": str(pasta / "appdata")})     # controle da licença (avaliação) isolado no teste
 
 from nfse_itaborai import clientes, config, db, emissor, financeiro, tela  # noqa: E402
 

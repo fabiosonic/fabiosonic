@@ -14,3 +14,4 @@ teste = ["pytest", "lxml", "cryptography"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["licenca_real: testa a licença de verdade (sem a liberação automática dos testes)"]

@@ -202,6 +202,7 @@ function docDe(txt) { const m = String(txt).match(/(\d[\d./-]{7,})\s*$/); return
 function form(el) { const o = {}; $$("[name]", el).forEach(i => o[i.name] = i.type == "checkbox" ? i.checked : i.value); return o; }
 async function carregarEstado() {
   ST = await api("estado");
+  if (ST.licenca && !ST.licenca.liberado) telaLicenca(ST.licenca);
   const b = $("#amb");
   b.innerHTML = `<span class="ponto"></span><span><b>${ST.producao ? "Produção" : "Homologação"}</b><small>${ST.producao ? "Notas com validade fiscal" : "Teste, sem validade"} · ${nomeCanal(true)} · v${esc(ST.versao || "")}</small></span>`;
   b.className = "amb " + (ST.producao ? "prod" : "hom");

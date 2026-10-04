@@ -9,11 +9,11 @@ from . import emissor, segredos
 
 PADRAO = {
     "empresa": {
-        "nome": "MORAES & OLIVEIRA CONTABILIDADE",
+        "nome": "",                 # razão social da empresa emissora (Configurações › Empresa)
         "pix_chave": "",            # chave PIX que recebe (CNPJ, e-mail, telefone ou aleatória)
         "pix_cidade": "ITABORAI",
         "whatsapp": "",             # número do escritório, aparece nas mensagens
-        "assinatura": "Moraes & Oliveira Contabilidade",
+        "assinatura": "",           # assinatura das mensagens (vazia = nome da empresa)
     },
     "smtp": {"host": "", "porta": 587, "usuario": "", "senha": "", "remetente": "", "ssl": False,
              "copia_para": ""},
@@ -184,7 +184,7 @@ def _mesclar(base: dict, extra: dict) -> dict:
     return base
 
 
-CNPJ_REGRA_BAIXA = {"24875410000144"}     # Moraes & Oliveira Contabilidade: NFS-e só na baixa
+CNPJ_REGRA_BAIXA: set[str] = set()   # empresas cuja regra muda uma única vez para "NFS-e só na baixa" (já aplicada)
 
 
 def _cnpj_da_pasta(arq=None) -> str:
@@ -210,8 +210,8 @@ def carregar() -> dict:
             cob["migrado_inter"] = True
             salvo["cobranca"] = cob
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
-        # v3.4.4 (pedido do escritório): na Moraes & Oliveira a NFS-e só sai na baixa (pagamento reconhecido ou
-        # baixa manual). Muda uma única vez e só nela; as demais empresas mantêm a regra de cada uma.
+        # v3.4.4: migração única da regra da NFS-e para "só na baixa" nas empresas listadas em CNPJ_REGRA_BAIXA;
+        # as demais mantêm a regra de cada uma.
         emi = salvo.setdefault("emissao", {})
         if not emi.get("migrado_regra_baixa"):
             if _cnpj_da_pasta(arq) in CNPJ_REGRA_BAIXA:

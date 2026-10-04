@@ -39,7 +39,7 @@ def configurar() -> int:
             if "=" in linha and not linha.lstrip().startswith("#"):
                 k, v = linha.split("=", 1)
                 atual[k.strip()] = v.strip()
-    padrao = {"ITABORAI_CNPJ": "24875410000144", "ITABORAI_IM": "1034265", "ITABORAI_SIMPLES": "S",
+    padrao = {"ITABORAI_CNPJ": "", "ITABORAI_IM": "", "ITABORAI_SIMPLES": "S",
               "ITABORAI_AMBIENTE": "homologacao", "ITABORAI_CIENTE_IRREVERSIVEL": "NAO"} | atual
 
     def perguntar(chave: str, texto: str, oculto: bool = False) -> None:
