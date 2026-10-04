@@ -48,19 +48,52 @@ def configurar() -> int:
         entrada = (getpass.getpass if oculto else input)(f"{texto} [{mostra}]: ").strip()
         padrao[chave] = entrada or sugestao
 
+    from . import config
+    canal_atual = config.carregar()["emissao"].get("canal", "municipal") if (emissor.RAIZ / "dados" / "config.json").exists() else ""
     print(f"Configurando {arq}  (Enter mantém o valor entre colchetes)")
+    print()
+    print("Como a empresa emite a NFS-e?")
+    print("  1 - Emissor Nacional (nfse.gov.br) - usa o certificado digital A1 da empresa")
+    print("  2 - Webservice da Prefeitura de Itaboraí - usa a Chave Privada Webservice do portal da prefeitura")
+    escolha = ""
+    while escolha not in ("1", "2"):
+        escolha = input(f"Opção [{'2' if canal_atual == 'municipal' else '1'}]: ").strip() or ("2" if canal_atual == "municipal" else "1")
+    nacional = escolha == "1"
     perguntar("ITABORAI_CNPJ", "CNPJ do prestador")
-    perguntar("ITABORAI_IM", "Inscrição municipal")
-    perguntar("ITABORAI_CHAVE", "Chave Privada Webservice (não aparece ao digitar/colar)", oculto=True)
-    perguntar("ITABORAI_PROXIMO_RPS", "Próximo número de RPS")
-    perguntar("ITABORAI_SIMPLES", "Optante do Simples Nacional? (S/N)")
-    if not padrao.get("ITABORAI_CHAVE"):
-        print("Chave não informada: nada foi gravado.")
+    padrao["ITABORAI_CNPJ"] = "".join(ch for ch in padrao["ITABORAI_CNPJ"] if ch.isdigit())
+    if len(padrao["ITABORAI_CNPJ"]) != 14:
+        print("CNPJ inválido (precisa de 14 números): nada foi gravado.")
         return 2
-    padrao.setdefault("ITABORAI_PROXIMO_LOTE", "1")
-    arq.write_text("".join(f"{k}={v}\n" for k, v in padrao.items()), encoding="utf-8")
-    print(f"OK: {arq} gravado. Produção continua bloqueada até você mudar "
-          "ITABORAI_AMBIENTE=producao e ITABORAI_CIENTE_IRREVERSIVEL=SIM nesse arquivo.")
+    perguntar("ITABORAI_IM", "Inscrição municipal" + (" (se não tiver, deixe em branco)" if nacional else ""))
+    municipio = ""
+    if nacional:
+        sugestao = config.carregar()["emissao"].get("municipio_emissor", "") if canal_atual == "nacional" else ""
+        while len(municipio) != 7:
+            municipio = "".join(ch for ch in (input(f"Código IBGE do município da empresa (7 números, ex.: 3304557 Rio de "
+                                                    f"Janeiro; consulte em ibge.gov.br) [{sugestao}]: ").strip() or sugestao)
+                                if ch.isdigit())
+            if len(municipio) != 7:
+                print("  O código do IBGE tem 7 números.")
+        perguntar("ITABORAI_SIMPLES", "Optante do Simples Nacional? (S/N)")
+    else:
+        perguntar("ITABORAI_CHAVE", "Chave Privada Webservice (não aparece ao digitar/colar)", oculto=True)
+        perguntar("ITABORAI_PROXIMO_RPS", "Próximo número de RPS")
+        perguntar("ITABORAI_SIMPLES", "Optante do Simples Nacional? (S/N)")
+        if not padrao.get("ITABORAI_CHAVE"):
+            print("Chave não informada: nada foi gravado. (Se a empresa emite pelo nfse.gov.br, escolha a opção 1.)")
+            return 2
+        padrao.setdefault("ITABORAI_PROXIMO_LOTE", "1")
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    arq.write_text("".join(f"{k}={v}\n" for k, v in padrao.items() if v != "" or k == "ITABORAI_IM"), encoding="utf-8")
+    emissao = {"canal": "nacional", "municipio_emissor": municipio} if nacional else {"canal": "municipal"}
+    config.salvar({"emissao": emissao})
+    print()
+    print(f"OK: {arq} gravado.")
+    if nacional:
+        print("Próximo passo: na tela do sistema, em Configurações > Empresa emissora e credenciais, selecione o")
+        print("certificado digital A1 (.pfx) da empresa e informe a senha. Ele assina as notas do Emissor Nacional.")
+    print("Produção continua bloqueada até você ligar em Configurações (ou mudar ITABORAI_AMBIENTE=producao e")
+    print("ITABORAI_CIENTE_IRREVERSIVEL=SIM nesse arquivo).")
     return 0
 
 

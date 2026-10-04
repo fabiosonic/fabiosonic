@@ -153,9 +153,19 @@ def carregar_env(caminho: Path | None = None) -> None:
     ler_env(caminho)
 
 
+def _canal() -> str:
+    try:
+        from . import config
+        return config.carregar()["emissao"].get("canal", "municipal")
+    except Exception:  # noqa: BLE001 — sem configuração legível vale o padrão
+        return "municipal"
+
+
 def prestador_do_ambiente() -> Prestador:
     carregar_env()
-    faltando = [k for k in ("ITABORAI_CNPJ", "ITABORAI_IM", "ITABORAI_CHAVE") if not env(k)]
+    # Emissor Nacional (nfse.gov.br): assina com o certificado A1 — não existe "chave privada webservice"
+    exigidos = ("ITABORAI_CNPJ",) if _canal() == "nacional" else ("ITABORAI_CNPJ", "ITABORAI_IM", "ITABORAI_CHAVE")
+    faltando = [k for k in exigidos if not env(k)]
     if faltando:
         raise ErroConfiguracao("Configure no arquivo .env: " + ", ".join(faltando) + " (veja .env.exemplo).")
     return Prestador(
