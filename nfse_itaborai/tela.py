@@ -112,15 +112,16 @@ def _tirar_da_cobranca(tid: int) -> dict:
 
 def _gerar_cobranca(tid: int) -> dict:
     """Gera o boleto/PIX agora; se o banco recusar, o motivo fica no título (e aparece na lista)."""
-    t = financeiro.obter_titulo(tid)
-    financeiro.atualizar_titulo(tid, cobrar=1, **({"boleto_situacao": ""} if t.get("boleto_situacao") == "dispensado" else {}))
+    antes = financeiro.obter_titulo(tid).get("boleto_situacao") or ""
+    financeiro.atualizar_titulo(tid, cobrar=1, **({"boleto_situacao": ""} if antes == "dispensado" else {}))
     try:
         t = cobranca.preparar_pagamento(tid)
+        if not financeiro.tem_meio_de_pagamento(t):
+            raise ValueError("Boleto/PIX não gerado: configure o Banco Inter (ou a chave PIX do escritório) em Configurações.")
     except Exception as ex:
-        financeiro.atualizar_titulo(tid, cobranca_erro=str(ex)[:300])
+        # sem boleto, o título volta ao que era (cobrança sem boleto continua na régua) e guarda o motivo
+        financeiro.atualizar_titulo(tid, cobranca_erro=str(ex)[:300], **({"boleto_situacao": antes} if antes else {}))
         raise
-    if not financeiro.tem_meio_de_pagamento(t):
-        raise ValueError("Boleto/PIX não gerado: configure o Banco Inter (ou a chave PIX do escritório) em Configurações.")
     return t
 
 

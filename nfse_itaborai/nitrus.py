@@ -18,7 +18,7 @@ import re
 import unicodedata
 from collections import defaultdict
 
-from . import clientes, cobranca, config, db, financeiro
+from . import clientes, db, financeiro
 
 DESCRICAO = "HONORÁRIOS CONTABEIS MENSAIS."
 
@@ -185,7 +185,6 @@ def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) ->
     Os títulos seguem na régua de cobrança sem boleto (já vinham sendo cobrados); 'gerar_agora' fica só por
     compatibilidade — boleto, só pelo botão "Gerar boleto" do título."""
     from .empresas import cnpj_valido
-    cfg = config.carregar()
     res = {"lancados": 0, "com_cobranca": 0, "ja_existiam": 0, "clientes_novos": 0, "pulados": 0, "avisos": []}
     for g in grupos:
         doc = clientes._digitos(g.get("cpf_cnpj"))

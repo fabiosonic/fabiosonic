@@ -302,9 +302,9 @@ def resumo_diario(resultado_robo: dict, em: date | None = None, forcar: bool = F
             + "".join(f'<tr><td style="padding:7px 0;color:#667085;font-size:14px;border-bottom:1px solid #eef0f4">{e(r)}</td>'
                       f'<td style="padding:7px 0;text-align:right;font-weight:700;font-size:14px;color:#101828;border-bottom:1px solid #eef0f4">{e(v)}</td></tr>'
                       for r, v in numeros) + "</table>"
-            + (f'<div style="margin-top:16px;padding:12px 14px;background:#fdf1dc;border-radius:8px;color:#7a4500;font-size:14px;line-height:1.5">'
+            + ('<div style="margin-top:16px;padding:12px 14px;background:#fdf1dc;border-radius:8px;color:#7a4500;font-size:14px;line-height:1.5">'
                + "<br>".join(e(a) for a in avisos) + "</div>" if avisos else "")
-            + (f'<p style="margin:16px 0 4px;font-size:13px;color:#667085;font-weight:700">ROBÔ DE HOJE</p><p style="margin:0;font-size:13px;color:#344054;line-height:1.6">'
+            + ('<p style="margin:16px 0 4px;font-size:13px;color:#667085;font-weight:700">ROBÔ DE HOJE</p><p style="margin:0;font-size:13px;color:#344054;line-height:1.6">'
                + "<br>".join(f"{e(k)}: {e(str(v))}" for k, v in robo.items()) + "</p>" if robo else "")
             + '</td></tr></table></td></tr></table></body></html>')
     cobranca.enviar_email(para, f"Resumo financeiro {em:%d/%m} — a receber {b(p['a_receber'])}", "\n".join(linhas), cfg,

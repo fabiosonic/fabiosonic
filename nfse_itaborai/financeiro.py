@@ -364,6 +364,17 @@ def valor_do_mes(k: dict, comp: str) -> tuple[int, str]:
     return max(total, 0), f"{k['descricao']} ({'; '.join(partes)})"[:190]
 
 
+def _mesmo_honorario(descricao: str, do_contrato: str) -> bool:
+    """'HONORÁRIOS CONTABEIS MENSAIS.' ≈ 'HONORARIOS CONTABEIS MENSAIS' (acentos, maiúsculas e pontuação não contam);
+    um avulso como 'HONORÁRIOS - ALTERAÇÃO CONTRATUAL' não é o honorário do mês."""
+    import unicodedata
+    def n(s):
+        s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().upper()
+        return " ".join(re.sub(r"[^A-Z0-9 ]+", " ", s).split())
+    a, b = n(descricao), n(do_contrato)
+    return bool(a) and (a == b or a == "HONORARIOS CONTABEIS MENSAIS" or (b and a == n("HONORARIOS " + b)))
+
+
 def gerar_titulos(competencia: str | None = None, em: date | None = None) -> list[int]:
     """Recorrência: cria o título do mês para cada contrato ativo (idempotente). Aplica reajuste anual."""
     em = em or hoje()
@@ -388,13 +399,15 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
                             (db.agora(), "reajuste", f"Contrato {k['id']}: {reais(k['valor_cent'])} -> {reais(novo)} "
                              f"({k['reajuste_pct']}%)"))
                 k["valor_cent"] = novo
+            if con.execute("SELECT 1 FROM titulos WHERE contrato_id=? AND competencia=?", (k["id"], comp)).fetchone():
+                continue                                   # o título do mês já existe
             # honorário do mês já lançado à mão (ex.: pago por PIX e baixado antes da recorrência começar): não
-            # gera outro — o título existente passa a ser o da recorrência
-            ja = con.execute("SELECT id FROM titulos WHERE cpf_cnpj=? AND competencia=? AND contrato_id IS NULL"
-                             " AND status!='cancelado' AND UPPER(descricao) LIKE 'HONOR%' ORDER BY id LIMIT 1",
-                             (k["cpf_cnpj"], comp)).fetchone()
+            # gera outro — o título existente passa a ser o da recorrência. Só o honorário mensal, não um avulso.
+            avulsos = con.execute("SELECT id, descricao FROM titulos WHERE cpf_cnpj=? AND competencia=? AND contrato_id IS NULL"
+                                  " AND status!='cancelado' ORDER BY id", (k["cpf_cnpj"], comp)).fetchall()
+            ja = [a for a in avulsos if _mesmo_honorario(a[1], k["descricao"])]
             if ja:
-                con.execute("UPDATE titulos SET contrato_id=? WHERE id=?", (k["id"], ja[0]))
+                con.execute("UPDATE titulos SET contrato_id=? WHERE id=?", (k["id"], ja[0][0]))
                 continue
             valor_mes, descricao_mes = valor_do_mes(k, comp)
             if valor_mes <= 0:
@@ -594,7 +607,8 @@ def decidir_parcial(tid: int, decisao: str, vencimento: str = "") -> dict:
         extra = {"aviso": f"Diferença de R$ {_br(dif)} lançada como desconto."}
     else:
         venc = vencimento or (hoje() + timedelta(days=int(config.carregar()["cobranca"].get("dias_boleto_atrasado", 5)))).isoformat()
-        resto = 0 if ja_emitida else base - nota         # honorários que faltam faturar (vão na nota do saldo)
+        # honorários que faltam faturar (vão na nota do saldo); título sem NFS-e ("só lançar") não ganha nota no saldo
+        resto = 0 if ja_emitida or t["nfse_status"] == "nao_emitir" else base - nota
         novo = criar_titulo(t["cpf_cnpj"], reais(dif), f"SALDO DO PAGAMENTO PARCIAL - {t['descricao']}"[:190],
                             vencimento=venc, competencia=t["competencia"], emitir_nfse=resto > 0,
                             apos_pagamento=True, cobrar=True, servico_id=t.get("servico_id") or "")

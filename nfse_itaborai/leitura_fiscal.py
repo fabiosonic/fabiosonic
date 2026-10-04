@@ -158,7 +158,7 @@ def aplicar_geral(notas: list[dict]) -> list[str]:
     """Preenche a regra geral da empresa em uso com o que as notas mostram (só o que ainda não foi definido)."""
     from . import config
     cfg = config.carregar()
-    f, e = cfg.get("fiscal") or {}, cfg["emissao"]
+    f = cfg.get("fiscal") or {}
     if f.get("lido_dos_xml") or not notas:
         return []
     g = regra_geral(notas)

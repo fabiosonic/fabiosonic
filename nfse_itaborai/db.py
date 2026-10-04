@@ -186,7 +186,9 @@ def _migrar(con: sqlite3.Connection) -> None:
         # pedido do escritório (Moraes & Oliveira): a recorrência começa em outubro/2026
         from . import config
         if config._cnpj_da_pasta() in config.CNPJ_REGRA_BAIXA:
-            con.execute("UPDATE contratos SET inicio='2026-10' WHERE ativo=1 AND (COALESCE(fim,'')='' OR fim>='2026-10')")
+            # só as que começariam até nov/2026; uma recorrência marcada de propósito para mais tarde não é puxada
+            con.execute("UPDATE contratos SET inicio='2026-10' WHERE ativo=1 AND inicio<='2026-11'"
+                        " AND (COALESCE(fim,'')='' OR fim>='2026-10')")
             # inadimplência do Nitrus: já vinha sendo cobrada; continua na cobrança sem gerar boleto (PIX do escritório)
             con.execute("UPDATE titulos SET boleto_situacao='dispensado' WHERE status='aberto' AND cobrar=1 AND banco_id=''"
                         " AND contrato_id IS NULL AND descricao='HONORÁRIOS CONTABEIS MENSAIS.'")
