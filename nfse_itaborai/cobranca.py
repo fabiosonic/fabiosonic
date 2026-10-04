@@ -209,11 +209,26 @@ def nome_cliente(nome: str) -> str:
     return " ".join(out)
 
 
+ETAPA_BOLETO = -100          # envio do boleto assim que a cobrança é gerada (antes de qualquer etapa da régua)
+ETAPA_PAGO = 1001            # agradecimento pelo pagamento
+ETAPA_NFSE = 1002            # envio da nota fiscal depois do pagamento
+
+
 def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
     """Partes da mensagem de cobrança (usadas no texto, no HTML e no WhatsApp)."""
     t = financeiro.enriquecer(t, em)
     nome = nome_cliente(t["cliente_nome"])
-    if etapa < 0:
+    if etapa == ETAPA_BOLETO:                   # primeiro envio: o boleto do título (em dia ou já vencido)
+        etapa = 1 if t["dias_atraso"] > 0 else -1
+        if etapa < 0:
+            assunto = f"Boleto dos honorários — vencimento {_data(t['vencimento'])}"
+            abertura = (f"Segue a cobrança dos honorários de {_brl(t['valor_cent'])}, com vencimento em "
+                        f"{_data(t['vencimento'])}.")
+        else:
+            assunto = f"Honorários em aberto — vencidos em {_data(t['vencimento'])}"
+            abertura = (f"Consta em aberto o pagamento de {_brl(t['valor_cent'])}, vencido em {_data(t['vencimento'])}. "
+                        f"Valor atualizado com multa e juros: {_brl(t['total_cent'])}.")
+    elif etapa < 0:
         assunto = f"Lembrete: honorários vencem em {_data(t['vencimento'])}"
         abertura = f"Lembramos que o pagamento de {_brl(t['valor_cent'])} vence em {_data(t['vencimento'])}."
     elif etapa == 0:
@@ -432,9 +447,11 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             enviadas = {e["etapa"] for e in db.linhas(
                 "SELECT etapa FROM eventos_cobranca WHERE titulo_id=? AND canal=?", (t["id"], canal))}
             etapa = etapa_devida(dias, etapas_da_regua(dias, cob), enviadas)
+            if etapa is None and not enviadas and cob.get("enviar_ao_gerar", True):
+                etapa = ETAPA_BOLETO                 # cobrança gerada e ainda sem nenhuma mensagem: manda o boleto já
             if etapa is None:
                 continue
-            if etapa > 0 and canal == "email":
+            if (etapa > 0 or (etapa == ETAPA_BOLETO and dias > 0)) and canal == "email":
                 t = _atualizar_cartao(t, cfg, em)
             assunto, texto = mensagem(t, etapa, cfg, em)
             if canal == "email":
@@ -470,15 +487,98 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             with db.conexao() as con:
                 con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
                             " VALUES (?,?,?,?,?,?)", (t["id"], etapa, canal, em.isoformat(), status, det))
+    _pos_pagamento(em, cfg, res)
     if any(res.values()):
         db.registrar("regua", f"Régua: {res}")
     return res
 
 
+# ---------------------------------------------------------------- depois do pagamento: agradecimento e nota fiscal
+
+def mensagem_pagamento(t: dict, cfg: dict) -> tuple[str, str]:
+    emp = cfg["empresa"]
+    ref = f"{t['descricao']} — competência {t['competencia'][5:]}/{t['competencia'][:4]}"
+    texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
+                        f"Recebemos o seu pagamento de {_brl(t['valor_pago_cent'] or t['valor_cent'])} em "
+                        f"{_data(t['data_pagamento'])}, referente a: {ref}.", "",
+                        "Muito obrigado pela confiança e pela pontualidade!" if (t["data_pagamento"] or "") <= t["vencimento"]
+                        else "Muito obrigado!",
+                        "", "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
+    return f"Pagamento recebido — obrigado! ({_brl(t['valor_pago_cent'] or t['valor_cent'])})", texto
+
+
+def mensagem_nfse(t: dict, cfg: dict) -> tuple[str, str]:
+    emp = cfg["empresa"]
+    link = t["nfse_link"] if str(t.get("nfse_link") or "").startswith("http") else ""
+    texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
+                        f"Segue a nota fiscal de serviço (NFS-e nº {t['nfse_numero']}) referente ao pagamento de "
+                        f"{_brl(t['valor_pago_cent'] or t['valor_cent'])} — competência {t['competencia'][5:]}/{t['competencia'][:4]}.",
+                        *([f"Consulta da nota: {link}"] if link else []),
+                        "", "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
+    return f"Nota fiscal de serviço nº {t['nfse_numero']}", texto
+
+
+def xml_nfse(t: dict) -> str:
+    """XML da NFS-e emitida (salvo em saida/AAAA-MM/...) para anexar ao e-mail; '' se não achar."""
+    num = str(t.get("nfse_numero") or "").strip()
+    if not num:
+        return ""
+    for nome in (f"NFSe_{num}.xml", f"NFSe_{t.get('nfse_chave') or '-'}.xml"):
+        achados = sorted((emissor.RAIZ / "saida").rglob(nome)) if (emissor.RAIZ / "saida").exists() else []
+        if achados:
+            return str(achados[-1])
+    return ""
+
+
+def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
+    """Pagamento reconhecido (baixa manual, banco, extrato ou cartão): agradece e, com a NFS-e emitida, envia a nota.
+    Só para pagamentos a partir do dia em que o recurso foi ligado (não reenvia nada do histórico)."""
+    cob = cfg["cobranca"]
+    if not cob.get("agradecer_pagamento", True) and not cob.get("enviar_nfse_paga", True):
+        return
+    desde = cob.get("agradecer_desde")
+    if not desde:
+        desde = em.isoformat()
+        config.salvar({"cobranca": {"agradecer_desde": desde}})
+    for t in db.linhas("SELECT * FROM titulos WHERE status='pago' AND cobrar=1 AND data_pagamento>=?", (desde,)):
+        cli = clientes.obter(t["cpf_cnpj"]) or {}
+        for canal, ligado in (("email", cob["regua_email"]), ("whatsapp", cob["regua_whatsapp"])):
+            if not ligado:
+                continue
+            if canal == "email" and not cli.get("email"):
+                continue
+            if canal == "whatsapp" and not (cli.get("whatsapp_cobranca") and cli.get("telefone")):
+                continue
+            feitas = {e["etapa"] for e in db.linhas("SELECT etapa FROM eventos_cobranca WHERE titulo_id=? AND canal=?",
+                                                     (t["id"], canal))}
+            fila = []
+            if cob.get("agradecer_pagamento", True) and ETAPA_PAGO not in feitas:
+                fila.append((ETAPA_PAGO, *mensagem_pagamento(t, cfg), []))
+            if cob.get("enviar_nfse_paga", True) and ETAPA_NFSE not in feitas and t["nfse_status"] == "emitida" \
+                    and (ETAPA_PAGO in feitas or fila or not cob.get("agradecer_pagamento", True)):
+                x = xml_nfse(t)
+                fila.append((ETAPA_NFSE, *mensagem_nfse(t, cfg), [x] if x else []))
+            for etapa, assunto, texto, anexos in fila:   # primeiro o agradecimento, depois a nota
+                if canal == "email":
+                    try:
+                        enviar_email(cli["email"], assunto, texto, cfg, anexos)
+                        status, det = "enviado", cli["email"]
+                        res["email"] += 1
+                    except Exception as ex:  # noqa: BLE001
+                        status, det = "erro", str(ex)[:300]
+                        res["erros"] += 1
+                else:
+                    status, det = "pendente", link_whatsapp(cli["telefone"], texto)   # sai pela fila do WhatsApp
+                    res["whatsapp"] += 1
+                with db.conexao() as con:
+                    con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
+                                " VALUES (?,?,?,?,?,?)", (t["id"], etapa, canal, em.isoformat(), status, det))
+
+
 def fila_whatsapp() -> list[dict]:
     lst = db.linhas("SELECT e.*, t.cliente_nome, t.valor_cent, t.vencimento FROM eventos_cobranca e "
                     "JOIN titulos t ON t.id=e.titulo_id WHERE e.canal='whatsapp' AND e.status='pendente' "
-                    "AND t.status='aberto' ORDER BY e.data")
+                    f"AND (t.status='aberto' OR e.etapa>={ETAPA_PAGO}) ORDER BY e.data, e.etapa")
     return lst
 
 

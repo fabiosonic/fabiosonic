@@ -259,6 +259,9 @@ ROTAS = {
     # contratos / recorrência
     "contratos": lambda c: financeiro.listar_contratos(),
     "contrato/salvar": lambda c: financeiro.salvar_contrato(c),
+    "contrato/ajustes": lambda c: financeiro.listar_ajustes(_id(c)),
+    "contrato/ajuste_salvar": lambda c: financeiro.salvar_ajuste(c),
+    "contrato/ajuste_excluir": lambda c: (financeiro.excluir_ajuste(_id(c)), {"ok": True})[1],
     "contrato/excluir": lambda c: (financeiro.excluir_contrato(_id(c)), {"ok": True})[1],
     "recorrencia": lambda c: {"preenchidos": financeiro.preencher_recorrencia(), "linhas": financeiro.lista_recorrencia(),
                               "regra_geral": financeiro.regra_geral(), "regras": financeiro.REGRAS_NFSE},

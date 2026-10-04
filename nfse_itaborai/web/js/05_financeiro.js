@@ -158,7 +158,9 @@ PAGINAS.contratos = async el => {
     $("#rc_tab").innerHTML = tabela([
       { t: '<label class="chk" title="Repetir todo mês — marcar todos os visíveis"><input type="checkbox" id="rc_todos"> Repetir</label>', f: l => `<input type="checkbox" class="rc" data-c="repetir" data-k="${chave(l)}" ${l.repetir ? "checked" : ""} aria-label="Repetir todo mês">` },
       { t: "Cliente", f: l => celNome(l.cliente_nome, `${fmtDoc(l.cpf_cnpj)}${l.id && !l.repetir ? " · a confirmar" : ""}${l.fim ? " · até " + mes(l.fim) : ""}`) },
-      { t: "Valor mensal (R$)", f: l => `<input class="rc" data-c="valor" data-k="${chave(l)}" inputmode="decimal" style="width:96px" value="${l.valor_cent ? num(l.valor_cent) : ""}" placeholder="0,00">` },
+      { t: "Valor mensal (R$)", f: l => `<input class="rc" data-c="valor" data-k="${chave(l)}" inputmode="decimal" style="width:96px" value="${l.valor_cent ? num(l.valor_cent) : ""}" placeholder="0,00">${l.ajustes_mes ? `<div class="sub nw" title="Acréscimos e descontos deste mês (botão Mais)">${l.ajustes_mes > 0 ? "+" : "−"} ${num(Math.abs(l.ajustes_mes))} este mês</div>` : ""}` },
+      { t: "Início", f: l => `<input class="rc" data-c="inicio" data-k="${chave(l)}" type="month" style="width:178px" value="${l.inicio || ""}" title="Mês do primeiro título">` },
+      { t: "Fim", f: l => `<input class="rc" data-c="fim" data-k="${chave(l)}" type="month" style="width:178px" value="${l.fim || ""}" title="Último mês cobrado: depois dele não gera mais títulos">` },
       { t: "Vence dia", f: l => `<input class="rc" data-c="dia_vencimento" data-k="${chave(l)}" type="number" min="1" max="31" style="width:58px" value="${l.dia_vencimento}">` },
       { t: "Serviço", f: l => `<select class="rc" style="min-width:130px;max-width:170px" data-c="servico_id" data-k="${chave(l)}">${(ST.servicos || []).length > 1 ? opcoesServ(l.servico_id || "", "Habitual do cliente") : opcoesServ(l.servico_id || "", "Padrão")}</select>` },
       { t: "Nota fiscal", f: l => `<select class="rc" style="min-width:180px" data-c="nfse_quando" data-k="${chave(l)}">${regraOpts(l.nfse_quando || "")}</select>` },
@@ -176,7 +178,8 @@ PAGINAS.contratos = async el => {
   $$("[data-rf]", el).forEach(b => b.onclick = () => { FILTRO_RECOR = b.dataset.rf; $$("[data-rf]", el).forEach(x => x.classList.toggle("on", x == b)); desenhar(); });
   $("#rc_salvar").onclick = async () => {
     const linhas = L.filter(l => alterados.has(chave(l))).map(l => ({ id: l.id, cpf_cnpj: l.cpf_cnpj, valor_cent: l.valor_cent, dia_vencimento: Number(l.dia_vencimento),
-      servico_id: l.servico_id || "", nfse_quando: l.nfse_quando || "", cobrar: l.cobrar !== false && l.cobrar !== 0, repetir: !!l.repetir }));
+      servico_id: l.servico_id || "", nfse_quando: l.nfse_quando || "", cobrar: l.cobrar !== false && l.cobrar !== 0, repetir: !!l.repetir,
+      inicio: l.inicio || "", fim: l.fim || "" }));
     if (!linhas.length) return aviso("Nada para salvar.");
     if (linhas.some(l => l.repetir && !l.valor_cent)) return aviso("Há cliente marcado para repetir sem valor mensal.");
     const novos = linhas.filter(l => l.repetir && !(L.find(x => x.id && x.id == l.id) || {}).confirmado).length;
@@ -206,8 +209,29 @@ function editarContrato(c) {
     <input type="hidden" name="emitir_nfse" value="1">
     <label class="chk"><input type="checkbox" name="cobrar" ${c.cobrar === 0 ? "" : "checked"}> Gerar cobrança (boleto/PIX e régua)</label>
     <label class="chk"><input type="checkbox" name="confirmado" ${c.id && !c.confirmado ? "" : "checked"}> <b>Repetir todo mês</b></label></div>
+    ${c.id ? `<h3 class="bloco-modal">Acréscimos e descontos</h3><p class="sub">Somados ao valor mensal no título do mês (e na NFS-e). Único = só no mês de início; recorrente = do início ao fim (sem fim = até ser excluído).</p>
+      <div id="aj_lista"><p class="sub">Carregando…</p></div>
+      <div class="campos aj-novo"><label>Tipo<select id="aj_tipo"><option value="acrescimo">Acréscimo (+)</option><option value="desconto">Desconto (−)</option></select></label>
+        <label>Descrição<input id="aj_desc" maxlength="80" placeholder="ex.: Alteração contratual"></label><label>Valor (R$)<input id="aj_valor" inputmode="decimal" placeholder="0,00"></label>
+        <label>Lançamento<select id="aj_unico"><option value="1">Único (só no mês de início)</option><option value="0">Recorrente</option></select></label>
+        <label>Mês de início<input id="aj_ini" type="month" value="${hojeISO().slice(0, 7)}"></label><label>Mês final<input id="aj_fim" type="month" disabled></label>
+        <p class="inteiro" style="margin:0"><button class="btn sec" id="aj_add" type="button">${ic("mais")}Incluir</button></p></div>` : `<p class="sub">Depois de salvar, abra em “Mais” para incluir acréscimos e descontos.</p>`}
     <p><button class="btn" id="ok">Salvar</button> <button class="btn sec" onclick="fechar()">Voltar</button>${c.id ? ` <button class="btn sec" onclick="fechar();encerrar(${c.id})">${ic("x")}Tirar da recorrência</button>` : ""}</p>`);
   $("#fc_serv").onchange = e => { if (e.target.value) $("#fc [name=descricao]").value = servDe(e.target.value).descricao || ""; };
+  if (c.id) {
+    const lista = async () => { const a = await api("contrato/ajustes", { id: c.id });
+      $("#aj_lista").innerHTML = tabela([{ t: "Tipo", f: x => x.tipo == "acrescimo" ? '<span class="selo alerta">+ acréscimo</span>' : '<span class="selo bom">− desconto</span>' },
+        { t: "Descrição", f: x => esc(x.descricao) }, { t: "Valor", n: 1, f: x => num(x.valor_cent) },
+        { t: "Período", f: x => x.fim == x.inicio ? `só ${mes(x.inicio)}` : `${mes(x.inicio)} → ${x.fim ? mes(x.fim) : "sem fim"}` },
+        { t: "", f: x => `<button class="btn min sec ico perigo-txt" type="button" data-ajx="${x.id}" title="Excluir" aria-label="Excluir">${ic("lixeira")}</button>` }], a, "Nenhum acréscimo ou desconto.");
+      $$("[data-ajx]").forEach(b => b.onclick = async () => { await api("contrato/ajuste_excluir", { id: b.dataset.ajx }); lista(); }); };
+    lista();
+    $("#aj_unico").onchange = e => { $("#aj_fim").disabled = e.target.value == "1"; if (e.target.value == "1") $("#aj_fim").value = ""; };
+    $("#aj_add").onclick = async () => {
+      await api("contrato/ajuste_salvar", { contrato_id: c.id, tipo: $("#aj_tipo").value, descricao: $("#aj_desc").value, valor: $("#aj_valor").value,
+        unico: $("#aj_unico").value == "1", inicio: $("#aj_ini").value, fim: $("#aj_fim").value });
+      $("#aj_desc").value = ""; $("#aj_valor").value = ""; aviso("Incluído ✔"); lista(); };
+  }
   $("#ok").onclick = async () => { const f = form($("#fc")); f.cpf_cnpj = docDe(f.cliente); if (c.id) f.id = c.id; await api("contrato/salvar", f); fechar(); aviso("Recorrência salva ✔"); await carregarEstado(); ir("contratos"); };
 }
 async function encerrar(id) { if (confirm("Tirar este cliente da recorrência? Ele deixa de gerar cobranças.")) { await api("contrato/excluir", { id }); ir("contratos"); } }
@@ -224,18 +248,20 @@ PAGINAS.cobranca = async el => {
   <div class="card"><h2>WhatsApp ainda não enviado (${fila.length}) ${fila.length && ww.ativo ? '<button class="btn" id="wa_auto">Enviar agora</button>' : ""} ${fila.length ? '<button class="btn sec" id="wa_seq">Enviar manualmente em sequência</button>' : ""}</h2>
     <p class="sub">${ww.ativo ? (ww.enviando ? "<b>Enviando agora pelo WhatsApp…</b> " : "") + "O robô envia esta fila sozinho a cada rodada (de hora em hora) e logo depois de “Rodar régua agora”." : "O WhatsApp do escritório não está conectado: estas mensagens saem sozinhas assim que você conectar em Configurações › WhatsApp. Enquanto isso, dá para enviar manualmente em sequência."} Só entram os clientes marcados em Clientes › “Cobrar por WhatsApp”.</p>
     ${tabela([{ t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
-      { t: "Etapa", f: e => e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias` },
+      { t: "Etapa", f: e => nomeEtapa(e.etapa) },
       { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔")}</div>
-  <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Etapa", f: e => e.etapa }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
+  <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Etapa", f: e => nomeEtapa(e.etapa) }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
   if ($("#wa_seq")) $("#wa_seq").onclick = () => enviarSequencia(fila);
   if ($("#wa_auto")) $("#wa_auto").onclick = async () => { await api("whatsapp_web/enviar_fila"); aviso("Enviando a fila pelo WhatsApp em segundo plano…", 6000); setTimeout(() => ir("cobranca"), 4000); };
   $("#rr").onclick = async () => { const r = await api("regua/rodar"); if (r.fora_do_horario) return aviso(r.fora_do_horario, 9000);
     aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp${r.whatsapp_automatico ? " (saindo sozinhos agora)" : ""}, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
 };
+const nomeEtapa = e => e == -100 ? "envio do boleto" : e == 1001 ? "agradecimento (pago)" : e == 1002 ? "nota fiscal (pago)"
+  : e < 0 ? "lembrete" : e == 0 ? "vence hoje" : `+${e} dias`;
 function enviarSequencia(fila, i = 0) {
   if (i >= fila.length) { fechar(); aviso("WhatsApp: todas as mensagens da fila foram abertas ✔", 6000); return ir("cobranca"); }
   const e = fila[i];
-  modal(`<h2>WhatsApp ${i + 1} de ${fila.length}</h2><p><b>${esc(e.cliente_nome)}</b> — ${brl(e.valor_cent)}, vencimento ${dt(e.vencimento)} (${e.etapa < 0 ? "lembrete" : e.etapa == 0 ? "vence hoje" : `+${e.etapa} dias`})</p>
+  modal(`<h2>WhatsApp ${i + 1} de ${fila.length}</h2><p><b>${esc(e.cliente_nome)}</b> — ${brl(e.valor_cent)}, vencimento ${dt(e.vencimento)} (${nomeEtapa(e.etapa)})</p>
     <p class="sub">1) Clique em “Abrir conversa”: o WhatsApp abre com a mensagem pronta. 2) Aperte Enviar lá. 3) Volte e clique em “Enviado, próximo”.</p>
     <p><a class="btn" id="seq_abrir" href="${esc(e.detalhe)}" target="_blank">${ic("fone")}Abrir conversa</a>
       <button class="btn sec" id="seq_ok" type="button">Enviado, próximo</button> <button class="btn sec" id="seq_pula" type="button">Pular</button>

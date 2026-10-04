@@ -72,7 +72,7 @@ def test_regua_cobra_atrasado_a_cada_periodo(base, monkeypatch):  # noqa: F811
     assert etapas == [0, 3, 13, 23, 33]                              # vencimento + a cada 10 dias a partir do 3º
     financeiro.baixar(tid, "2026-10-09", "300")
     cobranca.rodar_regua(date(2026, 10, 13))
-    assert len(cobranca.historico(tid)) == 5                         # pago: para de cobrar
+    assert [e["etapa"] for e in cobranca.historico(tid) if e["etapa"] < 1000] == [0, 3, 13, 23, 33]  # pago: para de cobrar
 
 
 # ---------------------------------------------------------------- certificado e isolamento

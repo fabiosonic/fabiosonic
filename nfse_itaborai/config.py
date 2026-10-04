@@ -36,6 +36,9 @@ PADRAO = {
         "regua_whatsapp": True,
         # envios (e-mail e WhatsApp) só em horário comercial: segunda a sexta, entre as horas abaixo
         "envio_horario_comercial": True,
+        "enviar_ao_gerar": True,        # manda o boleto assim que a cobrança é gerada (e-mail e WhatsApp, conforme a régua)
+        "agradecer_pagamento": True,    # pagamento reconhecido: mensagem de agradecimento
+        "enviar_nfse_paga": True,       # depois do agradecimento, envia a NFS-e emitida (link e XML no e-mail)
         "envio_hora_inicio": "08:00",
         "envio_hora_fim": "18:00",
         "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado

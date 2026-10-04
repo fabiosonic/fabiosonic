@@ -697,3 +697,5 @@ h2 .btn .ic, h1 .btn .ic { color: inherit; }
 .imp-tits span.ja { text-decoration: line-through; opacity: .65; }
 @media (max-width: 760px) { .imp-cab { grid-template-columns: minmax(0, 1fr); } .imp-soma { text-align: left; } }
 .classif { width: auto; min-height: 30px; padding: 3px 8px; font-size: 12.5px; }
+.bloco-modal { font-size: 14px; margin: 18px 0 4px; padding-top: 14px; border-top: 1px solid var(--borda); }
+.aj-novo { margin-top: 10px; }

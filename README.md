@@ -435,6 +435,26 @@ horário. O horário e a opção ficam em Configurações › Cobrança. Os test
 teste, mensagem de teste) não têm restrição. No WhatsApp automático, o **boleto em PDF** vai logo depois da mensagem
 (opção em Configurações › WhatsApp).
 
+### Envio automático: boleto, agradecimento e nota fiscal
+
+Tudo segue as opções de Configurações › Cobrança (ligadas por padrão) e o horário comercial:
+
+1. **Boleto ao gerar** — assim que o título tem boleto/PIX, o cliente recebe a cobrança por e-mail e, se estiver
+   marcado para WhatsApp, a mensagem com o **boleto em PDF** pelo WhatsApp Web. Depois seguem os lembretes da régua.
+   Título já vencido (ex.: importado) recebe uma única cobrança com o valor atualizado.
+2. **Pagamento reconhecido** (extrato do Inter, webhook ou baixa) — mensagem de **agradecimento**.
+3. **Nota fiscal** — em seguida, a NFS-e emitida (número, link e o XML no e-mail). Se a nota é emitida após o
+   pagamento, a mensagem sai assim que a emissão for concluída.
+
+Pagamentos anteriores à atualização não recebem mensagem (nada de envio em massa do histórico).
+
+### Recorrência: início, fim, acréscimos e descontos
+
+Cada recorrência tem **mês de início** e **mês final** (opcional): depois do mês final não são gerados novos títulos.
+Em **Mais**, a seção *Acréscimos e descontos* lança valores com descrição, **únicos** (só um mês) ou **recorrentes**
+(do início ao fim, ou sem fim). Eles são somados ao honorário no título do mês, e a descrição mostra a composição
+(ex.: "HONORÁRIOS (honorário R$ 1.000,00; + Alteração contratual R$ 300,00; - Desconto R$ 100,00)").
+
 ### Importar inadimplência do Nitrus
 
 Em **Contas a receber › Importar do Nitrus**, escolha o PDF do relatório *Inadimplência*. O sistema lê os títulos,

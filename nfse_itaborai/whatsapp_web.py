@@ -304,7 +304,7 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
     for e in fila:
         numero, texto = _do_link(e["detalhe"])
         itens.append({"evento": e["id"], "numero": numero, "texto": texto, "cliente": e["cliente_nome"],
-                      "pdf": _pdf_do_titulo(e["titulo_id"], cfg)})
+                      "pdf": _pdf_do_titulo(e["titulo_id"], cfg) if e["etapa"] < cobranca.ETAPA_PAGO else ""})
     try:
         saida = enviar(itens, cfg)
     except Desconectado as ex:

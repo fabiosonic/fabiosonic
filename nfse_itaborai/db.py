@@ -82,6 +82,17 @@ CREATE TABLE IF NOT EXISTS despesas (
     criado_em TEXT NOT NULL,
     UNIQUE (origem_id, competencia)
 );
+CREATE TABLE IF NOT EXISTS contrato_ajustes (
+    id INTEGER PRIMARY KEY,
+    contrato_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,                      -- acrescimo | desconto
+    descricao TEXT NOT NULL,
+    valor_cent INTEGER NOT NULL,
+    inicio TEXT NOT NULL,                    -- AAAA-MM
+    fim TEXT DEFAULT '',                     -- AAAA-MM ('' = sem fim; = inicio no lançamento único)
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS movimentos (
     id INTEGER PRIMARY KEY,
     data TEXT NOT NULL,

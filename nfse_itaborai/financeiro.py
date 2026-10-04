@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import re
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -179,7 +180,11 @@ def lista_recorrencia() -> list[dict]:
     geral = regra_geral()
     lst = listar_contratos()
     com = {k["cpf_cnpj"] for k in lst}
-    linhas = [k | {"repetir": bool(k["ativo"] and k["confirmado"]), "regra": regra_do_contrato(k, geral)}
+    comp = competencia_de(hoje())
+    linhas = [k | {"repetir": bool(k["ativo"] and k["confirmado"]), "regra": regra_do_contrato(k, geral),
+                   "ajustes_mes": sum(a["valor_cent"] if a["tipo"] == "acrescimo" else -a["valor_cent"]
+                                      for a in ajustes_do_mes(k["id"], comp)),
+                   "ajustes": len(listar_ajustes(k["id"]))}
               for k in lst if k["ativo"]]
     for c in clientes.listar():
         if c["cpf_cnpj"] not in com:
@@ -199,14 +204,23 @@ def salvar_recorrencia(linhas: list[dict]) -> dict:
         dados = {"servico_id": l.get("servico_id") or "", "nfse_quando": l.get("nfse_quando") or "",
                  "cobrar": l.get("cobrar", True), "confirmado": bool(l.get("repetir")),
                  "dia_vencimento": l.get("dia_vencimento"), "valor_cent": valor}
+        for campo in ("inicio", "fim"):                   # mês de início e mês final (o final encerra as cobranças futuras)
+            if campo in l:
+                v = str(l.get(campo) or "")[:7]
+                if v and not re.fullmatch(r"\d{4}-\d{2}", v):
+                    raise ValueError(f"Mês de {campo} inválido: {v}")
+                dados[campo] = v
+        if dados.get("fim") and dados.get("inicio") and dados["fim"] < dados["inicio"]:
+            raise ValueError("O mês final não pode ser antes do mês de início.")
         if l.get("id") and int(l["id"]) in atuais:
             k = atuais[int(l["id"])]
-            if dados["confirmado"] and not k["confirmado"] and k["inicio"] < competencia_de(hoje()):
+            if dados["confirmado"] and not k["confirmado"] and k["inicio"] < competencia_de(hoje()) \
+                    and dados.get("inicio", k["inicio"]) == k["inicio"]:
                 dados["inicio"] = competencia_de(hoje())   # confirmou agora: cobra a partir deste mês
             salvar_contrato({**k, "descricao": k["descricao"] if k.get("servico_id") == dados["servico_id"] else "",
                              **dados, "id": k["id"]})
         elif valor > 0:
-            salvar_contrato({"cpf_cnpj": l["cpf_cnpj"], **dados, "inicio": competencia_de(hoje())})
+            salvar_contrato({"cpf_cnpj": l["cpf_cnpj"], **dados, "inicio": dados.get("inicio") or competencia_de(hoje())})
         else:
             continue
         salvos += 1
@@ -271,6 +285,65 @@ def status_nfse_inicial(emitir: bool, apos_pagamento: bool | None = None) -> str
     return "apos_pagamento" if apos_pagamento else "pendente"
 
 
+# ---------------------------------------------------------------- acréscimos e descontos da recorrência
+
+def listar_ajustes(contrato_id: int) -> list[dict]:
+    return db.linhas("SELECT * FROM contrato_ajustes WHERE contrato_id=? AND ativo=1 ORDER BY inicio, id", (contrato_id,))
+
+
+def salvar_ajuste(d: dict) -> dict:
+    """Acréscimo ou desconto na recorrência: lançamento único (só no mês de início) ou recorrente (do início ao fim)."""
+    tipo = str(d.get("tipo") or "")
+    if tipo not in ("acrescimo", "desconto"):
+        raise ValueError("Escolha acréscimo ou desconto.")
+    desc = str(d.get("descricao") or "").strip()
+    valor = cent(d.get("valor"))
+    inicio = str(d.get("inicio") or "")[:7]
+    unico = d.get("unico") in (True, 1, "1", "true", "on")
+    fim = inicio if unico else str(d.get("fim") or "")[:7]
+    if not desc:
+        raise ValueError("Informe a descrição do acréscimo/desconto.")
+    if valor <= 0:
+        raise ValueError("Informe um valor maior que zero.")
+    if not re.fullmatch(r"\d{4}-\d{2}", inicio):
+        raise ValueError("Informe o mês de início.")
+    if fim and fim < inicio:
+        raise ValueError("O mês final não pode ser antes do início.")
+    if not db.linhas("SELECT id FROM contratos WHERE id=?", (int(d["contrato_id"]),)):
+        raise ValueError("Recorrência não encontrada.")
+    reg = {"contrato_id": int(d["contrato_id"]), "tipo": tipo, "descricao": desc[:80], "valor_cent": valor,
+           "inicio": inicio, "fim": fim}
+    with db.conexao() as con:
+        if d.get("id"):
+            con.execute(f"UPDATE contrato_ajustes SET {', '.join(f'{k}=?' for k in reg)} WHERE id=?", (*reg.values(), int(d["id"])))
+            reg["id"] = int(d["id"])
+        else:
+            reg["id"] = con.execute(f"INSERT INTO contrato_ajustes ({', '.join(reg)}, criado_em) VALUES "
+                                    f"({', '.join('?' * len(reg))}, ?)", (*reg.values(), db.agora())).lastrowid
+    return reg
+
+
+def excluir_ajuste(aid: int) -> None:
+    with db.conexao() as con:
+        con.execute("UPDATE contrato_ajustes SET ativo=0 WHERE id=?", (aid,))
+
+
+def ajustes_do_mes(contrato_id: int, comp: str) -> list[dict]:
+    return [a for a in listar_ajustes(contrato_id) if a["inicio"] <= comp and (not a["fim"] or comp <= a["fim"])]
+
+
+def valor_do_mes(k: dict, comp: str) -> tuple[int, str]:
+    """Valor do título do mês (honorário + acréscimos − descontos) e a descrição com a composição."""
+    ajs = ajustes_do_mes(k["id"], comp)
+    if not ajs:
+        return k["valor_cent"], k["descricao"]
+    total = k["valor_cent"] + sum(a["valor_cent"] if a["tipo"] == "acrescimo" else -a["valor_cent"] for a in ajs)
+    brl = lambda c: f"R$ {c / 100:,.2f}".translate(str.maketrans(",.", ".,"))  # noqa: E731
+    partes = [f"honorário {brl(k['valor_cent'])}"] + [
+        f"{'+' if a['tipo'] == 'acrescimo' else '-'} {a['descricao']} {brl(a['valor_cent'])}" for a in ajs]
+    return max(total, 0), f"{k['descricao']} ({'; '.join(partes)})"[:190]
+
+
 def gerar_titulos(competencia: str | None = None, em: date | None = None) -> list[int]:
     """Recorrência: cria o título do mês para cada contrato ativo (idempotente). Aplica reajuste anual."""
     em = em or hoje()
@@ -295,10 +368,15 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
                             (db.agora(), "reajuste", f"Contrato {k['id']}: {reais(k['valor_cent'])} -> {reais(novo)} "
                              f"({k['reajuste_pct']}%)"))
                 k["valor_cent"] = novo
+            valor_mes, descricao_mes = valor_do_mes(k, comp)
+            if valor_mes <= 0:
+                con.execute("INSERT INTO log (quando,tipo,mensagem) VALUES (?,?,?)", (db.agora(), "recorrencia",
+                            f"Contrato {k['id']} sem título em {comp}: descontos zeram o valor do mês"))
+                continue
             cur = con.execute(
                 "INSERT OR IGNORE INTO titulos (cpf_cnpj, cliente_nome, contrato_id, competencia, descricao, valor_cent,"
                 " vencimento, nfse_status, criado_em, servico_id, cobrar) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), k["id"], comp, k["descricao"], k["valor_cent"],
+                (k["cpf_cnpj"], _nome(k["cpf_cnpj"]), k["id"], comp, descricao_mes, valor_mes,
                  dia_no_mes(ano, mes, k["dia_vencimento"]).isoformat(),
                  _status_da_regra(regra), db.agora(), k.get("servico_id") or "", k.get("cobrar", 1)))
             if cur.rowcount:
