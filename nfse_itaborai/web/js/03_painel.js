@@ -192,6 +192,7 @@ function montarGrafico(alvo, serie, specs, opts = {}) {
 PAGINAS.painel = async el => {
   const [p, sd] = await Promise.all([api("painel"), api("saude")]);
   const al = [], A = (sev, icone, html) => al.push({ sev, icone, html });
+  if (p.parciais_pendentes) A("atencao", "receber", `<b>${p.parciais_pendentes}</b> pagamento(s) parcial(is) aguardando decisão — <a href="#" onclick="ir('receber');return false">decidir se a diferença é desconto ou nova cobrança</a>`);
   if (p.contratos_a_confirmar) A("info", "contratos", `<b>${p.contratos_a_confirmar}</b> cliente(s) na recorrência a confirmar — <a href="#" onclick="ir('contratos');return false">conferir e marcar “Repetir todo mês”</a>`);
   if (p.sem_nfse) A("alerta", "nota", `<b>${p.sem_nfse}</b> título(s) sem NFS-e válida — <a href="#" onclick="ir('receber');return false">ver</a>`);
   if (p.atrasado_qtd) A("serio", "relogio", `<b>${p.atrasado_qtd}</b> título(s) em atraso de <b>${p.clientes_atrasados}</b> cliente(s): <b>${brl(p.atrasado)}</b> — <a href="#" onclick="ir('cobranca');return false">cobrança</a>`);

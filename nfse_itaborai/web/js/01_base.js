@@ -37,9 +37,19 @@ async function api(rota, corpo) {
   const r = await fetch("/api/" + rota, { method: "POST", body: JSON.stringify(corpo || {}) });
   const d = await r.json();
   if (d && d.bloqueado) { telaPin(); throw new Error(d.erro); }
-  if (d && d.erro && !Array.isArray(d)) { aviso("⚠ " + d.erro, 7000); throw new Error(d.erro); }
+  if (d && d.erro && !Array.isArray(d)) { aviso("⚠ " + d.erro, 7000); destravar(); throw new Error(d.erro); }
   return d;
 }
+// Botão desativado durante uma operação ("Enviando…"): se a operação der erro, ele volta ao normal (não fica travado).
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("button");
+  if (b && !b.disabled) { b._rotulo = b.innerHTML; b._clicado = Date.now(); } }, true);
+function destravar() {
+  document.querySelectorAll("button:disabled").forEach(b => {
+    if (b._clicado && Date.now() - b._clicado < 300000) { b.disabled = false; b.innerHTML = b._rotulo; b._clicado = 0; } });
+}
+// Erro já mostrado no aviso (validação, configuração faltando): não vira "erro não tratado" no console.
+window.addEventListener("unhandledrejection", e => { if (e.reason && document.querySelector("#aviso") && !$("#aviso").hidden
+  && $("#aviso").textContent.includes(e.reason.message)) e.preventDefault(); });
 function aviso(t, ms = 3500) { const a = $("#aviso"); a.textContent = t; a.hidden = false; clearTimeout(a._t); a._t = setTimeout(() => a.hidden = true, ms); }
 function modal(html, larga = false) {
   $("#modal .caixa").classList.toggle("larga", !!larga);

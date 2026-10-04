@@ -110,6 +110,17 @@ def _tirar_da_cobranca(tid: int) -> dict:
     return {"ok": True}
 
 
+def _estornar(tid: int) -> dict:
+    """Estorno: o saldo de um pagamento parcial ainda em aberto é cancelado junto (inclusive o boleto no banco)."""
+    t = financeiro.obter_titulo(tid)
+    if t.get("saldo_titulo_id"):
+        saldo = financeiro.obter_titulo(t["saldo_titulo_id"])
+        if saldo["status"] == "aberto":
+            cobranca.cancelar_boleto(saldo, f"Estorno do pagamento do titulo {tid}")
+    financeiro.estornar(tid)
+    return {"ok": True}
+
+
 def _cancelar_titulo(tid: int, motivo: str) -> dict:
     t = financeiro.obter_titulo(tid)
     if t["status"] == "aberto":
@@ -225,8 +236,10 @@ ROTAS = {
     "titulos": lambda c: financeiro.listar_titulos(c.get("filtro", "todos"), c.get("cpf_cnpj", ""),
                                                    c.get("competencia", "")),
     "titulo/novo": lambda c: _novo_titulo(c),
-    "titulo/baixar": lambda c: financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual")),
-    "titulo/estornar": lambda c: (financeiro.estornar(_id(c)), {"ok": True})[1],
+    "titulo/baixar": lambda c: financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual"),
+                                                 str(c.get("parcial") or "")),
+    "titulo/parcial": lambda c: financeiro.decidir_parcial(_id(c), str(c.get("decisao") or ""), str(c.get("vencimento") or "")),
+    "titulo/estornar": lambda c: _estornar(_id(c)),
     "titulo/cancelar": lambda c: _cancelar_titulo(_id(c), c.get("motivo", "")),
     "titulo/sem_cobranca": lambda c: _tirar_da_cobranca(_id(c)),
     "titulo/gerar_cobranca": lambda c: (financeiro.atualizar_titulo(_id(c), cobrar=1), cobranca.preparar_pagamento(_id(c)))[1],

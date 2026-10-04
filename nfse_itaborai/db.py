@@ -150,7 +150,11 @@ MIGRACOES = {
                 "boleto_pdf": "TEXT DEFAULT ''", "cobrar": "INTEGER NOT NULL DEFAULT 1",
                 "boleto_situacao": "TEXT DEFAULT ''",
                 # título vencido: boleto registrado com o valor atualizado (multa e juros até o registro)
-                "boleto_valor_cent": "INTEGER DEFAULT 0", "boleto_vencimento": "TEXT DEFAULT ''",   # 'expirado'/'cancelado' no banco: não é refeito (sem custo)
+                "boleto_valor_cent": "INTEGER DEFAULT 0", "boleto_vencimento": "TEXT DEFAULT ''",
+                # pagamento parcial: 'pendente' (aguarda a decisão do escritório) | 'desconto' | 'cobrar'
+                "parcial_status": "TEXT DEFAULT ''", "parcial_dif_cent": "INTEGER DEFAULT 0",
+                "desconto_cent": "INTEGER DEFAULT 0", "saldo_titulo_id": "INTEGER DEFAULT 0",
+                "nota_cent": "INTEGER DEFAULT 0",       # valor da NFS-e quando difere do título (parcial / saldo)   # 'expirado'/'cancelado' no banco: não é refeito (sem custo)
                 "nfse_data": "TEXT DEFAULT ''", "extras": "TEXT DEFAULT ''",
                 # cartão de crédito (InfinitePay): nº do pedido, link, valor com a taxa repassada e situação
                 "cartao_id": "TEXT DEFAULT ''", "cartao_link": "TEXT DEFAULT ''", "cartao_total_cent": "INTEGER DEFAULT 0",

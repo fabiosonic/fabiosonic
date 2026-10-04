@@ -496,35 +496,107 @@ def atualizar_titulo(tid: int, **campos) -> None:
         con.execute(f"UPDATE titulos SET {', '.join(f'{k}=?' for k in campos)} WHERE id=?", (*campos.values(), tid))
 
 
-def baixar(tid: int, data: str = "", valor=None, forma: str = "manual") -> dict:
+def _br(c: int) -> str:
+    """1234567 -> '12.345,67' (texto para pessoas; reais() é o formato da API)."""
+    return f"{c / 100:,.2f}".translate(str.maketrans(",.", ".,"))
+
+
+def valor_devido(t: dict, data: str = "") -> int:
+    """Quanto o cliente devia pagar na data: o boleto (o banco não aceita menos) ou o valor atualizado."""
+    if t.get("forma_pagamento") == "inter" or t.get("_forma") == "inter":
+        return t.get("boleto_valor_cent") or t["valor_cent"]
+    em = date.fromisoformat(data) if data else hoje()
+    return encargos(t | {"status": "aberto"}, em)["total_cent"]
+
+
+def baixar(tid: int, data: str = "", valor=None, forma: str = "manual", parcial: str = "") -> dict:
+    """Baixa o título. Pago a menos (diferença acima de R$ 0,01): o escritório decide se a diferença é desconto ou
+    vira uma nova conta a receber ('parcial'; vazio = fica pendente de decisão e a nota aguarda)."""
     t = obter_titulo(tid)
     if t["status"] == "cancelado":
         raise ValueError("Título cancelado não pode ser baixado.")
-    pago = cent(valor) if valor not in (None, "") else encargos(t)["total_cent"]
-    atualizar_titulo(tid, status="pago", data_pagamento=data or hoje().isoformat(), valor_pago_cent=pago,
-                     forma_pagamento=forma)
-    db.registrar("baixa", f"Título {tid} ({t['cliente_nome']}) pago R$ {reais(pago)} via {forma}")
-    nota = ""
-    if t["nfse_status"] in ("apos_pagamento", "pendente"):
-        # pago (banco, extrato, cartão ou baixa manual): a nota que esperava o pagamento — ou que ainda não saiu —
-        # é emitida na hora, em produção; se a prefeitura falhar, o robô tenta de novo
-        if t["nfse_status"] == "apos_pagamento":
-            atualizar_titulo(tid, nfse_status="pendente")
-        if emissor.em_producao():
-            try:
-                r = emitir_nfse_titulo(tid)
-                nota = (f"NFS-e nº {r['titulo']['nfse_numero']} emitida." if r["sucesso"] else
-                        "NFS-e não emitida: " + "; ".join(r.get("erros") or ["erro na prefeitura"]) + " (o robô tenta de novo).")
-            except Exception as ex:  # noqa: BLE001 — a baixa vale mesmo se a emissão falhar; o robô tenta de novo
-                db.registrar("nfse", f"Título {tid}: emissão após o pagamento ficou pendente ({ex})")
-                nota = f"NFS-e pendente: {ex} (o robô tenta de novo)."
-        else:
-            nota = "Ambiente de homologação: a NFS-e fica pendente e sai automaticamente quando o sistema estiver em produção."
+    data = data or hoje().isoformat()
+    devido = valor_devido(t | {"_forma": forma}, data)
+    pago = cent(valor) if valor not in (None, "") else devido
+    if forma == "cartao":
+        devido = pago                    # link do cartão: o cliente paga exatamente o valor cobrado no link
+    atualizar_titulo(tid, status="pago", data_pagamento=data, valor_pago_cent=pago, forma_pagamento=forma)
+    db.registrar("baixa", f"Título {tid} ({t['cliente_nome']}) pago R$ {_br(pago)} via {forma}")
+    if devido - pago > 1:
+        atualizar_titulo(tid, parcial_status="pendente", parcial_dif_cent=devido - pago)
+        db.registrar("parcial", f"Título {tid} ({t['cliente_nome']}): pagamento parcial de R$ {_br(pago)} "
+                                f"(devido R$ {_br(devido)}; diferença R$ {_br(devido - pago)}) — aguarda decisão")
+        if parcial not in ("desconto", "cobrar"):
+            return obter_titulo(tid) | {"nfse_resultado": "", "parcial": True,
+                                        "aviso": f"Pagamento parcial: faltaram R$ {_br(devido - pago)}. "
+                                                 "Decida em Contas a receber se a diferença é desconto ou nova cobrança."}
+        return decidir_parcial(tid, parcial)
+    nota = _nota_apos_pagamento(tid)
     return obter_titulo(tid) | {"nfse_resultado": nota}
 
 
+def _nota_apos_pagamento(tid: int) -> str:
+    """A nota que esperava o pagamento — ou que ainda não saiu — é emitida na hora, em produção; se a prefeitura
+    falhar, o robô tenta de novo."""
+    t = obter_titulo(tid)
+    if t["nfse_status"] not in ("apos_pagamento", "pendente"):
+        return ""
+    if t["nfse_status"] == "apos_pagamento":
+        atualizar_titulo(tid, nfse_status="pendente")
+    if not emissor.em_producao():
+        return "Ambiente de homologação: a NFS-e fica pendente e sai automaticamente quando o sistema estiver em produção."
+    try:
+        r = emitir_nfse_titulo(tid)
+        return (f"NFS-e nº {r['titulo']['nfse_numero']} emitida." if r["sucesso"] else
+                "NFS-e não emitida: " + "; ".join(r.get("erros") or ["erro na prefeitura"]) + " (o robô tenta de novo).")
+    except Exception as ex:  # noqa: BLE001 — a baixa vale mesmo se a emissão falhar; o robô tenta de novo
+        db.registrar("nfse", f"Título {tid}: emissão após o pagamento ficou pendente ({ex})")
+        return f"NFS-e pendente: {ex} (o robô tenta de novo)."
+
+
+def decidir_parcial(tid: int, decisao: str, vencimento: str = "") -> dict:
+    """Pagamento parcial — a NFS-e sai só pelo valor pago (multa e juros nunca entram na nota):
+    'desconto': a diferença é concedida; 'cobrar': nova conta a receber com a diferença (boleto próprio), e o
+    restante dos honorários sai na nota desse saldo, quando ele for pago."""
+    t = obter_titulo(tid)
+    if t["parcial_status"] != "pendente":
+        raise ValueError("Este título não tem pagamento parcial aguardando decisão.")
+    if decisao not in ("desconto", "cobrar"):
+        raise ValueError("Escolha 'desconto' ou 'cobrar'.")
+    dif = t["parcial_dif_cent"]
+    base = valor_da_nota(t)                              # honorários ainda a faturar neste título
+    ja_emitida = t["nfse_status"] == "emitida"           # regra "emitir na geração": a nota já saiu cheia
+    nota = min(t["valor_pago_cent"], base)
+    if not ja_emitida:
+        atualizar_titulo(tid, nota_cent=nota)
+    if decisao == "desconto":
+        atualizar_titulo(tid, parcial_status="desconto", desconto_cent=0 if ja_emitida else base - nota)
+        db.registrar("parcial", f"Título {tid}: diferença de R$ {_br(dif)} concedida como desconto")
+        extra = {"aviso": f"Diferença de R$ {_br(dif)} lançada como desconto."}
+    else:
+        venc = vencimento or (hoje() + timedelta(days=int(config.carregar()["cobranca"].get("dias_boleto_atrasado", 5)))).isoformat()
+        resto = 0 if ja_emitida else base - nota         # honorários que faltam faturar (vão na nota do saldo)
+        novo = criar_titulo(t["cpf_cnpj"], reais(dif), f"SALDO DO PAGAMENTO PARCIAL - {t['descricao']}"[:190],
+                            vencimento=venc, competencia=t["competencia"], emitir_nfse=resto > 0,
+                            apos_pagamento=True, cobrar=True, servico_id=t.get("servico_id") or "")
+        if resto > 0:
+            atualizar_titulo(novo, nota_cent=resto)
+        atualizar_titulo(tid, parcial_status="cobrar", saldo_titulo_id=novo)
+        db.registrar("parcial", f"Título {tid}: saldo de R$ {_br(dif)} vira o título {novo} (vence {venc})")
+        extra = {"aviso": f"Nova conta a receber de R$ {_br(dif)} criada (vence {venc[8:]}/{venc[5:7]}/{venc[:4]}); "
+                          "o boleto sai pelo robô." + (f" A nota do saldo (R$ {_br(resto)}) sai quando ele for pago."
+                                                       if resto > 0 else ""), "saldo_titulo_id": novo}
+    nota_txt = _nota_apos_pagamento(tid)
+    return obter_titulo(tid) | extra | {"nfse_resultado": nota_txt}
+
+
 def estornar(tid: int) -> None:
-    atualizar_titulo(tid, status="aberto", data_pagamento="", valor_pago_cent=0, forma_pagamento="")
+    t = obter_titulo(tid)
+    if t.get("saldo_titulo_id") and obter_titulo(t["saldo_titulo_id"])["status"] == "aberto":
+        cancelar_titulo(t["saldo_titulo_id"], f"Estorno do pagamento parcial do título {tid}")
+    atualizar_titulo(tid, status="aberto", data_pagamento="", valor_pago_cent=0, forma_pagamento="",
+                     parcial_status="", parcial_dif_cent=0, desconto_cent=0, saldo_titulo_id=0,
+                     nota_cent=t["nota_cent"] if not t.get("parcial_status") else 0)
     with db.conexao() as con:
         con.execute("UPDATE movimentos SET titulo_id=NULL WHERE titulo_id=?", (tid,))
 
@@ -535,6 +607,12 @@ def cancelar_titulo(tid: int, motivo: str = "") -> None:
         raise ValueError("Título pago: faça o estorno antes de cancelar.")
     atualizar_titulo(tid, status="cancelado", observacao=(t["observacao"] + " " + motivo).strip())
     db.registrar("cancelamento", f"Título {tid} cancelado. {motivo}")
+
+
+def valor_da_nota(t: dict) -> int:
+    """Valor da NFS-e: os honorários do título, ou — num pagamento parcial — só o que foi pago (ou o restante dos
+    honorários, no título do saldo). Multa e juros nunca entram na nota."""
+    return t.get("nota_cent") or t["valor_cent"]
 
 
 def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
@@ -551,7 +629,7 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
         return {"sucesso": False, "erros": ["NFS-e deste título já está sendo emitida."], "titulo": obter_titulo(tid)}
     producao = emissor.em_producao()
     try:
-        r = lote.emitir_um(t["cpf_cnpj"], reais(t["valor_cent"]), t["descricao"], producao=producao, url=url,
+        r = lote.emitir_um(t["cpf_cnpj"], reais(valor_da_nota(t)), t["descricao"], producao=producao, url=url,
                            servico_id=t.get("servico_id") or "", extras=json.loads(t.get("extras") or "{}"))
     except Exception:
         atualizar_titulo(tid, nfse_status=t["nfse_status"])
@@ -562,7 +640,7 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
                          nfse_rps=r.get("rps", ""), nfse_link=r.get("link", ""), nfse_erro="",
                          nfse_canal=r.get("canal", "municipal"), nfse_chave=r.get("chave", ""))
         if producao:                # "última nota" do cliente (valor sugerido no lote e na recorrência)
-            clientes.registrar_ultima_nota(t["cpf_cnpj"], reais(t["valor_cent"]), hoje().isoformat(), r.get("nfse", ""))
+            clientes.registrar_ultima_nota(t["cpf_cnpj"], reais(valor_da_nota(t)), hoje().isoformat(), r.get("nfse", ""))
         subst = json.loads(t.get("extras") or "{}").get("subst_chave")
         if subst and producao:      # a nota substituída deixa de valer (fica cancelada por substituição)
             for velho in db.linhas("SELECT id, status FROM titulos WHERE nfse_chave=? AND id!=?", (subst, tid)):

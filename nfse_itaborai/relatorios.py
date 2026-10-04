@@ -105,6 +105,7 @@ def painel(em: date | None = None) -> dict:
         "atrasado_qtd": len(atrasados), "clientes_atrasados": len({t["cpf_cnpj"] for t in atrasados}),
         "inadimplencia_pct": round(vencido_aberto / vencido_total * 100, 1) if vencido_total else 0.0,
         "mrr": mrr, "contratos_ativos": len(contratos), "contratos_a_confirmar": a_confirmar,
+        "parciais_pendentes": db.linhas("SELECT COUNT(*) n FROM titulos WHERE parcial_status='pendente'")[0]["n"],
         "ticket_medio": mrr // len(contratos) if contratos else 0,
         "a_pagar": sum(d["valor_cent"] for d in desp_abertas),
         "a_pagar_atrasado": sum(d["valor_cent"] for d in desp_abertas if d["situacao"] == "atrasado"),

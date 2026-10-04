@@ -662,14 +662,26 @@ def mensagem_grupo_html(itens: list[tuple[dict, int]], cfg: dict | None = None, 
 
 # ---------------------------------------------------------------- depois do pagamento: agradecimento e nota fiscal
 
+def _saldo_parcial(t: dict) -> list[str]:
+    """Linhas do agradecimento quando o pagamento foi parcial (saldo em novo boleto ou desconto concedido)."""
+    if t.get("parcial_status") == "cobrar" and t.get("saldo_titulo_id"):
+        s = financeiro.obter_titulo(t["saldo_titulo_id"])
+        return [f"Ficou um saldo de {_brl(s['valor_cent'])}, que será cobrado em boleto à parte, com vencimento em "
+                f"{_data(s['vencimento'])}.", ""]
+    if t.get("parcial_status") == "desconto":
+        return [f"A diferença de {_brl(t['parcial_dif_cent'])} foi concedida como desconto.", ""]
+    return []
+
+
 def mensagem_pagamento(t: dict, cfg: dict) -> tuple[str, str]:
     emp = cfg["empresa"]
     ref = f"{t['descricao']} — competência {t['competencia'][5:]}/{t['competencia'][:4]}"
     texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
                         f"Recebemos o seu pagamento de {_brl(t['valor_pago_cent'] or t['valor_cent'])} em "
                         f"{_data(t['data_pagamento'])}, referente a: {ref}.", "",
+                        *_saldo_parcial(t),
                         "Muito obrigado pela confiança e pela pontualidade!" if (t["data_pagamento"] or "") <= t["vencimento"]
-                        else "Muito obrigado!",
+                        and not t.get("parcial_status") else "Muito obrigado!",
                         "", "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
     return f"Pagamento recebido — obrigado! ({_brl(t['valor_pago_cent'] or t['valor_cent'])})", texto
 
@@ -707,7 +719,8 @@ def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
     if not desde:
         desde = em.isoformat()
         config.salvar({"cobranca": {"agradecer_desde": desde}})
-    for t in db.linhas("SELECT * FROM titulos WHERE status='pago' AND cobrar=1 AND data_pagamento>=?", (desde,)):
+    for t in db.linhas("SELECT * FROM titulos WHERE status='pago' AND cobrar=1 AND data_pagamento>=?"
+                       " AND COALESCE(parcial_status,'')!='pendente'", (desde,)):   # parcial: espera a decisão
         cli = clientes.obter(t["cpf_cnpj"]) or {}
         for canal, ligado in (("email", cob["regua_email"]), ("whatsapp", cob["regua_whatsapp"])):
             if not ligado:

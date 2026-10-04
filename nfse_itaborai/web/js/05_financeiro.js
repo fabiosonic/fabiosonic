@@ -15,7 +15,10 @@ PAGINAS.receber = async el => {
       { t: "Cliente", f: t => celNome(t.cliente_nome, esc(frase(t.descricao))) },
       { t: "Vencimento", f: t => `<span class="nw">${dt(t.vencimento)}</span><div class="sub nw">comp. ${mes(t.competencia)}</div>` },
       { t: "Valor", n: 1, f: t => num(t.valor_cent) + (t.situacao == "atrasado" ? `<div class="sub">atualizado ${num(t.total_cent)}</div>` : t.status == "pago" ? `<div class="sub">pago ${num(t.valor_pago_cent)} em ${dt(t.data_pagamento)}</div>` : "") },
-      { t: "Situação", f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "") },
+      { t: "Situação", f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "")
+        + (t.parcial_status == "pendente" ? `<div>${estadoSelo("atencao", "Pagamento parcial")}</div><div class="sub">faltaram ${brl(t.parcial_dif_cent)}</div>`
+          : t.parcial_status == "desconto" ? `<div class="sub">desconto de ${brl(t.parcial_dif_cent)}</div>`
+          : t.parcial_status == "cobrar" ? `<div class="sub">saldo de ${brl(t.parcial_dif_cent)} em novo título</div>` : "") },
       { t: "NFS-e", f: t => selo(t.nfse_status) + (t.nfse_numero ? `<div class="sub">${t.nfse_link && t.nfse_link.startsWith("http") ? `<a href="${esc(t.nfse_link)}" target="_blank">${esc(t.nfse_numero)}</a>` : esc(t.nfse_numero)}</div>` : "") + (t.nfse_erro ? `<div class="sub" title="${esc(t.nfse_erro)}">${esc(t.nfse_erro.slice(0, 60))}…</div>` : "") },
       { t: "Ações", f: t => acoesTitulo(t) }], lst)}</div>`;
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_REC = b.dataset.f; ir("receber"); });
@@ -32,6 +35,7 @@ PAGINAS.receber = async el => {
 function acoesTitulo(t) {
   const prin = [], mais = [];
   const it = (txt, js) => `<button onclick="this.closest('details').open=false;${js}">${txt}</button>`;
+  if (t.parcial_status == "pendente") prin.push(`<button class="btn min" onclick="decidirParcial(${t.id})" title="O cliente pagou menos que o devido">Decidir diferença</button>`);
   if (t.status == "aberto") {
     prin.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
     if (t.situacao == "sem_cobranca") prin.push(`<button class="btn min sec" onclick="gerarCobranca(${t.id})" title="Gera boleto/PIX e coloca na régua">Gerar cobrança</button>`);
@@ -48,14 +52,39 @@ function acoesTitulo(t) {
   return `<div class="acoes-linha">${prin.join("")}<details class="menu-acoes"><summary class="btn min sec" title="Mais ações">Mais</summary><div class="pop">${mais.join("")}</div></details></div>`;
 }
 async function baixar(id, total) {
-  modal(`<h2>Dar baixa</h2><div class="campos" id="fb"><label>Data do pagamento<input type="date" name="data" value="${hojeISO()}"></label>
+  modal(`<h2>Dar baixa</h2><p class="sub">Valor devido hoje: <b>${brl(total)}</b></p><div class="campos" id="fb"><label>Data do pagamento<input type="date" name="data" value="${hojeISO()}"></label>
     <label>Valor recebido (R$)<input name="valor" value="${num(total)}"></label>
     <label>Forma<select name="forma"><option>pix</option><option>boleto</option><option>transferencia</option><option>dinheiro</option><option>cartao</option></select></label></div>
+    <div id="fb_parcial" class="bloco-modal" hidden><b>Pagamento parcial</b> — faltam <b id="fb_dif"></b>. O que fazer com a diferença?
+      <label class="chk"><input type="radio" name="fb_dec" value="cobrar" checked> Gerar uma conta a receber com a diferença e continuar cobrando (novo boleto atualizado)</label>
+      <label class="chk"><input type="radio" name="fb_dec" value="desconto"> Conceder a diferença como desconto</label>
+      <div class="sub">A nota fiscal sai só pelo valor pago; cobrando a diferença, o restante dos honorários sai na nota do saldo.</div></div>
     <p class="sub">Se a nota fiscal deste título ainda não saiu (emissão após o pagamento), ela é emitida na hora, ao confirmar.</p>
     <p><button class="btn" id="ok">Confirmar baixa</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  const dif = () => total - Math.round(parseFloat(String($("#fb [name=valor]").value).replace(/\./g, "").replace(",", ".")) * 100 || 0);
+  const ver = () => { const d = dif(); $("#fb_parcial").hidden = !(d > 1); $("#fb_dif").textContent = brl(d); };
+  $("#fb [name=valor]").oninput = ver; ver();
   $("#ok").onclick = async () => { $("#ok").disabled = true; $("#ok").textContent = "Registrando a baixa e emitindo a nota…";
-    const r = await api("titulo/baixar", { id, ...form($("#fb")) }); fechar();
-    aviso("Baixa registrada ✔" + (r.nfse_resultado ? " " + r.nfse_resultado : ""), r.nfse_resultado ? 9000 : 4000); ir(PAG); };
+    const parcial = dif() > 1 ? ($("[name=fb_dec]:checked") || {}).value : "";
+    const r = await api("titulo/baixar", { id, ...form($("#fb")), parcial }); fechar();
+    aviso("Baixa registrada ✔" + (r.aviso ? " " + r.aviso : "") + (r.nfse_resultado ? " " + r.nfse_resultado : ""), r.nfse_resultado || r.aviso ? 10000 : 4000); ir(PAG); };
+}
+function notaTxt(t, cobrar) {      // o que acontece com a NFS-e: só o valor pago entra na nota
+  if (t.nfse_status == "emitida") return " (a nota já emitida não muda)";
+  const base = t.nota_cent || t.valor_cent, nota = Math.min(t.valor_pago_cent, base), resto = base - nota;
+  return ` (a nota sai por ${brl(nota)}, o valor pago${cobrar && resto > 0 ? `; os ${brl(resto)} restantes dos honorários saem na nota do saldo, quando ele for pago` : ""})`;
+}
+async function decidirParcial(id) {
+  const t = (await api("titulos", { filtro: "todos" })).find(x => x.id == id);
+  modal(`<h2>Pagamento parcial</h2>
+    <p>${esc(nomeCli(t.cliente_nome))} pagou <b>${brl(t.valor_pago_cent)}</b> em ${dt(t.data_pagamento)}, mas o devido era <b>${brl(t.valor_pago_cent + t.parcial_dif_cent)}</b>.
+      Faltaram <b>${brl(t.parcial_dif_cent)}</b>. O que fazer com a diferença?</p>
+    <div class="bloco-modal"><label class="chk"><input type="radio" name="pd" value="cobrar" checked> <span><b>Cobrar a diferença</b>: cria uma conta a receber de ${brl(t.parcial_dif_cent)} e continua cobrando o cliente com boleto atualizado${notaTxt(t, true)}</span></label>
+      <label class="chk"><input type="radio" name="pd" value="desconto"> <span><b>Conceder desconto</b>: a diferença é perdoada${notaTxt(t, false)}</span></label></div>
+    <p><button class="btn" id="pd_ok">Confirmar</button> <button class="btn sec" onclick="fechar()">Decidir depois</button></p>`);
+  $("#pd_ok").onclick = async () => { $("#pd_ok").disabled = true;
+    const r = await api("titulo/parcial", { id, decisao: $("[name=pd]:checked").value }); fechar();
+    aviso([r.aviso, r.nfse_resultado].filter(Boolean).join(" "), 10000); ir(PAG); };
 }
 async function linkCartao(id, valor) {
   modal(`<h2>Pagamento com cartão de crédito</h2>
@@ -174,7 +203,7 @@ PAGINAS.contratos = async el => {
       l[i.dataset.c] = i.type == "checkbox" ? i.checked : i.value; if (i.dataset.c == "valor") l.valor_cent = Math.round(valorNum(i.value) * 100);
       if (i.dataset.c == "repetir" && i.checked && !l.valor_cent) aviso("Informe o valor mensal deste cliente.");
       alterados.add(i.dataset.k); $("#rc_alt").textContent = `${alterados.size} alteração(ões) não salva(s) — clique em “Salvar alterações”.`; });
-    $("#rc_todos").onclick = e => { $$('.rc[data-c="repetir"]', el).forEach(x => { if (x.checked != e.target.checked) { x.checked = e.target.checked; x.onchange(); } }); };
+    if ($("#rc_todos")) $("#rc_todos").onclick = e => { $$('.rc[data-c="repetir"]', el).forEach(x => { if (x.checked != e.target.checked) { x.checked = e.target.checked; x.onchange(); } }); };
     $$("[data-ed]", el).forEach(b => b.onclick = () => editarContrato(L.find(l => l.id == b.dataset.ed)));
   };
   $("#rc_f").oninput = desenhar; desenhar();

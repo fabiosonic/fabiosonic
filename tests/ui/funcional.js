@@ -244,6 +244,19 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await ir('receber'); await p.evaluate(id => gerarCobranca(id), t.id); await espera(4000);
     certo(/gerad/.test(await aviso()), await aviso());
   });
+  await passo('Contas a receber: pagamento parcial (nota do valor pago + saldo cobrado)', async () => {
+    const r = await api('titulo/novo', { cpf_cnpj: '35979895000132', valor: '300,00', nfse: 'pagamento', vencimento: '2027-01-20' });
+    await ir('receber', 1200); await p.evaluate(id => baixar(id, 30000), r.titulo_id); await espera(300);
+    await p.fill('#fb [name=valor]', '200,00'); await p.dispatchEvent('#fb [name=valor]', 'input');
+    certo(!(await p.isHidden('#fb_parcial')), 'a pergunta do pagamento parcial não apareceu');
+    await p.check('[name=fb_dec][value=cobrar]'); await p.click('#ok'); await espera(5000);
+    const ts = await api('titulos', { filtro: 'todos' }), t = ts.find(x => x.id === r.titulo_id);
+    certo(t.parcial_status === 'cobrar' && t.nota_cent === 20000 && t.nfse_status === 'emitida', JSON.stringify(t).slice(0, 300));
+    const saldo = ts.find(x => x.id === t.saldo_titulo_id);
+    certo(saldo && saldo.valor_cent === 10000 && saldo.nfse_status === 'apos_pagamento' && saldo.nota_cent === 10000, 'saldo: ' + JSON.stringify(saldo || {}).slice(0, 200));
+    await api('titulo/baixar', { id: saldo.id, valor: '100,00', forma: 'pix' });
+    certo((await api('titulos', { filtro: 'todos' })).find(x => x.id === saldo.id).nfse_status === 'emitida', 'nota do saldo não saiu');
+  });
   await passo('Contas a receber: título sem NFS-e e cancelar título', async () => {
     const r = await api('titulo/novo', { cpf_cnpj: '35979895000132', valor: '99,00', nfse: 'nao', cobrar: false });
     await ir('receber'); respostas = ['Lançado em duplicidade'];

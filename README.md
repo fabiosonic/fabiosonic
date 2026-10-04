@@ -474,6 +474,20 @@ O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR C
 junto (anexo no e-mail ou documento no WhatsApp automático), o PIX copia e cola não é repetido no texto. Ele continua
 quando não há PDF (cobrança só PIX, link manual de WhatsApp) e pode ser religado em Configurações › Cobrança.
 
+### Pagamento parcial
+
+Quando o cliente paga menos que o devido (Pix, transferência, extrato ou baixa manual), o título é baixado com o valor
+recebido e o sistema **pergunta o que fazer com a diferença** — na própria baixa manual, ou pelo botão *Decidir
+diferença* em Contas a receber (o Painel avisa quando há pagamento parcial esperando decisão):
+
+- **Cobrar a diferença**: cria uma nova conta a receber com a diferença, com vencimento em 5 dias e boleto próprio
+  (régua de cobrança normal).
+- **Conceder desconto**: a diferença é perdoada.
+
+A **NFS-e sai só pelo valor pago** (multa e juros nunca entram na nota). Cobrando a diferença, o restante dos
+honorários sai na nota do saldo, quando ele for pago; se faltou só multa e juros, o saldo não tem nota. Enquanto a
+decisão não é tomada, a nota e o agradecimento ao cliente aguardam. O estorno desfaz tudo (e cancela o saldo em aberto).
+
 ### Um boleto por título (sem custo de boletos novos)
 
 O sistema registra **um único boleto por título** e a régua reenvia sempre esse mesmo boleto — atrasado também: o
