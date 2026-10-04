@@ -79,8 +79,8 @@ PADRAO = {
         "iss_fixo": True,           # escritório contábil: ISS fixo fora do DAS (LC 123, art. 18, § 22-A)
         "extrato_inter_ate": "",    # último dia já baixado pela API de extrato do Inter
         "contas_bancarias": [],     # contas (banco-agência-conta) dos extratos desta empresa; preenchida no 1º OFX
-        "categorias_despesa": ["Aluguel", "Folha", "Pró-labore", "Impostos", "Sistemas", "Energia/Internet",
-                               "Contador/Assessoria", "Marketing", "Bancárias", "Outras"],
+        # categorias próprias do escritório (além do plano da DRE); na DRE entram em despesas administrativas
+        "categorias_despesa": [],
     },
     "decimo_terceiro": {            # 13º honorário: cobrado de cada contrato ativo no fim do ano
         "ativo": True,
@@ -137,6 +137,15 @@ PADRAO = {
         ["CLARO", "Energia/Internet"], ["OI ", "Energia/Internet"], ["ALUGUEL", "Aluguel"], ["CONDOMINIO", "Aluguel"],
         ["SALARIO", "Folha"], ["PRO LABORE", "Pró-labore"], ["PROLABORE", "Pró-labore"], ["DOMINIO", "Sistemas"],
         ["THOMSON", "Sistemas"], ["GOOGLE", "Sistemas"], ["MICROSOFT", "Sistemas"],
+        ["IPTU", "IPTU"], ["CEDAE", "Água e esgoto"], ["AGUAS DO", "Água e esgoto"], [" CRC ", "Conselhos de classe (CRC)"],
+        ["CORREIOS", "Correios e cartório"], ["CARTORIO", "Correios e cartório"], ["CERTISIGN", "Certificado digital"],
+        ["SERASA", "Certificado digital"], ["UNIMED", "Plano de saúde"], [" AMIL ", "Plano de saúde"],
+        ["SULAMERICA", "Plano de saúde"], ["RIOCARD", "Vale-transporte"], ["ALELO", "Vale-refeição/alimentação"],
+        ["SODEXO", "Vale-refeição/alimentação"], ["TICKET", "Vale-refeição/alimentação"], [" POSTO ", "Combustível"],
+        ["SHELL", "Combustível"], ["IPIRANGA", "Combustível"], [" UBER ", "Viagens e deslocamentos"],
+        ["ESTACIONAMENTO", "Estacionamento e pedágio"], ["SEM PARAR", "Estacionamento e pedágio"],
+        [" SEGURO", "Seguros"], ["ALVARA", "Alvará e taxas municipais"], ["META PLATFORMS", "Propaganda e publicidade"],
+        ["FACEBK", "Propaganda e publicidade"], ["JUROS", "Juros"], ["MULTA", "Juros e multas por atraso"],
     ],
     "automacao": {
         "ativa": True,              # liga o robô (só emite NFS-e em produção)

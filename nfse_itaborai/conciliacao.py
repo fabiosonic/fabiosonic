@@ -103,9 +103,16 @@ def _candidatos(m: dict, abertos: list[dict]) -> list[dict]:
     return [t for t in abertos if valor_ok(t) and t["vencimento"] <= limite]
 
 
+def regras() -> list:
+    """Regras salvas pelo escritório primeiro; depois as palavras padrão que ainda não estão nelas."""
+    salvas = config.carregar()["regras_despesa"]
+    tem = {_norm(p).strip() for p, _ in salvas}
+    return list(salvas) + [r for r in config.PADRAO["regras_despesa"] if _norm(r[0]).strip() not in tem]
+
+
 def categoria(historico: str) -> str:
     texto = " " + _norm(historico) + " "
-    for palavra, cat in config.carregar()["regras_despesa"]:
+    for palavra, cat in regras():
         if _norm(palavra) in texto:
             return cat
     return "Outras"
@@ -277,8 +284,8 @@ def recategorizar(mov_id: int, categoria_nova: str, iguais: bool = True, lembrar
         for x in alvo:
             con.execute("UPDATE despesas SET categoria=? WHERE id=?", (cat, x["despesa_id"]))
     if lembrar and cp and len(cp) >= 5 and m["fornecedor"] == "extrato":
-        regras = [r for r in config.carregar()["regras_despesa"] if _norm(r[0]) != cp]
-        config.salvar({"regras_despesa": [[cp, cat]] + regras})
+        outras = [r for r in config.carregar()["regras_despesa"] if _norm(r[0]) != cp]
+        config.salvar({"regras_despesa": [[cp, cat]] + outras})
         fd = dict(config.carregar()["financeiro"].get("contrapartes_fora_dre") or {})
         if fd.pop(cp, None):
             config.salvar({"financeiro": {"contrapartes_fora_dre": fd}})
@@ -289,6 +296,7 @@ def categorias_despesa() -> list[dict]:
     """Categorias organizadas pelas linhas da DRE (cada uma cai no grupo certo) + o que fica fora da DRE."""
     from .contabil import FINANCEIRAS, GRUPOS
     usadas = {r["categoria"] for r in db.linhas("SELECT DISTINCT categoria FROM despesas WHERE categoria!='' AND status!='cancelado'")}
+    usadas |= {c for c in (config.carregar()["financeiro"].get("categorias_despesa") or []) if c}
     grupos = [{"grupo": g, "categorias": list(cats)} for g, cats in GRUPOS.items()]
     grupos.append({"grupo": "Despesas financeiras", "categorias": list(FINANCEIRAS)})
     conhecidas = {c for g in grupos for c in g["categorias"]}

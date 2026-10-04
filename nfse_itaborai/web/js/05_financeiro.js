@@ -375,10 +375,11 @@ PAGINAS.pagar = async el => {
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_PAG = b.dataset.f; ir("pagar"); });
   $("#nd").onclick = () => editarDesp({});
 };
-function editarDesp(d) {
+async function editarDesp(d) {
+  const grupos = (await api("despesas/categorias")).filter(g => !g.fora);
   modal(`<h2>${d.id ? "Editar" : "Nova"} despesa</h2><div class="campos" id="fd"><label class="inteiro">Descrição<input name="descricao" value="${esc(d.descricao || "")}"></label>
     <label>Fornecedor<input name="fornecedor" value="${esc(d.fornecedor || "")}"></label>
-    <label>Categoria<select name="categoria">${ST.config.financeiro.categorias_despesa.map(c => `<option ${c == d.categoria ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
+    <label>Categoria (linha da DRE)<select name="categoria">${opcoesCategoria(grupos, d.categoria || "Outras").replace(/<option value="__nova">.*?<\/option>/, "")}</select></label>
     <label>Valor (R$)<input name="valor" value="${d.valor_cent ? num(d.valor_cent) : ""}"></label><label>Vencimento<input type="date" name="vencimento" value="${d.vencimento || hojeISO()}"></label>
     <label class="chk"><input type="checkbox" name="recorrente" ${d.recorrente ? "checked" : ""}> Repetir todo mês</label></div>
     <p><button class="btn" id="ok">Salvar</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);

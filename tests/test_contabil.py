@@ -72,3 +72,24 @@ def test_indicadores(base):  # noqa: F811
     assert i["recebido_em_dia_pct"] == 0.0 and i["atraso_medio_ponderado"] == 2.0
     assert i["top_clientes"][0]["pct"] == 66.7 and i["clientes_classe_a"] == 2
     assert i["inadimplencia_90d"] == 33.3
+
+
+def test_dre_detalhada_por_natureza_na_ordem_do_plano(base):  # noqa: F811
+    """Plano de despesas mais detalhado: cada categoria cai no grupo certo da DRE, na ordem do plano."""
+    config.salvar({"financeiro": {"regime": "simples"}})
+    for desc, cat, v in [("Vale-transporte set", "Vale-transporte", "300"), ("Salários set", "Folha", "2000"),
+                         ("Plano Unimed", "Plano de saúde", "500"), ("IPTU parcela", "IPTU", "120"),
+                         ("Anúncio Instagram", "Propaganda e publicidade", "250"), ("Anuidade CRC", "Conselhos de classe (CRC)", "600"),
+                         ("Juros cheque especial", "Juros", "40"), ("Taxa maquininha", "Taxas de cartão", "15"),
+                         ("Despesa própria", "Categoria do escritório", "10")]:
+        did = financeiro.salvar_despesa({"descricao": desc, "categoria": cat, "valor": v, "vencimento": "2026-09-10"})
+        financeiro.pagar_despesa(did, "2026-09-10")
+    d = contabil.dre(2026, EM)
+    contas = [l["conta"] for l in d["linhas"]]
+    i = contas.index
+    assert i("(−) DESPESAS COM PESSOAL") < i("Folha") < i("Vale-transporte") < i("Plano de saúde") < i("(−) DESPESAS DE OCUPAÇÃO")
+    assert i("(−) DESPESAS DE OCUPAÇÃO") < i("IPTU") < i("(−) DESPESAS ADMINISTRATIVAS") < i("Conselhos de classe (CRC)")
+    assert i("Conselhos de classe (CRC)") < i("Categoria do escritório") < i("(−) DESPESAS COMERCIAIS") < i("Propaganda e publicidade")
+    assert i("(=) RESULTADO OPERACIONAL") < i("(−) DESPESAS FINANCEIRAS") < i("Juros") < i("Taxas de cartão")
+    assert _conta(d, "(−) DESPESAS COMERCIAIS")["valores"][8] == -25000
+    assert contabil._grupo("Marketing") == "Despesas comerciais" and contabil._grupo("Folha") == "Despesas com pessoal"

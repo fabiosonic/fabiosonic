@@ -324,6 +324,7 @@ ROTAS = {
     "conciliacao/importar": lambda c: importacao.importar_manual(str(c.get("ofx", ""))),
     "conciliacao/inter": lambda c: importacao.importar_extrato_inter(int(c.get("dias") or 0) or None),
     "conciliacao/pendentes": lambda c: conciliacao.nao_conciliados(),
+    "despesas/categorias": lambda c: conciliacao.categorias_despesa(),
     "conciliacao/recategorizar": lambda c: conciliacao.recategorizar(_id(c, "movimento"), str(c.get("categoria") or ""),
                                                                      c.get("iguais", True) is not False, c.get("lembrar", True) is not False),
     "conciliacao/extrato": lambda c: conciliacao.extrato(str(c.get("inicio") or ""), str(c.get("fim") or "")),

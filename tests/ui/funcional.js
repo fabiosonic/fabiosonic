@@ -245,7 +245,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await ir('receber'); await p.click('.abas button[data-f="todos"]'); await espera(1500);
     const B = '.tabela-bloco[data-flt="receber"]';
     const total = await p.$$eval(B + ' tbody tr[data-fv]', r => r.length);
-    const nome = (await p.$$eval(B + ' tbody tr[data-fv] td:first-child b', t => t.map(x => x.textContent)))[0].split(' ')[0];
+    const nome = (await p.$$eval(B + ' tbody tr[data-fv] td:first-child .nome', t => t.map(x => x.textContent)))[0].split(' ')[0];
     await p.fill(B + ' input.flt[data-i="0"]', nome.toLowerCase()); await espera(400);
     const vis = await p.$$eval(B + ' tbody tr[data-fv]:not([hidden])', r => r.length);
     certo(vis > 0 && vis < total, `filtro de cliente não filtrou: ${vis} de ${total}`);
@@ -397,7 +397,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     let env = []; for (let i = 0; i < 40 && !(env = (await api('teste/whatsapp_web_enviados')).enviados).length; i++) await espera(1000);
     for (let i = 0; i < 30 && !env.some(e => e.arquivo); i++) { await espera(1000); env = (await api('teste/whatsapp_web_enviados')).enviados; }
     await espera(2000); env = (await api('teste/whatsapp_web_enviados')).enviados;   // o PDF sai logo depois do texto
-    const txt = env.filter(e => e.texto), docs = env.filter(e => e.arquivo);
+    const txt = env.filter(e => e.texto && !/^Boleto com vencimento em/.test(e.texto)), docs = env.filter(e => e.arquivo);   // legenda de cada PDF extra não conta
     certo(txt.length === 1 && txt[0].fone === '5521988887777' && /222,22/.test(txt[0].texto) && !/anexo/.test(txt[0].texto),
       JSON.stringify(env).slice(0, 300));
     certo(docs.length >= 1 && docs.every(d => /\.pdf$/i.test(d.arquivo)), 'boleto em PDF não foi junto: ' + JSON.stringify(docs));
@@ -407,7 +407,8 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     return `lembrete e boleto em PDF (${docs[0].arquivo}) enviados sozinhos para 5521988887777`;
   });
   await passo('WhatsApp automático: mensagem de teste para 21 97186-7366', async () => {
-    await ir('config', 1500); await p.fill('#ww_tel', '21 97186-7366'); await p.click('#ww_teste'); await espera(8000);
+    await ir('config', 1500); await p.fill('#ww_tel', '21 97186-7366'); await p.click('#ww_teste');
+    for (let i = 0; i < 40 && !/Mensagem de teste enviada|não|erro/i.test(await aviso()); i++) await espera(1000);   // espera o WhatsApp terminar a fila
     certo(/Mensagem de teste enviada/.test(await aviso()), await aviso());
     const env = (await api('teste/whatsapp_web_enviados')).enviados.at(-1);
     certo(env.fone === '5521971867366' && /TESTE/.test(env.texto), JSON.stringify(env).slice(0, 200));
@@ -415,7 +416,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
 
   // ------------------------------------------------------------ contas a pagar
   await passo('Contas a pagar: nova, editar, pagar e excluir', async () => {
-    await ir('pagar'); await p.click('#nd'); await espera(300);
+    await ir('pagar'); await p.click('#nd'); await espera(900);
     await p.fill('#fd [name=descricao]', 'ALUGUEL OUTUBRO'); await p.fill('#fd [name=valor]', '1.500,00'); await p.check('#fd [name=recorrente]');
     await p.click('#ok'); await espera(1000);
     let d = (await api('despesas', { filtro: 'todos' })).find(x => x.descricao === 'ALUGUEL OUTUBRO'); certo(d, 'não criou');

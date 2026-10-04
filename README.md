@@ -190,6 +190,22 @@ na correção.
     líquida, despesas por grupo, resultado operacional, despesas financeiras e resultado líquido, com 12 meses,
     total e análise vertical. Valores negativos entre parênteses. O DAS pago e lançado como despesa não é deduzido
     de novo.
+  - Plano de despesas por natureza (CPC 26 / NBC TG 26), na ordem em que aparece na DRE:
+    - **Pessoal:** Folha, Pró-labore, Férias e 13º salário, Rescisões, Encargos, INSS patronal, FGTS,
+      Vale-transporte, Vale-refeição/alimentação, Plano de saúde, Benefícios, Estagiários, Treinamento e cursos,
+      Uniformes e EPI, Confraternizações.
+    - **Ocupação:** Aluguel, Condomínio, IPTU, Energia elétrica, Água e esgoto, Telefone e internet, Manutenção e
+      conservação, Limpeza, Segurança e monitoramento, Seguros.
+    - **Administrativas:** Sistemas, Contador/Assessoria, Serviços de terceiros, Assessoria jurídica, Certificado
+      digital, Material, Material de copa e limpeza, Correios e cartório, Viagens e deslocamentos, Combustível,
+      Estacionamento e pedágio, Conselhos de classe (CRC), Associações e sindicatos, Assinaturas e publicações,
+      Equipamentos de pequeno valor, Doações, Outras.
+    - **Comerciais:** Marketing, Propaganda e publicidade, Brindes, Comissões, Representação e eventos.
+    - **Tributárias:** Impostos, Taxas, Alvará e taxas municipais, Contribuição sindical patronal, Multas fiscais.
+    - **Financeiras:** Bancárias, Tarifas, IOF, Juros, Juros e multas por atraso, Juros de empréstimos, Taxas de cartão.
+    - Categorias próprias (Configurações › Financeiro) entram em despesas administrativas. O extrato já classifica
+      sozinho os débitos conhecidos (IPTU, CEDAE, CRC, Correios, Unimed, Riocard, Alelo, posto de combustível,
+      estacionamento, seguros, juros, multas…), e o escritório completa a regra pela própria escolha.
   - Fluxo de caixa: realizado pelo caixa e projetado. Atrasos acima de 60 dias ficam fora da projeção; sem
     despesas lançadas, usa a média de 3 meses.
   - Livro caixa, inadimplência por faixa, análise por cliente e fechamento mensal.

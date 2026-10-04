@@ -28,13 +28,32 @@ from datetime import date, timedelta
 
 from . import config, db, financeiro, relatorios
 
+# Plano de despesas por natureza (CPC 26 / NBC TG 26, item 102), na ordem em que aparecem na DRE.
+# Os nomes antigos (Folha, Encargos, Benefícios, Energia/Internet, Material, Impostos, Taxas…) continuam valendo.
 GRUPOS = {
-    "Despesas com pessoal": ["Folha", "Pró-labore", "Encargos", "Benefícios"],
-    "Despesas de ocupação": ["Aluguel", "Energia/Internet", "Condomínio"],
-    "Despesas administrativas": ["Sistemas", "Contador/Assessoria", "Serviços de terceiros", "Marketing", "Material", "Outras"],
-    "Despesas tributárias": ["Impostos", "Taxas"],
+    "Despesas com pessoal": ["Folha", "Pró-labore", "Férias e 13º salário", "Rescisões", "Encargos", "INSS patronal",
+                             "FGTS", "Vale-transporte", "Vale-refeição/alimentação", "Plano de saúde", "Benefícios",
+                             "Estagiários", "Treinamento e cursos", "Uniformes e EPI", "Confraternizações"],
+    "Despesas de ocupação": ["Aluguel", "Condomínio", "IPTU", "Energia elétrica", "Água e esgoto", "Telefone e internet",
+                             "Energia/Internet", "Manutenção e conservação", "Limpeza", "Segurança e monitoramento",
+                             "Seguros"],
+    "Despesas administrativas": ["Sistemas", "Contador/Assessoria", "Serviços de terceiros", "Assessoria jurídica",
+                                 "Certificado digital", "Material", "Material de copa e limpeza", "Correios e cartório",
+                                 "Viagens e deslocamentos", "Combustível", "Estacionamento e pedágio",
+                                 "Conselhos de classe (CRC)", "Associações e sindicatos", "Assinaturas e publicações",
+                                 "Equipamentos de pequeno valor", "Doações", "Outras"],
+    "Despesas comerciais": ["Marketing", "Propaganda e publicidade", "Brindes", "Comissões", "Representação e eventos"],
+    "Despesas tributárias": ["Impostos", "Taxas", "Alvará e taxas municipais", "Contribuição sindical patronal",
+                             "Multas fiscais"],
 }
-FINANCEIRAS = ["Bancárias", "Juros", "Tarifas"]
+FINANCEIRAS = ["Bancárias", "Tarifas", "IOF", "Juros", "Juros e multas por atraso", "Juros de empréstimos",
+               "Taxas de cartão"]
+
+
+def _ordem(grupo: str, itens):
+    """Categorias na ordem do plano (as criadas pelo escritório vão para o fim, em ordem alfabética)."""
+    plano = FINANCEIRAS if grupo == "financeiras" else GRUPOS.get(grupo, [])
+    return sorted(itens, key=lambda kv: (plano.index(kv[0]) if kv[0] in plano else len(plano), kv[0].lower()))
 _DEDUCAO = re.compile(r"\b(DAS|SIMPLES|PGDAS|ISS|ISSQN)\b", re.IGNORECASE)
 # Presumido/Real: PIS, COFINS, IRPJ e CSLL já estão calculados na DRE; o pagamento (DARF) não entra de novo
 _DEDUCAO_REG = re.compile(r"\b(DAS|ISS|ISSQN|PIS|COFINS|IRPJ|CSLL)\b", re.IGNORECASE)
@@ -135,13 +154,13 @@ def dre(ano: int, em: date | None = None) -> dict:
         vg = soma(*grupos[g].values())
         total_oper = soma(total_oper, vg)
         add(f"(−) {g.upper()}", vg, "grupo", 0, -1)
-        for cat, v in sorted(grupos[g].items()):
+        for cat, v in _ordem(g, grupos[g].items()):
             add(cat, v, sinal=-1)
     oper = [l - d for l, d in zip(liquida, total_oper)]
     add("(=) RESULTADO OPERACIONAL", oper, "total", 0)
     fin = soma(*grupos["financeiras"].values()) if "financeiras" in grupos else [0] * 12
     add("(−) DESPESAS FINANCEIRAS", fin, "grupo", 0, -1)
-    for cat, v in sorted(grupos.get("financeiras", {}).items()):
+    for cat, v in _ordem("financeiras", grupos.get("financeiras", {}).items()):
         add(cat, v, sinal=-1)
     liquido = [o - f for o, f in zip(oper, fin)]
     add("(=) RESULTADO LÍQUIDO DO PERÍODO", liquido, "resultado", 0)
@@ -211,13 +230,13 @@ def _dre_regime(ano: int, em: date, regime: str, cfg: dict) -> dict:
         vg = soma(*grupos[g].values())
         total_oper = soma(total_oper, vg)
         add(f"(−) {g.upper()}", vg, "grupo", 0, -1)
-        for cat, v in sorted(grupos[g].items()):
+        for cat, v in _ordem(g, grupos[g].items()):
             add(cat, v, sinal=-1)
     oper = [l - d for l, d in zip(liquida, total_oper)]
     add("(=) RESULTADO OPERACIONAL", oper, "total", 0)
     fin = soma(*grupos["financeiras"].values()) if "financeiras" in grupos else zeros
     add("(−) DESPESAS FINANCEIRAS", fin, "grupo", 0, -1)
-    for cat, v in sorted(grupos.get("financeiras", {}).items()):
+    for cat, v in _ordem("financeiras", grupos.get("financeiras", {}).items()):
         add(cat, v, sinal=-1)
     lair = [o - f for o, f in zip(oper, fin)]
     irpj, csll = zeros, zeros
