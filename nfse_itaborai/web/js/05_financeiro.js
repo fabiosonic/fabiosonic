@@ -181,7 +181,7 @@ PAGINAS.contratos = async el => {
   const r = await api("recorrencia");
   const L = r.linhas, total = L.filter(l => l.repetir);
   const CURTO = { geracao: "Emitir na geração", baixa: "Emitir na baixa (pago)", lancar: "Só lançar, sem NFS-e", nada: "Não emitir e não lançar" };
-  const regraOpts = sel => `<option value="" ${!sel ? "selected" : ""}>Regra geral: ${esc(CURTO[r.regra_geral] || r.regra_geral)}</option>` + Object.entries(r.regras).map(([v, t]) => `<option value="${v}" title="${esc(t)}" ${sel == v ? "selected" : ""}>${CURTO[v] || t}</option>`).join("");
+  const regraOpts = sel => `<option value="" ${!sel ? "selected" : ""} title="Regra geral: ${esc(CURTO[r.regra_geral] || r.regra_geral)}">Regra geral</option>` + Object.entries(r.regras).map(([v, t]) => `<option value="${v}" title="${esc(t)}" ${sel == v ? "selected" : ""}>${CURTO[v] || t}</option>`).join("");
   el.innerHTML = `<h1>Recorrência mensal <span class="acoes"><button class="btn" id="rc_salvar">${ic("ok")}Salvar alterações</button><button class="btn sec" id="nc">${ic("mais")}Outra recorrência</button><button class="btn sec" id="gerar">Gerar títulos do mês</button></span></h1>
   <div class="kpis"><div class="kpi"><div class="r">Clientes na recorrência</div><div class="v">${total.length}</div></div><div class="kpi"><div class="r">Receita recorrente (MRR)</div><div class="v">${brl(total.reduce((a, c) => a + c.valor_cent, 0))}</div></div>
     <div class="kpi"><div class="r">A confirmar</div><div class="v">${L.filter(l => l.id && !l.repetir).length}</div></div></div>
@@ -198,11 +198,11 @@ PAGINAS.contratos = async el => {
       { t: '<label class="chk" title="Repetir todo mês — marcar todos os visíveis"><input type="checkbox" id="rc_todos"> Repetir</label>', f: l => `<input type="checkbox" class="rc" data-c="repetir" data-k="${chave(l)}" ${l.repetir ? "checked" : ""} aria-label="Repetir todo mês">` },
       { t: "Cliente", f: l => celNome(l.cliente_nome, `${fmtDoc(l.cpf_cnpj)}${l.id && !l.repetir ? " · a confirmar" : ""}${l.fim ? " · até " + mes(l.fim) : ""}`) },
       { t: "Valor mensal (R$)", f: l => `<input class="rc" data-c="valor" data-k="${chave(l)}" inputmode="decimal" style="width:96px" value="${l.valor_cent ? num(l.valor_cent) : ""}" placeholder="0,00">${l.ajustes_mes ? `<div class="sub nw" title="Acréscimos e descontos deste mês (botão Mais)">${l.ajustes_mes > 0 ? "+" : "−"} ${num(Math.abs(l.ajustes_mes))} este mês</div>` : ""}` },
-      { t: "Início", f: l => `<input class="rc" data-c="inicio" data-k="${chave(l)}" type="month" style="width:178px" value="${l.inicio || ""}" title="Mês do primeiro título">` },
-      { t: "Fim", f: l => `<input class="rc" data-c="fim" data-k="${chave(l)}" type="month" style="width:178px" value="${l.fim || ""}" title="Último mês cobrado: depois dele não gera mais títulos">` },
+      { t: "Início", f: l => `<input class="rc" data-c="inicio" data-k="${chave(l)}" type="month" value="${l.inicio || ""}" title="Mês do primeiro título">` },
+      { t: "Fim", f: l => `<input class="rc" data-c="fim" data-k="${chave(l)}" type="month" value="${l.fim || ""}" title="Último mês cobrado: depois dele não gera mais títulos">` },
       { t: "Vence dia", f: l => `<input class="rc" data-c="dia_vencimento" data-k="${chave(l)}" type="number" min="1" max="31" style="width:58px" value="${l.dia_vencimento}">` },
-      { t: "Serviço", f: l => `<select class="rc" style="min-width:130px;max-width:170px" data-c="servico_id" data-k="${chave(l)}">${(ST.servicos || []).length > 1 ? opcoesServ(l.servico_id || "", "Habitual do cliente") : opcoesServ(l.servico_id || "", "Padrão")}</select>` },
-      { t: "Nota fiscal", f: l => `<select class="rc" style="min-width:180px" data-c="nfse_quando" data-k="${chave(l)}">${regraOpts(l.nfse_quando || "")}</select>` },
+      { t: "Serviço", f: l => `<select class="rc" style="width:120px" data-c="servico_id" data-k="${chave(l)}">${(ST.servicos || []).length > 1 ? opcoesServ(l.servico_id || "", "Habitual do cliente") : opcoesServ(l.servico_id || "", "Padrão")}</select>` },
+      { t: "Nota fiscal", f: l => `<select class="rc" style="width:150px" data-c="nfse_quando" data-k="${chave(l)}">${regraOpts(l.nfse_quando || "")}</select>` },
       { t: "Boleto/PIX", f: l => `<input type="checkbox" class="rc" data-c="cobrar" data-k="${chave(l)}" ${l.cobrar === 0 ? "" : "checked"} aria-label="Gerar cobrança (boleto/PIX)">` },
       { t: "", f: l => l.id ? `<button class="btn min sec" data-ed="${l.id}" title="Início, fim, reajuste, descrição">Mais</button>` : "" }],
       vis, "Nenhum cliente neste filtro.");

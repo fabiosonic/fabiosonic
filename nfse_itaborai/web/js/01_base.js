@@ -116,7 +116,8 @@ function campoMes(inp) {
   w.className = "mes-pt"; w.title = inp.title || "";
   inp.style.width = "";                          // a largura vem do CSS (cabe "fevereiro" e o ano)
   sm.setAttribute("aria-label", "Mês"); sa.setAttribute("aria-label", "Ano");
-  sm.innerHTML = `<option value="">mês</option>` + MESES.map((m, i) => `<option value="${String(i + 1).padStart(2, "0")}">${m}</option>`).join("");
+  const curto = !!inp.closest("td");                 // dentro de tabela: "out" em vez de "outubro" (cabe na linha)
+  sm.innerHTML = `<option value="">mês</option>` + MESES.map((m, i) => `<option value="${String(i + 1).padStart(2, "0")}" title="${m}">${curto ? m.slice(0, 3) : m}</option>`).join("");
   const anos = v => {
     const atual = new Date().getFullYear(), a = +String(v).slice(0, 4) || atual;
     let h = `<option value="">ano</option>`;

@@ -403,8 +403,10 @@ details summary { cursor: pointer; color: var(--texto2); font-size: 13px; margin
 .faturar .rec-ate { display: flex; align-items: center; gap: 8px; } .faturar .rec-ate input { width: auto; }
 label.btn { display: inline-flex; flex-direction: row; align-items: center; cursor: pointer; vertical-align: middle; font-size: 14px; font-weight: 600; color: var(--texto); }
 .faturar .regra-nfse { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 14px; } .faturar .regra-nfse .ic { margin-top: 2px; flex: none; }
-.recor td:nth-child(2) { min-width: 200px; }
-.recor td { padding-left: 8px; padding-right: 8px; }
+.recor td:nth-child(2) { min-width: 180px; }
+.recor td:nth-child(2) .cel-nome { max-width: 260px; }
+.recor td, .recor th { padding-left: 6px; padding-right: 6px; }
+.recor select.rc { text-overflow: ellipsis; }
 .recor td .acoes-linha { flex-wrap: nowrap; }
 .opcoes-cancel { display: grid; gap: 6px; margin: 12px 0; } .opcoes-cancel .btn { justify-content: flex-start; white-space: normal; height: auto; min-height: 38px; padding: 8px 14px; } .opcoes-cancel p { margin: 0 0 8px; }
 .btn.perigo-txt { color: var(--critico); } .filtros-nf { flex-wrap: wrap; align-items: end; }
@@ -705,7 +707,9 @@ h2 .btn .ic, h1 .btn .ic { color: inherit; }
 .mes-pt select { flex: 1 1 auto; min-width: 0; padding-left: 8px; padding-right: 4px; }
 .mes-pt select + select { flex: 0 0 5.6em; width: 5.6em; }
 td .mes-pt, label[style*="row"] .mes-pt { display: inline-flex; vertical-align: middle; width: auto; }
-td .mes-pt select:first-child, label[style*="row"] .mes-pt select:first-child { min-width: 8.2em; }
+label[style*="row"] .mes-pt select:first-child { min-width: 8.2em; }
+td .mes-pt select:first-child { min-width: 4.4em; flex: 0 0 4.4em; }
+td .mes-pt select + select { flex: 0 0 5.2em; width: 5.2em; }
 
 /* campo de data em dd/mm/aaaa (substitui o input date do navegador) */
 .data-pt { position: relative; display: flex; width: 100%; min-width: 0; }
