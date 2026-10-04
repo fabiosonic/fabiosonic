@@ -226,9 +226,13 @@ na correção.
 3. Regras da importação:
    - os clientes só entram na empresa que emitiu as notas, nunca em outra;
    - se o prestador ainda não estiver cadastrado, o link "Cadastrar esta empresa" abre o cadastro já preenchido.
-4. Depois de importados, os arquivos vão para `IMPORTAR XML\importados\<CNPJ>`. Essa passa a ser a pasta de
+4. **Cadastro da empresa completado pelas notas:** na importação, o que ainda estiver vazio é preenchido com o que
+   as notas emitidas mostram — nome da empresa (e assinatura das mensagens), inscrição municipal e, no Emissor
+   Nacional, o código IBGE do município. A numeração continua de onde parou: o próximo RPS/DPS passa a ser o maior
+   número já usado + 1 (nunca volta). Nada que já esteja preenchido é trocado.
+5. Depois de importados, os arquivos vão para `IMPORTAR XML\importados\<CNPJ>`. Essa passa a ser a pasta de
    XML daquela empresa para o robô (notas emitidas fora do sistema e contratos detectados).
-5. O robô também importa sozinho os clientes das notas novas que aparecerem na pasta, cada uma na sua empresa.
+6. O robô também importa sozinho os clientes das notas novas que aparecerem na pasta, cada uma na sua empresa.
    Os padrões da nota só mudam quando você confirma na tela.
 
 ## 13º honorário

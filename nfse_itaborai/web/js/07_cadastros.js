@@ -89,7 +89,7 @@ async function importarXml(area) {
         return { nome: $(".imp-sv-nome", x).value.trim(), campos, padrao: $(".imp-sv-pad", x).checked }; });
       const r = await api("importador/importar", { empresa_id: $(".imp-emp", div).value, cnpj: g.cnpj, servicos });
       if (r.erro) return;
-      aviso(`${r.empresa}: ${r.xml} XML importado(s), ${r.clientes_novos} cliente(s) novo(s)${r.servicos ? ` · ${r.servicos} serviço(s) cadastrado(s)` : ""}${r.clientes_com_servico ? ` · ${r.clientes_com_servico} cliente(s) ligados ao serviço habitual` : ""}${(r.regra_geral || []).length ? " · regra geral completada pelas notas (" + r.regra_geral.length + " campo(s))" : ""}${r.regras_tomadores ? ` · ${r.regras_tomadores} tomador(es) com regra fiscal própria` : ""} ✔`, 12000);
+      aviso(`${r.empresa}: ${r.xml} XML importado(s), ${r.clientes_novos} cliente(s) novo(s)${r.servicos ? ` · ${r.servicos} serviço(s) cadastrado(s)` : ""}${r.clientes_com_servico ? ` · ${r.clientes_com_servico} cliente(s) ligados ao serviço habitual` : ""}${(r.regra_geral || []).length ? " · regra geral completada pelas notas (" + r.regra_geral.length + " campo(s))" : ""}${r.regras_tomadores ? ` · ${r.regras_tomadores} tomador(es) com regra fiscal própria` : ""}${(r.empresa_completada || []).length ? " · empresa completada: " + r.empresa_completada.join("; ") : ""} ✔`, 15000);
       await carregarEstado(); ir("clientes"); }; });
 }
 

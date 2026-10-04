@@ -45,6 +45,65 @@ def _prestador(raiz) -> tuple[str, str]:
     return _digitos(cnpj), _texto(raiz, "emit/xNome") or _texto(dps, "prest/xNome")
 
 
+def empresa_de_xml(raiz) -> dict:
+    """Dados da empresa emissora na nota: razão social, inscrição municipal, número da nota de origem (RPS/DPS),
+    série e município de emissão — para completar o cadastro da empresa na importação."""
+    if _local(raiz.tag) == "RetornoNfse" or _achar(raiz, "PrestadorServico") is not None:
+        p = _achar(raiz, "PrestadorServico")
+        return {"canal": "municipal", "nome": _texto(p, "RazaoSocial"), "im": _digitos(_texto(p, "InscricaoMunicipal")),
+                "numero": _digitos(_texto(raiz, "IdentificacaoRps/Numero")), "serie": "", "cmun": ""}
+    dps = _achar(raiz, "infDPS")
+    return {"canal": "nacional", "nome": _texto(raiz, "emit/xNome") or _texto(dps, "prest/xNome"),
+            "im": _digitos(_texto(raiz, "emit/IM") or _texto(dps, "prest/IM")),
+            "numero": _digitos(_texto(dps, "nDPS")), "serie": _texto(dps, "serie"),
+            "cmun": _digitos(_texto(dps, "cLocEmi") or _texto(raiz, "emit/enderNac/cMun"))}
+
+
+def completar_empresa(pasta: Path, cnpj: str) -> list[str]:
+    """Completa o cadastro da empresa em uso com o que as notas emitidas por ela mostram. Só preenche o que está
+    vazio (nome, assinatura, inscrição municipal, município do Emissor Nacional) e só AVANÇA a numeração
+    (próximo RPS/DPS = maior número já usado + 1); nunca apaga nem volta nada."""
+    from collections import Counter
+    dados = []
+    for arq in sorted(pasta.glob("*.xml")):
+        raiz = _ler(arq)
+        if raiz is not None and _prestador(raiz)[0] == cnpj:
+            dados.append(empresa_de_xml(raiz))
+    if not dados:
+        return []
+    freq = lambda campo: (Counter(d[campo] for d in dados if d.get(campo)).most_common(1) or [("", 0)])[0][0]  # noqa: E731
+    feito: list[str] = []
+    cfg = config.carregar()
+    nome = freq("nome")
+    if nome and not cfg["empresa"].get("nome"):
+        config.salvar({"empresa": {"nome": nome, **({} if cfg["empresa"].get("assinatura") else {"assinatura": nome})}})
+        feito.append(f"nome da empresa: {nome}")
+    im = freq("im")
+    if im and im != "0" and not _digitos(emissor.env("ITABORAI_IM") or ""):
+        empresas.salvar_credenciais({"im": im})
+        feito.append(f"inscrição municipal: {im}")
+    canal = cfg["emissao"].get("canal", "municipal")
+    cmun = freq("cmun")
+    if canal == "nacional" and cmun and len(cmun) == 7 and not cfg["emissao"].get("municipio_emissor"):
+        config.salvar({"emissao": {"municipio_emissor": cmun}})
+        feito.append(f"município emissor (IBGE): {cmun}")
+    nums = [int(d["numero"]) for d in dados if d.get("numero") and d["canal"] == canal]
+    if nums:
+        prox = max(nums) + 1
+        if canal == "nacional":
+            from . import nacional
+            if prox > nacional._proximo_dps():
+                config.salvar({"emissao": {"proximo_dps": prox}})
+                feito.append(f"próximo número da DPS: {prox} (a última nota usou {max(nums)})")
+        elif prox > int(emissor._ler_sequencia().get("proximo_rps", 1)):
+            emissor._definir_proximo_rps(prox)
+            empresas.salvar_credenciais({"proximo_rps": str(prox)})
+            feito.append(f"próximo número de RPS: {prox} (a última nota usou {max(nums)})")
+    if feito:
+        db.registrar("importacao", "Cadastro da empresa completado pelos XML: " + "; ".join(feito))
+    return feito
+
+
 def servico_de_xml(raiz) -> dict:
     """Dados do serviço da nota (para sugerir o serviço padrão da empresa)."""
     if _local(raiz.tag) == "RetornoNfse" or _achar(raiz, "TomadorServico") is not None:
@@ -211,13 +270,15 @@ def importar(empresa_id: str, cnpj_prestador: str, servico: dict | None = None,
         ligados = _ligar_clientes_aos_servicos(destino, cnpj) if destino.exists() else 0
         notas = _fatos_fiscais(destino, cnpj) if destino.exists() else []
         regra_geral = leitura_fiscal.aplicar_geral(notas)
+        empresa_completada = completar_empresa(destino, cnpj) if destino.exists() else []
         regras_tomadores = leitura_fiscal.aplicar_tomadores(notas)
         if not str(config.carregar()["pastas"].get("xml_nfse") or "").strip():
             config.salvar({"pastas": {"xml_nfse": str(destino)}})
         db.registrar("importacao", f"{movidos} XML importado(s) da pasta {NOME_PASTA}: {r['clientes_novos']} cliente(s) novo(s)")
     return {"empresa": emp["nome"], "xml": movidos, "clientes_novos": r["clientes_novos"],
             "clientes_total": r["clientes_total"], "padrao_salvo": bool(servico), "servicos": cadastrados,
-            "clientes_com_servico": ligados, "regra_geral": regra_geral, "regras_tomadores": regras_tomadores}
+            "clientes_com_servico": ligados, "regra_geral": regra_geral, "regras_tomadores": regras_tomadores,
+            "empresa_completada": empresa_completada}
 
 
 def _fatos_fiscais(pasta: Path, cnpj: str) -> list[dict]:

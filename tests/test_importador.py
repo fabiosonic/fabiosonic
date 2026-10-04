@@ -99,3 +99,35 @@ def test_config_antiga_com_downloads_passa_para_a_pasta_do_sistema(tmp_path, mon
     (tmp_path / "dados" / "config.json").write_text(json.dumps(
         {"pastas": {"xml_nfse": "~/Downloads/nfse/MORAES OLIVEIRA CONTABILIDADE LTDA"}}), encoding="utf-8")
     assert config.carregar()["pastas"]["xml_nfse"] == ""
+
+
+def test_importacao_completa_o_cadastro_da_empresa(multi):  # noqa: F811
+    """Instalação nova: o nome, a inscrição municipal, o município e a numeração da DPS vêm das notas já emitidas.
+    Só preenche o que está vazio e só avança a numeração."""
+    import json
+    from nfse_itaborai import nacional as nac
+    empresas.criar({"nome": "PADARIA BOM PAO LTDA", "cnpj": PADARIA, "canal": "nacional"})
+    pasta = multi / "empresas" / PADARIA
+    cfg = json.loads((pasta / "dados" / "config.json").read_text(encoding="utf-8"))
+    cfg["empresa"]["nome"] = cfg["empresa"]["assinatura"] = ""
+    cfg["emissao"].pop("municipio_emissor")                        # como numa instalação nova ainda sem município
+    (pasta / "dados" / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+    c = importador.caixa()
+    for n in (57, 58):
+        x = nacional(PADARIA, "07526557000100", "MERCADO X", n, "VENDA DE PAES", "010701")
+        x = x.replace(f"<xNome>EMPRESA {PADARIA[:4]}</xNome>", "<xNome>PADARIA BOM PAO LTDA</xNome><IM>4455667</IM>")
+        x = x.replace("<dhEmi>", f"<nDPS>{n}</nDPS><serie>900</serie><cLocEmi>3303302</cLocEmi><dhEmi>")
+        (c / f"p{n}.xml").write_text(x, encoding="utf-8")
+    r = tratar("importador/importar", {"empresa_id": PADARIA, "cnpj": PADARIA})
+    feito = " | ".join(r["empresa_completada"])
+    assert "nome da empresa: PADARIA BOM PAO LTDA" in feito and "inscrição municipal: 4455667" in feito
+    assert "município emissor (IBGE): 3303302" in feito and "próximo número da DPS: 59" in feito
+    with emissor.usar_empresa(pasta):
+        cfg = config.carregar()
+        assert cfg["empresa"]["nome"] == cfg["empresa"]["assinatura"] == "PADARIA BOM PAO LTDA"
+        assert cfg["emissao"]["municipio_emissor"] == "3303302" and nac._proximo_dps() == 59
+        assert emissor.env("ITABORAI_IM") == "4455667"
+        # nada é sobrescrito nem volta: nome trocado e numeração à frente continuam
+        config.salvar({"empresa": {"nome": "PADARIA NOVA"}, "emissao": {"proximo_dps": 100}})
+        assert importador.completar_empresa(importador.arquivo_da_empresa(PADARIA), PADARIA) == []
+        assert config.carregar()["empresa"]["nome"] == "PADARIA NOVA" and nac._proximo_dps() == 100

@@ -114,7 +114,7 @@ PADRAO = {
         "certificado_senha": "",
         "serie_dps": "900",         # série própria das DPS enviadas por este sistema
         "proximo_dps": 1,           # numeração da DPS (independente do RPS municipal)
-        "municipio_emissor": "3301900",
+        "municipio_emissor": "",    # código IBGE do município da empresa (assistente inicial ou importação dos XML)
         "op_simp_nac": "3",         # 1 não optante | 2 MEI | 3 ME/EPP
         "reg_ap_trib_sn": "2",      # 1 tudo no DAS | 2 federais no DAS e ISS fora (ISS fixo) | 3 tudo fora
         "reg_esp_trib": "6",        # 0 nenhum | 6 sociedade de profissionais (confirmar no cadastro municipal)
