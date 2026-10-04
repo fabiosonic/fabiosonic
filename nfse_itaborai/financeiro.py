@@ -495,15 +495,23 @@ def baixar(tid: int, data: str = "", valor=None, forma: str = "manual") -> dict:
     atualizar_titulo(tid, status="pago", data_pagamento=data or hoje().isoformat(), valor_pago_cent=pago,
                      forma_pagamento=forma)
     db.registrar("baixa", f"Título {tid} ({t['cliente_nome']}) pago R$ {reais(pago)} via {forma}")
-    if t["nfse_status"] == "apos_pagamento":
-        # nota só depois do pagamento: liberou agora; em produção emite já (o robô repete se a prefeitura falhar)
-        atualizar_titulo(tid, nfse_status="pendente")
+    nota = ""
+    if t["nfse_status"] in ("apos_pagamento", "pendente"):
+        # pago (banco, extrato, cartão ou baixa manual): a nota que esperava o pagamento — ou que ainda não saiu —
+        # é emitida na hora, em produção; se a prefeitura falhar, o robô tenta de novo
+        if t["nfse_status"] == "apos_pagamento":
+            atualizar_titulo(tid, nfse_status="pendente")
         if emissor.em_producao():
             try:
-                emitir_nfse_titulo(tid)
+                r = emitir_nfse_titulo(tid)
+                nota = (f"NFS-e nº {r['titulo']['nfse_numero']} emitida." if r["sucesso"] else
+                        "NFS-e não emitida: " + "; ".join(r.get("erros") or ["erro na prefeitura"]) + " (o robô tenta de novo).")
             except Exception as ex:  # noqa: BLE001 — a baixa vale mesmo se a emissão falhar; o robô tenta de novo
                 db.registrar("nfse", f"Título {tid}: emissão após o pagamento ficou pendente ({ex})")
-    return obter_titulo(tid)
+                nota = f"NFS-e pendente: {ex} (o robô tenta de novo)."
+        else:
+            nota = "Ambiente de homologação: a NFS-e fica pendente e sai automaticamente quando o sistema estiver em produção."
+    return obter_titulo(tid) | {"nfse_resultado": nota}
 
 
 def estornar(tid: int) -> None:

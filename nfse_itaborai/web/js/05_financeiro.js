@@ -51,8 +51,11 @@ async function baixar(id, total) {
   modal(`<h2>Dar baixa</h2><div class="campos" id="fb"><label>Data do pagamento<input type="date" name="data" value="${hojeISO()}"></label>
     <label>Valor recebido (R$)<input name="valor" value="${num(total)}"></label>
     <label>Forma<select name="forma"><option>pix</option><option>boleto</option><option>transferencia</option><option>dinheiro</option><option>cartao</option></select></label></div>
+    <p class="sub">Se a nota fiscal deste título ainda não saiu (emissão após o pagamento), ela é emitida na hora, ao confirmar.</p>
     <p><button class="btn" id="ok">Confirmar baixa</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
-  $("#ok").onclick = async () => { await api("titulo/baixar", { id, ...form($("#fb")) }); fechar(); aviso("Baixa registrada ✔"); ir(PAG); };
+  $("#ok").onclick = async () => { $("#ok").disabled = true; $("#ok").textContent = "Registrando a baixa e emitindo a nota…";
+    const r = await api("titulo/baixar", { id, ...form($("#fb")) }); fechar();
+    aviso("Baixa registrada ✔" + (r.nfse_resultado ? " " + r.nfse_resultado : ""), r.nfse_resultado ? 9000 : 4000); ir(PAG); };
 }
 async function linkCartao(id, valor) {
   modal(`<h2>Pagamento com cartão de crédito</h2>

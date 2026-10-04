@@ -42,6 +42,7 @@ PADRAO = {
         "envio_hora_inicio": "08:00",
         "envio_hora_fim": "18:00",
         "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado
+        "pix_nas_mensagens": False,     # PIX copia e cola no texto mesmo com o boleto (que já traz o QR Code) junto
         "bloquear_apos_dias": 60,   # alerta de cliente para suspensão/negociação
         # WhatsApp automático pelo WhatsApp Web do escritório (QR Code lido uma vez; sem API oficial)
         "whatsapp_web": False,          # liga sozinho quando o QR Code é lido em Configurações › WhatsApp

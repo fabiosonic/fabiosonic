@@ -254,6 +254,24 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
             "assinatura": emp.get("assinatura") or emp["nome"], "whatsapp": emp.get("whatsapp", "")}
 
 
+def _pdf_vai(c: dict, cfg: dict, canal: str = "email") -> bool:
+    """O PDF do boleto vai junto da mensagem? (e-mail: anexo; WhatsApp automático: documento logo depois do texto)"""
+    cob = cfg["cobranca"]
+    if not c["boleto_pdf"]:
+        return False
+    if canal == "email":
+        return bool(cob.get("anexar_boleto", True))
+    return bool(cob.get("whatsapp_web") and cob.get("whatsapp_web_pdf", True))
+
+
+def _pix_na_mensagem(c: dict, cfg: dict, canal: str = "email") -> bool:
+    """O boleto do Inter já traz o QR Code do PIX: com o PDF junto, o copia e cola só vai se a opção estiver ligada.
+    Sem o PDF (PIX avulso, link manual de WhatsApp) ele sempre vai — é a única forma de pagar pelo PIX."""
+    if not c["pix"]:
+        return False
+    return bool(cfg["cobranca"].get("pix_nas_mensagens", False)) or not _pdf_vai(c, cfg, canal)
+
+
 def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = None,
              canal: str = "email") -> tuple[str, str]:
     """(assunto, texto) conforme a etapa da régua — texto simples (e-mail sem HTML e WhatsApp).
@@ -268,11 +286,12 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
         linhas.append(f"NFS-e nº {c['nfse']}" + (f": {c['nfse_link']}" if c["nfse_link"] else ""))
     if c["boleto_link"]:
         linhas.append(f"Boleto/PIX: {c['boleto_link']}")
-    if c["boleto_pdf"] and canal == "email":
-        linhas.append("Boleto em PDF: segue em anexo.")
+    if _pdf_vai(c, cfg, canal):
+        qr = " (pague pelo código de barras ou pelo QR Code do PIX impresso no boleto)" if c["pix"] else ""
+        linhas.append(("Boleto em PDF: segue em anexo" if canal == "email" else "O boleto em PDF vai logo a seguir") + qr + ".")
     if c["linha"]:
         linhas.append(f"Linha digitável: {c['linha']}")
-    if c["pix"]:
+    if _pix_na_mensagem(c, cfg, canal):
         linhas += ["", "PIX copia e cola:", c["pix"]]
     if c["cartao"]:
         k = c["cartao"]
@@ -323,8 +342,10 @@ def mensagem_html(t: dict, etapa: int, cfg: dict | None = None, em: date | None 
              f'border-bottom:1px solid #e3e7ee;margin:0 0 8px">{detalhes}</table>'
              + (f'<div style="margin:16px 0 4px">{pagar}</div>' if pagar else "")
              + (caixa("Linha digitável do boleto", c["linha"]) if c["linha"] else "")
-             + ('<p style="margin:6px 0 0;font-size:13px;color:#667085">O boleto em PDF segue em anexo.</p>' if c["boleto_pdf"] else "")
-             + (caixa("PIX copia e cola", c["pix"]) if c["pix"] else ""))
+             + ('<p style="margin:6px 0 0;font-size:13px;color:#667085">O boleto em PDF segue em anexo'
+                + (" — pague pelo código de barras ou pelo <b>QR Code do PIX</b> impresso no boleto" if c["pix"] else "") + ".</p>"
+                if _pdf_vai(c, cfg) else "")
+             + (caixa("PIX copia e cola", c["pix"]) if _pix_na_mensagem(c, cfg) else ""))
     if c["cartao"]:
         k = c["cartao"]
         corpo += (f'<div style="margin:18px 0 0;padding:12px 14px;border:1px solid #e3e7ee;border-radius:8px;font-size:14px;color:#344054;line-height:1.5">'
@@ -526,7 +547,7 @@ def _grupo(itens: list[tuple[dict, int]], cfg: dict, em: date | None) -> tuple[l
         abertura = f"Seguem os {n} títulos de honorários em seu nome, no total de {_brl(total)}."
     return cs, {"assunto": assunto, "abertura": abertura, "atraso": atraso, "total": _brl(total),
                 "nome": cs[0]["nome"], "assinatura": cs[0]["assinatura"], "whatsapp": cs[0]["whatsapp"],
-                "pdf": any(c["boleto_pdf"] for c in cs)}
+                "pdf": any(_pdf_vai(c, cfg) for c in cs)}
 
 
 def mensagem_grupo(itens: list[tuple[dict, int]], cfg: dict | None = None, em: date | None = None) -> tuple[str, str]:
@@ -546,14 +567,14 @@ def mensagem_grupo(itens: list[tuple[dict, int]], cfg: dict | None = None, em: d
             linhas.append(f"   Boleto/PIX: {c['boleto_link']}")
         if c["linha"]:
             linhas.append(f"   Linha digitável: {c['linha']}")
-        if c["pix"]:
+        if _pix_na_mensagem(c, cfg):
             linhas.append(f"   PIX copia e cola: {c['pix']}")
         if c["cartao"]:
             linhas.append(f"   Cartão de crédito ({_brl(c['cartao']['valor'])}, taxa por conta de quem paga com cartão): "
                           f"{c['cartao']['link']}")
     linhas += ["", f"Total: {g['total']}"]
     if g["pdf"]:
-        linhas.append("Os boletos em PDF seguem em anexo.")
+        linhas.append("Os boletos em PDF seguem em anexo (pague pelo código de barras ou pelo QR Code do PIX impresso em cada boleto).")
     linhas += ["", "Atenciosamente,", g["assinatura"]]
     if g["whatsapp"]:
         linhas.append(f"WhatsApp: {g['whatsapp']}")
@@ -588,7 +609,7 @@ def mensagem_grupo_html(itens: list[tuple[dict, int]], cfg: dict | None = None, 
     for i, c in enumerate(cs, 1):
         bloco = ((f'<a href="{e(c["boleto_link"])}" style="color:#1f4fbf;font-weight:700">Pagar boleto / PIX</a> ' if c["boleto_link"] else "")
                  + (f'· <a href="{e(c["cartao"]["link"])}" style="color:#1f4fbf">cartão de crédito ({_brl(c["cartao"]["valor"])}, taxa por conta de quem paga com cartão)</a>' if c["cartao"] else "")
-                 + (caixa("Linha digitável", c["linha"]) if c["linha"] else "") + (caixa("PIX copia e cola", c["pix"]) if c["pix"] else ""))
+                 + (caixa("Linha digitável", c["linha"]) if c["linha"] else "") + (caixa("PIX copia e cola", c["pix"]) if _pix_na_mensagem(c, cfg) else ""))
         if bloco:
             pagar += (f'<div style="margin:16px 0 0;padding-top:12px;border-top:1px dashed #e3e7ee">'
                       f'<p style="margin:0 0 6px;font-size:14px;color:#101828"><b>{i}) {e(c["referente"])}</b> — '

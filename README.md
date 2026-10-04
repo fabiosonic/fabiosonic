@@ -458,6 +458,17 @@ Em **Mais**, a seção *Acréscimos e descontos* lança valores com descrição,
 (do início ao fim, ou sem fim). Eles são somados ao honorário no título do mês, e a descrição mostra a composição
 (ex.: "HONORÁRIOS (honorário R$ 1.000,00; + Alteração contratual R$ 300,00; - Desconto R$ 100,00)").
 
+### Pagamento → nota fiscal na hora
+
+Toda baixa passa pelo mesmo caminho — boleto ou PIX pago no Inter (consulta automática do robô), extrato conciliado,
+cartão ou **baixa manual** (botão *Baixar* em Contas a receber): se a NFS-e do título espera o pagamento (regra
+"Emitir na baixa") ou ainda não saiu, ela é emitida na hora, em produção, e a tela mostra o número da nota (ou o
+motivo, se a prefeitura recusar — o robô tenta de novo). Em homologação a nota fica pendente.
+
+O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR Code do PIX. Por isso, quando o PDF vai
+junto (anexo no e-mail ou documento no WhatsApp automático), o PIX copia e cola não é repetido no texto. Ele continua
+quando não há PDF (cobrança só PIX, link manual de WhatsApp) e pode ser religado em Configurações › Cobrança.
+
 ### Datas e meses sempre em português
 
 Os campos de data são digitados no padrão brasileiro (**dd/mm/aaaa**, com máscara e botão de calendário) e os de mês
