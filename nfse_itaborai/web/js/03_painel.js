@@ -202,7 +202,8 @@ PAGINAS.painel = async el => {
   if (!ST.config.automacao.ativa) A("alerta", "play", `O robô financeiro está desligado — <a href="#" onclick="ir('config');return false">ligar em Configurações</a>`);
   const S = p.serie, atu = S.at(-1) || {}, ant = S.at(-2) || {}, col = k => S.map(x => x[k]);
   const cobrado = Math.round((p.recebido_mes / (p.faturado_mes || 1)) * 1000) / 10;
-  const caixa = (atu.recebido || 0) - (atu.despesas || 0);
+  const caixa = (atu.recebido || 0) - (atu.despesas || 0), caixaAnt = (ant.recebido || 0) - (ant.despesas || 0);
+  const lucroSerie = S.map(x => (x.recebido || 0) - (x.despesas || 0));
   const robo = ST.config.automacao.ativa
     ? `<span class="estado bom">${ic("ok")}Robô ligado</span><span>${p.ultima_execucao_robo ? "última execução " + dt(p.ultima_execucao_robo.slice(0, 10)) + " às " + p.ultima_execucao_robo.slice(11, 16) : "ainda não executou"}</span>`
     : `<span class="estado critico">${ic("bloqueio")}Robô desligado</span>`;
@@ -223,7 +224,7 @@ PAGINAS.painel = async el => {
       <dl class="heroi-fatos">
         <div><dt>A receber no mês</dt><dd>${brl(Math.max(0, p.faturado_mes - p.recebido_mes))}</dd></div>
         <div><dt>Despesas pagas no mês</dt><dd>${brl(atu.despesas)}</dd></div>
-        <div><dt>Resultado de caixa no mês</dt><dd class="${caixa < 0 ? "neg" : ""}">${brl(caixa)}</dd></div>
+        <div><dt>Lucro líquido do mês</dt><dd class="${caixa < 0 ? "neg" : ""}">${brl(caixa)}</dd></div>
       </dl>
     </div>
     <div class="card"><div class="card-cab"><h2>${ic("relogio")}Contas a receber por idade</h2><span class="sub">${brl(agTotal)} em aberto</span></div>
@@ -232,6 +233,9 @@ PAGINAS.painel = async el => {
       <p class="card-pe"><a href="#" onclick="ABA_REL='aging';ir('relatorios');return false">Ver inadimplência por cliente</a></p></div>
   </section>
   <section class="stats">
+    ${statTile({ rot: "Lucro líquido do mês", icone: "receber", valor: brl(caixa), delta: variacao(caixa, caixaAnt, true, "mês anterior", mesCurto(ant.mes)), tendencia: lucroSerie,
+      rotTend: "Recebido menos despesas pagas, mês a mês", estado: estadoSelo(caixa < 0 ? "critico" : "bom", caixa < 0 ? "prejuízo no caixa" : "caixa positivo"),
+      sub: `${brl(atu.recebido || 0)} recebidos − ${brl(atu.despesas || 0)} de despesas pagas` })}
     ${statTile({ rot: "Faturado no mês", icone: "nota", valor: brl(p.faturado_mes), delta: variacao(p.faturado_mes, ant.faturado, true, "mês anterior", mesCurto(ant.mes)), tendencia: col("faturado"), sub: "por competência · 12 meses no gráfico" })}
     ${statTile({ rot: "A receber", icone: "receber", valor: brl(p.a_receber), tendencia: col("a_receber"), rotTend: "Saldo a receber no fim de cada mês", sub: `${brl(p.recebido_mes)} já recebidos no mês` })}
     ${statTile({ rot: "Em atraso", icone: "alerta", valor: brl(p.atrasado), delta: variacao(atu.atrasado, ant.atrasado, false, "fim do mês anterior", mesCurto(ant.mes)), tendencia: col("atrasado"), rotTend: "Valor em atraso no fim de cada mês",
