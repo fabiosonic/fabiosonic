@@ -148,6 +148,7 @@ MIGRACOES = {
     "titulos": {"origem": "TEXT DEFAULT 'sistema'", "nfse_canal": "TEXT DEFAULT 'municipal'",
                 "nfse_chave": "TEXT DEFAULT ''", "servico_id": "TEXT DEFAULT ''", "banco_id": "TEXT DEFAULT ''", "nosso_numero": "TEXT DEFAULT ''",
                 "boleto_pdf": "TEXT DEFAULT ''", "cobrar": "INTEGER NOT NULL DEFAULT 1",
+                "boleto_situacao": "TEXT DEFAULT ''",   # 'expirado'/'cancelado' no banco: não é refeito (sem custo)
                 "nfse_data": "TEXT DEFAULT ''", "extras": "TEXT DEFAULT ''",
                 # cartão de crédito (InfinitePay): nº do pedido, link, valor com a taxa repassada e situação
                 "cartao_id": "TEXT DEFAULT ''", "cartao_link": "TEXT DEFAULT ''", "cartao_total_cent": "INTEGER DEFAULT 0",
@@ -167,6 +168,12 @@ def _migrar(con: sqlite3.Connection) -> None:
         # notas emitidas fora do sistema (importadas dos XML) não geram cobrança: só faturamento
         con.execute("UPDATE titulos SET cobrar=0 WHERE origem='importado' AND banco_id='' AND status='aberto'")
         con.execute("PRAGMA user_version=2")
+        con.commit()
+    if con.execute("PRAGMA user_version").fetchone()[0] < 3:
+        # inadimplência importada do Nitrus: a NFS-e passa a sair quando o cliente pagar (antes: sem nota)
+        con.execute("UPDATE titulos SET nfse_status='apos_pagamento' WHERE status='aberto' AND nfse_status='nao_emitir'"
+                    " AND descricao='HONORÁRIOS CONTABEIS MENSAIS.' AND nfse_numero=''")
+        con.execute("PRAGMA user_version=3")
         con.commit()
 
 

@@ -215,7 +215,8 @@ def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) ->
                 res["ja_existiam"] += 1
                 continue
             tid = financeiro.criar_titulo(doc, financeiro.reais(int(t["valor_cent"])), DESCRICAO, vencimento=t["vencimento"],
-                                          competencia=t["vencimento"][:7], emitir_nfse=False, cobrar=cobrar)
+                                          competencia=t["vencimento"][:7], emitir_nfse=True, apos_pagamento=True,
+                                          cobrar=cobrar)          # a NFS-e sai só quando o cliente pagar
             res["lancados"] += 1
             if cobrar and gerar_agora:
                 try:

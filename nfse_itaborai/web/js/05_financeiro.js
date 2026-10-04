@@ -388,6 +388,7 @@ function mostrarNitrus(a) {
   modal(`<h2>Importar inadimplência do Nitrus</h2>
     <div class="imp-tot">${a.conferido ? estadoSelo("bom", "Leitura conferida com os totais do relatório") : estadoSelo("critico", "A leitura não bateu com os totais do relatório — confira antes de lançar")}
       <span>${a.titulos} título(s) de ${G.length} cliente(s) · original <b>${brl(a.lidos.original)}</b> · com juros e multa no Nitrus <b>${brl(a.lidos.total)}</b></span></div>
+    <p class="sub">Cada título entra com o vencimento original, boleto/PIX e régua de cobrança; a <b>NFS-e só sai quando o cliente pagar</b>.</p>
     <div class="imp-grupos">${G.map((g, i) => `<div class="imp-g ${g.cpf_cnpj ? "" : "sem"}" data-i="${i}">
       <div class="imp-cab"><div><div class="nome">${esc(nomeCli(g.nome))}</div><div class="sub">${g.codigo ? `código ${esc(g.codigo)} no Nitrus · ` : ""}${esc(g.email || "sem e-mail")} · ${esc(g.telefone || "sem telefone")}</div></div>
         <div class="imp-vinc"><select data-v="${i}">${opcCli(g.cpf_cnpj || "novo")}</select><input data-n="${i}" placeholder="CPF/CNPJ" inputmode="numeric" ${g.cpf_cnpj ? "hidden" : ""}></div>

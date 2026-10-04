@@ -474,6 +474,14 @@ O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR C
 junto (anexo no e-mail ou documento no WhatsApp automático), o PIX copia e cola não é repetido no texto. Ele continua
 quando não há PDF (cobrança só PIX, link manual de WhatsApp) e pode ser religado em Configurações › Cobrança.
 
+### Um boleto por título (sem custo de boletos novos)
+
+O sistema registra **um único boleto por título** e a régua reenvia sempre esse mesmo boleto — atrasado também: o
+banco calcula a multa e os juros no pagamento. Nunca é registrado um boleto novo "recalculado". Se o Inter derrubar o
+boleto (passou o prazo de pagamento após o vencimento, em Configurações › Cobrança, máximo de 60 dias), ele também não
+é refeito: as mensagens seguintes levam o **PIX da chave do escritório** com o valor atualizado (sem custo), e o
+pagamento é baixado pelo extrato.
+
 ### Datas e meses sempre em português
 
 Os campos de data são digitados no padrão brasileiro (**dd/mm/aaaa**, com máscara e botão de calendário) e os de mês
@@ -485,7 +493,8 @@ impossível (ex.: 31/02) fica marcada em vermelho e não é aceita.
 Em **Contas a receber › Importar do Nitrus**, escolha o PDF do relatório *Inadimplência*. O sistema lê os títulos,
 confere com os totais impressos no relatório e mostra, por cliente, o vínculo com o cadastro (pelo código do Nitrus,
 CPF/CNPJ ou nome). Quem não tiver cadastro pode ser cadastrado ali, informando o CPF/CNPJ. Cada título entra com o
-vencimento original (multa e juros pelo atraso), sem NFS-e, com boleto/PIX e na régua; título já lançado não repete.
+vencimento original (multa e juros pelo atraso), com boleto/PIX e na régua, e a **NFS-e só sai quando o cliente
+pagar**; título já lançado não repete.
 
 ### Conciliação: extrato completo
 

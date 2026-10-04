@@ -155,7 +155,7 @@ def salvar_boletos(competencia: str = "", cfg: dict | None = None) -> dict:
 
 
 def _pdf_boleto(t: dict, cfg: dict) -> str:
-    if not (t.get("banco_id") and cfg["cobranca"].get("anexar_boleto", True)):
+    if not (t.get("banco_id") and cfg["cobranca"].get("anexar_boleto", True)) or t.get("boleto_situacao"):
         return ""
     try:
         return salvar_boleto(t["id"], cfg)
@@ -173,8 +173,12 @@ def sincronizar_banco(cfg: dict | None = None) -> int:
             financeiro.baixar(t["id"], st["data_pagamento"][:10] or financeiro.hoje().isoformat(),
                               financeiro.reais(financeiro.cent(st["valor_pago"])), "inter")
             baixados += 1
-        elif st["baixado"]:
-            db.registrar("boleto", f"Boleto do título {t['id']} ({t['cliente_nome']}) está {st['situacao']} no Inter")
+        elif st["baixado"] and t.get("boleto_situacao") != st["situacao"].lower():
+            # o banco derrubou o boleto (prazo de pagamento após o vencimento acabou): NÃO se registra outro
+            # (cada boleto tem custo); as próximas mensagens levam o PIX da chave do escritório, sem custo
+            financeiro.atualizar_titulo(t["id"], boleto_situacao=st["situacao"].lower())
+            db.registrar("boleto", f"Boleto do título {t['id']} ({t['cliente_nome']}) está {st['situacao']} no Inter: "
+                                   "a cobrança segue pelo PIX do escritório, sem novo boleto")
     return baixados
 
 
@@ -244,13 +248,23 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
         cartao = {"link": t["cartao_link"], "valor": t.get("cartao_total_cent") or 0,
                   "acrescimo": max(0, (t.get("cartao_total_cent") or 0) - base)}
     emp = cfg["empresa"]
+    linha, pix_, boleto_pdf = t["linha_digitavel"], t["pix_copia_cola"], bool(t.get("banco_id"))
+    if t.get("boleto_situacao"):                 # boleto derrubado pelo banco: PIX do escritório, sem novo boleto
+        linha, boleto_pdf = "", False
+        try:
+            pix_ = pix.payload(emp.get("pix_chave", ""), t["total_cent"] if t["dias_atraso"] > 0 else t["valor_cent"],
+                               emp["nome"], emp.get("pix_cidade") or "ITABORAI", f"T{t['id']}")
+        except ValueError:
+            pix_ = ""
+        abertura += (" O boleto deste título expirou no banco; para pagar, use o PIX abaixo." if pix_ else
+                     " O boleto deste título expirou no banco; responda esta mensagem para combinarmos o pagamento.")
     return {"assunto": assunto, "nome": nome, "abertura": abertura, "atraso": etapa > 0,
             "referente": t["descricao"], "competencia": f"{t['competencia'][5:]}/{t['competencia'][:4]}",
             "vencimento": _data(t["vencimento"]), "valor": _brl(t["valor_cent"]),
             "total": _brl(t["total_cent"]) if etapa > 0 else "",
             "nfse": t["nfse_numero"], "nfse_link": t["nfse_link"] if str(t["nfse_link"]).startswith("http") else "",
-            "boleto_link": t["cobranca_link"], "boleto_pdf": bool(t.get("banco_id")),
-            "linha": t["linha_digitavel"], "pix": t["pix_copia_cola"], "cartao": cartao,
+            "boleto_link": t["cobranca_link"], "boleto_pdf": boleto_pdf,
+            "linha": linha, "pix": pix_, "cartao": cartao,
             "assinatura": emp.get("assinatura") or emp["nome"], "whatsapp": emp.get("whatsapp", "")}
 
 

@@ -72,7 +72,7 @@ def test_rejeita_outro_relatorio():
         nitrus.ler_inadimplencia(_pdf([[(100, 700, "Relação de Recebimentos")]]))
 
 
-def test_analisa_lanca_sem_nfse_com_cobranca_e_nao_duplica(base):  # noqa: F811
+def test_analisa_lanca_com_nfse_no_pagamento_e_nao_duplica(base):  # noqa: F811
     b64 = base64.b64encode(relatorio()).decode()
     a = nitrus.analisar(b64)
     rps, nova = a["grupos"][1], a["grupos"][0]           # sem cadastro vem primeiro
@@ -86,7 +86,7 @@ def test_analisa_lanca_sem_nfse_com_cobranca_e_nao_duplica(base):  # noqa: F811
     assert clientes.obter(CLI_A["cpf_cnpj"])["endereco"]["logradouro"] == CLI_A["endereco"]["logradouro"]   # cadastro intacto
     assert clientes.obter(CLI_A["cpf_cnpj"])["codigo_externo"] == "134"
     ts = db.linhas("SELECT * FROM titulos ORDER BY vencimento")
-    assert len(ts) == 3 and all(t["nfse_status"] == "nao_emitir" and t["cobrar"] == 1 and t["pix_copia_cola"] for t in ts)
+    assert len(ts) == 3 and all(t["nfse_status"] == "apos_pagamento" and t["cobrar"] == 1 and t["pix_copia_cola"] for t in ts)
     t = financeiro.enriquecer(next(x for x in ts if x["valor_cent"] == 37440), financeiro.hoje().replace(year=2026, month=10, day=3))
     assert t["situacao"] == "atrasado" and t["dias_atraso"] == 3 and t["competencia"] == "2026-09"
     # segunda importação: tudo já existe; o cliente novo agora é achado pelo código do Nitrus
