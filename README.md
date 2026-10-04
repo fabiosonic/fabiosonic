@@ -601,9 +601,13 @@ As saídas viram despesas pagas e as entradas baixam os títulos sozinhas, por i
 que o sistema não reconheceu. O cartão do Inter mostra quantos lançamentos já vieram (entradas e saídas, período), e
 o "Extrato da conta" abre no último mês com movimento quando o mês atual ainda não tem lançamentos.
 
-Saídas que viraram **despesa automática** aparecem no Extrato da conta com a categoria para escolher (as que ficaram
-em "Outras" são destacadas para revisar). A categoria escolhida vale para as outras despesas da mesma contraparte e
-vira regra para as próximas. **Desfazer** cancela a despesa automática e devolve o lançamento para "não conciliados";
+Saídas que viraram **despesa automática** aparecem no Extrato da conta com a classificação ao lado do valor (as que
+ficaram em "Outras" são destacadas para revisar). A lista segue as linhas da DRE: despesas com pessoal (Folha,
+Pró-labore, Encargos, Benefícios), de ocupação (Aluguel, Energia/Internet, Condomínio), administrativas (Sistemas,
+Contador/Assessoria, Serviços de terceiros, Marketing, Material, Outras), tributárias (Impostos, Taxas) e financeiras
+(Bancárias, Juros, Tarifas). O grupo **Fora da DRE** (Distribuição de lucros / retirada do sócio, Transferência entre
+contas, Saída sem despesa) tira o lançamento das despesas, porque não é custo da empresa. A escolha vale para as outras
+da mesma contraparte e vira regra para as próximas. **Desfazer** cancela a despesa automática e devolve o lançamento para "não conciliados";
 o robô não a recria.
 
 ### E-mails enviados pelo sistema

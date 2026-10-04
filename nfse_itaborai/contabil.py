@@ -31,7 +31,7 @@ from . import config, db, financeiro, relatorios
 GRUPOS = {
     "Despesas com pessoal": ["Folha", "Pró-labore", "Encargos", "Benefícios"],
     "Despesas de ocupação": ["Aluguel", "Energia/Internet", "Condomínio"],
-    "Despesas administrativas": ["Sistemas", "Contador/Assessoria", "Marketing", "Material", "Outras"],
+    "Despesas administrativas": ["Sistemas", "Contador/Assessoria", "Serviços de terceiros", "Marketing", "Material", "Outras"],
     "Despesas tributárias": ["Impostos", "Taxas"],
 }
 FINANCEIRAS = ["Bancárias", "Juros", "Tarifas"]

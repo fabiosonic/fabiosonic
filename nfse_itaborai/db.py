@@ -5,6 +5,7 @@ Valores monetários são guardados em centavos (inteiros) para não haver erro d
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from contextlib import closing, contextmanager
 from datetime import datetime
@@ -125,7 +126,7 @@ def caminho() -> Path:
 def conexao():
     arq = caminho()
     arq.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(arq, timeout=30)
+    con = sqlite3.connect(arq, timeout=float(os.environ.get("NFSE_DB_TIMEOUT", 30)))
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(ESQUEMA)
@@ -171,9 +172,11 @@ MIGRACOES = {
 def _migrar(con: sqlite3.Connection) -> None:
     for tabela, colunas in MIGRACOES.items():
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
-        for nome, tipo in colunas.items():
-            if nome not in existentes:
-                con.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
+        novas = [n for n in colunas if n not in existentes]
+        for nome in novas:
+            con.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {colunas[nome]}")
+        if novas:
+            con.commit()        # grava já: senão esta conexão segura o banco e outra aberta em seguida trava ("locked")
     if con.execute("PRAGMA user_version").fetchone()[0] < 2:
         # notas emitidas fora do sistema (importadas dos XML) não geram cobrança: só faturamento
         con.execute("UPDATE titulos SET cobrar=0 WHERE origem='importado' AND banco_id='' AND status='aberto'")

@@ -404,7 +404,7 @@ PAGINAS.conciliacao = async el => {
     { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
       <select class="classif" data-m="${m.id}" data-v="${m.valor_cent}"><option value="">${m.valor_cent > 0 ? "Classificar entrada…" : "Classificar saída…"}</option>${m.valor_cent > 0
         ? '<option value="transferencia">Transferência entre contas</option><option value="aporte">Aporte / dinheiro do sócio</option><option value="outra_receita">Outra receita (não é honorário)</option>'
-        : '<option value="despesa">Lançar como despesa paga</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (retirada, estorno…)</option>'}</select></div>`, filtro: false }], pend, "Tudo conciliado ✔", { filtros: "conc_pend", soma: m => m.valor_cent })}</div>
+        : '<option value="despesa">Lançar como despesa paga</option><option value="distribuicao">Distribuição de lucros / retirada do sócio</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (estorno…)</option>'}</select></div>`, filtro: false }], pend, "Tudo conciliado ✔", { filtros: "conc_pend", soma: m => m.valor_cent })}</div>
   <div class="card"><div class="card-cab"><h2>${ic("banco")}Extrato da conta</h2><span class="sub">todos os lançamentos importados — entradas e saídas</span></div>
     <div class="barra"><label>Período<select id="ex_per">${(() => { const h = new Date(hojeISO() + "T12:00"), o = [];
       for (let k = 0; k < 12; k++) { const d = new Date(h.getFullYear(), h.getMonth() - k, 1), v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; o.push(`<option value="${v}" ${v == EXT_PER ? "selected" : ""}>${mesExtenso(v)}</option>`); }
@@ -412,7 +412,7 @@ PAGINAS.conciliacao = async el => {
       <div class="abas">${[["todos", "Todos"], ["entradas", "Entradas"], ["saidas", "Saídas"], ["pendente", "Pendentes"]].map(([k, t]) => `<button data-ef="${k}" class="${k == EXT_FIL ? "on" : ""}">${t}</button>`).join("")}</div></div>
     <div id="ex_tab"><div class="vazio">Carregando…</div></div></div>`;
   $$(".classif", el).forEach(sel => sel.onchange = () => { const v = sel.value; if (!v) return;
-    if (v == "despesa") { const c = prompt("Categoria da despesa (ex.: Pessoal, Ocupação, Tecnologia, Tributos, Serviços, Bancárias, Outras):", "Outras"); if (c === null) { sel.value = ""; return; } return classificarMov(+sel.dataset.m, v, c); }
+    if (v == "despesa") { const c = prompt("Categoria da despesa na DRE (Folha, Pró-labore, Encargos, Benefícios, Aluguel, Energia/Internet, Sistemas, Contador/Assessoria, Serviços de terceiros, Marketing, Material, Impostos, Taxas, Bancárias, Outras):", "Outras"); if (c === null) { sel.value = ""; return; } return classificarMov(+sel.dataset.m, v, c); }
     classificarMov(+sel.dataset.m, v); });
   $("#ex_per").onchange = e => { EXT_PER = e.target.value; extratoConta(); };
   $$("[data-ef]", el).forEach(b => b.onclick = () => { EXT_FIL = b.dataset.ef; $$("[data-ef]", el).forEach(x => x.classList.toggle("on", x == b)); extratoConta(); });
@@ -454,16 +454,24 @@ async function extratoConta() {
     + tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) },
       { t: "Entrada", n: 1, f: m => m.valor_cent > 0 ? num(m.valor_cent) : "" }, { t: "Saída", n: 1, f: m => m.valor_cent < 0 ? `<span class="neg">${num(-m.valor_cent)}</span>` : "" },
       { t: "No sistema", fsel: 1, fv: m => m.situacao == "titulo" ? "Recebimento de título" : m.despesa_auto && m.categoria == "Outras" ? "Despesa a revisar (Outras)" : m.situacao == "despesa" ? "Despesa" : m.detalhe,
-        f: m => m.despesa_auto ? `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap"><span class="selo ${m.categoria == "Outras" ? "alerta" : "neutro"}">Despesa automática</span>
-            <select class="recat" data-m="${m.id}" title="Categoria da despesa (vale também para os próximos desta contraparte)">${[...new Set([m.categoria, ...e.categorias])].map(c => `<option ${c == m.categoria ? "selected" : ""}>${esc(c)}</option>`).join("")}<option value="__nova">Outra categoria…</option></select>
+        f: m => m.despesa_auto ? `<div class="acoes-linha" style="justify-content:flex-start"><span class="selo ${m.categoria == "Outras" ? "alerta" : "neutro"}">Despesa automática</span>
+            <select class="recat" style="width:230px;height:30px;padding:3px 8px;font-size:12.5px" data-m="${m.id}" title="Classificação na DRE (vale também para os próximos desta contraparte)">${opcoesCategoria(e.categorias, m.categoria)}</select>
             <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Cancela a despesa automática e devolve o lançamento para os não conciliados">Desfazer</button></div>`
           : `<span class="selo ${cls[m.situacao]}">${esc(m.detalhe)}</span>${m.situacao == "classificado" ? ` <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Volta para os não conciliados">Desfazer</button>` : ""}` }],
       vis, "Nenhum lançamento neste período.", { filtros: "conc_extrato", soma: m => m.valor_cent });
-  if (e.a_revisar) box.insertAdjacentHTML("afterbegin", `<div class="msg">${e.a_revisar} saída(s) deste período viraram despesa automática na categoria <b>Outras</b>. Escolha a categoria certa na coluna “No sistema”: ela vale para as outras da mesma contraparte e para as próximas.</div>`);
+  if (e.a_revisar) box.insertAdjacentHTML("afterbegin", `<div class="msg">${e.a_revisar} saída(s) deste período viraram despesa automática na categoria <b>Outras</b>. Escolha na coluna “No sistema” a linha da DRE (pessoal, ocupação, administrativas, tributárias, financeiras) ou, se não for despesa, “Distribuição de lucros / retirada do sócio” ou “Transferência”. A escolha vale para as outras da mesma contraparte e para as próximas.</div>`);
   $$(".recat", box).forEach(s => s.onchange = async () => { let c = s.value;
     if (c == "__nova") { c = prompt("Nome da categoria:"); if (!c) { extratoConta(); return; } }
     const r = await api("conciliacao/recategorizar", { movimento: +s.dataset.m, categoria: c });
-    aviso(`Categoria “${c}” aplicada${r.aplicados > 1 ? ` a ${r.aplicados} lançamentos da mesma contraparte` : ""} ✔ Os próximos já entram assim.`, 6000); extratoConta(); });
+    const nome = s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : c;
+    aviso(`${r.fora_dre ? `“${nome}”: saiu das despesas (não entra na DRE)` : `Categoria “${nome}” aplicada`}${r.aplicados > 1 ? ` a ${r.aplicados} lançamentos da mesma contraparte` : ""} ✔ Os próximos já entram assim.`, 7000); extratoConta(); });
+}
+function opcoesCategoria(grupos, atual) {
+  const conhecida = grupos.some(g => g.categorias.includes(atual));
+  return (conhecida || !atual ? "" : `<option selected>${esc(atual)}</option>`) + grupos.map(g => `<optgroup label="${esc(g.grupo)}">${
+    g.categorias.map(c => `<option value="${esc(c)}" ${c == atual ? "selected" : ""}>${esc(c)}</option>`).join("")}${
+    (g.fora || []).map(f => `<option value="${esc(f.valor)}">${esc(f.nome)}</option>`).join("")}</optgroup>`).join("")
+    + '<option value="__nova">Outra categoria (despesas administrativas)…</option>';
 }
 async function classificarMov(id, tipo, categoria = "") {
   const r = await api("conciliacao/classificar", { movimento: id, tipo, categoria });

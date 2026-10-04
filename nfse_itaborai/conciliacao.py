@@ -150,6 +150,9 @@ def conciliar() -> dict:
             if len(desp) == 1:
                 financeiro.pagar_despesa(desp[0]["id"], m["data"])
                 did = desp[0]["id"]
+            elif not desp and (_norm(_contraparte(m["descricao"])) in (config.carregar()["financeiro"].get("contrapartes_fora_dre") or {})):
+                classificar(m["id"], config.carregar()["financeiro"]["contrapartes_fora_dre"][_contraparte(m["descricao"])], iguais=False)
+                continue
             elif not desp and config.carregar()["automacao"].get("despesas_do_extrato") and not m.get("manual"):
                 did = financeiro.salvar_despesa({"descricao": (m["descricao"] or "Débito em conta")[:120],
                                                  "fornecedor": "extrato", "categoria": categoria(m["descricao"]),
@@ -183,7 +186,10 @@ def vincular(mov_id: int, titulo_id: int) -> None:
 # ---------------------------------------------------------------- extrato completo e classificação
 
 CLASSES = {"transferencia": "Transferência entre contas", "aporte": "Aporte / dinheiro do sócio",
-           "outra_receita": "Outra receita (não é honorário)", "outra_saida": "Saída sem despesa (retirada, estorno…)"}
+           "outra_receita": "Outra receita (não é honorário)", "outra_saida": "Saída sem despesa (retirada, estorno…)",
+           "distribuicao": "Distribuição de lucros / retirada do sócio"}
+# saídas que NÃO são despesa (não entram na DRE): escolhidas na mesma lista das categorias
+FORA_DRE = ("distribuicao", "transferencia", "outra_saida")
 
 
 def _da_propria_empresa(m: dict) -> bool:
@@ -252,19 +258,45 @@ def recategorizar(mov_id: int, categoria_nova: str, iguais: bool = True, lembrar
         alvo += [x for x in db.linhas("SELECT m.* FROM movimentos m JOIN despesas d ON d.id=m.despesa_id "
                                       "WHERE d.fornecedor='extrato' AND d.status!='cancelado' AND m.id!=?", (mov_id,))
                  if _contraparte(x["descricao"]) == cp]
+    fora = cat[6:] if cat.startswith("__cls:") else ""
+    if fora and fora not in FORA_DRE:
+        raise ValueError("Classificação inválida.")
+    if fora:          # não é despesa (ex.: distribuição de lucros ao sócio): cancela a despesa e classifica o lançamento
+        for x in alvo:                  # uma gravação por vez (excluir_despesa abre a própria conexão)
+            if m["fornecedor"] == "extrato" or x["id"] != m["id"]:
+                financeiro.excluir_despesa(x["despesa_id"])
+        with db.conexao() as con:
+            for x in alvo:
+                con.execute("UPDATE movimentos SET despesa_id=NULL, classificacao=? WHERE id=?", (fora, x["id"]))
+        if lembrar and cp and len(cp) >= 5:
+            fd = dict(config.carregar()["financeiro"].get("contrapartes_fora_dre") or {})
+            fd[cp] = fora
+            config.salvar({"financeiro": {"contrapartes_fora_dre": fd}})
+        return {"ok": True, "aplicados": len(alvo), "regra": cp if lembrar else "", "fora_dre": fora}
     with db.conexao() as con:
         for x in alvo:
             con.execute("UPDATE despesas SET categoria=? WHERE id=?", (cat, x["despesa_id"]))
     if lembrar and cp and len(cp) >= 5 and m["fornecedor"] == "extrato":
         regras = [r for r in config.carregar()["regras_despesa"] if _norm(r[0]) != cp]
         config.salvar({"regras_despesa": [[cp, cat]] + regras})
+        fd = dict(config.carregar()["financeiro"].get("contrapartes_fora_dre") or {})
+        if fd.pop(cp, None):
+            config.salvar({"financeiro": {"contrapartes_fora_dre": fd}})
     return {"ok": True, "aplicados": len(alvo), "regra": cp if lembrar else ""}
 
 
-def categorias_despesa() -> list[str]:
-    usadas = {r["categoria"] for r in db.linhas("SELECT DISTINCT categoria FROM despesas WHERE categoria!=''")}
-    padrao = {c for _, c in config.carregar()["regras_despesa"]} | {"Pessoal", "Ocupação", "Serviços", "Outras"}
-    return sorted(usadas | padrao, key=str.lower)
+def categorias_despesa() -> list[dict]:
+    """Categorias organizadas pelas linhas da DRE (cada uma cai no grupo certo) + o que fica fora da DRE."""
+    from .contabil import FINANCEIRAS, GRUPOS
+    usadas = {r["categoria"] for r in db.linhas("SELECT DISTINCT categoria FROM despesas WHERE categoria!='' AND status!='cancelado'")}
+    grupos = [{"grupo": g, "categorias": list(cats)} for g, cats in GRUPOS.items()]
+    grupos.append({"grupo": "Despesas financeiras", "categorias": list(FINANCEIRAS)})
+    conhecidas = {c for g in grupos for c in g["categorias"]}
+    extras = sorted(usadas - conhecidas, key=str.lower)
+    if extras:   # categoria criada pelo escritório: na DRE entra em despesas administrativas
+        grupos[2]["categorias"] += extras
+    grupos.append({"grupo": "Fora da DRE (não é despesa)", "categorias": [], "fora": [{"valor": "__cls:" + k, "nome": CLASSES[k]} for k in FORA_DRE]})
+    return grupos
 
 
 def extrato(inicio: str = "", fim: str = "") -> dict:

@@ -65,16 +65,57 @@ def test_despesa_automatica_do_extrato_pode_ser_recategorizada_e_desfeita(base):
     assert r["despesas"] == 3 or len(db.linhas("SELECT id FROM despesas WHERE fornecedor='extrato'")) == 3
     e = conciliacao.extrato("2026-09-01", "2026-09-30")
     assert e["a_revisar"] == 3 and all(m["despesa_auto"] and m["categoria"] == "Outras" for m in e["movimentos"])
-    assert "Pessoal" in e["categorias"]
+    grupos = {g["grupo"]: g for g in e["categorias"]}
+    assert "Folha" in grupos["Despesas com pessoal"]["categorias"] and "Bancárias" in grupos["Despesas financeiras"]["categorias"]
+    assert [f["valor"] for f in grupos["Fora da DRE (não é despesa)"]["fora"]] == ["__cls:distribuicao", "__cls:transferencia", "__cls:outra_saida"]
     miguel = next(m for m in e["movimentos"] if m["fitid"] == "inter:a")
-    x = conciliacao.recategorizar(miguel["id"], "Pessoal")
+    x = conciliacao.recategorizar(miguel["id"], "Folha")
     assert x["aplicados"] == 2 and x["regra"] == "MIGUEL DOS SANTOS SILVA JOSE"
     cats = {m["fitid"]: m["categoria"] for m in conciliacao.extrato("2026-09-01", "2026-09-30")["movimentos"]}
-    assert cats == {"inter:a": "Pessoal", "inter:b": "Pessoal", "inter:c": "Outras"}
-    assert conciliacao.categoria("Pix enviado Miguel Dos Santos Silva Jose") == "Pessoal"   # próximos já entram certos
+    assert cats == {"inter:a": "Folha", "inter:b": "Folha", "inter:c": "Outras"}
+    assert conciliacao.categoria("Pix enviado Miguel Dos Santos Silva Jose") == "Folha"   # próximos já entram certos
+    from nfse_itaborai import contabil
+    assert contabil._grupo("Folha") == "Despesas com pessoal"                          # e caem na linha certa da DRE
     luna = next(m for m in e["movimentos"] if m["fitid"] == "inter:c")
     conciliacao.classificar(luna["id"], "")                                     # desfazer: volta a pendente
     assert [m["descricao"] for m in conciliacao.nao_conciliados()] == ["Pix enviado Luna Francisco Figueira Faria"]
     assert db.linhas("SELECT status FROM despesas WHERE id=?", (luna["despesa_id"],))[0]["status"] == "cancelado"
     conciliacao.conciliar()                                                     # o robô não recria a despesa desfeita
     assert [m["descricao"] for m in conciliacao.nao_conciliados()] == ["Pix enviado Luna Francisco Figueira Faria"]
+
+
+def test_pix_ao_socio_sai_da_dre_como_distribuicao_de_lucros(base):  # noqa: F811
+    config.salvar({"empresa": {"nome": "MORAES & OLIVEIRA CONTABILIDADE"}, "automacao": {"despesas_do_extrato": True}})
+    conciliacao.importar("", [{"data": "2026-09-26", "valor_cent": -16000, "descricao": "Pix enviado Fabio Moraes Oliveira", "fitid": "inter:f1"}])
+    m = conciliacao.extrato()["movimentos"][0]
+    assert m["despesa_auto"]
+    r = conciliacao.recategorizar(m["id"], "__cls:distribuicao")
+    assert r["fora_dre"] == "distribuicao"
+    m = conciliacao.extrato()["movimentos"][0]
+    assert m["situacao"] == "classificado" and m["classificacao"] == "distribuicao" and not m["despesa_id"]
+    assert db.linhas("SELECT COUNT(*) n FROM despesas WHERE status!='cancelado'")[0]["n"] == 0     # não é despesa
+    # o próximo Pix ao sócio já entra como distribuição, sem virar despesa
+    conciliacao.importar("", [{"data": "2026-10-05", "valor_cent": -50000, "descricao": "Pix enviado Fabio Moraes Oliveira", "fitid": "inter:f2"}])
+    novo = next(x for x in conciliacao.extrato()["movimentos"] if x["fitid"] == "inter:f2")
+    assert novo["classificacao"] == "distribuicao" and not novo["despesa_id"]
+    with __import__("pytest").raises(ValueError):
+        conciliacao.recategorizar(novo["id"], "__cls:aporte")
+
+
+def test_banco_de_versao_anterior_nao_trava_ao_classificar(base):  # noqa: F811
+    """Caso real: vários Pix ao sócio (mesma contraparte); classificar 'fora da DRE' abria uma gravação dentro da outra
+    e ficava em 'database is locked'."""
+    import sqlite3
+    config.salvar({"empresa": {"nome": "MORAES & OLIVEIRA CONTABILIDADE"}, "automacao": {"despesas_do_extrato": True}})
+    conciliacao.importar("", [{"data": "2026-09-26", "valor_cent": -16000, "descricao": "Pix enviado Fabio Moraes Oliveira", "fitid": "inter:f1"},
+                              {"data": "2026-08-31", "valor_cent": -40000, "descricao": "Pix enviado Fabio Moraes Oliveira", "fitid": "inter:f2"},
+                              {"data": "2026-07-31", "valor_cent": -77837, "descricao": "Pix enviado Fabio Moraes Oliveira", "fitid": "inter:f3"}])
+    mid = conciliacao.extrato()["movimentos"][0]["id"]
+    con = sqlite3.connect(db.caminho())
+    con.execute("ALTER TABLE movimentos DROP COLUMN manual")             # como o banco da versão anterior
+    con.commit(); con.close()
+    import time
+    t0 = time.time()
+    r = conciliacao.recategorizar(mid, "__cls:distribuicao")
+    assert r["fora_dre"] == "distribuicao" and r["aplicados"] == 3 and time.time() - t0 < 5
+    assert {m["classificacao"] for m in conciliacao.extrato()["movimentos"]} == {"distribuicao"}
