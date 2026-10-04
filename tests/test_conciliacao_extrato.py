@@ -19,8 +19,11 @@ def test_extrato_completo_e_classificacao(base):  # noqa: F811
     movs = _movs()
     movs[-1]["descricao"] = movs[-1]["descricao"].replace("{tid}", str(tid))
     r = conciliacao.importar("", movs)
-    assert r["novos"] == 5 and r["titulos"] == 1
+    assert r["novos"] == 5 and r["titulos"] == 1 and r["entradas"] == 4 and r["saidas"] == 1
     e = conciliacao.extrato()
+    # resumo por origem: mostra que as saídas também vieram do banco (mesmo já conciliadas)
+    assert e["fontes"]["inter"] == {"n": 5, "entradas": 4, "saidas": 1, "de": "2026-09-26", "ate": "2026-09-30", "pendentes": 3}
+    assert conciliacao.extrato("2026-10-01", "2026-10-31")["movimentos"] == []       # mês sem movimento: lista vazia, resumo igual
     sit = {m["descricao"][:30]: m["situacao"] for m in e["movimentos"]}
     assert sit["Pix recebido Moraes & Oliveira"] == "classificado"              # transferência da própria empresa
     assert e["entradas"] == 79000 and e["saidas"] == 200000 and e["pendentes"] == 3

@@ -201,7 +201,7 @@ def test_conciliacao_ofx(base):
     financeiro.criar_titulo(CLI_A["cpf_cnpj"], "350", vencimento="2026-10-05", emitir_nfse=False)  # mesmo valor de b
     financeiro.salvar_despesa({"descricao": "Aluguel", "valor": "1500", "vencimento": "2026-10-05"})
     r = conciliacao.importar(OFX.format(a=a))
-    assert r == {"lancamentos": 4, "novos": 4, "titulos": 2, "despesas": 1}
+    assert r == {"lancamentos": 4, "novos": 4, "titulos": 2, "despesas": 1, "entradas": 3, "saidas": 1}
     assert financeiro.obter_titulo(a)["status"] == "pago"
     assert financeiro.obter_titulo(b)["status"] == "pago"          # nome desempata valores iguais
     pend = conciliacao.nao_conciliados()

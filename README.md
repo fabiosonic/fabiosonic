@@ -585,6 +585,11 @@ de título, despesa, transferência ou aporte. Pix/TED da própria empresa vira 
 automaticamente (não é receita nem despesa). Os pendentes podem ser classificados (transferência, aporte do sócio,
 outra receita, saída sem despesa) ou lançados como despesa; a classificação vale para os outros da mesma origem.
 
+O extrato do Inter pela API traz **todos** os lançamentos da conta (Pix enviados e recebidos, pagamentos, tarifas).
+As saídas viram despesas pagas e as entradas baixam os títulos sozinhas, por isso em "não conciliados" só fica o
+que o sistema não reconheceu. O cartão do Inter mostra quantos lançamentos já vieram (entradas e saídas, período), e
+o "Extrato da conta" abre no último mês com movimento quando o mês atual ainda não tem lançamentos.
+
 ### E-mails enviados pelo sistema
 
 | E-mail | Para | Quando |

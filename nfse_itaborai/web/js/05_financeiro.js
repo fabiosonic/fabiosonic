@@ -390,7 +390,7 @@ PAGINAS.conciliacao = async el => {
   ${ST.config.cobranca.provedor == "inter" ? `<div class="card"><h2>${ic("banco")}Extrato do Banco Inter (automático)</h2>
     <p class="sub">O robô baixa o extrato da conta Inter direto do banco (sem arquivo) e concilia sozinho, de hora em hora${ST.config.financeiro.extrato_inter_ate ? ` — último dia baixado: <b>${dt(ST.config.financeiro.extrato_inter_ate)}</b>` : ""}. Lançamentos que já vieram por OFX não são duplicados. A integração do Inter precisa da permissão <b>“Consultar extrato e saldo”</b>.</p>
     <div class="barra"><label>Período<select id="ext_dias"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="60">Últimos 60 dias</option><option value="90">Últimos 90 dias</option></select></label>
-    <button class="btn" id="ext_baixar">${ic("download")}Baixar extrato agora</button></div><div id="ext_res"></div></div>` : ""}
+    <button class="btn" id="ext_baixar">${ic("download")}Baixar extrato agora</button></div><div id="ext_res" class="sub"></div></div>` : ""}
   <div class="card"><div class="card-cab"><h2>${ic("alerta")}Lançamentos não conciliados (${pend.length})</h2><span class="sub">vincule ao título, classifique ou lance como despesa</span></div>
   ${tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) }, { t: "Valor", n: 1, f: m => `<span class="${m.valor_cent < 0 ? "neg" : ""}">${num(m.valor_cent)}</span>` },
     { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
@@ -411,7 +411,7 @@ PAGINAS.conciliacao = async el => {
   extratoConta();
   if ($("#ext_baixar")) $("#ext_baixar").onclick = async () => { const b = $("#ext_baixar"); b.disabled = true; b.textContent = "Baixando…";
     try { const r = await api("conciliacao/inter", { dias: $("#ext_dias").value });
-      ULTIMO_EXTRATO = `<div class="msg ok">Extrato do Inter: ${r.lancamentos} lançamento(s) de ${dt(r.periodo.slice(0, 10))} a ${dt(r.periodo.slice(-10))} · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)</div>`;
+      ULTIMO_EXTRATO = `<div class="msg ok">Extrato do Inter: ${r.lancamentos} lançamento(s) de ${dt(r.periodo.slice(0, 10))} a ${dt(r.periodo.slice(-10))} (${r.entradas} entrada(s) e ${r.saidas} saída(s)) · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)${r.lancamentos === 0 ? " · a conta não teve movimento no período" : ""}</div>`;
       await carregarEstado(); ir("conciliacao");
     } catch (e) { b.disabled = false; b.innerHTML = `${ic("download")}Baixar extrato agora`; } };
   const zona = $("#zona");
@@ -428,10 +428,20 @@ let EXT_PER = hojeISO().slice(0, 7), EXT_FIL = "todos";
 async function extratoConta() {
   const box = $("#ex_tab"); if (!box) return;
   const ini = EXT_PER ? EXT_PER + "-01" : "", fim = EXT_PER ? EXT_PER + "-31" : "";
-  const e = await api("conciliacao/extrato", { inicio: ini, fim });
+  let e = await api("conciliacao/extrato", { inicio: ini, fim });
+  let nota = "";
+  const f = e.fontes || {}, ult = Object.values(f).map(x => x.ate).sort().pop() || "";
+  if (!e.movimentos.length && EXT_PER && ult && ult.slice(0, 7) < EXT_PER && !extratoConta.pulou) {   // mês atual sem movimento: abre no último mês com lançamentos
+    extratoConta.pulou = true; const mesVazio = EXT_PER; EXT_PER = ult.slice(0, 7);
+    const sel = $("#ex_per"); if (sel) sel.value = EXT_PER;
+    e = await api("conciliacao/extrato", { inicio: EXT_PER + "-01", fim: EXT_PER + "-31" });
+    nota = `<div class="msg">Nenhum lançamento em ${mesExtenso(mesVazio)}: mostrando ${mesExtenso(EXT_PER)}, mês do último lançamento (${dt(ult)}).</div>`;
+  }
+  const res = $("#ext_res");
+  if (res) res.innerHTML = f.inter ? `Já importados do Inter: <b>${f.inter.n}</b> lançamento(s) de ${dt(f.inter.de)} a ${dt(f.inter.ate)} — <b>${f.inter.entradas}</b> entrada(s) e <b>${f.inter.saidas}</b> saída(s)${f.inter.pendentes ? `, ${f.inter.pendentes} ainda não conciliado(s)` : ", todos conciliados"}. As saídas viram despesas pagas e as entradas baixam os títulos; por isso em “não conciliados” só fica o que o sistema não reconheceu.` : "Nenhum lançamento importado do Inter ainda.";
   const vis = e.movimentos.filter(m => EXT_FIL == "todos" || (EXT_FIL == "entradas" ? m.valor_cent > 0 : EXT_FIL == "saidas" ? m.valor_cent < 0 : m.situacao == "pendente"));
   const cls = { titulo: "bom", despesa: "neutro", classificado: "neutro", pendente: "alerta" };
-  box.innerHTML = `<section class="stats" style="margin-top:4px">${statTile({ rot: "Entradas", icone: "receber", valor: brl(e.entradas) })}${statTile({ rot: "Saídas", icone: "pagar", valor: brl(e.saidas) })}
+  box.innerHTML = nota + `<section class="stats" style="margin-top:4px">${statTile({ rot: "Entradas", icone: "receber", valor: brl(e.entradas) })}${statTile({ rot: "Saídas", icone: "pagar", valor: brl(e.saidas) })}
     ${statTile({ rot: "Resultado do período", icone: "banco", valor: `<span class="${e.resultado < 0 ? "neg" : ""}">${brl(e.resultado)}</span>` })}${statTile({ rot: "Pendentes", icone: "alerta", valor: e.pendentes, estado: e.pendentes ? estadoSelo("atencao", "conciliar") : estadoSelo("bom", "tudo certo") })}</section>`
     + tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) },
       { t: "Entrada", n: 1, f: m => m.valor_cent > 0 ? num(m.valor_cent) : "" }, { t: "Saída", n: 1, f: m => m.valor_cent < 0 ? `<span class="neg">${num(-m.valor_cent)}</span>` : "" },

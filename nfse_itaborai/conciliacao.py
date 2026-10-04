@@ -76,6 +76,8 @@ def importar(conteudo: str, movs: list[dict] | None = None, origem: str = "OFX")
     movs = ler_ofx(conteudo) if movs is None else movs
     novos = gravar_movimentos(movs)
     r = conciliar()
+    r["entradas"] = sum(1 for m in movs if m["valor_cent"] > 0)
+    r["saidas"] = sum(1 for m in movs if m["valor_cent"] < 0)
     db.registrar("conciliacao", f"{origem}: {len(movs)} lançamentos, {novos} novos, {r['titulos']} título(s) baixado(s), "
                                 f"{r['despesas']} despesa(s) paga(s)")
     return {"lancamentos": len(movs), "novos": novos} | r
@@ -251,4 +253,16 @@ def extrato(inicio: str = "", fim: str = "") -> dict:
     ent = sum(m["valor_cent"] for m in movs if m["valor_cent"] > 0)
     sai = -sum(m["valor_cent"] for m in movs if m["valor_cent"] < 0)
     return {"movimentos": movs, "entradas": ent, "saidas": sai, "resultado": ent - sai,
-            "pendentes": sum(1 for m in movs if m["situacao"] == "pendente")}
+            "pendentes": sum(1 for m in movs if m["situacao"] == "pendente"), "fontes": resumo_fontes()}
+
+
+def resumo_fontes() -> dict:
+    """O que já foi importado de cada origem (API do Inter / OFX), no total: quantidade de entradas e saídas e o
+    período coberto. Mostra ao escritório que as saídas também vieram, mesmo quando já foram conciliadas sozinhas."""
+    out = {}
+    for r in db.linhas("SELECT CASE WHEN fitid LIKE 'inter:%' THEN 'inter' ELSE 'ofx' END fonte, COUNT(*) n, "
+                       "SUM(valor_cent>0) entradas, SUM(valor_cent<0) saidas, MIN(data) de, MAX(data) ate, "
+                       "SUM(titulo_id IS NULL AND despesa_id IS NULL AND COALESCE(classificacao,'')='') pendentes "
+                       "FROM movimentos GROUP BY 1"):
+        out[r["fonte"]] = {k: r[k] for k in ("n", "entradas", "saidas", "de", "ate", "pendentes")}
+    return out
