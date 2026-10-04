@@ -119,3 +119,24 @@ def test_banco_de_versao_anterior_nao_trava_ao_classificar(base):  # noqa: F811
     r = conciliacao.recategorizar(mid, "__cls:distribuicao")
     assert r["fora_dre"] == "distribuicao" and r["aplicados"] == 3 and time.time() - t0 < 5
     assert {m["classificacao"] for m in conciliacao.extrato()["movimentos"]} == {"distribuicao"}
+
+
+def test_migracao_simultanea_nao_quebra(base):  # noqa: F811
+    """Primeira abertura da versão nova: tela e robô migram o banco ao mesmo tempo (coluna já criada pelo outro)."""
+    import sqlite3
+    import threading
+    db.linhas("SELECT 1")                                              # cria o banco
+    con = sqlite3.connect(db.caminho())
+    con.execute("ALTER TABLE movimentos DROP COLUMN manual")
+    con.commit(); con.close()
+    erros = []
+
+    def abrir():
+        try:
+            db.linhas("SELECT 1")
+        except Exception as ex:  # noqa: BLE001
+            erros.append(ex)
+    ts = [threading.Thread(target=abrir) for _ in range(8)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert erros == [] and "manual" in {r[1] for r in sqlite3.connect(db.caminho()).execute("PRAGMA table_info(movimentos)")}

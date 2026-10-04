@@ -174,7 +174,11 @@ def _migrar(con: sqlite3.Connection) -> None:
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
         novas = [n for n in colunas if n not in existentes]
         for nome in novas:
-            con.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {colunas[nome]}")
+            try:
+                con.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {colunas[nome]}")
+            except sqlite3.OperationalError as ex:      # outra conexão (tela + robô) criou a coluna no mesmo instante
+                if "duplicate column" not in str(ex).lower():
+                    raise
         if novas:
             con.commit()        # grava já: senão esta conexão segura o banco e outra aberta em seguida trava ("locked")
     if con.execute("PRAGMA user_version").fetchone()[0] < 2:

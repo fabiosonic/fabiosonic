@@ -250,9 +250,11 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     const vis = await p.$$eval(B + ' tbody tr[data-fv]:not([hidden])', r => r.length);
     certo(vis > 0 && vis < total, `filtro de cliente não filtrou: ${vis} de ${total}`);
     certo(/de \d+ com os filtros/.test(await p.textContent(B + ' .flt-cont')), 'contagem do filtro não apareceu');
-    await p.selectOption(B + ' select.flt[data-i="3"]', { label: 'Pago' }); await espera(400);
-    const pagos = await p.$$eval(B + ' tbody tr[data-fv]:not([hidden]) td:nth-child(4)', t => t.map(x => x.textContent));
-    certo(pagos.every(x => /Pago/.test(x)), 'filtro de situação deixou passar outra situação');
+    await p.fill(B + ' input.flt[data-i="0"]', ''); await espera(300);
+    const opcao = await p.$eval(B + ' select.flt[data-i="3"]', s => s.options[1].text);    // primeira situação da lista
+    await p.selectOption(B + ' select.flt[data-i="3"]', { index: 1 }); await espera(400);
+    const sit = await p.$$eval(B + ' tbody tr[data-fv]:not([hidden]) td:nth-child(4) .selo', t => t.map(x => x.textContent.trim()));
+    certo(sit.length > 0 && sit.every(x => x === opcao), `filtro de situação "${opcao}" deixou passar: ${[...new Set(sit)].join(', ')}`);
     await p.click(B + ' .flt-limpar'); await espera(400);
     certo((await p.$$eval(B + ' tbody tr[data-fv]:not([hidden])', r => r.length)) === total, 'limpar filtros não voltou tudo');
     await p.click('.abas button[data-f="a_receber"]'); await espera(1200);
