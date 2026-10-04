@@ -433,7 +433,7 @@ function mostrarNitrus(a) {
         <div class="imp-soma"><b>${brl(g.titulos.reduce((s, t) => s + t.valor_cent, 0))}</b><div class="sub">${g.titulos.length} título(s)${g.titulos.some(t => t.existe) ? ` · ${g.titulos.filter(t => t.existe).length} já no sistema` : ""}${fora(g).length ? ` · <b>${fora(g).length} fora da cobrança</b>` : ""}</div></div></div>
       ${!g.cpf_cnpj ? `<div class="sub" style="margin-top:6px">${esc(g.motivo)}: escolha o cliente no cadastro ou informe o CPF/CNPJ para cadastrar.</div>` : ""}
       <div class="imp-tits">${g.titulos.map(t => `<span class="${t.estado == "fora" ? "fora" : t.existe ? "ja" : ""}" title="${ESTADO[t.estado || ""][1]} · ${t.dias} dia(s) de atraso · ${brl(t.total_cent)} no Nitrus">${dt(t.vencimento)} · ${num(t.valor_cent)}${t.existe ? ` <small>${ESTADO[t.estado || ""][0]}</small>` : ""}</span>`).join("")}</div></div>`).join("")}</div>
-    <label class="chk"><input type="checkbox" id="nt_cobrar" checked> Gerar boleto/PIX e incluir na régua de cobrança (o cliente passa a ser cobrado)</label>
+    <label class="chk"><input type="checkbox" id="nt_cobrar" checked> Incluir na régua de cobrança — sem gerar boleto, o cliente paga pelo PIX do escritório (desmarcado: só controle)</label>
     <p><button class="btn" id="nt_ok">Lançar</button> <button class="btn sec" onclick="fechar()">Cancelar</button></p>`, true);
   const atu = () => { let n = 0; G.forEach((g, i) => { const v = $(`[data-v="${i}"]`).value; $(`[data-n="${i}"]`).hidden = v != "novo";
       if (v && v != "nao" && (v != "novo" || clientesDig($(`[data-n="${i}"]`).value).length >= 11)) n += novos(g).length + fora(g).length; });
