@@ -321,7 +321,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await api('whatsapp/fila');
   });
   await passo('Cobrança: WhatsApp em sequência (só clientes marcados)', async () => {
-    const hoje = await p.evaluate(() => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10));
+    const hoje = (await api('painel')).hoje;                // data do sistema (Brasília), não a do navegador
     for (const doc of ['32396063000103', '35979895000132'])
       await api('titulo/novo', { cpf_cnpj: doc, valor: '123,45', descricao: 'HONORARIOS TESTE WHATSAPP', vencimento: hoje, nfse: 'nao' });
     await ir('cobranca', 1200); await p.click('#rr'); await espera(3500);
@@ -347,18 +347,20 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     certo(/conectado ✔/.test(await p.textContent('#ww_estado')), await p.textContent('#ww_estado'));
   });
   await passo('WhatsApp automático: régua envia sozinha (só cliente marcado)', async () => {
-    const d = new Date(Date.now() + 3 * 864e5 - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    const h = (await api('painel')).hoje, d = new Date(Date.parse(h + 'T12:00:00Z') + 3 * 864e5).toISOString().slice(0, 10);   // data do sistema (Brasília)
     for (const doc of ['32396063000103', '35979895000132'])
       await api('titulo/novo', { cpf_cnpj: doc, valor: '222,22', descricao: 'HONORARIOS WHATSAPP AUTOMATICO', vencimento: d, nfse: 'nao' });
     await ir('cobranca', 1200); await p.click('#rr'); await espera(1500);
     certo(/saindo sozinhos/.test(await aviso()), await aviso());
     let env = []; for (let i = 0; i < 40 && !(env = (await api('teste/whatsapp_web_enviados')).enviados).length; i++) await espera(1000);
     await espera(2000); env = (await api('teste/whatsapp_web_enviados')).enviados;
-    certo(env.length === 1 && env[0].fone === '5521988887777' && /222,22/.test(env[0].texto) && !/anexo/.test(env[0].texto),
+    const txt = env.filter(e => e.texto), docs = env.filter(e => e.arquivo);
+    certo(txt.length === 1 && txt[0].fone === '5521988887777' && /222,22/.test(txt[0].texto) && !/anexo/.test(txt[0].texto),
       JSON.stringify(env).slice(0, 300));
+    certo(docs.length === 1 && /\.pdf$/i.test(docs[0].arquivo), 'boleto em PDF não foi junto: ' + JSON.stringify(docs));
     for (let i = 0; i < 10 && (await api('whatsapp/fila')).length; i++) await espera(1000);
     certo((await api('whatsapp/fila')).length === 0, 'fila não esvaziou');
-    return 'lembrete enviado sozinho para 5521988887777';
+    return `lembrete e boleto em PDF (${docs[0].arquivo}) enviados sozinhos para 5521988887777`;
   });
   await passo('WhatsApp automático: mensagem de teste para 21 97186-7366', async () => {
     await ir('config', 1500); await p.fill('#ww_tel', '21 97186-7366'); await p.click('#ww_teste'); await espera(8000);

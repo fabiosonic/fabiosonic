@@ -18,7 +18,7 @@ from datetime import date
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, inter, pix, whatsapp, whatsapp_web
+from . import clientes, config, db, emissor, financeiro, horario, inter, pix, whatsapp, whatsapp_web
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -418,6 +418,8 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
     cfg = cfg or config.carregar()
     cob = cfg["cobranca"]
     res = {"email": 0, "whatsapp": 0, "sem_contato": 0, "erros": 0}
+    if not horario.comercial(cfg=cfg):
+        return res | {"fora_do_horario": horario.motivo(cfg=cfg)}
     # Só cobra títulos com NFS-e válida, sem nota ou com nota após o pagamento: nunca dispara por nota de teste.
     # Títulos lançados sem cobrança (cobrar=0) ficam fora da régua.
     for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND " + financeiro.SQL_COBRADO +
@@ -492,6 +494,8 @@ def historico(tid: int) -> list[dict]:
 def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     """Envio manual imediato (botão 'Cobrar'): e-mail + link de WhatsApp."""
     cfg = cfg or config.carregar()
+    if not horario.comercial(cfg=cfg):
+        raise ValueError(horario.motivo(cfg=cfg).replace("O robô envia", "A régua cobra sozinha"))
     t = preparar_pagamento(tid, cfg)
     dias = (financeiro.hoje() - date.fromisoformat(t["vencimento"])).days
     etapa = max(dias, -1) if dias < 0 else dias
@@ -509,7 +513,8 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
             out["whatsapp_erro"] = str(ex)
     elif cli.get("telefone") and cli.get("whatsapp_cobranca") and whatsapp_web.ativo(cfg):
         try:                                   # WhatsApp Web do escritório: envia na hora, sozinho
-            out["whatsapp_enviado"] = whatsapp_web.enviar_um(cli["telefone"], mensagem(t, etapa, cfg, canal="whatsapp")[1], cfg)
+            out["whatsapp_enviado"] = whatsapp_web.enviar_um(cli["telefone"], mensagem(t, etapa, cfg, canal="whatsapp")[1], cfg,
+                                                             pdf=whatsapp_web._pdf_do_titulo(t["id"], cfg))
         except Exception as ex:  # noqa: BLE001
             out["whatsapp_erro"] = str(ex)
     if cli.get("email") and cfg["smtp"].get("host"):

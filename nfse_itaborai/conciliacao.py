@@ -109,10 +109,29 @@ def categoria(historico: str) -> str:
     return "Outras"
 
 
+def _corrigir_transferencias() -> int:
+    """Pix/TED entre contas da própria empresa que viraram despesa automática do extrato (versões antigas): a despesa
+    é cancelada e o lançamento passa a ser transferência entre contas — não é despesa e não entra na DRE."""
+    n = 0
+    for m in db.linhas("SELECT m.*, d.fornecedor, d.status st FROM movimentos m JOIN despesas d ON d.id=m.despesa_id "
+                       "WHERE m.valor_cent < 0 AND d.fornecedor='extrato' AND d.status!='cancelado'"):
+        if _da_propria_empresa(m):
+            financeiro.excluir_despesa(m["despesa_id"])
+            with db.conexao() as con:
+                con.execute("UPDATE movimentos SET despesa_id=NULL, classificacao='transferencia' WHERE id=?", (m["id"],))
+            n += 1
+    return n
+
+
 def conciliar() -> dict:
     baixados = pagas = 0
-    pendentes = db.linhas("SELECT * FROM movimentos WHERE titulo_id IS NULL AND despesa_id IS NULL ORDER BY data")
+    _corrigir_transferencias()
+    pendentes = db.linhas("SELECT * FROM movimentos WHERE titulo_id IS NULL AND despesa_id IS NULL "
+                          "AND COALESCE(classificacao,'')='' ORDER BY data")
     for m in pendentes:
+        if _da_propria_empresa(m):                   # Pix/TED entre contas da própria empresa: não é receita nem despesa
+            classificar(m["id"], "transferencia", iguais=False)
+            continue
         if m["valor_cent"] > 0:
             abertos = db.linhas("SELECT * FROM titulos WHERE status='aberto'")
             c = _candidatos(m, abertos)
@@ -143,7 +162,8 @@ def conciliar() -> dict:
 
 
 def nao_conciliados() -> list[dict]:
-    lst = db.linhas("SELECT * FROM movimentos WHERE titulo_id IS NULL AND despesa_id IS NULL ORDER BY data DESC")
+    lst = db.linhas("SELECT * FROM movimentos WHERE titulo_id IS NULL AND despesa_id IS NULL "
+                    "AND COALESCE(classificacao,'')='' ORDER BY data DESC")
     abertos = db.linhas("SELECT * FROM titulos WHERE status='aberto'")
     for m in lst:
         m["sugestoes"] = [{"id": t["id"], "cliente": t["cliente_nome"], "valor_cent": t["valor_cent"],
@@ -156,3 +176,79 @@ def vincular(mov_id: int, titulo_id: int) -> None:
     financeiro.baixar(titulo_id, m["data"], financeiro.reais(m["valor_cent"]), "extrato")
     with db.conexao() as con:
         con.execute("UPDATE movimentos SET titulo_id=? WHERE id=?", (titulo_id, mov_id))
+
+
+# ---------------------------------------------------------------- extrato completo e classificação
+
+CLASSES = {"transferencia": "Transferência entre contas", "aporte": "Aporte / dinheiro do sócio",
+           "outra_receita": "Outra receita (não é honorário)", "outra_saida": "Saída sem despesa (retirada, estorno…)"}
+
+
+def _da_propria_empresa(m: dict) -> bool:
+    nome = _norm(config.carregar()["empresa"].get("nome", ""))
+    nome = re.sub(r"\b(LTDA|ME|EPP|EIRELI|SA|S A)\b", " ", nome).split()
+    return len(nome) >= 2 and " ".join(nome[:3]) in " ".join(_norm(m["descricao"]).split())
+
+
+def _contraparte(desc: str) -> str:
+    """'Pix recebido Fulano de Tal' -> 'FULANO DE TAL' (para aplicar a mesma classificação aos iguais)."""
+    d = " ".join(_norm(desc).split())
+    return re.sub(r"^(PIX|TED|DOC|TRANSFERENCIA)\s+(RECEBIDO|ENVIADO|RECEBIDA|ENVIADA)\s+", "", d).strip()
+
+
+def classificar(mov_id: int, tipo: str, iguais: bool = True, categoria_desp: str = "") -> dict:
+    """Marca um lançamento que não é título nem despesa. tipo='despesa' lança e paga a despesa; '' desfaz.
+    Com iguais=True, os pendentes da mesma contraparte e do mesmo sentido recebem a mesma classificação."""
+    m = db.linhas("SELECT * FROM movimentos WHERE id=?", (mov_id,))
+    if not m:
+        raise ValueError("Lançamento não encontrado.")
+    m = m[0]
+    if tipo and tipo not in CLASSES and tipo != "despesa":
+        raise ValueError("Classificação inválida.")
+    if tipo == "despesa":
+        if m["valor_cent"] >= 0:
+            raise ValueError("Só saídas viram despesa.")
+        did = financeiro.salvar_despesa({"descricao": (m["descricao"] or "Débito em conta")[:120], "fornecedor": "extrato",
+                                         "categoria": categoria_desp or categoria(m["descricao"]),
+                                         "valor": financeiro.reais(-m["valor_cent"]), "vencimento": m["data"]})
+        financeiro.pagar_despesa(did, m["data"])
+        with db.conexao() as con:
+            con.execute("UPDATE movimentos SET despesa_id=?, classificacao='' WHERE id=?", (did, mov_id))
+        return {"ok": True, "despesa": did, "aplicados": 1}
+    alvo = [m]
+    if iguais and tipo:
+        cp = _contraparte(m["descricao"])
+        alvo += [x for x in db.linhas("SELECT * FROM movimentos WHERE titulo_id IS NULL AND despesa_id IS NULL "
+                                     "AND COALESCE(classificacao,'')='' AND id!=?", (mov_id,))
+                 if cp and _contraparte(x["descricao"]) == cp and (x["valor_cent"] > 0) == (m["valor_cent"] > 0)]
+    with db.conexao() as con:
+        for x in alvo:
+            con.execute("UPDATE movimentos SET classificacao=? WHERE id=?", (tipo, x["id"]))
+    return {"ok": True, "aplicados": len(alvo)}
+
+
+def extrato(inicio: str = "", fim: str = "") -> dict:
+    """Todos os lançamentos do extrato no período (entradas e saídas), com o que cada um virou no sistema."""
+    sql, p = "SELECT * FROM movimentos WHERE 1=1", []
+    if inicio:
+        sql += " AND data>=?"; p.append(inicio)
+    if fim:
+        sql += " AND data<=?"; p.append(fim)
+    movs = db.linhas(sql + " ORDER BY data DESC, id DESC", p)
+    tits = {t["id"]: t for t in db.linhas("SELECT id, cliente_nome, competencia FROM titulos")}
+    desps = {d["id"]: d for d in db.linhas("SELECT id, descricao, categoria FROM despesas")}
+    for m in movs:
+        if m["titulo_id"] and m["titulo_id"] in tits:
+            t = tits[m["titulo_id"]]
+            m["situacao"], m["detalhe"] = "titulo", f"Recebimento de {t['cliente_nome']} (comp. {t['competencia'][5:]}/{t['competencia'][:4]})"
+        elif m["despesa_id"] and m["despesa_id"] in desps:
+            d = desps[m["despesa_id"]]
+            m["situacao"], m["detalhe"] = "despesa", f"Despesa: {d['descricao']} ({d['categoria']})"
+        elif m.get("classificacao"):
+            m["situacao"], m["detalhe"] = "classificado", CLASSES.get(m["classificacao"], m["classificacao"])
+        else:
+            m["situacao"], m["detalhe"] = "pendente", "Não conciliado"
+    ent = sum(m["valor_cent"] for m in movs if m["valor_cent"] > 0)
+    sai = -sum(m["valor_cent"] for m in movs if m["valor_cent"] < 0)
+    return {"movimentos": movs, "entradas": ent, "saidas": sai, "resultado": ent - sai,
+            "pendentes": sum(1 for m in movs if m["situacao"] == "pendente")}

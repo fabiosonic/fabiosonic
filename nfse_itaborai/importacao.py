@@ -264,6 +264,9 @@ def resumo_diario(resultado_robo: dict, em: date | None = None, forcar: bool = F
         return "sem e-mail do dono ou SMTP"
     if cfg["resumo"].get("ultimo_envio") == em.isoformat() and not forcar:
         return "já enviado hoje"
+    from . import horario
+    if not forcar and not horario.comercial(cfg=cfg):
+        return "fora do horário comercial (envia no próximo horário comercial)"
     p = relatorios.painel(em)
     recebidos = [t for t in db.linhas("SELECT * FROM titulos WHERE status='pago' AND data_pagamento=?",
                                       ((em - timedelta(days=1)).isoformat(),))]

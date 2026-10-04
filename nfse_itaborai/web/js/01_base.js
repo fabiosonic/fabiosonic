@@ -41,7 +41,8 @@ async function api(rota, corpo) {
   return d;
 }
 function aviso(t, ms = 3500) { const a = $("#aviso"); a.textContent = t; a.hidden = false; clearTimeout(a._t); a._t = setTimeout(() => a.hidden = true, ms); }
-function modal(html) {
+function modal(html, larga = false) {
+  $("#modal .caixa").classList.toggle("larga", !!larga);
   $("#modal_corpo").innerHTML = `<button class="modal-x" type="button" onclick="fechar()" aria-label="Fechar" title="Fechar (Esc)">${ic("x")}</button>` + html;
   const novo = $("#modal").hidden; $("#modal").hidden = false;
   if (novo) { const f = $("#modal_corpo").querySelector("input:not([type=hidden]):not([disabled]), select, textarea"); if (f) setTimeout(() => f.focus(), 30); }

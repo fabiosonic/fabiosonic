@@ -34,6 +34,10 @@ PADRAO = {
         "recorrente_a_cada_dias": 7,  # e repete a cada X dias enquanto não pagar
         "regua_email": True,
         "regua_whatsapp": True,
+        # envios (e-mail e WhatsApp) só em horário comercial: segunda a sexta, entre as horas abaixo
+        "envio_horario_comercial": True,
+        "envio_hora_inicio": "08:00",
+        "envio_hora_fim": "18:00",
         "anexar_boleto": True,      # e-mails de cobrança levam o PDF do boleto anexado
         "bloquear_apos_dias": 60,   # alerta de cliente para suspensão/negociação
         # WhatsApp automático pelo WhatsApp Web do escritório (QR Code lido uma vez; sem API oficial)
@@ -41,6 +45,7 @@ PADRAO = {
         "whatsapp_web_intervalo": 15,   # segundos (em média) entre uma mensagem e outra
         "whatsapp_web_limite": 40,      # máximo de mensagens por rodada do robô
         "whatsapp_web_visivel": False,  # mostrar a janela do navegador durante o envio
+        "whatsapp_web_pdf": True,       # manda também o boleto em PDF (documento) logo depois da mensagem
         "whatsapp_web_navegador": "",   # caminho do navegador (vazio = Edge ou Chrome instalados)
         # WhatsApp pela API oficial da Meta (Cloud API): a régua envia sozinha, com modelos aprovados
         "whatsapp_api": False,      # desligado = fila com o link "Enviar" (envio manual pelo WhatsApp do escritório)

@@ -678,3 +678,22 @@ h2 .btn .ic, h1 .btn .ic { color: inherit; }
   .tabela:not(.dre) td .cel-nome { max-width: none; }
   .tabela:not(.dre) td .acoes-linha { justify-content: flex-end; flex-wrap: wrap; }
 }
+
+/* ------------------------------------------------------------------ importação do Nitrus */
+.modal .caixa.larga { width: min(1120px, 100%); }
+.imp-tot { display: flex; gap: 10px 22px; flex-wrap: wrap; align-items: center; margin: 4px 0 14px; font-size: 13.5px; }
+.imp-grupos { display: flex; flex-direction: column; gap: 10px; max-height: 58vh; overflow-y: auto; padding-right: 4px; margin-bottom: 14px; }
+.imp-g { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; background: var(--superficie); }
+.imp-g.sem { border-color: color-mix(in srgb, var(--alerta-forte) 55%, var(--borda)); background: var(--alerta-suave); }
+.imp-cab { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) auto; gap: 8px 16px; align-items: center; }
+.imp-cab .nome { font-weight: 600; }
+.imp-cab .sub { font-size: 12px; }
+.imp-vinc { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.imp-vinc select { min-width: 0; flex: 1; }
+.imp-vinc input { width: 170px; flex: none; }
+.imp-soma { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.imp-tits { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.imp-tits span { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--neutro-suave); color: var(--texto2); font-variant-numeric: tabular-nums; }
+.imp-tits span.ja { text-decoration: line-through; opacity: .65; }
+@media (max-width: 760px) { .imp-cab { grid-template-columns: minmax(0, 1fr); } .imp-soma { text-align: left; } }
+.classif { width: auto; min-height: 30px; padding: 3px 8px; font-size: 12.5px; }

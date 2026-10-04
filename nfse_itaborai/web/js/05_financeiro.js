@@ -7,7 +7,7 @@ PAGINAS.receber = async el => {
   const comp = (el._comp ?? "");
   const lst = await api("titulos", { filtro: FILTRO_REC, competencia: comp });
   const soma = lst.reduce((a, t) => a + (t.status == "aberto" ? t.total_cent : t.status == "pago" ? t.valor_pago_cent : 0), 0);
-  el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">${ic("mais")}Título avulso</button><button class="btn sec" id="pdf_bol">${ic("download")}PDFs dos boletos</button><a class="btn sec" href="/export/titulos.csv">${ic("download")}Exportar CSV</a></span></h1>
+  el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">${ic("mais")}Título avulso</button><button class="btn sec" id="imp_nitrus" title="Lança os títulos em aberto do relatório de Inadimplência do Nitrus (PDF)">${ic("download")}Importar do Nitrus</button><button class="btn sec" id="pdf_bol">${ic("download")}PDFs dos boletos</button><a class="btn sec" href="/export/titulos.csv">${ic("download")}Exportar CSV</a></span></h1>
   <div class="card"><div class="abas">${[["a_receber", "A receber"], ["atrasado", "Atrasados"], ["pago", "Pagos"], ["sem_cobranca", "Sem cobrança"], ["sem_nfse", "Sem NFS-e"], ["cancelado", "Cancelados"], ["todos", "Todos"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_REC ? "on" : ""}">${t}</button>`).join("")}
     <label style="flex-direction:row;align-items:center;gap:6px;margin-left:auto">Competência <input type="month" id="r_comp" value="${comp}" style="width:160px"></label></div>
     <p class="sub">${lst.length} título(s) · ${brl(soma)}</p>
@@ -21,6 +21,7 @@ PAGINAS.receber = async el => {
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_REC = b.dataset.f; ir("receber"); });
   $("#r_comp").onchange = e => { el._comp = e.target.value; ir("receber"); };
   $("#novo_t").onclick = novoTitulo;
+  $("#imp_nitrus").onclick = importarNitrus;
   $("#pdf_bol").onclick = async () => {
     aviso("Baixando os PDFs dos boletos…", 20000);
     const r = await api("boletos/baixar", { competencia: comp });
@@ -218,6 +219,7 @@ PAGINAS.cobranca = async el => {
   el.innerHTML = `<h1>Cobrança <span class="acoes"><button class="btn" id="rr">Rodar régua agora</button></span></h1>
   <div class="card"><h2>Régua automática</h2><p>Etapas (dias em relação ao vencimento): <b>${c.regua_dias.map(d => d < 0 ? d : d == 0 ? "0 (vencimento)" : "+" + d).join(" · ")}</b> —
     e-mail ${c.regua_email ? "<b>ligado</b>" : "desligado"}, WhatsApp ${c.regua_whatsapp ? (c.whatsapp_api ? "<b>automático (API oficial)</b>" : ww.ativo ? "<b>automático</b> (WhatsApp do escritório conectado) para os clientes marcados em Clientes › “Cobrar por WhatsApp”" : "<b>ligado</b>, mas o WhatsApp <b>não está conectado</b> — <a href=\"#\" onclick=\"ir('config');return false\">conectar</a>; até lá as mensagens ficam na fila abaixo") : "desligado"}. Multa ${c.multa_pct}% + juros ${c.juros_mes_pct}% a.m. pro rata.
+    ${c.envio_horario_comercial !== false ? `Envios só de segunda a sexta, das ${esc(c.envio_hora_inicio || "08:00")} às ${esc(c.envio_hora_fim || "18:00")}.` : "Envios a qualquer hora."}
     <a href="#" onclick="ir('config');return false">Alterar</a></p></div>
   <div class="card"><h2>WhatsApp ainda não enviado (${fila.length}) ${fila.length && ww.ativo ? '<button class="btn" id="wa_auto">Enviar agora</button>' : ""} ${fila.length ? '<button class="btn sec" id="wa_seq">Enviar manualmente em sequência</button>' : ""}</h2>
     <p class="sub">${ww.ativo ? (ww.enviando ? "<b>Enviando agora pelo WhatsApp…</b> " : "") + "O robô envia esta fila sozinho a cada rodada (de hora em hora) e logo depois de “Rodar régua agora”." : "O WhatsApp do escritório não está conectado: estas mensagens saem sozinhas assim que você conectar em Configurações › WhatsApp. Enquanto isso, dá para enviar manualmente em sequência."} Só entram os clientes marcados em Clientes › “Cobrar por WhatsApp”.</p>
@@ -227,7 +229,8 @@ PAGINAS.cobranca = async el => {
   <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Etapa", f: e => e.etapa }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
   if ($("#wa_seq")) $("#wa_seq").onclick = () => enviarSequencia(fila);
   if ($("#wa_auto")) $("#wa_auto").onclick = async () => { await api("whatsapp_web/enviar_fila"); aviso("Enviando a fila pelo WhatsApp em segundo plano…", 6000); setTimeout(() => ir("cobranca"), 4000); };
-  $("#rr").onclick = async () => { const r = await api("regua/rodar"); aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp${r.whatsapp_automatico ? " (saindo sozinhos agora)" : ""}, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
+  $("#rr").onclick = async () => { const r = await api("regua/rodar"); if (r.fora_do_horario) return aviso(r.fora_do_horario, 9000);
+    aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp${r.whatsapp_automatico ? " (saindo sozinhos agora)" : ""}, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
 };
 function enviarSequencia(fila, i = 0) {
   if (i >= fila.length) { fechar(); aviso("WhatsApp: todas as mensagens da fila foram abertas ✔", 6000); return ir("cobranca"); }
@@ -279,9 +282,24 @@ PAGINAS.conciliacao = async el => {
     <p class="sub">O robô baixa o extrato da conta Inter direto do banco (sem arquivo) e concilia sozinho, de hora em hora${ST.config.financeiro.extrato_inter_ate ? ` — último dia baixado: <b>${dt(ST.config.financeiro.extrato_inter_ate)}</b>` : ""}. Lançamentos que já vieram por OFX não são duplicados. A integração do Inter precisa da permissão <b>“Consultar extrato e saldo”</b>.</p>
     <div class="barra"><label>Período<select id="ext_dias"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="60">Últimos 60 dias</option><option value="90">Últimos 90 dias</option></select></label>
     <button class="btn" id="ext_baixar">${ic("download")}Baixar extrato agora</button></div><div id="ext_res"></div></div>` : ""}
-  <div class="card"><h2>Lançamentos não conciliados (${pend.length})</h2>
-  ${tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) }, { t: "Valor", n: 1, f: m => num(m.valor_cent) },
-    { t: "Sugestões", f: m => m.sugestoes.length ? m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(s.cliente.slice(0, 28))} · ${num(s.valor_cent)}</button>`).join(" ") : '<span class="sub">—</span>' }], pend, "Tudo conciliado ✔")}</div>`;
+  <div class="card"><div class="card-cab"><h2>${ic("alerta")}Lançamentos não conciliados (${pend.length})</h2><span class="sub">vincule ao título, classifique ou lance como despesa</span></div>
+  ${tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) }, { t: "Valor", n: 1, f: m => `<span class="${m.valor_cent < 0 ? "neg" : ""}">${num(m.valor_cent)}</span>` },
+    { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
+      <select class="classif" data-m="${m.id}" data-v="${m.valor_cent}"><option value="">${m.valor_cent > 0 ? "Classificar entrada…" : "Classificar saída…"}</option>${m.valor_cent > 0
+        ? '<option value="transferencia">Transferência entre contas</option><option value="aporte">Aporte / dinheiro do sócio</option><option value="outra_receita">Outra receita (não é honorário)</option>'
+        : '<option value="despesa">Lançar como despesa paga</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (retirada, estorno…)</option>'}</select></div>` }], pend, "Tudo conciliado ✔")}</div>
+  <div class="card"><div class="card-cab"><h2>${ic("banco")}Extrato da conta</h2><span class="sub">todos os lançamentos importados — entradas e saídas</span></div>
+    <div class="barra"><label>Período<select id="ex_per">${(() => { const h = new Date(hojeISO() + "T12:00"), o = [];
+      for (let k = 0; k < 12; k++) { const d = new Date(h.getFullYear(), h.getMonth() - k, 1), v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; o.push(`<option value="${v}" ${v == EXT_PER ? "selected" : ""}>${mesExtenso(v)}</option>`); }
+      return `<option value="" ${!EXT_PER ? "selected" : ""}>Todo o período</option>` + o.join(""); })()}</select></label>
+      <div class="abas">${[["todos", "Todos"], ["entradas", "Entradas"], ["saidas", "Saídas"], ["pendente", "Pendentes"]].map(([k, t]) => `<button data-ef="${k}" class="${k == EXT_FIL ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    <div id="ex_tab"><div class="vazio">Carregando…</div></div></div>`;
+  $$(".classif", el).forEach(sel => sel.onchange = () => { const v = sel.value; if (!v) return;
+    if (v == "despesa") { const c = prompt("Categoria da despesa (ex.: Pessoal, Ocupação, Tecnologia, Tributos, Serviços, Bancárias, Outras):", "Outras"); if (c === null) { sel.value = ""; return; } return classificarMov(+sel.dataset.m, v, c); }
+    classificarMov(+sel.dataset.m, v); });
+  $("#ex_per").onchange = e => { EXT_PER = e.target.value; extratoConta(); };
+  $$("[data-ef]", el).forEach(b => b.onclick = () => { EXT_FIL = b.dataset.ef; $$("[data-ef]", el).forEach(x => x.classList.toggle("on", x == b)); extratoConta(); });
+  extratoConta();
   if ($("#ext_baixar")) $("#ext_baixar").onclick = async () => { const b = $("#ext_baixar"); b.disabled = true; b.textContent = "Baixando…";
     try { const r = await api("conciliacao/inter", { dias: $("#ext_dias").value });
       ULTIMO_EXTRATO = `<div class="msg ok">Extrato do Inter: ${r.lancamentos} lançamento(s) de ${dt(r.periodo.slice(0, 10))} a ${dt(r.periodo.slice(-10))} · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)</div>`;
@@ -297,4 +315,74 @@ PAGINAS.conciliacao = async el => {
     ULTIMO_EXTRATO = `<div class="msg ok">Extrato OFX: ${r.lancamentos} lançamento(s) lidos · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)</div>`;
     ir("conciliacao"); };
 };
+let EXT_PER = hojeISO().slice(0, 7), EXT_FIL = "todos";
+async function extratoConta() {
+  const box = $("#ex_tab"); if (!box) return;
+  const ini = EXT_PER ? EXT_PER + "-01" : "", fim = EXT_PER ? EXT_PER + "-31" : "";
+  const e = await api("conciliacao/extrato", { inicio: ini, fim });
+  const vis = e.movimentos.filter(m => EXT_FIL == "todos" || (EXT_FIL == "entradas" ? m.valor_cent > 0 : EXT_FIL == "saidas" ? m.valor_cent < 0 : m.situacao == "pendente"));
+  const cls = { titulo: "bom", despesa: "neutro", classificado: "neutro", pendente: "alerta" };
+  box.innerHTML = `<section class="stats" style="margin-top:4px">${statTile({ rot: "Entradas", icone: "receber", valor: brl(e.entradas) })}${statTile({ rot: "Saídas", icone: "pagar", valor: brl(e.saidas) })}
+    ${statTile({ rot: "Resultado do período", icone: "banco", valor: `<span class="${e.resultado < 0 ? "neg" : ""}">${brl(e.resultado)}</span>` })}${statTile({ rot: "Pendentes", icone: "alerta", valor: e.pendentes, estado: e.pendentes ? estadoSelo("atencao", "conciliar") : estadoSelo("bom", "tudo certo") })}</section>`
+    + tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) },
+      { t: "Entrada", n: 1, f: m => m.valor_cent > 0 ? num(m.valor_cent) : "" }, { t: "Saída", n: 1, f: m => m.valor_cent < 0 ? `<span class="neg">${num(-m.valor_cent)}</span>` : "" },
+      { t: "No sistema", f: m => `<span class="selo ${cls[m.situacao]}">${esc(m.detalhe)}</span>${m.situacao == "classificado" ? ` <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Volta para os não conciliados">Desfazer</button>` : ""}` }],
+      vis, "Nenhum lançamento neste período.");
+}
+async function classificarMov(id, tipo, categoria = "") {
+  const r = await api("conciliacao/classificar", { movimento: id, tipo, categoria });
+  aviso(tipo ? (r.aplicados > 1 ? `${r.aplicados} lançamentos da mesma origem classificados ✔` : "Lançamento classificado ✔") : "Classificação desfeita", 5000);
+  ir("conciliacao");
+}
 async function vincular(movimento, titulo) { await api("conciliacao/vincular", { movimento, titulo }); aviso("Conciliado e baixado ✔"); ir("conciliacao"); }
+
+// ---------------------------------------------------------------- importar inadimplência do Nitrus (PDF)
+function importarNitrus() {
+  modal(`<h2>Importar inadimplência do Nitrus</h2>
+    <p class="sub">No Nitrus, gere o relatório <b>Inadimplência</b> em PDF e escolha o arquivo aqui. O sistema mostra a conferência antes de lançar:
+    cada título entra no Contas a receber com o vencimento original (multa e juros calculados pelo atraso), sem emitir NFS-e, com boleto/PIX e na régua de cobrança.
+    Títulos que já estiverem no sistema não são lançados de novo.</p>
+    <label class="soltar"><input type="file" id="nt_pdf" accept=".pdf,application/pdf" hidden>${ic("download")}<span><b>Escolher o PDF de Inadimplência</b><small>nitrus-inadimplencia.pdf</small></span></label>
+    <div id="nt_res"></div>`);
+  $("#nt_pdf").onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    $("#nt_res").innerHTML = '<p class="sub">Lendo o relatório…</p>';
+    const r = new FileReader();
+    r.onload = async () => { try { mostrarNitrus(await api("nitrus/analisar", { pdf: r.result })); } catch (x) { $("#nt_res").innerHTML = `<p class="neg">${esc(x.message)}</p>`; } };
+    r.readAsDataURL(f);
+  };
+}
+function mostrarNitrus(a) {
+  const G = a.grupos, opcCli = sel => `<option value="">— escolher cliente do cadastro —</option><option value="novo" ${sel == "novo" ? "selected" : ""}>Cadastrar novo: informe o CPF/CNPJ →</option><option value="nao">Não lançar este cliente</option>`
+    + ST.clientes.slice().sort((x, y) => x.razao_social.localeCompare(y.razao_social)).map(c => `<option value="${c.cpf_cnpj}" ${c.cpf_cnpj == sel ? "selected" : ""}>${esc(nomeCli(c.razao_social))} — ${fmtDoc(c.cpf_cnpj)}</option>`).join("");
+  const novos = g => g.titulos.filter(t => !t.existe);
+  modal(`<h2>Importar inadimplência do Nitrus</h2>
+    <div class="imp-tot">${a.conferido ? estadoSelo("bom", "Leitura conferida com os totais do relatório") : estadoSelo("critico", "A leitura não bateu com os totais do relatório — confira antes de lançar")}
+      <span>${a.titulos} título(s) de ${G.length} cliente(s) · original <b>${brl(a.lidos.original)}</b> · com juros e multa no Nitrus <b>${brl(a.lidos.total)}</b></span></div>
+    <div class="imp-grupos">${G.map((g, i) => `<div class="imp-g ${g.cpf_cnpj ? "" : "sem"}" data-i="${i}">
+      <div class="imp-cab"><div><div class="nome">${esc(nomeCli(g.nome))}</div><div class="sub">${g.codigo ? `código ${esc(g.codigo)} no Nitrus · ` : ""}${esc(g.email || "sem e-mail")} · ${esc(g.telefone || "sem telefone")}</div></div>
+        <div class="imp-vinc"><select data-v="${i}">${opcCli(g.cpf_cnpj || "novo")}</select><input data-n="${i}" placeholder="CPF/CNPJ" inputmode="numeric" ${g.cpf_cnpj ? "hidden" : ""}></div>
+        <div class="imp-soma"><b>${brl(g.titulos.reduce((s, t) => s + t.valor_cent, 0))}</b><div class="sub">${g.titulos.length} título(s)${g.titulos.some(t => t.existe) ? ` · ${g.titulos.filter(t => t.existe).length} já no sistema` : ""}</div></div></div>
+      ${!g.cpf_cnpj ? `<div class="sub" style="margin-top:6px">${esc(g.motivo)}: escolha o cliente no cadastro ou informe o CPF/CNPJ para cadastrar.</div>` : ""}
+      <div class="imp-tits">${g.titulos.map(t => `<span class="${t.existe ? "ja" : ""}" title="${t.existe ? "já está no sistema" : `${t.dias} dia(s) de atraso · ${brl(t.total_cent)} no Nitrus`}">${dt(t.vencimento)} · ${num(t.valor_cent)}</span>`).join("")}</div></div>`).join("")}</div>
+    <label class="chk"><input type="checkbox" id="nt_cobrar" checked> Gerar boleto/PIX e incluir na régua de cobrança (o cliente passa a ser cobrado)</label>
+    <p><button class="btn" id="nt_ok">Lançar</button> <button class="btn sec" onclick="fechar()">Cancelar</button></p>`, true);
+  const atu = () => { let n = 0; G.forEach((g, i) => { const v = $(`[data-v="${i}"]`).value; $(`[data-n="${i}"]`).hidden = v != "novo";
+      if (v && v != "nao" && (v != "novo" || clientesDig($(`[data-n="${i}"]`).value).length >= 11)) n += novos(g).length; });
+    $("#nt_ok").textContent = `Lançar ${n} título(s)`; $("#nt_ok").disabled = !n; };
+  $$("[data-v],[data-n]").forEach(x => x.oninput = x.onchange = atu); atu();
+  $("#nt_ok").onclick = async ev => {
+    const grupos = G.map((g, i) => { const v = $(`[data-v="${i}"]`).value;
+      return v && v != "nao" ? { ...g, titulos: novos(g), cpf_cnpj: v == "novo" ? "" : v, cnpj_novo: v == "novo" ? $(`[data-n="${i}"]`).value : "" } : null; }).filter(g => g && g.titulos.length);
+    if (!confirm(`Lançar ${grupos.reduce((s, g) => s + g.titulos.length, 0)} título(s) no Contas a receber${$("#nt_cobrar").checked ? " e incluir na cobrança" : ""}?`)) return;
+    ev.target.disabled = true; ev.target.textContent = "Lançando…";
+    try {
+      const r = await api("nitrus/lancar", { grupos, cobrar: $("#nt_cobrar").checked });
+      modal(`<h2>Inadimplência do Nitrus lançada</h2><p><b>${r.lancados}</b> título(s) lançado(s)${r.com_cobranca ? `, ${r.com_cobranca} com boleto/PIX` : ""}${r.clientes_novos ? ` · ${r.clientes_novos} cliente(s) cadastrado(s)` : ""}${r.ja_existiam ? ` · ${r.ja_existiam} já estavam no sistema` : ""}.</p>
+        ${r.avisos.length ? `<ul class="lista">${r.avisos.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+        <p><button class="btn" onclick="fechar();FILTRO_REC='atrasado';ir('receber')">Ver os atrasados</button></p>`);
+      await carregarEstado();
+    } catch (x) { ev.target.disabled = false; atu(); }
+  };
+}
+const clientesDig = s => String(s || "").replace(/\D/g, "");

@@ -20,6 +20,7 @@ Requer o pacote Python "playwright" (o INICIAR.bat instala sozinho).
 from __future__ import annotations
 
 import json
+import os
 import random
 import shutil
 import threading
@@ -40,6 +41,9 @@ CAIXA = ('footer div[contenteditable="true"], div[contenteditable="true"][data-t
          'div[contenteditable="true"][aria-label="Digite uma mensagem"], div[contenteditable="true"][aria-placeholder]')
 DIALOGO = 'div[role="dialog"], [data-animate-modal-popup="true"]'
 SAIDA = "div.message-out"
+ANEXAR = ('button[title="Anexar"], [aria-label="Anexar"], button[title="Attach"], [aria-label="Attach"], '
+          'span[data-icon="plus-rounded"], span[data-icon="attach-menu-plus"], span[data-icon="clip"]')
+ENVIAR_ANEXO = 'span[data-icon="send"], span[data-icon="wds-ic-send-filled"], [aria-label="Enviar"], [aria-label="Send"]'
 PENDENTE = 'span[data-icon="msg-time"]'
 
 _trava = threading.Lock()
@@ -169,7 +173,40 @@ def desconectar() -> dict:
     return {"ok": True, "mensagem": "WhatsApp desconectado deste computador. Remova também em Aparelhos conectados no celular."}
 
 
-def _enviar_na_pagina(pg, url: str, numero: str, texto: str) -> str:
+def _confirmar(pg, antes: int, espera: int = 60) -> bool:
+    fim = time.time() + espera
+    while time.time() < fim:
+        n = pg.locator(SAIDA).count()
+        if n > antes and not pg.locator(SAIDA).nth(n - 1).locator(PENDENTE).count():
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def _anexar_pdf(pg, caminho: str) -> None:
+    """Anexa o boleto em PDF como documento na conversa aberta e envia."""
+    antes = pg.locator(SAIDA).count()
+    pg.locator(ANEXAR).first.click()
+    entrada, fim = None, time.time() + 15
+    while entrada is None and time.time() < fim:          # o campo de documento aceita qualquer arquivo (não só fotos)
+        campos = pg.locator('input[type="file"]')
+        for i in range(campos.count()):
+            aceita = campos.nth(i).get_attribute("accept") or "*"
+            if not aceita.startswith(("image", "video")):
+                entrada = campos.nth(i)
+                break
+        time.sleep(0.3)
+    if entrada is None:
+        raise ErroWhatsAppWeb("não achei onde anexar documento no WhatsApp Web")
+    entrada.set_input_files(caminho)
+    pg.wait_for_selector(ENVIAR_ANEXO, timeout=30000)
+    time.sleep(random.uniform(0.6, 1.2))
+    pg.locator(ENVIAR_ANEXO).last.click()
+    if not _confirmar(pg, antes, 90):
+        raise ErroWhatsAppWeb("o WhatsApp não confirmou o envio do PDF")
+
+
+def _enviar_na_pagina(pg, url: str, numero: str, texto: str, pdf: str = "") -> str:
     pg.goto(f"{url}/send?phone={numero}&text={urllib.parse.quote(texto)}", wait_until="domcontentloaded")
     pg.wait_for_selector(f"{CAIXA}, {DIALOGO}, {QR}", timeout=90000)
     if pg.locator(QR).count() and not pg.locator(LOGADO).count():
@@ -188,13 +225,14 @@ def _enviar_na_pagina(pg, url: str, numero: str, texto: str) -> str:
     antes = pg.locator(SAIDA).count()
     time.sleep(random.uniform(0.6, 1.5))
     pg.locator(CAIXA).first.press("Enter")
-    fim = time.time() + 60
-    while time.time() < fim:
-        n = pg.locator(SAIDA).count()
-        if n > antes and not pg.locator(SAIDA).nth(n - 1).locator(PENDENTE).count():
-            return "enviado"
-        time.sleep(0.5)
-    return "enviado (sem confirmação de entrega)"
+    res = "enviado" if _confirmar(pg, antes) else "enviado (sem confirmação de entrega)"
+    if pdf and os.path.isfile(pdf):
+        try:
+            _anexar_pdf(pg, pdf)
+            res += " com o boleto em PDF"
+        except Exception as ex:  # noqa: BLE001 — a mensagem (linha digitável e PIX) já foi; o PDF segue no e-mail
+            res += f" (sem o PDF: {str(ex)[:120]})"
+    return res
 
 
 def enviar(itens: list[dict], cfg: dict | None = None) -> list[dict]:
@@ -220,7 +258,7 @@ def enviar(itens: list[dict], cfg: dict | None = None) -> list[dict]:
                     if i and intervalo:
                         time.sleep(random.uniform(intervalo * 0.6, intervalo * 1.4))
                     try:
-                        saida.append(it | {"resultado": _enviar_na_pagina(pg, _url(cfg), it["numero"], it["texto"])})
+                        saida.append(it | {"resultado": _enviar_na_pagina(pg, _url(cfg), it["numero"], it["texto"], it.get("pdf", ""))})
                     except Desconectado as ex:
                         _marca().unlink(missing_ok=True)
                         saida.append(it | {"erro": str(ex), "desconectado": True})
@@ -254,8 +292,10 @@ def _do_link(link: str) -> tuple[str, str]:
 
 def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
     """Envia sozinho as mensagens de WhatsApp que a régua deixou na fila (status 'pendente')."""
-    from . import cobranca
+    from . import cobranca, horario
     cfg = cfg or config.carregar()
+    if not horario.comercial(cfg=cfg):
+        return {"enviados": 0, "erros": 0, "pendentes": len(cobranca.fila_whatsapp()), "aviso": horario.motivo(cfg=cfg)}
     fila = cobranca.fila_whatsapp()[: limite or int(_cfg(cfg).get("whatsapp_web_limite", 40) or 40)]
     res = {"enviados": 0, "erros": 0, "pendentes": 0}
     if not fila:
@@ -263,7 +303,8 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
     itens = []
     for e in fila:
         numero, texto = _do_link(e["detalhe"])
-        itens.append({"evento": e["id"], "numero": numero, "texto": texto, "cliente": e["cliente_nome"]})
+        itens.append({"evento": e["id"], "numero": numero, "texto": texto, "cliente": e["cliente_nome"],
+                      "pdf": _pdf_do_titulo(e["titulo_id"], cfg)})
     try:
         saida = enviar(itens, cfg)
     except Desconectado as ex:
@@ -290,12 +331,26 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
     return res
 
 
-def enviar_um(telefone: str, texto: str, cfg: dict | None = None) -> str:
+def _pdf_do_titulo(tid: int, cfg: dict) -> str:
+    """Boleto em PDF do título para mandar junto (Configurações › WhatsApp: 'enviar também o boleto em PDF')."""
+    if not _cfg(cfg).get("whatsapp_web_pdf", True):
+        return ""
+    from . import cobranca, financeiro
+    try:
+        return cobranca._pdf_boleto(financeiro.obter_titulo(tid), cfg) or ""
+    except Exception:  # noqa: BLE001 — sem PDF a mensagem sai com a linha digitável e o PIX
+        return ""
+
+
+def enviar_um(telefone: str, texto: str, cfg: dict | None = None, so_horario_comercial: bool = True, pdf: str = "") -> str:
     """Envio imediato (botão "Cobrar" e mensagem de teste). Devolve o número usado."""
+    from . import horario
+    if so_horario_comercial and not horario.comercial(cfg=cfg):
+        raise ErroWhatsAppWeb(horario.motivo(cfg=cfg))
     numero = numero_de(telefone)
     if not numero:
         raise ErroWhatsAppWeb("Telefone do cliente inválido para WhatsApp (DDD + número).")
-    s = enviar([{"numero": numero, "texto": texto}], cfg)[0]
+    s = enviar([{"numero": numero, "texto": texto, "pdf": pdf}], cfg)[0]
     if "erro" in s:
         raise ErroWhatsAppWeb(s["erro"])
     db.registrar("whatsapp", f"WhatsApp Web: mensagem enviada para {numero}")

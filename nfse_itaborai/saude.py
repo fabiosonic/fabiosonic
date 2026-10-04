@@ -170,6 +170,9 @@ def fechamento_mensal(em: date | None = None, forcar: bool = False) -> str:
             return "aguardando o dia do fechamento"
         if cfg["resumo"].get("ultimo_fechamento") == ref:
             return f"fechamento de {ref} já feito"
+        from . import horario
+        if not horario.comercial(cfg=cfg):
+            return "fora do horário comercial (envia no próximo horário comercial)"
     doc = relatorio_mensal_html(ref, em)
     arq = pasta_relatorios(cfg) / f"Fechamento {ref}.html"
     arq.parent.mkdir(parents=True, exist_ok=True)

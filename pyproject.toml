@@ -9,6 +9,7 @@ dependencies = []
 xsd = ["lxml"]
 nacional = ["lxml", "cryptography"]
 whatsapp = ["playwright"]
+nitrus = ["pypdf"]
 teste = ["pytest", "lxml", "cryptography"]
 
 [tool.pytest.ini_options]

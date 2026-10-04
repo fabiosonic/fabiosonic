@@ -20,7 +20,8 @@ pasta, porta = Path(sys.argv[1]), int(sys.argv[2])
 (pasta / ".env").write_text("ITABORAI_CNPJ=24875410000144\nITABORAI_IM=1034265\nITABORAI_CHAVE=chave-de-teste-123\n"
                             "ITABORAI_PROXIMO_RPS=3509\nITABORAI_AMBIENTE=homologacao\nITABORAI_CIENTE_IRREVERSIVEL=NAO\n",
                             encoding="utf-8")
-os.environ.update({"ITABORAI_PASTA": str(pasta), "NFSE_CHAVE_LOCAL": str(pasta / "chave_local.bin")})
+os.environ.update({"ITABORAI_PASTA": str(pasta), "NFSE_CHAVE_LOCAL": str(pasta / "chave_local.bin"),
+                   "NFSE_ENVIO_SEMPRE": "1"})       # o teste roda a qualquer hora (horário comercial testado à parte)
 
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.serialization import pkcs12  # noqa: E402

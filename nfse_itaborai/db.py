@@ -141,6 +141,8 @@ MIGRACOES = {
                 # cartão de crédito (InfinitePay): nº do pedido, link, valor com a taxa repassada e situação
                 "cartao_id": "TEXT DEFAULT ''", "cartao_link": "TEXT DEFAULT ''", "cartao_total_cent": "INTEGER DEFAULT 0",
                 "cartao_parcelas": "INTEGER DEFAULT 0", "cartao_status": "TEXT DEFAULT ''"},
+    # lançamento do extrato que não é título nem despesa: transferencia | aporte | outra_receita | outra_saida
+    "movimentos": {"classificacao": "TEXT DEFAULT ''"},
 }
 
 

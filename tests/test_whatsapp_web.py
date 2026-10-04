@@ -70,6 +70,27 @@ setTimeout(() => {
     c.textContent = '';
     setTimeout(() => { m.querySelector('span').dataset.icon = 'msg-check'; }, 300);
   });
+  // anexar documento: botão "Anexar" abre o menu com os campos de foto e de documento; a prévia tem "Enviar"
+  const anexar = document.createElement('button'); anexar.setAttribute('aria-label', 'Anexar'); anexar.textContent = '+';
+  f.prepend(anexar);
+  anexar.onclick = () => {
+    if (document.querySelector('input[type=file]')) return;
+    const foto = document.createElement('input'); foto.type = 'file'; foto.accept = 'image/*,video/mp4'; foto.hidden = true;
+    const doc = document.createElement('input'); doc.type = 'file'; doc.accept = '*'; doc.hidden = true;
+    document.body.append(foto, doc);
+    doc.onchange = () => {
+      const nome = doc.files[0].name, prev = document.createElement('div');
+      prev.innerHTML = '<span>' + nome + '</span><div role="button" aria-label="Enviar"><span data-icon="send">➤</span></div>';
+      document.body.append(prev);
+      prev.querySelector('[aria-label=Enviar]').onclick = async () => {
+        const m = document.createElement('div'); m.className = 'message-out';
+        m.innerHTML = '<span data-icon="msg-time"></span>'; m.append(nome);
+        document.getElementById('msgs').append(m); prev.remove(); foto.remove(); doc.remove();
+        await fetch('/_enviado', { method: 'POST', body: JSON.stringify({ fone, arquivo: nome, tamanho: doc.files[0].size }) });
+        setTimeout(() => { m.querySelector('span').dataset.icon = 'msg-check'; }, 300);
+      };
+    };
+  };
 }, 400);
 </script>"""
 
@@ -220,3 +241,24 @@ def test_sessao_fica_fora_do_backup_e_desconectar_apaga(wa):
     assert not backup._caminho_permitido("dados/whatsapp_web/Default/Cookies")
     whatsapp_web.desconectar()
     assert not whatsapp_web.pasta().exists() and not whatsapp_web.estado()["conectado"]
+
+
+def test_boleto_em_pdf_vai_junto_da_mensagem(wa, tmp_path, monkeypatch):
+    _conectar(wa)
+    pdf = tmp_path / "Boleto RPS 10-2026.pdf"
+    pdf.write_bytes(b"%PDF-1.4 boleto de teste")
+    s = whatsapp_web.enviar([{"numero": "5521988887777", "texto": "Olá! Segue a cobrança.", "pdf": str(pdf)}])[0]
+    assert s["resultado"] == "enviado com o boleto em PDF"
+    env = FakeWhatsAppWeb.enviados
+    assert env[0]["texto"] == "Olá! Segue a cobrança." and env[1]["arquivo"] == "Boleto RPS 10-2026.pdf" and env[1]["tamanho"] == 24
+    # régua: o PDF do boleto do título vai junto; sem o PDF a mensagem sai normalmente
+    monkeypatch.setattr(cobranca, "enviar_email", lambda *a, **k: None)
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-09-25", emitir_nfse=False)
+    monkeypatch.setattr(cobranca, "_pdf_boleto", lambda t, cfg: str(pdf) if t["id"] == tid else "")
+    cobranca.rodar_regua(date(2026, 9, 30))
+    assert whatsapp_web.enviar_fila()["enviados"] == 1
+    assert [e.get("arquivo") for e in FakeWhatsAppWeb.enviados[2:]] == [None, "Boleto RPS 10-2026.pdf"]
+    ev = db.linhas("SELECT detalhe FROM eventos_cobranca WHERE canal='whatsapp'")[0]["detalhe"]
+    assert ev.endswith("enviado com o boleto em PDF")
+    c = config.carregar(); c["cobranca"]["whatsapp_web_pdf"] = False; config.salvar(c)
+    assert whatsapp_web._pdf_do_titulo(tid, config.carregar()) == ""

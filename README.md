@@ -427,6 +427,28 @@ sistema no computador do escritório. Sem API da Meta, sem intermediário e sem 
 - O INICIAR.bat instala sozinho o componente necessário (pacote Python `playwright`, que usa o Edge do Windows).
 - A API oficial da Meta continua disponível em Configurações, recolhida e desligada.
 
+### Horário comercial dos envios
+
+E-mails e mensagens (régua, botão Cobrar, WhatsApp, resumo diário e fechamento) só saem **de segunda a sexta,
+das 08:00 às 18:00** (horário de Brasília). Fora disso nada se perde: o robô envia na primeira rodada dentro do
+horário. O horário e a opção ficam em Configurações › Cobrança. Os testes que o escritório dispara (e-mail de
+teste, mensagem de teste) não têm restrição. No WhatsApp automático, o **boleto em PDF** vai logo depois da mensagem
+(opção em Configurações › WhatsApp).
+
+### Importar inadimplência do Nitrus
+
+Em **Contas a receber › Importar do Nitrus**, escolha o PDF do relatório *Inadimplência*. O sistema lê os títulos,
+confere com os totais impressos no relatório e mostra, por cliente, o vínculo com o cadastro (pelo código do Nitrus,
+CPF/CNPJ ou nome). Quem não tiver cadastro pode ser cadastrado ali, informando o CPF/CNPJ. Cada título entra com o
+vencimento original (multa e juros pelo atraso), sem NFS-e, com boleto/PIX e na régua; título já lançado não repete.
+
+### Conciliação: extrato completo
+
+A Conciliação mostra **todo o extrato** importado (entradas e saídas), com o que cada lançamento virou: recebimento
+de título, despesa, transferência ou aporte. Pix/TED da própria empresa vira *transferência entre contas*
+automaticamente (não é receita nem despesa). Os pendentes podem ser classificados (transferência, aporte do sócio,
+outra receita, saída sem despesa) ou lançados como despesa; a classificação vale para os outros da mesma origem.
+
 ### E-mails enviados pelo sistema
 
 | E-mail | Para | Quando |
@@ -620,7 +642,7 @@ pip install pytest lxml cryptography
 python -m pytest
 ```
 
-São 251 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
+São 266 testes, que cobrem o emissor (municipal e nacional), o financeiro e as automações:
 - a ordem e o conteúdo de cada campo do XML, além da validação contra o XSD oficial;
 - a leitura do retorno real do webservice;
 - a chave de segurança;

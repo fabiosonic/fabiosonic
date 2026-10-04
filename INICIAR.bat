@@ -12,7 +12,7 @@ if errorlevel 1 (
   exit /b 1
 )
 if not exist dados mkdir dados
-%PY% -c "import lxml, cryptography, playwright" 2>nul || %PY% -m pip install --quiet --disable-pip-version-check lxml cryptography playwright
+%PY% -c "import lxml, cryptography, playwright, pypdf" 2>nul || %PY% -m pip install --quiet --disable-pip-version-check lxml cryptography playwright pypdf
 rem Se esta versao ja esta aberta (mesma pasta), so abre o navegador nela
 %PY% -m nfse_itaborai ja-aberto 2>nul && exit /b 0
 rem Fecha telas de versoes antigas/outras pastas para nao abrir o sistema velho no navegador

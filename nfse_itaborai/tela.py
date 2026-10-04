@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, assistente, atualizacao, automacao, cartao, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -244,6 +244,8 @@ ROTAS = {
     "cartao/simular": lambda c: cartao.valor_no_cartao(financeiro.cent(c.get("valor") or 0), int(c.get("parcelas") or 1)),
     "cartao/testar": lambda c: cartao.testar(),
     "whatsapp/testar": lambda c: whatsapp.testar(),
+    "nitrus/analisar": lambda c: nitrus.analisar(str(c.get("pdf") or "")),
+    "nitrus/lancar": lambda c: nitrus.lancar(c.get("grupos") or [], c.get("cobrar", True) is not False),
     "whatsapp_web/estado": lambda c: whatsapp_web.estado(),
     "whatsapp_web/conectar": lambda c: (whatsapp_web.em_segundo_plano(whatsapp_web.conectar), {"ok": True})[1],
     "whatsapp_web/desconectar": lambda c: whatsapp_web.desconectar(),
@@ -284,6 +286,9 @@ ROTAS = {
     "conciliacao/importar": lambda c: importacao.importar_manual(str(c.get("ofx", ""))),
     "conciliacao/inter": lambda c: importacao.importar_extrato_inter(int(c.get("dias") or 0) or None),
     "conciliacao/pendentes": lambda c: conciliacao.nao_conciliados(),
+    "conciliacao/extrato": lambda c: conciliacao.extrato(str(c.get("inicio") or ""), str(c.get("fim") or "")),
+    "conciliacao/classificar": lambda c: conciliacao.classificar(_id(c, "movimento"), str(c.get("tipo") or ""),
+                                                                 c.get("iguais", True) is not False, str(c.get("categoria") or "")),
     "conciliacao/vincular": lambda c: (conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo")), {"ok": True})[1],
     # atualização do sistema pelo ZIP da versão nova
     "atualizacao/analisar": lambda c: atualizacao.analisar(_b64(c)),
@@ -341,7 +346,7 @@ def _whatsapp_teste(telefone: str) -> dict:
         t |= {"cartao_link": "(link do cartão do título)", "cartao_status": "aberto",
               "cartao_total_cent": cartao.valor_no_cartao(35000, 1, cfg)["total_cent"]}
     texto = "*[TESTE — modelo de cobrança do sistema]*\n\n" + cobranca.mensagem(t, 0, cfg, _d.fromisoformat(venc), "whatsapp")[1]
-    numero = whatsapp_web.enviar_um(telefone, texto, cfg)
+    numero = whatsapp_web.enviar_um(telefone, texto, cfg, so_horario_comercial=False)   # teste do próprio escritório
     return {"ok": True, "mensagem": f"Mensagem de teste enviada pelo WhatsApp para {numero}."}
 
 
