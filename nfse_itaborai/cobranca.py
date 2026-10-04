@@ -437,6 +437,7 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
         return res | {"fora_do_horario": horario.motivo(cfg=cfg)}
     # Só cobra títulos com NFS-e válida, sem nota ou com nota após o pagamento: nunca dispara por nota de teste.
     # Títulos lançados sem cobrança (cobrar=0) ficam fora da régua.
+    por_cliente: dict[str, tuple[dict, list]] = {}
     for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND " + financeiro.SQL_COBRADO +
                        " AND nfse_status IN ('emitida','nao_emitir','apos_pagamento')"):
         dias = (em - date.fromisoformat(t["vencimento"])).days
@@ -453,22 +454,10 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                 continue
             if (etapa > 0 or (etapa == ETAPA_BOLETO and dias > 0)) and canal == "email":
                 t = _atualizar_cartao(t, cfg, em)
-            assunto, texto = mensagem(t, etapa, cfg, em)
-            if canal == "email":
-                if not cli.get("email"):
-                    status, det = "sem_contato", "cliente sem e-mail"
-                    res["sem_contato"] += 1
-                else:
-                    try:
-                        pdf_ = _pdf_boleto(t, cfg)
-                        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [],
-                                     html=mensagem_html(t, etapa, cfg, em))
-                        status, det = "enviado", cli["email"]
-                        res["email"] += 1
-                    except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
-                        status, det = "erro", str(ex)[:300]
-                        res["erros"] += 1
-            elif not cli.get("whatsapp_cobranca"):
+            if canal == "email":                     # junta os títulos do mesmo cliente num único e-mail
+                por_cliente.setdefault(t["cpf_cnpj"], (cli, []))[1].append((t, etapa))
+                continue
+            if not cli.get("whatsapp_cobranca"):
                 continue                             # cliente não marcado para receber cobrança por WhatsApp
             elif not cli.get("telefone"):
                 status, det = "sem_contato", "cliente sem telefone"
@@ -487,10 +476,141 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             with db.conexao() as con:
                 con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
                             " VALUES (?,?,?,?,?,?)", (t["id"], etapa, canal, em.isoformat(), status, det))
+    for cli, itens in por_cliente.values():
+        _email_cobranca(cli, itens, em, cfg, res)
     _pos_pagamento(em, cfg, res)
     if any(res.values()):
         db.registrar("regua", f"Régua: {res}")
     return res
+
+
+def _email_cobranca(cli: dict, itens: list[tuple[dict, int]], em: date, cfg: dict, res: dict) -> None:
+    """Um e-mail por cliente: um título usa a mensagem da etapa; vários vão juntos, com todos os boletos anexados."""
+    if not cli.get("email"):
+        status, det = "sem_contato", "cliente sem e-mail"
+        res["sem_contato"] += 1
+    else:
+        try:
+            pdfs = [p for p in (_pdf_boleto(t, cfg) for t, _ in itens) if p]
+            if len(itens) == 1:
+                t, etapa = itens[0]
+                assunto, texto = mensagem(t, etapa, cfg, em)
+                html = mensagem_html(t, etapa, cfg, em)
+            else:
+                assunto, texto = mensagem_grupo(itens, cfg, em)
+                html = mensagem_grupo_html(itens, cfg, em)
+            enviar_email(cli["email"], assunto, texto, cfg, pdfs, html=html)
+            status, det = "enviado", cli["email"] + (f" (e-mail com {len(itens)} títulos)" if len(itens) > 1 else "")
+            res["email"] += 1
+        except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
+            status, det = "erro", str(ex)[:300]
+            res["erros"] += 1
+    with db.conexao() as con:
+        for t, etapa in itens:
+            con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
+                        " VALUES (?,?,?,?,?,?)", (t["id"], etapa, "email", em.isoformat(), status, det))
+
+
+def _grupo(itens: list[tuple[dict, int]], cfg: dict, em: date | None) -> tuple[list[dict], dict]:
+    cs = sorted((_conteudo(t, etapa, cfg, em) | {"_t": financeiro.enriquecer(t, em)} for t, etapa in itens),
+                key=lambda c: c["_t"]["vencimento"])
+    atraso = any(c["atraso"] for c in cs)
+    total = sum(c["_t"]["total_cent"] if c["atraso"] else c["_t"]["valor_cent"] for c in cs)
+    n = len(cs)
+    if atraso:
+        assunto = f"Honorários em aberto — {n} títulos (total atualizado {_brl(total)})"
+        abertura = (f"Constam em aberto {n} títulos de honorários em seu nome, no total de {_brl(total)} "
+                    "(vencidos com multa e juros até hoje). Seguem os dados de cada um para pagamento.")
+    else:
+        assunto = f"Boletos dos honorários — {n} títulos (total {_brl(total)})"
+        abertura = f"Seguem os {n} títulos de honorários em seu nome, no total de {_brl(total)}."
+    return cs, {"assunto": assunto, "abertura": abertura, "atraso": atraso, "total": _brl(total),
+                "nome": cs[0]["nome"], "assinatura": cs[0]["assinatura"], "whatsapp": cs[0]["whatsapp"],
+                "pdf": any(c["boleto_pdf"] for c in cs)}
+
+
+def mensagem_grupo(itens: list[tuple[dict, int]], cfg: dict | None = None, em: date | None = None) -> tuple[str, str]:
+    """(assunto, texto) de um e-mail com vários títulos do mesmo cliente."""
+    cfg = cfg or config.carregar()
+    cs, g = _grupo(itens, cfg, em)
+    linhas = [f"Olá, {g['nome']}!", "", g["abertura"]]
+    if g["atraso"]:
+        linhas.append("Se já pagou, por favor desconsidere e nos envie o comprovante.")
+    for i, c in enumerate(cs, 1):
+        linhas += ["", f"{i}) {c['referente']} — competência {c['competencia']}",
+                   f"   Vencimento {c['vencimento']} · valor {c['valor']}"
+                   + (f" · atualizado {c['total']} ({c['_t']['dias_atraso']} dia(s) em atraso)" if c["atraso"] else "")]
+        if c["nfse"]:
+            linhas.append(f"   NFS-e nº {c['nfse']}" + (f": {c['nfse_link']}" if c["nfse_link"] else ""))
+        if c["boleto_link"]:
+            linhas.append(f"   Boleto/PIX: {c['boleto_link']}")
+        if c["linha"]:
+            linhas.append(f"   Linha digitável: {c['linha']}")
+        if c["pix"]:
+            linhas.append(f"   PIX copia e cola: {c['pix']}")
+        if c["cartao"]:
+            linhas.append(f"   Cartão de crédito ({_brl(c['cartao']['valor'])}, taxa por conta de quem paga com cartão): "
+                          f"{c['cartao']['link']}")
+    linhas += ["", f"Total: {g['total']}"]
+    if g["pdf"]:
+        linhas.append("Os boletos em PDF seguem em anexo.")
+    linhas += ["", "Atenciosamente,", g["assinatura"]]
+    if g["whatsapp"]:
+        linhas.append(f"WhatsApp: {g['whatsapp']}")
+    return g["assunto"], "\n".join(linhas)
+
+
+def mensagem_grupo_html(itens: list[tuple[dict, int]], cfg: dict | None = None, em: date | None = None) -> str:
+    """Versão formatada do e-mail com vários títulos (mesmo visual do e-mail de um título)."""
+    from html import escape as e
+    cfg = cfg or config.carregar()
+    cs, g = _grupo(itens, cfg, em)
+    cor = "#b42318" if g["atraso"] else "#1f4fbf"
+    selo = "EM ATRASO" if g["atraso"] else "COBRANÇA"
+    td = 'style="padding:8px 6px;border-bottom:1px solid #e3e7ee;font-size:14px;color:#101828;vertical-align:top"'
+    th = 'style="padding:6px;border-bottom:2px solid #e3e7ee;font-size:12px;color:#667085;text-align:left"'
+    linhas = "".join(
+        f'<tr><td {td}>{e(c["referente"])}<br><span style="color:#667085;font-size:12px">competência {c["competencia"]}'
+        + (f' · NFS-e nº {e(c["nfse"])}' if c["nfse"] else "") + f'</span></td><td {td}>{c["vencimento"]}'
+        + (f'<br><span style="color:#b42318;font-size:12px">{c["_t"]["dias_atraso"]} dia(s) em atraso</span>' if c["atraso"] else "")
+        + f'</td><td {td} align="right"><b>{c["total"] if c["atraso"] else c["valor"]}</b>'
+        + (f'<br><span style="color:#667085;font-size:12px">original {c["valor"]}</span>' if c["atraso"] else "")
+        + "</td></tr>" for c in cs)
+    tabela = (f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px">'
+              f'<tr><th {th}>Referente a</th><th {th}>Vencimento</th><th {th} align="right">Valor</th></tr>{linhas}'
+              f'<tr><td colspan="2" style="padding:10px 6px;font-size:14px;font-weight:700">Total</td>'
+              f'<td align="right" style="padding:10px 6px;font-size:15px;font-weight:700">{g["total"]}</td></tr></table>')
+    caixa = lambda titulo, conteudo: (  # noqa: E731
+        f'<p style="margin:10px 0 4px;font-size:12px;color:#667085;font-weight:700">{titulo}</p>'
+        f'<div style="background:#f4f6f9;border:1px solid #e3e7ee;border-radius:8px;padding:10px;font-family:Consolas,Menlo,monospace;'
+        f'font-size:12px;color:#101828;word-break:break-all">{e(conteudo)}</div>')
+    pagar = ""
+    for i, c in enumerate(cs, 1):
+        bloco = ((f'<a href="{e(c["boleto_link"])}" style="color:#1f4fbf;font-weight:700">Pagar boleto / PIX</a> ' if c["boleto_link"] else "")
+                 + (f'· <a href="{e(c["cartao"]["link"])}" style="color:#1f4fbf">cartão de crédito ({_brl(c["cartao"]["valor"])}, taxa por conta de quem paga com cartão)</a>' if c["cartao"] else "")
+                 + (caixa("Linha digitável", c["linha"]) if c["linha"] else "") + (caixa("PIX copia e cola", c["pix"]) if c["pix"] else ""))
+        if bloco:
+            pagar += (f'<div style="margin:16px 0 0;padding-top:12px;border-top:1px dashed #e3e7ee">'
+                      f'<p style="margin:0 0 6px;font-size:14px;color:#101828"><b>{i}) {e(c["referente"])}</b> — '
+                      f'vencimento {c["vencimento"]}</p>{bloco}</div>')
+    corpo = (f'<p style="margin:0 0 4px;font-size:16px;color:#101828">Olá, <b>{e(g["nome"])}</b>!</p>'
+             f'<p style="margin:8px 0 16px;font-size:15px;line-height:1.5;color:#344054">{e(g["abertura"])}'
+             + (" Se já pagou, por favor desconsidere e nos envie o comprovante." if g["atraso"] else "") + "</p>"
+             + tabela + ('<p style="margin:6px 0 0;font-size:13px;color:#667085">Os boletos em PDF seguem em anexo.</p>' if g["pdf"] else "")
+             + pagar)
+    rodape = e(g["assinatura"]) + (f' · WhatsApp {e(g["whatsapp"])}' if g["whatsapp"] else "")
+    return (f'<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+            f'<title>{e(g["assunto"])}</title></head><body style="margin:0;padding:0;background:#f4f6f9">'
+            f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f9;padding:24px 12px">'
+            f'<tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+            f'style="max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e3e7ee;font-family:Segoe UI,Arial,sans-serif">'
+            f'<tr><td style="padding:18px 24px;border-bottom:4px solid {cor}"><span style="font-size:17px;font-weight:700;color:#101828">'
+            f'{e(cfg["empresa"]["nome"])}</span><span style="float:right;font-size:12px;font-weight:700;color:{cor};'
+            f'border:1px solid {cor};border-radius:999px;padding:3px 10px">{selo}</span></td></tr>'
+            f'<tr><td style="padding:22px 24px">{corpo}</td></tr>'
+            f'<tr><td style="padding:14px 24px;background:#f8f9fb;border-top:1px solid #e3e7ee;border-radius:0 0 12px 12px;'
+            f'font-size:13px;color:#667085">Atenciosamente,<br><b style="color:#344054">{rodape}</b></td></tr>'
+            f'</table></td></tr></table></body></html>')
 
 
 # ---------------------------------------------------------------- depois do pagamento: agradecimento e nota fiscal

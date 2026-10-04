@@ -79,3 +79,23 @@ def test_whatsapp_so_para_quem_e_marcado(base, monkeypatch):  # noqa: F811
     financeiro.baixar(tid, "2026-10-02", "200", "pix")
     cobranca.rodar_regua(date(2026, 10, 2))
     assert cobranca.fila_whatsapp() == []
+
+
+def test_titulos_do_mesmo_cliente_vao_num_unico_email(base, monkeypatch):  # noqa: F811
+    env = []
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, html="", **k:
+                        env.append((para, assunto, texto, html)))
+    ids = [financeiro.criar_titulo(CLI_A["cpf_cnpj"], v, vencimento=d, emitir_nfse=False)
+           for v, d in (("400", "2026-07-10"), ("500", "2026-08-10"), ("600", "2026-10-20"))]
+    for tid in ids:
+        financeiro.atualizar_titulo(tid, pix_copia_cola=f"000201pix{tid}")
+    r = cobranca.rodar_regua(date(2026, 10, 1))
+    assert r["email"] == 1 and len(env) == 1
+    para, assunto, texto, html = env[0]
+    assert assunto.startswith("Honorários em aberto — 3 títulos (total atualizado R$ ")
+    assert texto.index("10/07/2026") < texto.index("10/08/2026") < texto.index("20/10/2026")   # por vencimento
+    assert all(f"000201pix{tid}" in texto and f"000201pix{tid}" in html for tid in ids)
+    assert "R$ 600,00" in texto and "dia(s) em atraso" in html
+    ev = db.linhas("SELECT titulo_id, etapa, status FROM eventos_cobranca WHERE canal='email' ORDER BY titulo_id")
+    assert [e["titulo_id"] for e in ev] == ids and {e["status"] for e in ev} == {"enviado"}
+    assert cobranca.rodar_regua(date(2026, 10, 2))["email"] == 0   # nada repete

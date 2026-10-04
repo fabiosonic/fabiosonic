@@ -442,6 +442,9 @@ Tudo segue as opções de Configurações › Cobrança (ligadas por padrão) e 
 1. **Boleto ao gerar** — assim que o título tem boleto/PIX, o cliente recebe a cobrança por e-mail e, se estiver
    marcado para WhatsApp, a mensagem com o **boleto em PDF** pelo WhatsApp Web. Depois seguem os lembretes da régua.
    Título já vencido (ex.: importado) recebe uma única cobrança com o valor atualizado.
+   Vários títulos do mesmo cliente na mesma rodada vão **num único e-mail**: tabela com vencimento, dias de atraso e
+   valor atualizado de cada um, o total, os dados de pagamento (PIX/linha digitável) de cada título e todos os
+   boletos em PDF anexados.
 2. **Pagamento reconhecido** (extrato do Inter, webhook ou baixa) — mensagem de **agradecimento**.
 3. **Nota fiscal** — em seguida, a NFS-e emitida (número, link e o XML no e-mail). Se a nota é emitida após o
    pagamento, a mensagem sai assim que a emissão for concluída.
