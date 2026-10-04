@@ -228,14 +228,16 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     const r = await api('boletos/baixar', {}); certo(r.baixados + r.ja_existiam >= 1, JSON.stringify(r));
     const csv = await p.evaluate(() => fetch('/export/titulos.csv').then(x => x.text())); certo(csv.split('\n').length > 2, 'CSV vazio');
   });
-  await passo('Contas a receber: editar título (valor) refaz o boleto no banco', async () => {
-    const t = (await api('titulos', { filtro: 'a_receber' })).find(x => x.banco_id && x.nfse_status !== 'emitida');
-    certo(t, 'nenhum título em aberto com boleto e sem nota emitida');
+  await passo('Contas a receber: editar título (vencimento) refaz o boleto no banco', async () => {
+    const t = (await api('titulos', { filtro: 'a_receber' })).find(x => x.banco_id);
+    certo(t, 'nenhum título em aberto com boleto');
     await ir('receber'); await p.evaluate(id => editarTitulo(id), t.id); await espera(1200);
     certo(/Editar título/.test(await p.textContent('#modal_corpo')), 'modal de edição não abriu');
-    await p.fill('#fe [name=valor]', ((t.valor_cent + 1000) / 100).toFixed(2).replace('.', ',')); await p.click('#modal_corpo #ok'); await espera(4000);
+    const novoVenc = new Date(t.vencimento + 'T12:00:00'); novoVenc.setDate(novoVenc.getDate() + 3);
+    const iso = novoVenc.toISOString().slice(0, 10);
+    await p.fill('#fe [name=vencimento]', iso); await p.click('#modal_corpo #ok'); await espera(4000);
     const d = (await api('titulos', { filtro: 'todos' })).find(x => x.id === t.id);
-    certo(d.valor_cent === t.valor_cent + 1000, 'valor não mudou: ' + d.valor_cent);
+    certo(d.vencimento === iso, 'vencimento não mudou: ' + d.vencimento);
     certo(d.banco_id && d.banco_id !== t.banco_id, 'boleto não foi refeito: ' + d.banco_id);
     certo(/atualizado/.test(await aviso()), await aviso());
   });
