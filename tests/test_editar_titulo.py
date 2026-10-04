@@ -104,3 +104,25 @@ def test_recorrencia_alterada_aplica_aos_titulos_em_aberto(base, banco, monkeypa
     assert [x["id"] for x in tratar("contrato/abertos", {"id": k["id"]})["titulos"]] == [tid]
     assert tratar("contrato/aplicar_abertos", {"id": k["id"]}) == {"titulos": [tid], "boletos": 1}
     assert financeiro.obter_titulo(tid)["valor_cent"] == 350000 and financeiro.obter_titulo(tid)["banco_id"] == "cod-3"
+
+
+def test_painel_avisa_titulo_com_valor_diferente_da_recorrencia(base, banco, monkeypatch):  # noqa: F811
+    """Caso real (Lmg Engenharia): recorrência mudou de R$ 10.400 para R$ 4.000 e o título de out/2026 ficou com o
+    boleto antigo. O Painel avisa; acréscimos/descontos do mês não contam como diferença."""
+    from nfse_itaborai import relatorios
+    monkeypatch.setattr(financeiro, "hoje", lambda: date(2026, 10, 4))
+    k = financeiro.salvar_contrato({"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "10400", "dia_vencimento": 20, "inicio": "2026-10",
+                                    "descricao": "HONORARIOS CONTABEIS MENSAIS"})
+    with db.conexao() as con:
+        con.execute("UPDATE contratos SET confirmado=1")
+    [tid] = financeiro.gerar_titulos("2026-10", date(2026, 10, 4))
+    cobranca.preparar_pagamento(tid)
+    assert relatorios.painel(date(2026, 10, 4))["divergencias_recorrencia"] == []
+    financeiro.salvar_contrato({**db.linhas("SELECT * FROM contratos WHERE id=?", (k["id"],))[0], "valor_cent": 400000})
+    d = relatorios.painel(date(2026, 10, 4))["divergencias_recorrencia"]
+    assert d == [{"titulo_id": tid, "contrato_id": k["id"], "cliente": CLI_A["razao_social"], "competencia": "2026-10",
+                  "valor_cent": 1040000, "valor_recorrencia": 400000, "boleto": True}]
+    # acréscimo do mês: o título com honorário + acréscimo bate com a recorrência e não é aviso
+    financeiro.salvar_ajuste({"contrato_id": k["id"], "tipo": "acrescimo", "descricao": "Alteração contratual", "valor": "6400",
+                              "unico": True, "inicio": "2026-10"})
+    assert relatorios.painel(date(2026, 10, 4))["divergencias_recorrencia"] == []

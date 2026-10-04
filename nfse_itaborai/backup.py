@@ -73,7 +73,7 @@ def _arquivos(raiz: Path):
         for arq in sorted(base.rglob("*")):
             rel = arq.relative_to(raiz).as_posix()
             if not arq.is_file() or rel.startswith(("dados/backup/", "dados/whatsapp_web/")) or rel == "dados/sistema.db" \
-                    or rel.endswith(("-journal", "-wal", "-shm")):
+                    or rel.endswith(("-journal", "-wal", "-shm")) or rel == "dados/robo.lock":   # trava do robô não é dado
                 continue
             yield rel
 
@@ -334,11 +334,11 @@ def _restaurar_zip(zip_path: Path, raiz: Path, nome: str) -> dict:
         dados = raiz / "dados"
         dados.mkdir(parents=True, exist_ok=True)
         for arq in dados.iterdir():
-            if arq.is_file() and not (tmp / "dados" / arq.name).exists():
+            if arq.is_file() and arq.name != "robo.lock" and not (tmp / "dados" / arq.name).exists():
                 arq.unlink()
         for arq in sorted(tmp.rglob("*")):
             rel = arq.relative_to(tmp).as_posix()
-            if arq.is_dir() or rel in (MANIFESTO, SEGREDOS_ARQ):
+            if arq.is_dir() or rel in (MANIFESTO, SEGREDOS_ARQ, "dados/robo.lock"):   # backup antigo com a trava do robô
                 continue
             alvo = raiz / rel
             alvo.parent.mkdir(parents=True, exist_ok=True)

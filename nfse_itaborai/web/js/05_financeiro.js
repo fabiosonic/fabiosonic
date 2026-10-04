@@ -186,6 +186,13 @@ async function historicoTitulo(id) {
   const h = await api("titulo/historico", { id });
   modal(`<h2>Histórico de cobrança</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Etapa", f: e => e.etapa < 0 ? `${-e.etapa} dia(s) antes` : e.etapa == 0 ? "no vencimento" : `${e.etapa} dia(s) após` }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }], h, "Nenhuma cobrança enviada ainda.")}<p><button class="btn sec" onclick="fechar()">Fechar</button></p>`);
 }
+async function aplicarRecorrencia(cid) {
+  const ab = await api("contrato/abertos", { id: cid }); if (!ab.titulos.length) return aviso("Nada a ajustar.");
+  if (!confirm(ab.titulos.map(t => `${t.cliente_nome} · ${mes(t.competencia)}: ${brl(t.valor_cent)} → ${brl(t.valor_recorrencia)}`).join("\n")
+    + "\n\nAplicar o valor da recorrência? O boleto antigo é cancelado no banco e um novo é registrado com o valor certo.")) return;
+  const r = await api("contrato/aplicar_abertos", { id: cid });
+  aviso(`${r.titulos.length} título(s) atualizado(s)${r.boletos ? `, ${r.boletos} boleto(s) refeito(s)` : ""} ✔`, 8000); ir(PAG);
+}
 async function editarTitulo(id) {
   const t = (await api("titulos", { filtro: "todos" })).find(x => x.id == id); if (!t) return aviso("Título não encontrado.");
   const temBoleto = !!t.banco_id, temPix = !!t.pix_copia_cola && !temBoleto;
@@ -446,8 +453,17 @@ async function extratoConta() {
     ${statTile({ rot: "Resultado do período", icone: "banco", valor: `<span class="${e.resultado < 0 ? "neg" : ""}">${brl(e.resultado)}</span>` })}${statTile({ rot: "Pendentes", icone: "alerta", valor: e.pendentes, estado: e.pendentes ? estadoSelo("atencao", "conciliar") : estadoSelo("bom", "tudo certo") })}</section>`
     + tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) },
       { t: "Entrada", n: 1, f: m => m.valor_cent > 0 ? num(m.valor_cent) : "" }, { t: "Saída", n: 1, f: m => m.valor_cent < 0 ? `<span class="neg">${num(-m.valor_cent)}</span>` : "" },
-      { t: "No sistema", fsel: 1, fv: m => m.situacao == "titulo" ? "Recebimento de título" : m.situacao == "despesa" ? "Despesa" : m.detalhe, f: m => `<span class="selo ${cls[m.situacao]}">${esc(m.detalhe)}</span>${m.situacao == "classificado" ? ` <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Volta para os não conciliados">Desfazer</button>` : ""}` }],
+      { t: "No sistema", fsel: 1, fv: m => m.situacao == "titulo" ? "Recebimento de título" : m.despesa_auto && m.categoria == "Outras" ? "Despesa a revisar (Outras)" : m.situacao == "despesa" ? "Despesa" : m.detalhe,
+        f: m => m.despesa_auto ? `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap"><span class="selo ${m.categoria == "Outras" ? "alerta" : "neutro"}">Despesa automática</span>
+            <select class="recat" data-m="${m.id}" title="Categoria da despesa (vale também para os próximos desta contraparte)">${[...new Set([m.categoria, ...e.categorias])].map(c => `<option ${c == m.categoria ? "selected" : ""}>${esc(c)}</option>`).join("")}<option value="__nova">Outra categoria…</option></select>
+            <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Cancela a despesa automática e devolve o lançamento para os não conciliados">Desfazer</button></div>`
+          : `<span class="selo ${cls[m.situacao]}">${esc(m.detalhe)}</span>${m.situacao == "classificado" ? ` <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Volta para os não conciliados">Desfazer</button>` : ""}` }],
       vis, "Nenhum lançamento neste período.", { filtros: "conc_extrato", soma: m => m.valor_cent });
+  if (e.a_revisar) box.insertAdjacentHTML("afterbegin", `<div class="msg">${e.a_revisar} saída(s) deste período viraram despesa automática na categoria <b>Outras</b>. Escolha a categoria certa na coluna “No sistema”: ela vale para as outras da mesma contraparte e para as próximas.</div>`);
+  $$(".recat", box).forEach(s => s.onchange = async () => { let c = s.value;
+    if (c == "__nova") { c = prompt("Nome da categoria:"); if (!c) { extratoConta(); return; } }
+    const r = await api("conciliacao/recategorizar", { movimento: +s.dataset.m, categoria: c });
+    aviso(`Categoria “${c}” aplicada${r.aplicados > 1 ? ` a ${r.aplicados} lançamentos da mesma contraparte` : ""} ✔ Os próximos já entram assim.`, 6000); extratoConta(); });
 }
 async function classificarMov(id, tipo, categoria = "") {
   const r = await api("conciliacao/classificar", { movimento: id, tipo, categoria });

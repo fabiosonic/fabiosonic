@@ -135,3 +135,20 @@ def test_backup_nao_falha_se_o_windows_segurar_o_arquivo_temporario(monkeypatch,
     (raiz / ".env").write_text("ITABORAI_CNPJ=24875410000144\n", encoding="utf-8")
     info = bk.criar("automatico", raiz)
     assert info["nome"].endswith(".zip")
+
+
+def test_trava_do_robo_nao_entra_no_backup_nem_volta_na_restauracao(multi):  # noqa: F811
+    trava = multi / "dados" / "robo.lock"
+    trava.write_text("1234", encoding="utf-8")
+    b = tratar("backup/criar", {})
+    with zipfile.ZipFile(backup.pasta_backups() / b["nome"]) as z:
+        assert "dados/robo.lock" not in z.namelist()
+    # backup antigo (de versão anterior) que trouxe a trava: a restauração não a recria
+    antigo = backup.pasta_backups() / "backup_antigo_com_trava.zip"
+    with zipfile.ZipFile(backup.pasta_backups() / b["nome"]) as z, zipfile.ZipFile(antigo, "w") as w:
+        for n in z.namelist():
+            w.writestr(n, z.read(n))
+        w.writestr("dados/robo.lock", "999")
+    trava.unlink()
+    tratar("backup/restaurar", {"nome": antigo.name})
+    assert not trava.exists()

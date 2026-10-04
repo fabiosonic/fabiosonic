@@ -150,7 +150,7 @@ def conciliar() -> dict:
             if len(desp) == 1:
                 financeiro.pagar_despesa(desp[0]["id"], m["data"])
                 did = desp[0]["id"]
-            elif not desp and config.carregar()["automacao"].get("despesas_do_extrato"):
+            elif not desp and config.carregar()["automacao"].get("despesas_do_extrato") and not m.get("manual"):
                 did = financeiro.salvar_despesa({"descricao": (m["descricao"] or "Débito em conta")[:120],
                                                  "fornecedor": "extrato", "categoria": categoria(m["descricao"]),
                                                  "valor": financeiro.reais(-m["valor_cent"]), "vencimento": m["data"]})
@@ -217,6 +217,13 @@ def classificar(mov_id: int, tipo: str, iguais: bool = True, categoria_desp: str
         with db.conexao() as con:
             con.execute("UPDATE movimentos SET despesa_id=?, classificacao='' WHERE id=?", (did, mov_id))
         return {"ok": True, "despesa": did, "aplicados": 1}
+    if not tipo and m["despesa_id"]:
+        d = db.linhas("SELECT fornecedor FROM despesas WHERE id=?", (m["despesa_id"],))
+        if d and d[0]["fornecedor"] == "extrato":          # despesa criada pelo extrato: desfazer cancela e volta a pendente
+            financeiro.excluir_despesa(m["despesa_id"])
+            with db.conexao() as con:
+                con.execute("UPDATE movimentos SET despesa_id=NULL, classificacao='', manual=1 WHERE id=?", (mov_id,))
+            return {"ok": True, "aplicados": 1}
     alvo = [m]
     if iguais and tipo:
         cp = _contraparte(m["descricao"])
@@ -229,6 +236,37 @@ def classificar(mov_id: int, tipo: str, iguais: bool = True, categoria_desp: str
     return {"ok": True, "aplicados": len(alvo)}
 
 
+def recategorizar(mov_id: int, categoria_nova: str, iguais: bool = True, lembrar: bool = True) -> dict:
+    """Muda a categoria da despesa que o extrato lançou sozinho. Com 'iguais', as outras despesas automáticas da mesma
+    contraparte recebem a mesma categoria; com 'lembrar', a contraparte vira regra e os próximos já entram certos."""
+    cat = (categoria_nova or "").strip()[:60]
+    if not cat:
+        raise ValueError("Informe a categoria.")
+    m = db.linhas("SELECT m.*, d.fornecedor FROM movimentos m JOIN despesas d ON d.id=m.despesa_id WHERE m.id=?", (mov_id,))
+    if not m:
+        raise ValueError("Este lançamento não é uma despesa.")
+    m = m[0]
+    alvo = [m]
+    cp = _contraparte(m["descricao"])
+    if iguais and cp:
+        alvo += [x for x in db.linhas("SELECT m.* FROM movimentos m JOIN despesas d ON d.id=m.despesa_id "
+                                      "WHERE d.fornecedor='extrato' AND d.status!='cancelado' AND m.id!=?", (mov_id,))
+                 if _contraparte(x["descricao"]) == cp]
+    with db.conexao() as con:
+        for x in alvo:
+            con.execute("UPDATE despesas SET categoria=? WHERE id=?", (cat, x["despesa_id"]))
+    if lembrar and cp and len(cp) >= 5 and m["fornecedor"] == "extrato":
+        regras = [r for r in config.carregar()["regras_despesa"] if _norm(r[0]) != cp]
+        config.salvar({"regras_despesa": [[cp, cat]] + regras})
+    return {"ok": True, "aplicados": len(alvo), "regra": cp if lembrar else ""}
+
+
+def categorias_despesa() -> list[str]:
+    usadas = {r["categoria"] for r in db.linhas("SELECT DISTINCT categoria FROM despesas WHERE categoria!=''")}
+    padrao = {c for _, c in config.carregar()["regras_despesa"]} | {"Pessoal", "Ocupação", "Serviços", "Outras"}
+    return sorted(usadas | padrao, key=str.lower)
+
+
 def extrato(inicio: str = "", fim: str = "") -> dict:
     """Todos os lançamentos do extrato no período (entradas e saídas), com o que cada um virou no sistema."""
     sql, p = "SELECT * FROM movimentos WHERE 1=1", []
@@ -238,7 +276,7 @@ def extrato(inicio: str = "", fim: str = "") -> dict:
         sql += " AND data<=?"; p.append(fim)
     movs = db.linhas(sql + " ORDER BY data DESC, id DESC", p)
     tits = {t["id"]: t for t in db.linhas("SELECT id, cliente_nome, competencia FROM titulos")}
-    desps = {d["id"]: d for d in db.linhas("SELECT id, descricao, categoria FROM despesas")}
+    desps = {d["id"]: d for d in db.linhas("SELECT id, descricao, categoria, fornecedor FROM despesas")}
     for m in movs:
         if m["titulo_id"] and m["titulo_id"] in tits:
             t = tits[m["titulo_id"]]
@@ -246,6 +284,7 @@ def extrato(inicio: str = "", fim: str = "") -> dict:
         elif m["despesa_id"] and m["despesa_id"] in desps:
             d = desps[m["despesa_id"]]
             m["situacao"], m["detalhe"] = "despesa", f"Despesa: {d['descricao']} ({d['categoria']})"
+            m["categoria"], m["despesa_auto"] = d["categoria"], d["fornecedor"] == "extrato"
         elif m.get("classificacao"):
             m["situacao"], m["detalhe"] = "classificado", CLASSES.get(m["classificacao"], m["classificacao"])
         else:
@@ -253,7 +292,9 @@ def extrato(inicio: str = "", fim: str = "") -> dict:
     ent = sum(m["valor_cent"] for m in movs if m["valor_cent"] > 0)
     sai = -sum(m["valor_cent"] for m in movs if m["valor_cent"] < 0)
     return {"movimentos": movs, "entradas": ent, "saidas": sai, "resultado": ent - sai,
-            "pendentes": sum(1 for m in movs if m["situacao"] == "pendente"), "fontes": resumo_fontes()}
+            "pendentes": sum(1 for m in movs if m["situacao"] == "pendente"), "fontes": resumo_fontes(),
+            "a_revisar": sum(1 for m in movs if m.get("despesa_auto") and m.get("categoria") == "Outras"),
+            "categorias": categorias_despesa()}
 
 
 def resumo_fontes() -> dict:

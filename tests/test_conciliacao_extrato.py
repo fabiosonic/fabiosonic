@@ -52,3 +52,29 @@ def test_transferencia_que_virou_despesa_e_corrigida(base):  # noqa: F811
     m = db.linhas("SELECT * FROM movimentos")[0]
     assert m["despesa_id"] is None and m["classificacao"] == "transferencia"
     assert db.linhas("SELECT status FROM despesas WHERE id=?", (did,))[0]["status"] == "cancelado"
+
+
+def test_despesa_automatica_do_extrato_pode_ser_recategorizada_e_desfeita(base):  # noqa: F811
+    """Caso real (extrato Inter 04/09 a 04/10/2026): as saídas viraram despesa 'Outras' sozinhas e não apareciam para
+    conciliar. Agora o extrato mostra quais revisar, a categoria vale para a contraparte e vira regra; e dá para desfazer."""
+    config.salvar({"empresa": {"nome": "MORAES & OLIVEIRA CONTABILIDADE"}, "automacao": {"despesas_do_extrato": True}})
+    movs = [{"data": "2026-09-18", "valor_cent": -65000, "descricao": "Pix enviado Miguel Dos Santos Silva Jose", "fitid": "inter:a"},
+            {"data": "2026-09-30", "valor_cent": -335000, "descricao": "Pix enviado Miguel Dos Santos Silva Jose", "fitid": "inter:b"},
+            {"data": "2026-09-21", "valor_cent": -70000, "descricao": "Pix enviado Luna Francisco Figueira Faria", "fitid": "inter:c"}]
+    r = conciliacao.importar("", movs)
+    assert r["despesas"] == 3 or len(db.linhas("SELECT id FROM despesas WHERE fornecedor='extrato'")) == 3
+    e = conciliacao.extrato("2026-09-01", "2026-09-30")
+    assert e["a_revisar"] == 3 and all(m["despesa_auto"] and m["categoria"] == "Outras" for m in e["movimentos"])
+    assert "Pessoal" in e["categorias"]
+    miguel = next(m for m in e["movimentos"] if m["fitid"] == "inter:a")
+    x = conciliacao.recategorizar(miguel["id"], "Pessoal")
+    assert x["aplicados"] == 2 and x["regra"] == "MIGUEL DOS SANTOS SILVA JOSE"
+    cats = {m["fitid"]: m["categoria"] for m in conciliacao.extrato("2026-09-01", "2026-09-30")["movimentos"]}
+    assert cats == {"inter:a": "Pessoal", "inter:b": "Pessoal", "inter:c": "Outras"}
+    assert conciliacao.categoria("Pix enviado Miguel Dos Santos Silva Jose") == "Pessoal"   # próximos já entram certos
+    luna = next(m for m in e["movimentos"] if m["fitid"] == "inter:c")
+    conciliacao.classificar(luna["id"], "")                                     # desfazer: volta a pendente
+    assert [m["descricao"] for m in conciliacao.nao_conciliados()] == ["Pix enviado Luna Francisco Figueira Faria"]
+    assert db.linhas("SELECT status FROM despesas WHERE id=?", (luna["despesa_id"],))[0]["status"] == "cancelado"
+    conciliacao.conciliar()                                                     # o robô não recria a despesa desfeita
+    assert [m["descricao"] for m in conciliacao.nao_conciliados()] == ["Pix enviado Luna Francisco Figueira Faria"]

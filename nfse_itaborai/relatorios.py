@@ -109,6 +109,10 @@ def painel(em: date | None = None) -> dict:
         "clientes_juridico": len({t["cpf_cnpj"] for t in juridicos}),
         "inadimplencia_pct": round(inadimplente / vencido_total * 100, 1) if vencido_total else 0.0,
         "mrr": mrr, "contratos_ativos": len(contratos), "contratos_a_confirmar": a_confirmar,
+        "divergencias_recorrencia": [{"titulo_id": t["id"], "contrato_id": t["contrato_id"], "cliente": t["cliente_nome"],
+                                      "competencia": t["competencia"], "valor_cent": t["valor_cent"],
+                                      "valor_recorrencia": t["valor_recorrencia"], "boleto": bool(t["banco_id"])}
+                                     for t in financeiro.divergencias_recorrencia()],
         "parciais_pendentes": db.linhas("SELECT COUNT(*) n FROM titulos WHERE parcial_status='pendente'")[0]["n"],
         "ticket_medio": mrr // len(contratos) if contratos else 0,
         "a_pagar": sum(d["valor_cent"] for d in desp_abertas),

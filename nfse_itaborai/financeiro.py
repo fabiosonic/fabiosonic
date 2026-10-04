@@ -722,13 +722,24 @@ def editar_titulo(tid: int, valor=None, vencimento: str = "", competencia: str =
 
 
 def titulos_abertos_do_contrato(cid: int, a_partir: str = "") -> list[dict]:
-    """Títulos em aberto já gerados pela recorrência (da competência indicada em diante) cujo valor difere do contrato."""
+    """Títulos em aberto já gerados pela recorrência (da competência indicada em diante) cujo valor difere do que a
+    recorrência daria hoje para aquele mês (honorário + acréscimos − descontos). Cada um vem com 'valor_recorrencia'."""
     k = db.linhas("SELECT * FROM contratos WHERE id=?", (cid,))
     if not k:
         return []
-    return [t for t in db.linhas("SELECT * FROM titulos WHERE contrato_id=? AND status='aberto' AND competencia>=? "
-                                 "ORDER BY competencia", (cid, a_partir or competencia_de(hoje())))
-            if t["valor_cent"] != k[0]["valor_cent"] and t["nfse_status"] != "emitida"]
+    out = []
+    for t in db.linhas("SELECT * FROM titulos WHERE contrato_id=? AND status='aberto' AND competencia>=? "
+                       "AND nfse_status!='emitida' AND COALESCE(parcial_status,'')='' AND COALESCE(juridico_em,'')='' "
+                       "ORDER BY competencia", (cid, a_partir or competencia_de(hoje()))):
+        valor, desc = valor_do_mes(k[0], t["competencia"])
+        if valor > 0 and valor != t["valor_cent"]:
+            out.append(t | {"valor_recorrencia": valor, "descricao_recorrencia": desc})
+    return out
+
+
+def divergencias_recorrencia() -> list[dict]:
+    """Para o Painel: títulos em aberto (deste mês em diante) com valor diferente da recorrência atual."""
+    return [t for k in db.linhas("SELECT id FROM contratos WHERE ativo=1") for t in titulos_abertos_do_contrato(k["id"])]
 
 
 def aplicar_contrato_aos_titulos(cid: int, a_partir: str = "") -> dict:
@@ -740,7 +751,8 @@ def aplicar_contrato_aos_titulos(cid: int, a_partir: str = "") -> dict:
         raise ValueError("Recorrência não encontrada.")
     feitos, boletos = [], 0
     for t in titulos_abertos_do_contrato(cid, a_partir):
-        editar_titulo(t["id"], valor=k[0]["valor_cent"] / 100)
+        editar_titulo(t["id"], valor=f"{t['valor_recorrencia'] / 100:.2f}",
+                      descricao=t["descricao_recorrencia"] if t["descricao"].startswith(k[0]["descricao"][:20]) else "")
         r = cobranca.refazer_cobranca(t["id"], "Valor da recorrencia alterado")
         boletos += 1 if r.get("banco_id") else 0
         feitos.append(t["id"])

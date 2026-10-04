@@ -163,7 +163,8 @@ MIGRACOES = {
                 # cobrança jurídica: data em que o título foi enviado ao jurídico (suspende e-mails/WhatsApp) e observação
                 "juridico_em": "TEXT DEFAULT ''", "juridico_obs": "TEXT DEFAULT ''"},
     # lançamento do extrato que não é título nem despesa: transferencia | aporte | outra_receita | outra_saida
-    "movimentos": {"classificacao": "TEXT DEFAULT ''"},
+    "movimentos": {"classificacao": "TEXT DEFAULT ''",
+                   "manual": "INTEGER DEFAULT 0"},     # 1 = o escritório desfez a despesa automática: o robô não a recria
 }
 
 

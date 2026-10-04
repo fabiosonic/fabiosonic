@@ -565,6 +565,9 @@ corretos; a próxima cobrança já vai com ele. PIX próprio é regerado; cobran
 Título com NFS-e emitida não muda de valor nem de competência (cancele ou substitua a nota antes, ou use o desconto
 na baixa); o vencimento pode mudar.
 
+O **Painel** avisa quando um título em aberto (deste mês em diante) está com valor diferente do que a recorrência dá
+hoje (honorário + acréscimos − descontos do mês), com o atalho "aplicar o valor da recorrência e refazer o boleto".
+
 Ao alterar o **valor de uma recorrência** (aba Recorrência, em lote ou pela janela do cliente), o sistema pergunta se
 o novo valor vai também aos títulos em aberto já gerados deste mês em diante: cada um é editado e tem o boleto
 refeito. Competências passadas e títulos com NFS-e emitida ficam como estão.
@@ -597,6 +600,11 @@ O extrato do Inter pela API traz **todos** os lançamentos da conta (Pix enviado
 As saídas viram despesas pagas e as entradas baixam os títulos sozinhas, por isso em "não conciliados" só fica o
 que o sistema não reconheceu. O cartão do Inter mostra quantos lançamentos já vieram (entradas e saídas, período), e
 o "Extrato da conta" abre no último mês com movimento quando o mês atual ainda não tem lançamentos.
+
+Saídas que viraram **despesa automática** aparecem no Extrato da conta com a categoria para escolher (as que ficaram
+em "Outras" são destacadas para revisar). A categoria escolhida vale para as outras despesas da mesma contraparte e
+vira regra para as próximas. **Desfazer** cancela a despesa automática e devolve o lançamento para "não conciliados";
+o robô não a recria.
 
 ### E-mails enviados pelo sistema
 
