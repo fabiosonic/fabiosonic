@@ -124,6 +124,7 @@ PADRAO = {
         # lancar = só lança o contas a receber, sem NFS-e | nada = não emite e não lança (recorrência)
         "nfse_quando": "",
         "nfse_apos_pagamento": False,  # legado: equivale a nfse_quando = "baixa"
+        "migrado_regra_baixa": True,   # configuração já gravada nesta versão: não muda a regra escolhida
     },
     # senha que protege os backups (vazia = backup .zip comum); guardada protegida, como as demais senhas
     "seguranca": {"backup_senha": ""},
@@ -187,6 +188,12 @@ def carregar() -> dict:
                 cob.pop(k)
             cob["migrado_inter"] = True
             salvo["cobranca"] = cob
+            arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
+        # v3.4.4 (pedido do escritório): a regra geral passa a ser "emitir a NFS-e quando o cliente pagar".
+        # Muda uma única vez; se depois for alterada na tela, a escolha é mantida.
+        emi = salvo.setdefault("emissao", {})
+        if not emi.get("migrado_regra_baixa"):
+            emi.update(nfse_quando="baixa", nfse_apos_pagamento=True, migrado_regra_baixa=True)
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
         # XML das notas: passa a ser lido da pasta do sistema (IMPORTAR XML), não mais de Downloads
         if "downloads" in str(salvo.get("pastas", {}).get("xml_nfse", "")).lower():

@@ -465,6 +465,10 @@ cartão ou **baixa manual** (botão *Baixar* em Contas a receber): se a NFS-e do
 "Emitir na baixa") ou ainda não saiu, ela é emitida na hora, em produção, e a tela mostra o número da nota (ou o
 motivo, se a prefeitura recusar — o robô tenta de novo). Em homologação a nota fica pendente.
 
+Desde a versão 3.4.4 a **regra geral** é **"Emitir quando o cliente pagar"**: ao atualizar, as configurações de cada
+empresa mudam uma única vez para essa regra (e as empresas cadastradas depois já nascem com ela). Clientes com regra
+própria na Recorrência continuam com a deles. A regra pode ser trocada a qualquer momento em Configurações.
+
 O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR Code do PIX. Por isso, quando o PDF vai
 junto (anexo no e-mail ou documento no WhatsApp automático), o PIX copia e cola não é repetido no texto. Ele continua
 quando não há PDF (cobrança só PIX, link manual de WhatsApp) e pode ser religado em Configurações › Cobrança.
