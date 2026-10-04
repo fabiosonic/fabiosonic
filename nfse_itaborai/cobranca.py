@@ -97,6 +97,35 @@ def cancelar_boleto(t: dict, motivo: str = "", cfg: dict | None = None) -> None:
         db.registrar("boleto", f"Cancelamento do boleto do título {t['id']}: {ex}")
 
 
+def refazer_cobranca(tid: int, motivo: str = "Titulo alterado", cfg: dict | None = None) -> dict:
+    """Título editado (valor/vencimento): cancela no banco o boleto antigo — o cliente não pode pagar o valor errado —
+    e registra um novo com os dados atuais (PIX próprio é regerado; cobrança 'dispensada' continua sem boleto).
+    O link de cartão antigo é descartado; um novo é oferecido com o valor certo."""
+    cfg = cfg or config.carregar()
+    t = financeiro.obter_titulo(tid)
+    if t["status"] != "aberto":
+        return t
+    if t.get("banco_id"):
+        cancelar_boleto(t, motivo, cfg)
+    if t.get("boleto_pdf"):
+        try:
+            Path(t["boleto_pdf"]).unlink(missing_ok=True)      # PDF do boleto antigo não pode ser reenviado
+        except OSError:
+            pass
+    financeiro.atualizar_titulo(tid, banco_id="", nosso_numero="", linha_digitavel="", pix_copia_cola="", boleto_pdf="",
+                                boleto_valor_cent=0, boleto_vencimento="", cobranca_link="",
+                                cartao_id="", cartao_link="", cartao_total_cent=0, cartao_parcelas=0, cartao_status="")
+    if t.get("boleto_situacao") in ("expirado", "cancelado"):
+        financeiro.atualizar_titulo(tid, boleto_situacao="")    # boleto antigo foi embora; o novo sai normalmente
+    if t.get("cobrar", 1):
+        try:
+            preparar_pagamento(tid, cfg)
+        except Exception as ex:  # noqa: BLE001 — o motivo fica no título e o robô tenta de novo
+            financeiro.atualizar_titulo(tid, cobranca_erro=str(ex)[:300])
+            db.registrar("boleto", f"Título {tid}: cobrança não refeita ({ex})")
+    return financeiro.obter_titulo(tid)
+
+
 # ---------------------------------------------------------------- PDF dos boletos
 
 def pasta_boletos(cfg: dict | None = None) -> Path:

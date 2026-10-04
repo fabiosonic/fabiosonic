@@ -258,10 +258,11 @@ def lista_recorrencia() -> list[dict]:
     return sorted(linhas, key=lambda x: (not x["repetir"], x["cliente_nome"].upper()))
 
 
-def salvar_recorrencia(linhas: list[dict]) -> dict:
-    """Grava as linhas alteradas na aba Recorrência. 'repetir' = entra na cobrança mensal (confirmado)."""
+def salvar_recorrencia(linhas: list[dict], aplicar_abertos: bool = False) -> dict:
+    """Grava as linhas alteradas na aba Recorrência. 'repetir' = entra na cobrança mensal (confirmado).
+    aplicar_abertos: o novo valor vai também aos títulos em aberto já gerados deste mês em diante (boleto refeito)."""
     atuais = {k["id"]: k for k in db.linhas("SELECT * FROM contratos")}
-    salvos = 0
+    salvos, ajustados = 0, []
     for l in linhas:
         valor = l.get("valor_cent") if "valor_cent" in l else cent(l.get("valor") or 0)
         dados = {"servico_id": l.get("servico_id") or "", "nfse_quando": l.get("nfse_quando") or "",
@@ -282,12 +283,14 @@ def salvar_recorrencia(linhas: list[dict]) -> dict:
                 dados["inicio"] = competencia_de(hoje())   # confirmou agora: cobra a partir deste mês
             salvar_contrato({**k, "descricao": k["descricao"] if k.get("servico_id") == dados["servico_id"] else "",
                              **dados, "id": k["id"]})
+            if aplicar_abertos and valor != k["valor_cent"]:
+                ajustados += aplicar_contrato_aos_titulos(k["id"])["titulos"]
         elif valor > 0:
             salvar_contrato({"cpf_cnpj": l["cpf_cnpj"], **dados, "inicio": dados.get("inicio") or competencia_de(hoje())})
         else:
             continue
         salvos += 1
-    return {"salvos": salvos}
+    return {"salvos": salvos, "titulos_ajustados": ajustados}
 
 
 # ---------------------------------------------------------------- títulos (contas a receber)
@@ -675,6 +678,73 @@ def estornar(tid: int) -> None:
                      nota_cent=t["nota_cent"] if not t.get("parcial_status") else 0)
     with db.conexao() as con:
         con.execute("UPDATE movimentos SET titulo_id=NULL WHERE titulo_id=?", (tid,))
+
+
+def editar_titulo(tid: int, valor=None, vencimento: str = "", competencia: str = "", descricao: str = "") -> dict:
+    """Edita um título em aberto (valor, vencimento, competência, descrição). Devolve o que mudou; a cobrança
+    (boleto/PIX) é refeita por cobranca.refazer_cobranca quando valor ou vencimento mudam."""
+    t = obter_titulo(tid)
+    if not t:
+        raise ValueError("Título não encontrado.")
+    if t["status"] != "aberto":
+        raise ValueError("Só título em aberto pode ser editado (pago: faça o estorno; cancelado: crie outro).")
+    novo = {}
+    if valor not in (None, ""):
+        v = cent(valor)
+        if v <= 0:
+            raise ValueError("Valor deve ser maior que zero.")
+        if v != t["valor_cent"]:
+            if t["nfse_status"] == "emitida":
+                raise ValueError(f"A NFS-e deste título já foi emitida com R$ {_br(t['valor_cent'])}: para mudar o valor, "
+                                 "cancele ou substitua a nota primeiro (ou conceda a diferença como desconto na baixa).")
+            novo["valor_cent"] = v
+    if vencimento and vencimento != t["vencimento"]:
+        try:
+            date.fromisoformat(vencimento)
+        except ValueError:
+            raise ValueError(f"Vencimento inválido: {vencimento}") from None
+        novo["vencimento"] = vencimento
+    if competencia and competencia != t["competencia"]:
+        if not re.fullmatch(r"\d{4}-\d{2}", competencia):
+            raise ValueError(f"Competência inválida: {competencia}")
+        if t["nfse_status"] == "emitida":
+            raise ValueError("A NFS-e já foi emitida nesta competência: a competência do título não pode mudar.")
+        novo["competencia"] = competencia
+    if descricao and descricao.strip()[:190] != t["descricao"]:
+        novo["descricao"] = descricao.strip()[:190]
+    if not novo:
+        return {"titulo": t, "mudou": [], "refazer": False}
+    atualizar_titulo(tid, **novo)
+    antes = {k: t[k] for k in novo}
+    db.registrar("titulo", f"Título {tid} ({t['cliente_nome']}) editado: " + "; ".join(
+        f"{k} {_br(antes[k]) if k == 'valor_cent' else antes[k]} -> {_br(v) if k == 'valor_cent' else v}" for k, v in novo.items()))
+    return {"titulo": obter_titulo(tid), "mudou": list(novo), "refazer": bool({"valor_cent", "vencimento"} & set(novo))}
+
+
+def titulos_abertos_do_contrato(cid: int, a_partir: str = "") -> list[dict]:
+    """Títulos em aberto já gerados pela recorrência (da competência indicada em diante) cujo valor difere do contrato."""
+    k = db.linhas("SELECT * FROM contratos WHERE id=?", (cid,))
+    if not k:
+        return []
+    return [t for t in db.linhas("SELECT * FROM titulos WHERE contrato_id=? AND status='aberto' AND competencia>=? "
+                                 "ORDER BY competencia", (cid, a_partir or competencia_de(hoje())))
+            if t["valor_cent"] != k[0]["valor_cent"] and t["nfse_status"] != "emitida"]
+
+
+def aplicar_contrato_aos_titulos(cid: int, a_partir: str = "") -> dict:
+    """Recorrência alterada: leva o novo valor aos títulos em aberto já gerados (deste mês em diante) e refaz o
+    boleto/PIX de cada um. Títulos com NFS-e emitida ficam como estão (a nota já saiu com o valor antigo)."""
+    from . import cobranca
+    k = db.linhas("SELECT * FROM contratos WHERE id=?", (cid,))
+    if not k:
+        raise ValueError("Recorrência não encontrada.")
+    feitos, boletos = [], 0
+    for t in titulos_abertos_do_contrato(cid, a_partir):
+        editar_titulo(t["id"], valor=k[0]["valor_cent"] / 100)
+        r = cobranca.refazer_cobranca(t["id"], "Valor da recorrencia alterado")
+        boletos += 1 if r.get("banco_id") else 0
+        feitos.append(t["id"])
+    return {"titulos": feitos, "boletos": boletos}
 
 
 def cancelar_titulo(tid: int, motivo: str = "") -> None:

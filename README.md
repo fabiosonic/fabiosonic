@@ -548,6 +548,19 @@ pagar**; título já lançado não repete. A conferência mostra a situação de
 cobrança, **fora da cobrança**, pago) e o lançamento **recoloca em cobrança** os que estavam fora — reimportar o
 relatório garante que toda a inadimplência esteja lançada e sendo cobrada.
 
+### Editar título e refazer o boleto
+
+Em **Contas a receber › Mais › Editar título** mudam valor, vencimento, competência e descrição de um título em
+aberto. Se o valor ou o vencimento mudar e o título já tiver boleto, o boleto antigo é **cancelado no Inter** (o
+cliente não pode pagar o valor errado), o PDF antigo é descartado e um boleto novo é registrado com os dados
+corretos; a próxima cobrança já vai com ele. PIX próprio é regerado; cobrança "sem boleto" continua sem boleto.
+Título com NFS-e emitida não muda de valor nem de competência (cancele ou substitua a nota antes, ou use o desconto
+na baixa); o vencimento pode mudar.
+
+Ao alterar o **valor de uma recorrência** (aba Recorrência, em lote ou pela janela do cliente), o sistema pergunta se
+o novo valor vai também aos títulos em aberto já gerados deste mês em diante: cada um é editado e tem o boleto
+refeito. Competências passadas e títulos com NFS-e emitida ficam como estão.
+
 ### Cobrança jurídica (aba Jurídico)
 
 Quando o escritório decide levar um cliente ao jurídico, em **Contas a receber › Mais › Enviar para o jurídico**

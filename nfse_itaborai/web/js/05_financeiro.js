@@ -60,6 +60,7 @@ function acoesTitulo(t) {
     if (["pendente", "erro", "teste"].includes(t.nfse_status)) mais.push(it(`${ic("nota")}Emitir NFS-e`, `emitirTitulo(${t.id})`));
   }
   if (t.status == "pago") prin.push(`<button class="btn min sec" onclick="estornar(${t.id})">Estornar</button>`);
+  if (t.status == "aberto") mais.unshift(it(`${ic("editar")}Editar título (valor, vencimento…)`, `editarTitulo(${t.id})`));
   mais.push(it(`${ic("relogio")}Histórico`, `historicoTitulo(${t.id})`));
   if (t.status == "aberto") mais.push(it(`${ic("x")}Cancelar título`, `cancelarTitulo(${t.id},'${t.nfse_status}')`).replace("<button", '<button class="perigo"'));
   return `<div class="acoes-linha">${prin.join("")}<details class="menu-acoes"><summary class="btn min sec" title="Mais ações">Mais</summary><div class="pop">${mais.join("")}</div></details></div>`;
@@ -184,6 +185,21 @@ async function historicoTitulo(id) {
   const h = await api("titulo/historico", { id });
   modal(`<h2>Histórico de cobrança</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Etapa", f: e => e.etapa < 0 ? `${-e.etapa} dia(s) antes` : e.etapa == 0 ? "no vencimento" : `${e.etapa} dia(s) após` }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }], h, "Nenhuma cobrança enviada ainda.")}<p><button class="btn sec" onclick="fechar()">Fechar</button></p>`);
 }
+async function editarTitulo(id) {
+  const t = (await api("titulos", { filtro: "todos" })).find(x => x.id == id); if (!t) return aviso("Título não encontrado.");
+  const temBoleto = !!t.banco_id, temPix = !!t.pix_copia_cola && !temBoleto;
+  modal(`<h2>Editar título</h2><p class="sub">${esc(t.cliente_nome)} · ${esc(frase(t.descricao))}</p><div class="campos" id="fe">
+    <label>Valor (R$)<input name="valor" value="${num(t.valor_cent)}" ${t.nfse_status == "emitida" ? 'disabled title="NFS-e já emitida com este valor"' : ""}></label>
+    <label>Vencimento<input type="date" name="vencimento" value="${t.vencimento}"></label>
+    <label>Competência<input type="month" name="competencia" value="${t.competencia}" ${t.nfse_status == "emitida" ? "disabled" : ""}></label>
+    <label class="inteiro">Descrição<input name="descricao" value="${esc(t.descricao)}"></label></div>
+    ${t.nfse_status == "emitida" ? '<p class="sub">A NFS-e deste título já foi emitida: o valor e a competência não mudam (cancele ou substitua a nota primeiro).</p>' : ""}
+    ${temBoleto ? '<p class="sub"><b>Boleto:</b> se o valor ou o vencimento mudar, o boleto atual é <b>cancelado no banco</b> (o cliente não pode pagar o valor antigo) e um novo é registrado com os dados corretos. O PDF antigo é descartado e a próxima cobrança já vai com o boleto novo.</p>' : temPix ? '<p class="sub">O PIX copia e cola é regerado com o novo valor.</p>' : ""}
+    <p><button class="btn" id="ok">Salvar</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#ok").onclick = async () => { $("#ok").disabled = true; $("#ok").textContent = temBoleto ? "Salvando e refazendo o boleto…" : "Salvando…";
+    const f = form($("#fe")); const r = await api("titulo/editar", { id, ...f }); fechar();
+    aviso(!r.mudou.length ? "Nada mudou." : "Título atualizado ✔" + (r.boleto_refeito ? " Boleto antigo cancelado e novo boleto registrado no Inter." : r.refazer && temBoleto ? " O boleto antigo foi cancelado; o novo ainda não foi registrado (veja a situação na lista)." : ""), 9000); ir(PAG); };
+}
 function novoTitulo() {
   modal(`<h2>Título avulso</h2><div class="campos" id="fn"><label class="inteiro">Cliente<input name="cliente" list="dl_cli2"></label><datalist id="dl_cli2">${opcoesClientes()}</datalist>
     <label>Valor (R$)<input name="valor"></label><label>Vencimento<input type="date" name="vencimento"></label><label>Competência<input type="month" name="competencia"></label>
@@ -201,6 +217,7 @@ let FILTRO_RECOR = "todos";
 PAGINAS.contratos = async el => {
   const r = await api("recorrencia");
   const L = r.linhas, total = L.filter(l => l.repetir);
+  L.forEach(l => { l.valor_original = l.valor_cent; });     // para saber, ao salvar, quais valores mudaram
   const CURTO = { geracao: "Emitir na geração", baixa: "Emitir na baixa (pago)", lancar: "Só lançar, sem NFS-e", nada: "Não emitir e não lançar" };
   const regraOpts = sel => `<option value="" ${!sel ? "selected" : ""} title="Regra geral: ${esc(CURTO[r.regra_geral] || r.regra_geral)}">Regra geral</option>` + Object.entries(r.regras).map(([v, t]) => `<option value="${v}" title="${esc(t)}" ${sel == v ? "selected" : ""}>${CURTO[v] || t}</option>`).join("");
   el.innerHTML = `<h1>Recorrência mensal <span class="acoes"><button class="btn" id="rc_salvar">${ic("ok")}Salvar alterações</button><button class="btn sec" id="nc">${ic("mais")}Outra recorrência</button><button class="btn sec" id="gerar">Gerar títulos do mês</button></span></h1>
@@ -242,7 +259,9 @@ PAGINAS.contratos = async el => {
     if (linhas.some(l => l.repetir && !l.valor_cent)) return aviso("Há cliente marcado para repetir sem valor mensal.");
     const novos = linhas.filter(l => l.repetir && !(L.find(x => x.id && x.id == l.id) || {}).confirmado).length;
     if (novos && !confirm(`${novos} cliente(s) passam a ser faturados todo mês a partir deste mês. Confirmar?`)) return;
-    const x = await api("recorrencia/salvar", { linhas }); aviso(`${x.salvos} recorrência(s) salva(s) ✔`); await carregarEstado(); ir("contratos"); };
+    const mudouValor = linhas.filter(l => l.id && (L.find(x => x.id == l.id) || {}).valor_original !== undefined && L.find(x => x.id == l.id).valor_original != l.valor_cent).length;
+    const aplicar = mudouValor > 0 && confirm(`${mudouValor} recorrência(s) com valor alterado. Aplicar o novo valor também aos títulos EM ABERTO já gerados deste mês em diante?\n\nO boleto desses títulos é cancelado no banco e refeito com o valor novo. Títulos com NFS-e emitida não mudam.`);
+    const x = await api("recorrencia/salvar", { linhas, aplicar_abertos: aplicar }); aviso(`${x.salvos} recorrência(s) salva(s) ✔` + (x.titulos_ajustados && x.titulos_ajustados.length ? ` ${x.titulos_ajustados.length} título(s) em aberto atualizado(s) com boleto refeito.` : ""), 8000); await carregarEstado(); ir("contratos"); };
   $("#nc").onclick = () => editarContrato({});
   $("#gerar").onclick = async () => { const c = prompt("Competência (AAAA-MM):", hojeISO().slice(0, 7)); if (!c) return;
     const x = await api("recorrencia/gerar", { competencia: c }); aviso(`${x.gerados} título(s) gerado(s) ✔`); };
@@ -290,7 +309,13 @@ function editarContrato(c) {
         unico: $("#aj_unico").value == "1", inicio: $("#aj_ini").value, fim: $("#aj_fim").value });
       $("#aj_desc").value = ""; $("#aj_valor").value = ""; aviso("Incluído ✔"); lista(); };
   }
-  $("#ok").onclick = async () => { const f = form($("#fc")); f.cpf_cnpj = docDe(f.cliente); if (c.id) f.id = c.id; await api("contrato/salvar", f); fechar(); aviso("Recorrência salva ✔"); await carregarEstado(); ir("contratos"); };
+  $("#ok").onclick = async () => { const f = form($("#fc")); f.cpf_cnpj = docDe(f.cliente); if (c.id) f.id = c.id; const k = await api("contrato/salvar", f); fechar();
+    let extra = "";
+    if (c.id && c.valor_cent && k.valor_cent != c.valor_cent) {
+      const ab = await api("contrato/abertos", { id: c.id });
+      if (ab.titulos.length && confirm(`Há ${ab.titulos.length} título(s) em aberto já gerado(s) com o valor antigo. Aplicar o novo valor a eles (boleto cancelado no banco e refeito)?`)) {
+        const r = await api("contrato/aplicar_abertos", { id: c.id }); extra = ` ${r.titulos.length} título(s) atualizado(s)${r.boletos ? `, ${r.boletos} boleto(s) refeito(s)` : ""}.`; } }
+    aviso("Recorrência salva ✔" + extra, 8000); await carregarEstado(); ir("contratos"); };
 }
 async function encerrar(id) { if (confirm("Tirar este cliente da recorrência? Ele deixa de gerar cobranças.")) { await api("contrato/excluir", { id }); ir("contratos"); } }
 

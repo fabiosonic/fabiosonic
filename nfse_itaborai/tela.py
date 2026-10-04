@@ -251,6 +251,9 @@ ROTAS = {
     "titulos": lambda c: financeiro.listar_titulos(c.get("filtro", "todos"), c.get("cpf_cnpj", ""),
                                                    c.get("competencia", "")),
     "titulo/novo": lambda c: _novo_titulo(c),
+    "titulo/editar": lambda c: _editar_titulo(c),
+    "contrato/aplicar_abertos": lambda c: financeiro.aplicar_contrato_aos_titulos(_id(c), str(c.get("a_partir") or "")),
+    "contrato/abertos": lambda c: {"titulos": financeiro.titulos_abertos_do_contrato(_id(c), str(c.get("a_partir") or ""))},
     "titulo/baixar": lambda c: financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual"),
                                                  str(c.get("parcial") or "")),
     "contatos/analisar": lambda c: contatos.analisar(contatos.de_base64(str(c.get("arquivo") or ""))),
@@ -297,7 +300,7 @@ ROTAS = {
     "contrato/excluir": lambda c: (financeiro.excluir_contrato(_id(c)), {"ok": True})[1],
     "recorrencia": lambda c: {"preenchidos": financeiro.preencher_recorrencia(), "linhas": financeiro.lista_recorrencia(),
                               "regra_geral": financeiro.regra_geral(), "regras": financeiro.REGRAS_NFSE},
-    "recorrencia/salvar": lambda c: financeiro.salvar_recorrencia(c.get("linhas") or []),
+    "recorrencia/salvar": lambda c: financeiro.salvar_recorrencia(c.get("linhas") or [], bool(c.get("aplicar_abertos"))),
     "recorrencia/gerar": lambda c: {"gerados": len(financeiro.gerar_titulos(str(c.get("competencia") or "") or None))},
     "contratos/historico": lambda c: {"criados": financeiro.contratos_do_historico(c.get("dia_vencimento") or None)},
     "contratos/confirmar": lambda c: {"confirmados": importacao.confirmar_contratos(c.get("ids") or None)},
@@ -383,6 +386,21 @@ def _whatsapp_teste(telefone: str) -> dict:
     texto = "*[TESTE — modelo de cobrança do sistema]*\n\n" + cobranca.mensagem(t, 0, cfg, _d.fromisoformat(venc), "whatsapp")[1]
     numero = whatsapp_web.enviar_um(telefone, texto, cfg, so_horario_comercial=False)   # teste do próprio escritório
     return {"ok": True, "mensagem": f"Mensagem de teste enviada pelo WhatsApp para {numero}."}
+
+
+def _editar_titulo(c: dict) -> dict:
+    """Edita o título; se valor ou vencimento mudaram e ele tem boleto/PIX, a cobrança é refeita (boleto antigo
+    cancelado no banco, novo registrado com o valor certo)."""
+    r = financeiro.editar_titulo(_id(c), c.get("valor"), str(c.get("vencimento") or ""), str(c.get("competencia") or ""),
+                                 str(c.get("descricao") or ""))
+    t = r["titulo"]
+    r["boleto_refeito"] = False
+    if r["refazer"] and c.get("refazer", True) is not False and (t.get("banco_id") or t.get("pix_copia_cola") or t.get("cartao_link")):
+        tinha_boleto = bool(t.get("banco_id"))
+        t = cobranca.refazer_cobranca(t["id"], "Titulo alterado")
+        r["boleto_refeito"] = tinha_boleto and bool(t.get("banco_id"))
+        r["titulo"] = t
+    return r
 
 
 def _novo_titulo(c: dict) -> dict:
