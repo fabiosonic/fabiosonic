@@ -82,17 +82,11 @@ def test_nao_atualiza_com_robo_rodando(multi):  # noqa: F811
     assert emissor.BASE == multi
 
 
-def test_pacote_com_caminho_fora_da_pasta_e_recusado(instalacao):
-    """Zip-slip: um nome de arquivo com '..' no pacote não pode escrever fora da pasta do programa."""
-    import io
-    import zipfile
-
-    import pytest
-
-    from nfse_itaborai import atualizacao
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("EmissorItaborai/nfse_itaborai/__init__.py", '__version__ = "99.0.0"\n')
-        z.writestr("EmissorItaborai/nfse_itaborai/../../fora.py", "print('fora')\n")
-    with pytest.raises(ValueError, match="fora da pasta"):
-        atualizacao.aplicar(buf.getvalue())
+def test_pacote_com_caminho_fora_da_pasta_e_recusado(multi):  # noqa: F811
+    """Zip-slip: nome de arquivo com '..' no pacote não escreve fora da pasta do programa (nem ao analisar, nem ao aplicar)."""
+    _programa(multi)
+    pacote = _zip(extra={"nfse_itaborai/../../fora.py": "print('fora')\n"})
+    with pytest.raises(ValueError, match="inválid"):
+        atualizacao.aplicar(pacote)
+    assert not (multi.parent / "fora.py").exists() and not (multi / "fora.py").exists()
+    assert (multi / "nfse_itaborai" / "velho.py").exists()                      # nada foi alterado

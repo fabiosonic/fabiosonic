@@ -474,6 +474,12 @@ O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR C
 junto (anexo no e-mail ou documento no WhatsApp automático), o PIX copia e cola não é repetido no texto. Ele continua
 quando não há PDF (cobrança só PIX, link manual de WhatsApp) e pode ser religado em Configurações › Cobrança.
 
+### Proteção da tela local
+
+A tela roda em `http://127.0.0.1:porta` e sua API só aceita pedidos vindos da própria tela: um site qualquer aberto no
+mesmo computador não consegue comandar o sistema (nem mandar um "pacote de atualização" falso), com ou sem PIN. O pacote
+de atualização também é recusado se trouxer caminhos fora da pasta do programa.
+
 ### Tela adaptativa
 
 O conteúdo ocupa a largura toda do monitor. Em notebooks e monitores menores (até 1700px) o menu lateral vira só
