@@ -108,7 +108,7 @@ nav a.on .ic { opacity: 1; color: #8fb0ff; }
 .amb.prod .ponto { background: #34c46a; box-shadow: 0 0 0 4px rgba(52, 196, 106, .2); }
 
 /* ------------------------------------------------------------------ conteúdo */
-main { flex: 1; padding: 26px 32px 64px; min-width: 0; max-width: 1480px; }
+main { flex: 1; padding: 26px 32px 64px; min-width: 0; }
 main a:not(.btn) { color: var(--link); text-underline-offset: 2px; text-decoration-thickness: 1px; }
 main a:not(.btn):visited { color: var(--link); }
 h1 { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 20px; display: flex; align-items: center;

@@ -95,6 +95,7 @@ function nomeCli(n) {
 
 const frase = s => { s = String(s || "").trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
 // Célula de cliente: nome legível numa linha (nome completo ao passar o mouse) + complemento
+const fone = d => { d = String(d || "").replace(/\D/g, ""); return d.length == 11 ? d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3") : d.length == 10 ? d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3") : d; };
 const celNome = (nome, sub = "") => `<div class="cel-nome"><span class="nome" title="${esc(nome)}">${esc(nomeCli(nome))}</span>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
 function servPadrao() { return (ST.servicos || []).find(s => s.padrao) || ST.padrao || {}; }
 function servDe(id) { return (ST.servicos || []).find(s => s.id == id) || servPadrao(); }

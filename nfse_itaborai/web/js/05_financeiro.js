@@ -16,6 +16,9 @@ PAGINAS.receber = async el => {
       { t: "Vencimento", f: t => `<span class="nw">${dt(t.vencimento)}</span><div class="sub nw">comp. ${mes(t.competencia)}</div>` },
       { t: "Valor", n: 1, f: t => num(t.valor_cent) + (t.situacao == "atrasado" ? `<div class="sub">atualizado ${num(t.total_cent)}</div>` : t.status == "pago" ? `<div class="sub">pago ${num(t.valor_pago_cent)} em ${dt(t.data_pagamento)}</div>` : "") },
       { t: "Situação", f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "")
+        + (t.status == "aberto" && t.cobrar && t.boleto_situacao == "dispensado" ? `<div class="sub">cobrança sem boleto (PIX do escritório)</div>`
+          : t.status == "aberto" && t.cobrar && !t.banco_id && !t.pix_copia_cola && !t.linha_digitavel
+          ? `<div class="sub neg quebra" title="${esc(t.cobranca_erro || "")}">${t.cobranca_erro ? "boleto não gerado: " + esc(t.cobranca_erro.slice(0, 90)) : "boleto ainda não gerado"}</div>` : "")
         + (t.parcial_status == "pendente" ? `<div>${estadoSelo("atencao", "Pagamento parcial")}</div><div class="sub">faltaram ${brl(t.parcial_dif_cent)}</div>`
           : t.parcial_status == "desconto" ? `<div class="sub">desconto de ${brl(t.parcial_dif_cent)}</div>`
           : t.parcial_status == "cobrar" ? `<div class="sub">saldo de ${brl(t.parcial_dif_cent)} em novo título</div>` : "") },
@@ -38,7 +41,11 @@ function acoesTitulo(t) {
   if (t.parcial_status == "pendente") prin.push(`<button class="btn min" onclick="decidirParcial(${t.id})" title="O cliente pagou menos que o devido">Decidir diferença</button>`);
   if (t.status == "aberto") {
     prin.push(`<button class="btn min" onclick="baixar(${t.id},${t.total_cent})">Baixar</button>`);
-    if (t.situacao == "sem_cobranca") prin.push(`<button class="btn min sec" onclick="gerarCobranca(${t.id})" title="Gera boleto/PIX e coloca na régua">Gerar cobrança</button>`);
+    const semBoleto = !t.banco_id && !t.pix_copia_cola && !t.linha_digitavel && t.boleto_situacao != "dispensado";
+    if (t.boleto_situacao == "dispensado") mais.push(it(`${ic("receber")}Gerar boleto (registra no banco)`, `gerarCobranca(${t.id})`));
+    if (t.situacao != "sem_cobranca" && semBoleto) prin.push(`<button class="btn min" onclick="gerarCobranca(${t.id})" title="O boleto ainda não foi gerado: gera agora (boleto/PIX) e coloca na régua">Gerar boleto</button>`)
+      && mais.push(it(`${ic("bloqueio")}Tirar da cobrança (manter a nota)`, `tirarDaCobranca(${t.id})`));
+    else if (t.situacao == "sem_cobranca") prin.push(`<button class="btn min sec" onclick="gerarCobranca(${t.id})" title="Gera boleto/PIX e coloca na régua">Gerar cobrança</button>`);
     else { prin.push(`<button class="btn min sec" onclick="cobrar(${t.id})">Cobrar</button>`);
       mais.push(it(`${ic("bloqueio")}Tirar da cobrança (manter a nota)`, `tirarDaCobranca(${t.id})`)); }
     if (t.banco_id) mais.push(`<a href="/boleto/${t.id}.pdf" target="_blank">${ic("download")}Boleto em PDF</a>`);
@@ -398,7 +405,7 @@ async function vincular(movimento, titulo) { await api("conciliacao/vincular", {
 function importarNitrus() {
   modal(`<h2>Importar inadimplência do Nitrus</h2>
     <p class="sub">No Nitrus, gere o relatório <b>Inadimplência</b> em PDF e escolha o arquivo aqui. O sistema mostra a conferência antes de lançar:
-    cada título entra no Contas a receber com o vencimento original (multa e juros calculados pelo atraso), sem emitir NFS-e, com boleto/PIX e na régua de cobrança.
+    cada título entra no Contas a receber com o vencimento original (multa e juros calculados pelo atraso) e continua na régua de cobrança, sem gerar boleto (o cliente paga pelo PIX do escritório; se quiser, gere o boleto pelo título); a NFS-e sai quando o cliente pagar.
     Títulos que já estiverem no sistema não são lançados de novo.</p>
     <label class="soltar"><input type="file" id="nt_pdf" accept=".pdf,application/pdf" hidden>${ic("download")}<span><b>Escolher o PDF de Inadimplência</b><small>nitrus-inadimplencia.pdf</small></span></label>
     <div id="nt_res"></div>`);
@@ -417,7 +424,7 @@ function mostrarNitrus(a) {
   modal(`<h2>Importar inadimplência do Nitrus</h2>
     <div class="imp-tot">${a.conferido ? estadoSelo("bom", "Leitura conferida com os totais do relatório") : estadoSelo("critico", "A leitura não bateu com os totais do relatório — confira antes de lançar")}
       <span>${a.titulos} título(s) de ${G.length} cliente(s) · original <b>${brl(a.lidos.original)}</b> · com juros e multa no Nitrus <b>${brl(a.lidos.total)}</b></span></div>
-    <p class="sub">Cada título entra com o vencimento original, boleto/PIX e régua de cobrança; a <b>NFS-e só sai quando o cliente pagar</b>.</p>
+    <p class="sub">Cada título entra com o vencimento original e continua na régua de cobrança, sem gerar boleto (PIX do escritório); a <b>NFS-e só sai quando o cliente pagar</b>.</p>
     <div class="imp-grupos">${G.map((g, i) => `<div class="imp-g ${g.cpf_cnpj ? "" : "sem"}" data-i="${i}">
       <div class="imp-cab"><div><div class="nome">${esc(nomeCli(g.nome))}</div><div class="sub">${g.codigo ? `código ${esc(g.codigo)} no Nitrus · ` : ""}${esc(g.email || "sem e-mail")} · ${esc(g.telefone || "sem telefone")}</div></div>
         <div class="imp-vinc"><select data-v="${i}">${opcCli(g.cpf_cnpj || "novo")}</select><input data-n="${i}" placeholder="CPF/CNPJ" inputmode="numeric" ${g.cpf_cnpj ? "hidden" : ""}></div>

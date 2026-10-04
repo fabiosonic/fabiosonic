@@ -30,6 +30,8 @@ def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
     if t["status"] != "aberto":
         return t
     prov = cfg["cobranca"]["provedor"]
+    if t.get("boleto_situacao"):
+        return t                         # cobrança sem boleto (dispensado/expirado): nenhum boleto é registrado
     if prov == "inter" and not t["banco_id"] and inter.configurado(cfg):
         # um único boleto por título; se já venceu, ele sai com o valor atualizado (multa e juros até hoje)
         hoje = financeiro.hoje()
@@ -52,6 +54,9 @@ def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
             emp["pix_chave"], t["valor_cent"], emp["nome"], emp["pix_cidade"], f"T{t['id']}",
             f"NFSE {t['nfse_numero']}" if t["nfse_numero"] else ""))
     _oferecer_cartao(tid, cfg)
+    t = financeiro.obter_titulo(tid)
+    if t.get("cobranca_erro") and financeiro.tem_meio_de_pagamento(t):
+        financeiro.atualizar_titulo(tid, cobranca_erro="")
     return financeiro.obter_titulo(tid)
 
 
@@ -261,15 +266,16 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
                   "acrescimo": max(0, (t.get("cartao_total_cent") or 0) - base)}
     emp = cfg["empresa"]
     linha, pix_, boleto_pdf = t["linha_digitavel"], t["pix_copia_cola"], bool(t.get("banco_id"))
-    if t.get("boleto_situacao"):                 # boleto derrubado pelo banco: PIX do escritório, sem novo boleto
+    if t.get("boleto_situacao"):                 # sem boleto (dispensado ou derrubado pelo banco): PIX do escritório
         linha, boleto_pdf = "", False
         try:
             pix_ = pix.payload(emp.get("pix_chave", ""), t["total_cent"] if t["dias_atraso"] > 0 else t["valor_cent"],
                                emp["nome"], emp.get("pix_cidade") or "ITABORAI", f"T{t['id']}")
         except ValueError:
             pix_ = ""
-        abertura += (" O boleto deste título expirou no banco; para pagar, use o PIX abaixo." if pix_ else
-                     " O boleto deste título expirou no banco; responda esta mensagem para combinarmos o pagamento.")
+        motivo = "" if t["boleto_situacao"] == "dispensado" else " O boleto deste título expirou no banco;"
+        abertura += (f"{motivo} Para pagar, use o PIX abaixo." if pix_ else
+                     f"{motivo} Responda esta mensagem para combinarmos o pagamento.")
     return {"assunto": assunto, "nome": nome, "abertura": abertura, "atraso": etapa > 0,
             "referente": t["descricao"], "competencia": f"{t['competencia'][5:]}/{t['competencia'][:4]}",
             "vencimento": _data(t["vencimento"]), "valor": _brl(t["valor_cent"]),

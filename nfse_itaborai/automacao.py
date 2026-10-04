@@ -104,7 +104,8 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     def cobrancas():
         n, erros = 0, []
         boleto = cfg["cobranca"]["provedor"] == "inter" and inter.configurado(cfg)
-        sql = "SELECT * FROM titulos WHERE status='aberto' AND cobrar=1 AND banco_id=''" + ("" if boleto else " AND pix_copia_cola=''")
+        sql = ("SELECT * FROM titulos WHERE status='aberto' AND cobrar=1 AND banco_id='' AND COALESCE(boleto_situacao,'')=''"
+               + ("" if boleto else " AND pix_copia_cola=''"))
         for t in db.linhas(sql):
             if t["nfse_status"] in ("pendente", "erro", "teste"):
                 continue                      # cobra junto com a nota válida
@@ -114,6 +115,7 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
                 financeiro_t = cobranca.preparar_pagamento(t["id"], cfg)
             except Exception as ex:  # noqa: BLE001 — um cadastro incompleto não trava os demais boletos
                 erros.append(f"{t['cliente_nome']}: {ex}")
+                financeiro.atualizar_titulo(t["id"], cobranca_erro=str(ex)[:300])
                 db.registrar("boleto_erro", f"Título {t['id']} ({t['cliente_nome']}): {ex}")
                 continue
             n += bool(financeiro_t["pix_copia_cola"] or financeiro_t["banco_id"])

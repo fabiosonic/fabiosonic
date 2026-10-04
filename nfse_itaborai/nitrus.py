@@ -182,7 +182,8 @@ def analisar(pdf_b64: str) -> dict:
 
 def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) -> dict:
     """Lança os títulos dos grupos vinculados. Grupo com 'cnpj_novo' cadastra o cliente com esse CNPJ.
-    gerar_agora=False deixa o boleto/PIX para o robô (ele gera para todo título em aberto com cobrança)."""
+    Os títulos seguem na régua de cobrança sem boleto (já vinham sendo cobrados); 'gerar_agora' fica só por
+    compatibilidade — boleto, só pelo botão "Gerar boleto" do título."""
     from .empresas import cnpj_valido
     cfg = config.carregar()
     res = {"lancados": 0, "com_cobranca": 0, "ja_existiam": 0, "clientes_novos": 0, "pulados": 0, "avisos": []}
@@ -218,12 +219,11 @@ def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) ->
                                           competencia=t["vencimento"][:7], emitir_nfse=True, apos_pagamento=True,
                                           cobrar=cobrar)          # a NFS-e sai só quando o cliente pagar
             res["lancados"] += 1
-            if cobrar and gerar_agora:
-                try:
-                    tt = cobranca.preparar_pagamento(tid, cfg)
-                    res["com_cobranca"] += bool(tt.get("banco_id") or tt.get("pix_copia_cola"))
-                except Exception as ex:  # noqa: BLE001 — o robô gera a cobrança na próxima rodada
-                    res["avisos"].append(f"{g['nome']} {t['vencimento'][8:]}/{t['vencimento'][5:7]}: boleto/PIX não gerado agora ({ex})")
+            if cobrar:
+                # já vinha sendo cobrado no Nitrus: segue na régua sem gerar boleto (paga pelo PIX do escritório);
+                # se quiser boleto para algum, o botão "Gerar boleto" do título registra um
+                financeiro.atualizar_titulo(tid, boleto_situacao="dispensado")
+                res["com_cobranca"] += 1
     db.registrar("importacao", f"Inadimplência do Nitrus: {res['lancados']} título(s) lançado(s), "
                                f"{res['clientes_novos']} cliente(s) novo(s), {res['ja_existiam']} já existiam")
     return res

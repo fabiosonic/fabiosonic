@@ -69,13 +69,24 @@ def encargos(titulo: dict, em: date | None = None) -> dict:
             "total_cent": titulo["valor_cent"] + int(juros) + int(multa)}
 
 
-# Só está "em cobrança" (a receber, atraso, inadimplência, previsão de caixa) o título com cobrança de fato
-# gerada: boleto registrado ou PIX. Nota emitida sem boleto/PIX é faturamento, não valor a receber cobrado.
-SQL_COBRADO = "cobrar=1 AND (banco_id!='' OR pix_copia_cola!='' OR linha_digitavel!='')"
+# Mensagens de cobrança (régua) saem para título com meio de pagamento: boleto registrado, PIX, ou cobrança sem
+# boleto (boleto_situacao 'dispensado', ex.: inadimplência que já vinha sendo cobrada — paga pelo PIX do escritório).
+SQL_COBRADO = ("cobrar=1 AND (banco_id!='' OR pix_copia_cola!='' OR linha_digitavel!=''"
+               " OR COALESCE(boleto_situacao,'')='dispensado')")
 
 
 def tem_cobranca(t: dict) -> bool:
-    return bool(t.get("cobrar", 1)) and bool(t.get("banco_id") or t.get("pix_copia_cola") or t.get("linha_digitavel"))
+    """Está "em cobrança" (a receber, atraso, inadimplência, previsão de caixa) o título a cobrar com boleto/PIX, ou
+    ainda à espera dele: nota que só sai no pagamento (ex.: inadimplência importada) ou boleto que o banco recusou.
+    Nota já emitida que nunca teve boleto (versões antigas marcavam cobrar=1) e cobrar=0 são só faturamento."""
+    if not t.get("cobrar", 1):
+        return False
+    return (tem_meio_de_pagamento(t) or bool(t.get("cobranca_erro") or t.get("boleto_situacao"))
+            or t.get("nfse_status") in ("apos_pagamento", "nao_emitir"))
+
+
+def tem_meio_de_pagamento(t: dict) -> bool:
+    return bool(t.get("banco_id") or t.get("pix_copia_cola") or t.get("linha_digitavel"))
 
 
 def situacao(titulo: dict, em: date | None = None) -> str:
@@ -377,6 +388,14 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
                             (db.agora(), "reajuste", f"Contrato {k['id']}: {reais(k['valor_cent'])} -> {reais(novo)} "
                              f"({k['reajuste_pct']}%)"))
                 k["valor_cent"] = novo
+            # honorário do mês já lançado à mão (ex.: pago por PIX e baixado antes da recorrência começar): não
+            # gera outro — o título existente passa a ser o da recorrência
+            ja = con.execute("SELECT id FROM titulos WHERE cpf_cnpj=? AND competencia=? AND contrato_id IS NULL"
+                             " AND status!='cancelado' AND UPPER(descricao) LIKE 'HONOR%' ORDER BY id LIMIT 1",
+                             (k["cpf_cnpj"], comp)).fetchone()
+            if ja:
+                con.execute("UPDATE titulos SET contrato_id=? WHERE id=?", (k["id"], ja[0]))
+                continue
             valor_mes, descricao_mes = valor_do_mes(k, comp)
             if valor_mes <= 0:
                 con.execute("INSERT INTO log (quando,tipo,mensagem) VALUES (?,?,?)", (db.agora(), "recorrencia",

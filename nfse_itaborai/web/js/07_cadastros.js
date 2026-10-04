@@ -3,7 +3,7 @@
 "use strict";
 // ---------------------------------------------------------------- clientes
 PAGINAS.clientes = async el => {
-  el.innerHTML = `<h1>Clientes <span class="acoes"><button class="btn" id="imp_xml">${ic("download")}Importar clientes dos XML</button></span></h1><div id="imp_area"></div><div class="card"><div class="card-cab"><h2 id="c_tit">${ic("clientes")}Novo cliente</h2><span class="sub">endereço completo é exigido na NFS-e e no boleto</span></div><div class="barra"><label data-br>CNPJ / CPF<input id="c_doc" placeholder="só números"></label>
+  el.innerHTML = `<h1>Clientes <span class="acoes"><button class="btn sec" id="imp_cont">${ic("download")}Importar e-mails e WhatsApp (CSV)</button><button class="btn" id="imp_xml">${ic("download")}Importar clientes dos XML</button></span></h1><div id="imp_area"></div><div class="card"><div class="card-cab"><h2 id="c_tit">${ic("clientes")}Novo cliente</h2><span class="sub">endereço completo é exigido na NFS-e e no boleto</span></div><div class="barra"><label data-br>CNPJ / CPF<input id="c_doc" placeholder="só números"></label>
       <label class="chk"><input type="checkbox" id="c_ext"> Cliente do exterior <span class="sub">(sem CPF/CNPJ — exportação de serviço)</span></label></div>
     <div class="campos" id="fcli"><label class="inteiro">Razão social / nome<input name="razao_social"></label>
     <label data-ex hidden>País<select id="ce_pais"><option value="">Escolha…</option>${Object.entries(ST.paises || {}).map(([k, v]) => `<option value="${k}">${esc(v[0])} (${k})</option>`).join("")}<option value="outro">Outro país…</option></select></label>
@@ -46,6 +46,7 @@ PAGINAS.clientes = async el => {
     $$("[data-ex]").forEach(b => b.onclick = async () => { if (confirm("Excluir do cadastro?")) { await api("cliente/excluir", { cpf_cnpj: b.dataset.ex }); await carregarEstado(); desenhar(); } }); };
   $("#c_f").oninput = desenhar; desenhar();
   $("#lc").onclick = () => preencher({});
+  $("#imp_cont").onclick = importarContatos;
   $("#imp_xml").onclick = () => importarXml($("#imp_area"));
   ligarFiscal("cf");
   $("#sc").onclick = async () => { const f = form($("#fcli")), e = {}; END.forEach(k => { e[k] = f[k]; delete f[k]; });
@@ -138,4 +139,38 @@ function editarServico(s) {
   $("#ok").onclick = async () => { const d = form($("#fsv")); if (s.id) d.id = s.id; if (s.padrao) d.padrao = true;
     if (!d.nome.trim()) return aviso("Dê um nome ao serviço (ex.: Consultoria).");
     const r = await api("servico/salvar", d); if (r.erro) return; fechar(); aviso("Serviço salvo ✔"); recarregarServicos(); };
+}
+
+// ---------------------------------------------------------------- contatos (e-mail e WhatsApp) da planilha do escritório
+function importarContatos() {
+  modal(`<h2>Importar e-mails e WhatsApp dos clientes</h2>
+    <p class="sub">Escolha a planilha de contatos (CSV separado por ponto e vírgula, com as colunas <b>CPF/CNPJ</b>, <b>Celular</b> e <b>E-mail</b>
+    — ou a exportação de contatos com Departamentos, da qual entra o contato do <b>Financeiro</b>). Só clientes <b>já cadastrados</b> são
+    atualizados; como WhatsApp, só celular; e-mails provisórios ("aguardando@…") e do próprio escritório são ignorados.
+    Nada é gravado antes da sua conferência.</p>
+    <label class="soltar"><input type="file" id="ct_csv" accept=".csv,text/csv" hidden>${ic("download")}<span><b>Escolher a planilha (.csv)</b><small>empresas_contatos.csv</small></span></label>
+    <div id="ct_res"></div>`, true);
+  $("#ct_csv").onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = async () => {
+      const a = await api("contatos/analisar", { arquivo: r.result });
+      const L = a.itens, troca = L.filter(i => (i.email_novo && i.email_atual) || (i.fone_novo && i.fone_atual && !i.fixo)).length;
+      const cel = (atual, novo, fmt) => novo ? `${atual ? `<s class="sub">${esc(fmt(atual))}</s><br>` : ""}<b>${esc(fmt(novo))}</b>` : `<span class="sub">${esc(fmt(atual) || "—")}</span>`;
+      $("#ct_res").innerHTML = `<p>${a.empresas} empresa(s) no arquivo · <b>${L.length}</b> cliente(s) com e-mail/WhatsApp novo · ${a.sem_mudanca} já estavam iguais
+        ${a.fora_do_cadastro.length ? ` · ${a.fora_do_cadastro.length} não estão no cadastro (não são incluídas)` : ""}</p>
+        ${L.length ? tabela([{ t: "Cliente", f: i => celNome(i.razao_social, i.contato ? "contato: " + esc(i.contato) : "") },
+          { t: "E-mail", f: i => cel(i.email_atual, i.email_novo, x => x) },
+          { t: "WhatsApp", f: i => cel(i.fone_atual, i.fone_novo, fone) }], L) : ""}
+        ${troca ? `<label class="chk"><input type="checkbox" id="ct_subst"> Substituir também os ${troca} cliente(s) que já têm e-mail/telefone cadastrado (riscados acima)</label>` : ""}
+        ${a.fora_do_cadastro.length ? `<details><summary class="sub">Empresas do arquivo que não estão no cadastro</summary><p class="sub">${a.fora_do_cadastro.map(x => esc(x.razao_social) + " (" + fmtDoc(x.cpf_cnpj) + ")").join("; ")}</p></details>` : ""}
+        <p><button class="btn" id="ct_ok" ${L.length ? "" : "disabled"}>Gravar os contatos</button> <button class="btn sec" onclick="fechar()">Cancelar</button></p>
+        <p class="sub">A cobrança por WhatsApp continua só para os clientes que você marcar em Clientes (coluna WhatsApp).</p>`;
+      if ($("#ct_ok")) $("#ct_ok").onclick = async () => { $("#ct_ok").disabled = true;
+        const x = await api("contatos/aplicar", { arquivo: r.result, substituir: !!($("#ct_subst") || {}).checked });
+        fechar(); aviso(`Contatos gravados ✔ ${x.clientes} cliente(s): ${x.emails} e-mail(s) e ${x.whatsapp} WhatsApp.`, 9000);
+        await carregarEstado(); ir("clientes"); };
+    };
+    r.readAsDataURL(f);
+  };
 }

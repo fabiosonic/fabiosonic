@@ -154,7 +154,8 @@ MIGRACOES = {
                 # pagamento parcial: 'pendente' (aguarda a decisão do escritório) | 'desconto' | 'cobrar'
                 "parcial_status": "TEXT DEFAULT ''", "parcial_dif_cent": "INTEGER DEFAULT 0",
                 "desconto_cent": "INTEGER DEFAULT 0", "saldo_titulo_id": "INTEGER DEFAULT 0",
-                "nota_cent": "INTEGER DEFAULT 0",       # valor da NFS-e quando difere do título (parcial / saldo)   # 'expirado'/'cancelado' no banco: não é refeito (sem custo)
+                "nota_cent": "INTEGER DEFAULT 0",
+                "cobranca_erro": "TEXT DEFAULT ''",     # por que o boleto ainda não foi gerado (o robô tenta de novo)       # valor da NFS-e quando difere do título (parcial / saldo)   # 'expirado'/'cancelado' no banco: não é refeito (sem custo)
                 "nfse_data": "TEXT DEFAULT ''", "extras": "TEXT DEFAULT ''",
                 # cartão de crédito (InfinitePay): nº do pedido, link, valor com a taxa repassada e situação
                 "cartao_id": "TEXT DEFAULT ''", "cartao_link": "TEXT DEFAULT ''", "cartao_total_cent": "INTEGER DEFAULT 0",
@@ -180,6 +181,16 @@ def _migrar(con: sqlite3.Connection) -> None:
         con.execute("UPDATE titulos SET nfse_status='apos_pagamento' WHERE status='aberto' AND nfse_status='nao_emitir'"
                     " AND descricao='HONORÁRIOS CONTABEIS MENSAIS.' AND nfse_numero=''")
         con.execute("PRAGMA user_version=3")
+        con.commit()
+    if con.execute("PRAGMA user_version").fetchone()[0] < 4:
+        # pedido do escritório (Moraes & Oliveira): a recorrência começa em outubro/2026
+        from . import config
+        if config._cnpj_da_pasta() in config.CNPJ_REGRA_BAIXA:
+            con.execute("UPDATE contratos SET inicio='2026-10' WHERE ativo=1 AND (COALESCE(fim,'')='' OR fim>='2026-10')")
+            # inadimplência do Nitrus: já vinha sendo cobrada; continua na cobrança sem gerar boleto (PIX do escritório)
+            con.execute("UPDATE titulos SET boleto_situacao='dispensado' WHERE status='aberto' AND cobrar=1 AND banco_id=''"
+                        " AND contrato_id IS NULL AND descricao='HONORÁRIOS CONTABEIS MENSAIS.'")
+        con.execute("PRAGMA user_version=4")
         con.commit()
 
 

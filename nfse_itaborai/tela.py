@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, contatos, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -108,6 +108,20 @@ def _tirar_da_cobranca(tid: int) -> dict:
     financeiro.atualizar_titulo(tid, cobrar=0, pix_copia_cola="")
     db.registrar("cobranca", f"Título {tid} ({t['cliente_nome']}) retirado da cobrança; NFS-e mantida")
     return {"ok": True}
+
+
+def _gerar_cobranca(tid: int) -> dict:
+    """Gera o boleto/PIX agora; se o banco recusar, o motivo fica no título (e aparece na lista)."""
+    t = financeiro.obter_titulo(tid)
+    financeiro.atualizar_titulo(tid, cobrar=1, **({"boleto_situacao": ""} if t.get("boleto_situacao") == "dispensado" else {}))
+    try:
+        t = cobranca.preparar_pagamento(tid)
+    except Exception as ex:
+        financeiro.atualizar_titulo(tid, cobranca_erro=str(ex)[:300])
+        raise
+    if not financeiro.tem_meio_de_pagamento(t):
+        raise ValueError("Boleto/PIX não gerado: configure o Banco Inter (ou a chave PIX do escritório) em Configurações.")
+    return t
 
 
 def _estornar(tid: int) -> dict:
@@ -238,11 +252,13 @@ ROTAS = {
     "titulo/novo": lambda c: _novo_titulo(c),
     "titulo/baixar": lambda c: financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual"),
                                                  str(c.get("parcial") or "")),
+    "contatos/analisar": lambda c: contatos.analisar(contatos.de_base64(str(c.get("arquivo") or ""))),
+    "contatos/aplicar": lambda c: contatos.aplicar(contatos.de_base64(str(c.get("arquivo") or "")), bool(c.get("substituir"))),
     "titulo/parcial": lambda c: financeiro.decidir_parcial(_id(c), str(c.get("decisao") or ""), str(c.get("vencimento") or "")),
     "titulo/estornar": lambda c: _estornar(_id(c)),
     "titulo/cancelar": lambda c: _cancelar_titulo(_id(c), c.get("motivo", "")),
     "titulo/sem_cobranca": lambda c: _tirar_da_cobranca(_id(c)),
-    "titulo/gerar_cobranca": lambda c: (financeiro.atualizar_titulo(_id(c), cobrar=1), cobranca.preparar_pagamento(_id(c)))[1],
+    "titulo/gerar_cobranca": lambda c: _gerar_cobranca(_id(c)),
     "nfse/listar": lambda c: financeiro.listar_notas(str(c.get("competencia") or ""), str(c.get("situacao") or "validas"),
                                                      str(c.get("busca") or ""), str(c.get("servico_id") or "")),
     "nfse/ultima": lambda c: {"nota": financeiro.ultima_nota(str(c.get("cpf_cnpj", "")))},

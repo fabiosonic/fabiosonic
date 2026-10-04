@@ -474,6 +474,22 @@ O boleto do Inter é **boleto com PIX**: o PDF traz o código de barras e o QR C
 junto (anexo no e-mail ou documento no WhatsApp automático), o PIX copia e cola não é repetido no texto. Ele continua
 quando não há PDF (cobrança só PIX, link manual de WhatsApp) e pode ser religado em Configurações › Cobrança.
 
+### E-mails e WhatsApp dos clientes (planilha)
+
+Em **Clientes › Importar e-mails e WhatsApp (CSV)**, escolha a planilha (colunas CPF/CNPJ, Celular e E-mail, ou a
+exportação de contatos com departamentos — vale o contato do Financeiro). Só clientes **já cadastrados** são
+atualizados (empresas fora do cadastro aparecem só como aviso); WhatsApp só de celular; e-mails provisórios
+("aguardando@…") e do próprio escritório são ignorados. Por padrão só preenche o que está vazio (telefone fixo é trocado
+pelo celular); a opção "substituir" troca também os já cadastrados.
+
+### Inadimplência e recorrência
+
+- A aba **Atrasados** mostra também os títulos em cobrança que ainda não têm boleto (com o motivo, se o banco recusou).
+- A **inadimplência importada do Nitrus** continua na régua de cobrança **sem gerar boleto** (já vinha sendo cobrada):
+  as mensagens levam o PIX da chave do escritório com o valor atualizado. O vencimento original é mantido; boleto só se
+  pedir, pelo botão *Gerar boleto* do título.
+- As datas de vencimento nunca são prorrogadas pelo sistema.
+
 ### Pagamento parcial
 
 Quando o cliente paga menos que o devido (Pix, transferência, extrato ou baixa manual), o título é baixado com o valor
