@@ -174,6 +174,17 @@ def _mesclar(base: dict, extra: dict) -> dict:
     return base
 
 
+CNPJ_REGRA_BAIXA = {"24875410000144"}     # Moraes & Oliveira Contabilidade: NFS-e só na baixa
+
+
+def _cnpj_da_pasta(arq=None) -> str:
+    """CNPJ da empresa ativa (dona desta configuração), lido do .env da empresa como faz o emissor."""
+    try:
+        return "".join(ch for ch in str(emissor.env("ITABORAI_CNPJ") or "") if ch.isdigit())
+    except Exception:  # noqa: BLE001 — sem .env legível, nenhuma regra é trocada
+        return ""
+
+
 def carregar() -> dict:
     cfg = copy.deepcopy(PADRAO)
     arq = _arquivo()
@@ -189,11 +200,13 @@ def carregar() -> dict:
             cob["migrado_inter"] = True
             salvo["cobranca"] = cob
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
-        # v3.4.4 (pedido do escritório): a regra geral passa a ser "emitir a NFS-e quando o cliente pagar".
-        # Muda uma única vez; se depois for alterada na tela, a escolha é mantida.
+        # v3.4.4 (pedido do escritório): na Moraes & Oliveira a NFS-e só sai na baixa (pagamento reconhecido ou
+        # baixa manual). Muda uma única vez e só nela; as demais empresas mantêm a regra de cada uma.
         emi = salvo.setdefault("emissao", {})
         if not emi.get("migrado_regra_baixa"):
-            emi.update(nfse_quando="baixa", nfse_apos_pagamento=True, migrado_regra_baixa=True)
+            if _cnpj_da_pasta(arq) in CNPJ_REGRA_BAIXA:
+                emi.update(nfse_quando="baixa", nfse_apos_pagamento=True)
+            emi["migrado_regra_baixa"] = True
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
         # XML das notas: passa a ser lido da pasta do sistema (IMPORTAR XML), não mais de Downloads
         if "downloads" in str(salvo.get("pastas", {}).get("xml_nfse", "")).lower():
