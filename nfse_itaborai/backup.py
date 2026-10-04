@@ -78,6 +78,19 @@ def _arquivos(raiz: Path):
             yield rel
 
 
+def _apagar(arq: Path, tentativas: int = 10) -> None:
+    """Apaga um arquivo; no Windows, se o antivírus ainda o estiver lendo, espera um pouco e tenta de novo."""
+    import time
+    for i in range(tentativas):
+        try:
+            arq.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if i == tentativas - 1:
+                raise
+            time.sleep(0.5)
+
+
 def criar(motivo: str = "manual", raiz: Path | None = None) -> dict:
     """Gera o .zip do backup da empresa e devolve as informações dele."""
     raiz = raiz or emissor.raiz()
@@ -86,7 +99,9 @@ def criar(motivo: str = "manual", raiz: Path | None = None) -> dict:
     destino = pasta_backups(raiz) / f"backup_{cnpj or 'empresa'}_{agora:%Y-%m-%d_%H%M%S}_{motivo}.zip"
     manifesto = {"sistema": "nfse_itaborai", "versao_backup": 1, "versao_sistema": __version__, "cnpj": cnpj,
                  "empresa": _nome_empresa(raiz), "criado_em": agora.strftime("%Y-%m-%d %H:%M:%S"), "motivo": motivo}
-    with tempfile.TemporaryDirectory() as tmp, zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as z:
+    # ignore_cleanup_errors: no Windows o antivírus pode segurar a cópia temporária por instantes; o backup já
+    # está pronto e a pasta temporária é limpa pelo próprio Windows depois (antes, isso fazia o backup "falhar")
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp, zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as z:
         banco = raiz / "dados" / "sistema.db"
         if banco.exists():   # cópia consistente mesmo com o sistema aberto
             copia = Path(tmp) / "sistema.db"
@@ -107,7 +122,7 @@ def criar(motivo: str = "manual", raiz: Path | None = None) -> dict:
         cab = json.dumps({k: v for k, v in manifesto.items()}, ensure_ascii=False).encode("utf-8")
         protegido = destino.with_suffix(EXT_PROTEGIDO)
         protegido.write_bytes(segredos.cifrar_com_senha(destino.read_bytes(), senha, cab))
-        destino.unlink()
+        _apagar(destino)
         destino = protegido
     copia_extra = _copiar_para_pasta_extra(destino, raiz)
     _limpar_antigos(raiz)
@@ -286,7 +301,7 @@ def restaurar(arq: Path, raiz: Path | None = None, senha: str = "") -> dict:
     if not senha:
         raise ValueError("Este backup é protegido: informe a senha do backup.")
     zip_bytes = segredos.decifrar_com_senha(dados, senha)
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         z = Path(tmp) / "b.zip"
         z.write_bytes(zip_bytes)
         with zipfile.ZipFile(z) as zz:
@@ -302,7 +317,7 @@ def _restaurar_zip(zip_path: Path, raiz: Path, nome: str) -> dict:
     if atual and m.get("cnpj") and m["cnpj"] != atual:
         raise ValueError(f"Este backup é da empresa {m.get('empresa') or ''} (CNPJ {m['cnpj']}) e não pode ser "
                          f"restaurado na empresa em uso (CNPJ {atual}). Os dados de uma empresa nunca vão para outra.")
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         tmp = Path(tmp)
         with zipfile.ZipFile(zip_path) as z:
             z.extractall(tmp)   # caminhos já validados em ler_manifesto
@@ -363,7 +378,7 @@ def decodificar(arquivo_b64: str) -> bytes:
 def manifesto_de_bytes(dados: bytes) -> dict:
     if dados.startswith(segredos.MAGICO):
         return _manifesto_protegido(dados)
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         p = Path(tmp) / "b.zip"
         p.write_bytes(dados)
         return ler_manifesto(p)

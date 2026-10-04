@@ -97,7 +97,7 @@ PAGINAS.relatorios = async el => {
     $("#fech").onclick = async () => { const x = await api("fechamento/gerar"); aviso(x.resultado, 6000); await carregarEstado(); };
   } else {
     const l = await api("log");
-    r.innerHTML = `<div class="card">${tabela([{ t: "Quando", f: x => esc(x.quando) }, { t: "Tipo", f: x => esc(x.tipo) }, { t: "Mensagem", f: x => esc(x.mensagem) }], l)}</div>`;
+    r.innerHTML = `<div class="card">${tabela([{ t: "Quando", f: x => esc(x.quando) }, { t: "Tipo", f: x => esc(x.tipo) }, { t: "Mensagem", f: x => `<span class="quebra">${esc(x.mensagem)}</span>` }], l)}</div>`;
   }
 };
 function barrasH(itens) {

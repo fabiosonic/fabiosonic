@@ -717,3 +717,6 @@ td .mes-pt select:first-child, label[style*="row"] .mes-pt select:first-child { 
 .data-pt input.data-orig { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; padding: 0; border: 0; }
 td .data-pt, label[style*="row"] .data-pt, .barra .data-pt { display: inline-flex; width: auto; vertical-align: middle; }
 td .data-pt input[type="text"], label[style*="row"] .data-pt input[type="text"], .barra .data-pt input[type="text"] { width: 9.2em; }
+
+/* textos longos sem espaço (caminhos de pasta, registros do robô) quebram a linha em vez de alargar a tela */
+.quebra { overflow-wrap: anywhere; word-break: break-word; }

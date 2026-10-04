@@ -106,3 +106,32 @@ def test_backup_fecha_as_conexoes_do_banco(multi, monkeypatch):  # noqa: F811
     for c in abertas:
         with pytest.raises(sqlite3.ProgrammingError):
             c.execute("SELECT 1")
+
+
+def test_backup_nao_falha_se_o_windows_segurar_o_arquivo_temporario(monkeypatch, tmp_path):
+    """Antivírus segurando a cópia temporária do banco (WinError 32) não pode fazer o backup falhar."""
+    import shutil
+    import tempfile
+    from nfse_itaborai import backup as bk
+    original = tempfile.TemporaryDirectory
+
+    class Preso(original):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self._ignorar = k.get("ignore_cleanup_errors", False)
+
+        def cleanup(self):
+            if not self._ignorar:
+                raise PermissionError(32, "O arquivo já está sendo usado por outro processo")
+            shutil.rmtree(self.name, ignore_errors=True)
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", Preso)
+    monkeypatch.setattr(bk.tempfile, "TemporaryDirectory", Preso)
+    raiz = tmp_path / "emp"
+    (raiz / "dados").mkdir(parents=True)
+    import sqlite3
+    from contextlib import closing
+    with closing(sqlite3.connect(raiz / "dados" / "sistema.db")) as c:
+        c.execute("CREATE TABLE t (x)")
+    (raiz / ".env").write_text("ITABORAI_CNPJ=24875410000144\n", encoding="utf-8")
+    info = bk.criar("automatico", raiz)
+    assert info["nome"].endswith(".zip")
