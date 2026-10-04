@@ -92,3 +92,92 @@ function opcoesServ(sel, vazio) {
   return (vazio ? `<option value="">${esc(vazio)}</option>` : "") + (ST.servicos || []).map(s => `<option value="${esc(s.id)}" ${s.id == sel ? "selected" : ""}>${esc(s.nome)}${s.padrao ? " (padrão)" : ""} — item ${esc(s.item_lista_servico || "?")}</option>`).join("");
 }
 function nfseAposPagamento() { return !!((ST.config || {}).emissao || {}).nfse_apos_pagamento; }
+
+// ---------------------------------------------------------------- campo de mês sempre em português
+// O <input type="month"> do navegador segue o idioma do Edge/Windows ("October 2026") e não existe no Firefox.
+// Cada um vira dois seletores (mês por extenso + ano); o campo original continua guardando "AAAA-MM", com os mesmos
+// eventos (input/change), .value e .disabled — as telas não precisam saber da troca.
+const _valorInput = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+function campoMes(inp) {
+  if (inp._mesPt) return;
+  inp._mesPt = true;
+  const w = document.createElement("span"), sm = document.createElement("select"), sa = document.createElement("select");
+  w.className = "mes-pt"; w.title = inp.title || "";
+  inp.style.width = "";                          // a largura vem do CSS (cabe "fevereiro" e o ano)
+  sm.setAttribute("aria-label", "Mês"); sa.setAttribute("aria-label", "Ano");
+  sm.innerHTML = `<option value="">mês</option>` + MESES.map((m, i) => `<option value="${String(i + 1).padStart(2, "0")}">${m}</option>`).join("");
+  const anos = v => {
+    const atual = new Date().getFullYear(), a = +String(v).slice(0, 4) || atual;
+    let h = `<option value="">ano</option>`;
+    for (let x = Math.min(atual - 8, a); x <= Math.max(atual + 6, a); x++) h += `<option>${x}</option>`;
+    sa.innerHTML = h;
+  };
+  const mostrar = () => {
+    const v = _valorInput.get.call(inp);
+    if (v && ![...sa.options].some(o => o.value == v.slice(0, 4))) anos(v);
+    sm.value = v.slice(5, 7); sa.value = v ? v.slice(0, 4) : "";
+    sm.disabled = sa.disabled = inp.disabled;
+  };
+  const mudou = () => {
+    if (sm.value && !sa.value) sa.value = String(new Date().getFullYear());
+    _valorInput.set.call(inp, sm.value && sa.value ? `${sa.value}-${sm.value}` : "");
+    if (!sm.value) sa.value = "";
+    inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  sm.onchange = sa.onchange = mudou;
+  inp.type = "hidden";
+  Object.defineProperty(inp, "value", { configurable: true, get() { return _valorInput.get.call(this); },
+    set(v) { _valorInput.set.call(this, v || ""); mostrar(); } });
+  new MutationObserver(mostrar).observe(inp, { attributes: true, attributeFilter: ["disabled"] });
+  w.append(sm, sa); inp.after(w); anos(_valorInput.get.call(inp)); mostrar();
+}
+new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+  if (n.nodeType != 1) return;
+  (n.matches('input[type="month"]') ? [n] : n.querySelectorAll('input[type="month"]')).forEach(campoMes);
+}))).observe(document.documentElement, { childList: true, subtree: true });
+
+// ---------------------------------------------------------------- campo de data sempre em dd/mm/aaaa
+// O <input type="date"> segue o idioma do navegador (num Edge em inglês aparece "mm/dd/yyyy", fácil de trocar dia e
+// mês). O campo original fica escondido guardando "AAAA-MM-DD" (mesmo .value, eventos e name); por cima vai um campo
+// digitado no padrão brasileiro, com máscara, e um botão que abre o calendário.
+function campoData(inp) {
+  if (inp._dataPt) return;
+  inp._dataPt = true;
+  const w = document.createElement("span"), txt = document.createElement("input"), bt = document.createElement("button");
+  w.className = "data-pt"; txt.type = "text"; txt.inputMode = "numeric"; txt.maxLength = 10; txt.placeholder = "dd/mm/aaaa";
+  txt.autocomplete = "off"; txt.title = inp.title || "Data no formato dia/mês/ano";
+  if (inp.id) txt.dataset.de = inp.id;
+  bt.type = "button"; bt.className = "data-cal"; bt.title = "Abrir o calendário"; bt.setAttribute("aria-label", "Abrir o calendário");
+  bt.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`;
+  if (inp.style.width) { w.style.width = inp.style.width; inp.style.width = ""; }
+  const iso = () => _valorInput.get.call(inp);
+  const mostrar = () => {
+    const v = iso();
+    txt.value = /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}` : "";
+    txt.classList.remove("invalido");
+    txt.disabled = bt.disabled = inp.disabled; txt.required = inp.required;
+  };
+  const avisar = () => { inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new Event("change", { bubbles: true })); };
+  txt.oninput = () => {
+    const d = txt.value.replace(/\D/g, "").slice(0, 8);
+    txt.value = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+    if (d.length == 8) {
+      const v = `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}`, dt = new Date(v + "T12:00:00");
+      const ok = !isNaN(dt) && dt.toISOString().slice(0, 10) == v;
+      txt.classList.toggle("invalido", !ok);
+      if (ok && v != iso()) { _valorInput.set.call(inp, v); avisar(); }
+    } else if (!d && iso()) { _valorInput.set.call(inp, ""); avisar(); }
+  };
+  txt.onblur = () => { if (txt.value && txt.value.replace(/\D/g, "").length < 8) txt.classList.add("invalido"); };
+  inp.addEventListener("change", e => { if (e.isTrusted) mostrar(); });   // escolhido no calendário
+  bt.onclick = () => { try { inp.showPicker(); } catch (_) { txt.focus(); } };
+  Object.defineProperty(inp, "value", { configurable: true, get() { return _valorInput.get.call(this); },
+    set(v) { _valorInput.set.call(this, v || ""); mostrar(); } });
+  new MutationObserver(mostrar).observe(inp, { attributes: true, attributeFilter: ["disabled", "required"] });
+  inp.classList.add("data-orig"); inp.tabIndex = -1; inp.setAttribute("aria-hidden", "true");
+  inp.after(w); w.append(txt, bt, inp); mostrar();
+}
+new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+  if (n.nodeType != 1) return;
+  (n.matches('input[type="date"]') ? [n] : n.querySelectorAll('input[type="date"]')).forEach(campoData);
+}))).observe(document.documentElement, { childList: true, subtree: true });

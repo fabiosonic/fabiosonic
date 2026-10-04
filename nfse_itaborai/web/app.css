@@ -699,3 +699,21 @@ h2 .btn .ic, h1 .btn .ic { color: inherit; }
 .classif { width: auto; min-height: 30px; padding: 3px 8px; font-size: 12.5px; }
 .bloco-modal { font-size: 14px; margin: 18px 0 4px; padding-top: 14px; border-top: 1px solid var(--borda); }
 .aj-novo { margin-top: 10px; }
+
+/* campo de mês em português (substitui o input month do navegador) */
+.mes-pt { display: flex; gap: 6px; width: 100%; min-width: 0; }
+.mes-pt select { flex: 1 1 auto; min-width: 0; padding-left: 8px; padding-right: 4px; }
+.mes-pt select + select { flex: 0 0 5.6em; width: 5.6em; }
+td .mes-pt, label[style*="row"] .mes-pt { display: inline-flex; vertical-align: middle; width: auto; }
+td .mes-pt select:first-child, label[style*="row"] .mes-pt select:first-child { min-width: 8.2em; }
+
+/* campo de data em dd/mm/aaaa (substitui o input date do navegador) */
+.data-pt { position: relative; display: flex; width: 100%; min-width: 0; }
+.data-pt input[type="text"] { flex: 1 1 auto; min-width: 0; width: 100%; padding-right: 34px; font-variant-numeric: tabular-nums; }
+.data-pt input.invalido { border-color: var(--ruim-txt); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ruim-txt) 15%, transparent); }
+.data-pt .data-cal { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none;
+  padding: 4px 6px; color: var(--muted); cursor: pointer; line-height: 0; border-radius: 6px; min-height: 0; }
+.data-pt .data-cal:hover { color: var(--texto); background: var(--superficie2); }
+.data-pt input.data-orig { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; padding: 0; border: 0; }
+td .data-pt, label[style*="row"] .data-pt, .barra .data-pt { display: inline-flex; width: auto; vertical-align: middle; }
+td .data-pt input[type="text"], label[style*="row"] .data-pt input[type="text"], .barra .data-pt input[type="text"] { width: 9.2em; }

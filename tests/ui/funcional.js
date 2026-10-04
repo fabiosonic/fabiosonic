@@ -187,7 +187,7 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
   await passo('Contas a receber: título avulso com NFS-e após o pagamento', async () => {
     await ir('receber', 1500); await p.click('#novo_t'); await espera(300);
     await p.fill('#fn [name=cliente]', PORTAL); await p.fill('#fn [name=valor]', '250,00');
-    await p.fill('#fn [name=vencimento]', '2026-10-20'); await p.selectOption('#fn [name=nfse]', 'pagamento');
+    await p.fill('#fn [data-de], #fn .data-pt input[type=text]', '20/10/2026'); await p.selectOption('#fn [name=nfse]', 'pagamento');
     await p.click('#ok'); await espera(4000);
     const t = (await api('titulos', { filtro: 'todos' })).find(x => x.valor_cent === 25000);
     certo(t && t.nfse_status === 'apos_pagamento' && t.banco_id, 'título/boleto não criado: ' + JSON.stringify(t || {}).slice(0, 200));
@@ -353,7 +353,8 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await ir('cobranca', 1200); await p.click('#rr'); await espera(1500);
     certo(/saindo sozinhos/.test(await aviso()), await aviso());
     let env = []; for (let i = 0; i < 40 && !(env = (await api('teste/whatsapp_web_enviados')).enviados).length; i++) await espera(1000);
-    await espera(2000); env = (await api('teste/whatsapp_web_enviados')).enviados;
+    for (let i = 0; i < 30 && !env.some(e => e.arquivo); i++) { await espera(1000); env = (await api('teste/whatsapp_web_enviados')).enviados; }
+    await espera(2000); env = (await api('teste/whatsapp_web_enviados')).enviados;   // o PDF sai logo depois do texto
     const txt = env.filter(e => e.texto), docs = env.filter(e => e.arquivo);
     certo(txt.length === 1 && txt[0].fone === '5521988887777' && /222,22/.test(txt[0].texto) && !/anexo/.test(txt[0].texto),
       JSON.stringify(env).slice(0, 300));

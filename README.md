@@ -458,6 +458,12 @@ Em **Mais**, a seção *Acréscimos e descontos* lança valores com descrição,
 (do início ao fim, ou sem fim). Eles são somados ao honorário no título do mês, e a descrição mostra a composição
 (ex.: "HONORÁRIOS (honorário R$ 1.000,00; + Alteração contratual R$ 300,00; - Desconto R$ 100,00)").
 
+### Datas e meses sempre em português
+
+Os campos de data são digitados no padrão brasileiro (**dd/mm/aaaa**, com máscara e botão de calendário) e os de mês
+são escolhidos por extenso (janeiro…dezembro + ano), qualquer que seja o idioma do navegador ou do Windows. Data
+impossível (ex.: 31/02) fica marcada em vermelho e não é aceita.
+
 ### Importar inadimplência do Nitrus
 
 Em **Contas a receber › Importar do Nitrus**, escolha o PDF do relatório *Inadimplência*. O sistema lê os títulos,
