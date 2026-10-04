@@ -543,8 +543,10 @@ impossível (ex.: 31/02) fica marcada em vermelho e não é aceita.
 Em **Contas a receber › Importar do Nitrus**, escolha o PDF do relatório *Inadimplência*. O sistema lê os títulos,
 confere com os totais impressos no relatório e mostra, por cliente, o vínculo com o cadastro (pelo código do Nitrus,
 CPF/CNPJ ou nome). Quem não tiver cadastro pode ser cadastrado ali, informando o CPF/CNPJ. Cada título entra com o
-vencimento original (multa e juros pelo atraso), com boleto/PIX e na régua, e a **NFS-e só sai quando o cliente
-pagar**; título já lançado não repete.
+vencimento original (multa e juros pelo atraso), na régua de cobrança sem boleto, e a **NFS-e só sai quando o cliente
+pagar**; título já lançado não repete. A conferência mostra a situação de cada título que já está no sistema (em
+cobrança, **fora da cobrança**, pago) e o lançamento **recoloca em cobrança** os que estavam fora — reimportar o
+relatório garante que toda a inadimplência esteja lançada e sendo cobrada.
 
 ### Conciliação: extrato completo
 

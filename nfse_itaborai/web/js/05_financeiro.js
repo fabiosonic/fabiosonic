@@ -418,31 +418,35 @@ function importarNitrus() {
 function mostrarNitrus(a) {
   const G = a.grupos, opcCli = sel => `<option value="">— escolher cliente do cadastro —</option><option value="novo" ${sel == "novo" ? "selected" : ""}>Cadastrar novo: informe o CPF/CNPJ →</option><option value="nao">Não lançar este cliente</option>`
     + ST.clientes.slice().sort((x, y) => x.razao_social.localeCompare(y.razao_social)).map(c => `<option value="${c.cpf_cnpj}" ${c.cpf_cnpj == sel ? "selected" : ""}>${esc(nomeCli(c.razao_social))} — ${fmtDoc(c.cpf_cnpj)}</option>`).join("");
-  const novos = g => g.titulos.filter(t => !t.existe);
+  const novos = g => g.titulos.filter(t => !t.existe), fora = g => g.titulos.filter(t => t.estado == "fora"), S = a.situacao || {};
+  const ESTADO = { "": ["novo", "ainda não está no sistema: será lançado"], cobranca: ["em cobrança", "já está no sistema e sendo cobrado"],
+    fora: ["fora da cobrança", "está no sistema, mas não estava sendo cobrado: volta para a cobrança"], pago: ["pago", "já está pago no sistema"] };
   modal(`<h2>Importar inadimplência do Nitrus</h2>
     <div class="imp-tot">${a.conferido ? estadoSelo("bom", "Leitura conferida com os totais do relatório") : estadoSelo("critico", "A leitura não bateu com os totais do relatório — confira antes de lançar")}
       <span>${a.titulos} título(s) de ${G.length} cliente(s) · original <b>${brl(a.lidos.original)}</b> · com juros e multa no Nitrus <b>${brl(a.lidos.total)}</b></span></div>
     <p class="sub">Cada título entra com o vencimento original e continua na régua de cobrança, sem gerar boleto (PIX do escritório); a <b>NFS-e só sai quando o cliente pagar</b>.</p>
+    <div class="imp-sit">${[["novos", "a lançar", "alerta"], ["fora_da_cobranca", "no sistema, fora da cobrança (voltam a ser cobrados)", "atencao"], ["em_cobranca", "já em cobrança", "bom"], ["pagos", "já pagos", "bom"]]
+      .filter(([k]) => S[k]).map(([k, t, c]) => `<span class="selo ${c}">${S[k]} ${t}</span>`).join(" ") || ""}</div>
     <div class="imp-grupos">${G.map((g, i) => `<div class="imp-g ${g.cpf_cnpj ? "" : "sem"}" data-i="${i}">
       <div class="imp-cab"><div><div class="nome">${esc(nomeCli(g.nome))}</div><div class="sub">${g.codigo ? `código ${esc(g.codigo)} no Nitrus · ` : ""}${esc(g.email || "sem e-mail")} · ${esc(g.telefone || "sem telefone")}</div></div>
         <div class="imp-vinc"><select data-v="${i}">${opcCli(g.cpf_cnpj || "novo")}</select><input data-n="${i}" placeholder="CPF/CNPJ" inputmode="numeric" ${g.cpf_cnpj ? "hidden" : ""}></div>
-        <div class="imp-soma"><b>${brl(g.titulos.reduce((s, t) => s + t.valor_cent, 0))}</b><div class="sub">${g.titulos.length} título(s)${g.titulos.some(t => t.existe) ? ` · ${g.titulos.filter(t => t.existe).length} já no sistema` : ""}</div></div></div>
+        <div class="imp-soma"><b>${brl(g.titulos.reduce((s, t) => s + t.valor_cent, 0))}</b><div class="sub">${g.titulos.length} título(s)${g.titulos.some(t => t.existe) ? ` · ${g.titulos.filter(t => t.existe).length} já no sistema` : ""}${fora(g).length ? ` · <b>${fora(g).length} fora da cobrança</b>` : ""}</div></div></div>
       ${!g.cpf_cnpj ? `<div class="sub" style="margin-top:6px">${esc(g.motivo)}: escolha o cliente no cadastro ou informe o CPF/CNPJ para cadastrar.</div>` : ""}
-      <div class="imp-tits">${g.titulos.map(t => `<span class="${t.existe ? "ja" : ""}" title="${t.existe ? "já está no sistema" : `${t.dias} dia(s) de atraso · ${brl(t.total_cent)} no Nitrus`}">${dt(t.vencimento)} · ${num(t.valor_cent)}</span>`).join("")}</div></div>`).join("")}</div>
+      <div class="imp-tits">${g.titulos.map(t => `<span class="${t.estado == "fora" ? "fora" : t.existe ? "ja" : ""}" title="${ESTADO[t.estado || ""][1]} · ${t.dias} dia(s) de atraso · ${brl(t.total_cent)} no Nitrus">${dt(t.vencimento)} · ${num(t.valor_cent)}${t.existe ? ` <small>${ESTADO[t.estado || ""][0]}</small>` : ""}</span>`).join("")}</div></div>`).join("")}</div>
     <label class="chk"><input type="checkbox" id="nt_cobrar" checked> Gerar boleto/PIX e incluir na régua de cobrança (o cliente passa a ser cobrado)</label>
     <p><button class="btn" id="nt_ok">Lançar</button> <button class="btn sec" onclick="fechar()">Cancelar</button></p>`, true);
   const atu = () => { let n = 0; G.forEach((g, i) => { const v = $(`[data-v="${i}"]`).value; $(`[data-n="${i}"]`).hidden = v != "novo";
-      if (v && v != "nao" && (v != "novo" || clientesDig($(`[data-n="${i}"]`).value).length >= 11)) n += novos(g).length; });
-    $("#nt_ok").textContent = `Lançar ${n} título(s)`; $("#nt_ok").disabled = !n; };
+      if (v && v != "nao" && (v != "novo" || clientesDig($(`[data-n="${i}"]`).value).length >= 11)) n += novos(g).length + fora(g).length; });
+    $("#nt_ok").textContent = `Lançar / recolocar ${n} título(s)`; $("#nt_ok").disabled = !n; };
   $$("[data-v],[data-n]").forEach(x => x.oninput = x.onchange = atu); atu();
   $("#nt_ok").onclick = async ev => {
     const grupos = G.map((g, i) => { const v = $(`[data-v="${i}"]`).value;
-      return v && v != "nao" ? { ...g, titulos: novos(g), cpf_cnpj: v == "novo" ? "" : v, cnpj_novo: v == "novo" ? $(`[data-n="${i}"]`).value : "" } : null; }).filter(g => g && g.titulos.length);
-    if (!confirm(`Lançar ${grupos.reduce((s, g) => s + g.titulos.length, 0)} título(s) no Contas a receber${$("#nt_cobrar").checked ? " e incluir na cobrança" : ""}?`)) return;
+      return v && v != "nao" ? { ...g, titulos: [...novos(g), ...fora(g)], cpf_cnpj: v == "novo" ? "" : v, cnpj_novo: v == "novo" ? $(`[data-n="${i}"]`).value : "" } : null; }).filter(g => g && g.titulos.length);
+    if (!confirm(`Lançar/recolocar ${grupos.reduce((s, g) => s + g.titulos.length, 0)} título(s) no Contas a receber${$("#nt_cobrar").checked ? " e incluir na cobrança" : ""}?`)) return;
     ev.target.disabled = true; ev.target.textContent = "Lançando…";
     try {
       const r = await api("nitrus/lancar", { grupos, cobrar: $("#nt_cobrar").checked });
-      modal(`<h2>Inadimplência do Nitrus lançada</h2><p><b>${r.lancados}</b> título(s) lançado(s)${r.com_cobranca ? `, ${r.com_cobranca} com boleto/PIX` : ""}${r.clientes_novos ? ` · ${r.clientes_novos} cliente(s) cadastrado(s)` : ""}${r.ja_existiam ? ` · ${r.ja_existiam} já estavam no sistema` : ""}.</p>
+      modal(`<h2>Inadimplência do Nitrus lançada</h2><p><b>${r.lancados}</b> título(s) lançado(s)${r.recolocados ? ` · <b>${r.recolocados}</b> recolocado(s) em cobrança` : ""}${r.clientes_novos ? ` · ${r.clientes_novos} cliente(s) cadastrado(s)` : ""}${r.ja_existiam ? ` · ${r.ja_existiam} já estavam no sistema` : ""}.</p>
         ${r.avisos.length ? `<ul class="lista">${r.avisos.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
         <p><button class="btn" onclick="fechar();FILTRO_REC='atrasado';ir('receber')">Ver os atrasados</button></p>`);
       await carregarEstado();

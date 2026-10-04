@@ -154,9 +154,27 @@ def achar_cliente(nome: str, codigo: str = "", cads: list[dict] | None = None) -
 
 
 def _ja_existe(doc: str, venc: str, valor: int) -> dict | None:
-    r = db.linhas("SELECT id, status FROM titulos WHERE cpf_cnpj=? AND vencimento=? AND valor_cent=? AND status!='cancelado'",
+    r = db.linhas("SELECT * FROM titulos WHERE cpf_cnpj=? AND vencimento=? AND valor_cent=? AND status!='cancelado'",
                   (doc, venc, valor))
     return r[0] if r else None
+
+
+def _estado(t: dict | None) -> str:
+    """'' = não está no sistema | 'cobranca' = aberto e sendo cobrado | 'fora' = aberto mas fora da cobrança | 'pago'."""
+    if not t:
+        return ""
+    if t["status"] == "pago":
+        return "pago"
+    return "cobranca" if financeiro.tem_cobranca(t) else "fora"
+
+
+def _recolocar_em_cobranca(t: dict) -> None:
+    """Título do relatório que está no sistema mas fora da cobrança (sem boleto, ou tirado da cobrança): volta a ser
+    cobrado pela régua sem boleto (PIX do escritório), com a NFS-e saindo no pagamento."""
+    campos = {"cobrar": 1, "boleto_situacao": "dispensado"} if not financeiro.tem_meio_de_pagamento(t) else {"cobrar": 1}
+    if t["nfse_status"] == "nao_emitir":
+        campos["nfse_status"] = "apos_pagamento"
+    financeiro.atualizar_titulo(t["id"], **campos)
 
 
 def analisar(pdf_b64: str) -> dict:
@@ -174,10 +192,13 @@ def analisar(pdf_b64: str) -> dict:
         g = grupos[chave]
         ja = _ja_existe(g["cpf_cnpj"], l["vencimento"], l["valor_cent"]) if g["cpf_cnpj"] else None
         g["titulos"].append({k: l[k] for k in ("vencimento", "valor_cent", "juros_cent", "total_cent", "dias")}
-                            | {"existe": ja["status"] if ja else ""})
+                            | {"existe": ja["status"] if ja else "", "estado": _estado(ja)})
     lista = sorted(grupos.values(), key=lambda g: (bool(g["cpf_cnpj"]), -sum(t["valor_cent"] for t in g["titulos"])))
+    estados = [t["estado"] for g in lista for t in g["titulos"]]
     return {"grupos": lista, "lidos": rel["lidos"], "impressos": rel["impressos"], "conferido": rel["conferido"],
-            "titulos": len(rel["linhas"])}
+            "titulos": len(rel["linhas"]),
+            "situacao": {"novos": estados.count(""), "em_cobranca": estados.count("cobranca"),
+                         "fora_da_cobranca": estados.count("fora"), "pagos": estados.count("pago")}}
 
 
 def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) -> dict:
@@ -185,7 +206,7 @@ def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) ->
     Os títulos seguem na régua de cobrança sem boleto (já vinham sendo cobrados); 'gerar_agora' fica só por
     compatibilidade — boleto, só pelo botão "Gerar boleto" do título."""
     from .empresas import cnpj_valido
-    res = {"lancados": 0, "com_cobranca": 0, "ja_existiam": 0, "clientes_novos": 0, "pulados": 0, "avisos": []}
+    res = {"lancados": 0, "com_cobranca": 0, "ja_existiam": 0, "recolocados": 0, "clientes_novos": 0, "pulados": 0, "avisos": []}
     for g in grupos:
         doc = clientes._digitos(g.get("cpf_cnpj"))
         novo = clientes._digitos(g.get("cnpj_novo"))
@@ -211,8 +232,12 @@ def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) ->
             res["clientes_novos"] += 1
             res["avisos"].append(f"{g['nome']}: cadastrado — complete o endereço em Clientes para o banco registrar o boleto")
         for t in g["titulos"]:
-            if _ja_existe(doc, t["vencimento"], int(t["valor_cent"])):
+            ja = _ja_existe(doc, t["vencimento"], int(t["valor_cent"]))
+            if ja:
                 res["ja_existiam"] += 1
+                if cobrar and _estado(ja) == "fora":          # está no sistema, mas não estava sendo cobrado
+                    _recolocar_em_cobranca(ja)
+                    res["recolocados"] += 1
                 continue
             tid = financeiro.criar_titulo(doc, financeiro.reais(int(t["valor_cent"])), DESCRICAO, vencimento=t["vencimento"],
                                           competencia=t["vencimento"][:7], emitir_nfse=True, apos_pagamento=True,
@@ -224,7 +249,8 @@ def lancar(grupos: list[dict], cobrar: bool = True, gerar_agora: bool = True) ->
                 financeiro.atualizar_titulo(tid, boleto_situacao="dispensado")
                 res["com_cobranca"] += 1
     db.registrar("importacao", f"Inadimplência do Nitrus: {res['lancados']} título(s) lançado(s), "
-                               f"{res['clientes_novos']} cliente(s) novo(s), {res['ja_existiam']} já existiam")
+                               f"{res['clientes_novos']} cliente(s) novo(s), {res['ja_existiam']} já existiam, "
+                               f"{res['recolocados']} recolocado(s) em cobrança")
     return res
 
 

@@ -108,3 +108,36 @@ def test_sem_cobranca_so_controla(base):  # noqa: F811
     r = nitrus.lancar([a["grupos"][1]], cobrar=False)
     t = db.linhas("SELECT * FROM titulos")[0]
     assert r["lancados"] == 1 and t["cobrar"] == 0 and not t["pix_copia_cola"]
+
+
+def test_reimportar_recoloca_em_cobranca_o_que_estava_fora(base):  # noqa: F811
+    """Caso real: títulos lançados antes sem meio de pagamento ou tirados da cobrança não apareciam em Atrasados.
+    Reimportar o relatório mostra o estado de cada um e recoloca em cobrança os que estavam fora; pagos ficam."""
+    from datetime import date
+
+    from nfse_itaborai import financeiro as fin
+    clientes.salvar({"cpf_cnpj": "11222333000181", "razao_social": "CLINICA NOVA VIDA LTDA", "codigo_externo": "1201"})
+    pdf = base64.b64encode(relatorio()).decode()
+    a = nitrus.analisar(pdf)
+    rps = next(x for x in a["grupos"] if x["cpf_cnpj"] == CLI_A["cpf_cnpj"])["titulos"][0]
+    nova = next(x for x in a["grupos"] if x["cpf_cnpj"] == "11222333000181")["titulos"][0]
+    # rps: lançado à mão, sem boleto e fora da cobrança (cobrar=0); nova: lançado e pago
+    a1 = fin.criar_titulo(CLI_A["cpf_cnpj"], fin.reais(rps["valor_cent"]), nitrus.DESCRICAO, vencimento=rps["vencimento"],
+                          emitir_nfse=False, cobrar=False)
+    a2 = fin.criar_titulo("11222333000181", fin.reais(nova["valor_cent"]), nitrus.DESCRICAO, vencimento=nova["vencimento"],
+                          emitir_nfse=False)
+    fin.baixar(a2, "2026-10-01", fin.reais(nova["valor_cent"]), "pix")
+    a = nitrus.analisar(pdf)
+    estados = {t["vencimento"]: t["estado"] for g in a["grupos"] for t in g["titulos"]}
+    assert estados[rps["vencimento"]] == "fora" and estados[nova["vencimento"]] == "pago"
+    assert a["situacao"] == {"novos": 1, "em_cobranca": 0, "fora_da_cobranca": 1, "pagos": 1}
+    assert fin.situacao(fin.obter_titulo(a1), date(2026, 10, 5)) == "sem_cobranca"
+    r = nitrus.lancar(a["grupos"])
+    assert (r["recolocados"], r["lancados"], r["ja_existiam"]) == (1, 1, 2)
+    t = fin.obter_titulo(a1)
+    assert (t["cobrar"], t["boleto_situacao"], t["nfse_status"]) == (1, "dispensado", "apos_pagamento")
+    assert fin.situacao(t, date(2026, 10, 5)) == "atrasado"
+    assert fin.obter_titulo(a2)["status"] == "pago"                       # pago não é mexido
+    atras = [x["id"] for x in fin.listar_titulos("atrasado", em=date(2026, 10, 5))]
+    assert a1 in atras and len(atras) == 2                                # todos os do relatório em cobrança, menos o pago
+    assert nitrus.lancar(nitrus.analisar(pdf)["grupos"])["recolocados"] == 0   # segunda vez: nada a fazer

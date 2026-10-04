@@ -761,3 +761,8 @@ td .data-pt input[type="text"], label[style*="row"] .data-pt input[type="text"],
 .par > label { display: flex; align-items: center; gap: 4px; margin: 0; font-weight: 400; }
 .par small { color: var(--muted); font-size: 11px; width: 2.6em; }
 @media (max-width: 1500px) { .recor .par { flex-wrap: wrap; } .recor .par small { width: auto; min-width: 2.6em; } }
+
+/* importação do Nitrus: situação de cada título já existente */
+.imp-sit { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.imp-tits span.fora { border-color: var(--atencao, #f2a516); background: color-mix(in srgb, var(--atencao, #f2a516) 12%, transparent); }
+.imp-tits span small { color: var(--muted); font-size: 11px; margin-left: 4px; }
