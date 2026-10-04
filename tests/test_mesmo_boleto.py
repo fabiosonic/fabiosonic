@@ -11,7 +11,7 @@ from test_financeiro import CLI_A, base  # noqa: F401  (fixture)
 def _inter(monkeypatch, situacao="A_RECEBER"):
     registros = []
 
-    def criar(t, cfg=None, espera=0):
+    def criar(t, cfg=None, espera=0, atualizado=None):
         registros.append(t["id"])
         return {"banco_id": f"cod-{t['id']}-{len(registros)}", "linha_digitavel": "07790.00116 1",
                 "pix_copia_cola": "000201PIXDOBOLETO", "nosso_numero": "123"}

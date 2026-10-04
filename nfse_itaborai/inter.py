@@ -185,10 +185,14 @@ def pagador(cpf_cnpj: str) -> dict:
 
 # ---------------------------------------------------------------- operações
 
-def criar_cobranca(titulo: dict, cfg: dict | None = None, espera: float = 8.0) -> dict:
-    """Registra o boleto (com PIX) do título no Inter e devolve os campos para gravar no título."""
+def criar_cobranca(titulo: dict, cfg: dict | None = None, espera: float = 8.0, atualizado: dict | None = None) -> dict:
+    """Registra o boleto (com PIX) do título no Inter e devolve os campos para gravar no título.
+    atualizado = título já vencido: {"valor_cent", "vencimento", "original_cent", "venc_original", "ate"} — o boleto
+    sai com o valor atualizado (multa e juros até 'ate'), sem nova multa e com juros diários só sobre o original."""
     cfg = cfg or config.carregar()
     c = cfg["cobranca"]
+    if atualizado:
+        titulo = titulo | {"valor_cent": atualizado["valor_cent"], "vencimento": atualizado["vencimento"]}
     valor = titulo["valor_cent"] / 100
     if valor < 2.5:
         raise ErroInter("O Inter só emite boleto a partir de R$ 2,50.")
@@ -200,10 +204,20 @@ def criar_cobranca(titulo: dict, cfg: dict | None = None, espera: float = 8.0) -
         "mensagem": {"linha1": f"{titulo['descricao']}"[:78],
                      "linha2": f"Competência {titulo['competencia'][5:]}/{titulo['competencia'][:4]}"[:78]},
     }
-    if float(c.get("multa_pct") or 0) > 0:
-        corpo["multa"] = {"codigo": "PERCENTUAL", "taxa": float(c["multa_pct"])}
-    if float(c.get("juros_mes_pct") or 0) > 0:
-        corpo["mora"] = {"codigo": "TAXAMENSAL", "taxa": float(c["juros_mes_pct"])}
+    if atualizado:
+        def br(cent):
+            return f"{cent / 100:,.2f}".translate(str.maketrans(",.", ".,"))
+        ate, vo = atualizado["ate"], atualizado["venc_original"]
+        corpo["mensagem"]["linha3"] = (f"Original R$ {br(atualizado['original_cent'])} venc. {vo[8:10]}/{vo[5:7]}/{vo[:4]}"
+                                       f" + multa e juros ate {ate[8:10]}/{ate[5:7]}/{ate[:4]}")[:78]
+        dia = round(atualizado["original_cent"] / 100 * float(c.get("juros_mes_pct") or 0) / 100 / 30, 2)
+        if dia > 0:
+            corpo["mora"] = {"codigo": "VALORDIA", "valor": dia}
+    else:
+        if float(c.get("multa_pct") or 0) > 0:
+            corpo["multa"] = {"codigo": "PERCENTUAL", "taxa": float(c["multa_pct"])}
+        if float(c.get("juros_mes_pct") or 0) > 0:
+            corpo["mora"] = {"codigo": "TAXAMENSAL", "taxa": float(c["juros_mes_pct"])}
     cod = _api("POST", "/cobrancas", corpo, cfg).get("codigoSolicitacao")
     if not cod:
         raise ErroInter("Inter não devolveu o código da cobrança.")

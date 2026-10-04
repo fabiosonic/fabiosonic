@@ -148,7 +148,9 @@ MIGRACOES = {
     "titulos": {"origem": "TEXT DEFAULT 'sistema'", "nfse_canal": "TEXT DEFAULT 'municipal'",
                 "nfse_chave": "TEXT DEFAULT ''", "servico_id": "TEXT DEFAULT ''", "banco_id": "TEXT DEFAULT ''", "nosso_numero": "TEXT DEFAULT ''",
                 "boleto_pdf": "TEXT DEFAULT ''", "cobrar": "INTEGER NOT NULL DEFAULT 1",
-                "boleto_situacao": "TEXT DEFAULT ''",   # 'expirado'/'cancelado' no banco: não é refeito (sem custo)
+                "boleto_situacao": "TEXT DEFAULT ''",
+                # título vencido: boleto registrado com o valor atualizado (multa e juros até o registro)
+                "boleto_valor_cent": "INTEGER DEFAULT 0", "boleto_vencimento": "TEXT DEFAULT ''",   # 'expirado'/'cancelado' no banco: não é refeito (sem custo)
                 "nfse_data": "TEXT DEFAULT ''", "extras": "TEXT DEFAULT ''",
                 # cartão de crédito (InfinitePay): nº do pedido, link, valor com a taxa repassada e situação
                 "cartao_id": "TEXT DEFAULT ''", "cartao_link": "TEXT DEFAULT ''", "cartao_total_cent": "INTEGER DEFAULT 0",

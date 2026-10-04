@@ -55,9 +55,18 @@ def encargos(titulo: dict, em: date | None = None) -> dict:
     cob = config.carregar()["cobranca"]
     v = Decimal(titulo["valor_cent"])
     multa = (v * Decimal(str(cob["multa_pct"])) / 100).quantize(Decimal("1"), ROUND_HALF_UP)
+    if titulo.get("boleto_valor_cent") and titulo.get("boleto_vencimento"):
+        # boleto atualizado: vale o valor dele; depois do novo vencimento, só juros diários sobre o valor
+        # original (sem nova multa e sem juros sobre juros) — exatamente o que o banco cobra
+        extra = max(0, (em - date.fromisoformat(titulo["boleto_vencimento"])).days)
+        juros_extra = (v * Decimal(str(cob["juros_mes_pct"])) / 100 / 30 * extra).quantize(Decimal("1"), ROUND_HALF_UP)
+        total = titulo["boleto_valor_cent"] + int(juros_extra)
+        multa = min(int(multa), total - titulo["valor_cent"])
+        return {"dias_atraso": dias, "multa_cent": multa, "juros_cent": total - titulo["valor_cent"] - multa,
+                "total_cent": total}
     juros = (v * Decimal(str(cob["juros_mes_pct"])) / 100 / 30 * dias).quantize(Decimal("1"), ROUND_HALF_UP)
     return {"dias_atraso": dias, "multa_cent": int(multa), "juros_cent": int(juros),
-            "total_cent": titulo["valor_cent"] + int(multa) + int(juros)}
+            "total_cent": titulo["valor_cent"] + int(juros) + int(multa)}
 
 
 # Só está "em cobrança" (a receber, atraso, inadimplência, previsão de caixa) o título com cobrança de fato

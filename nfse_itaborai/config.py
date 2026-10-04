@@ -25,6 +25,7 @@ PADRAO = {
         "inter_chave": "",          # arquivo .key gerado na integração do Inter
         "inter_conta": "",          # nº da conta corrente (só se houver mais de uma)
         "inter_sandbox": False,
+        "dias_boleto_atrasado": 5,  # título já vencido: o boleto (valor atualizado) vence em N dias
         "inter_dias_agenda": 60,    # dias após o vencimento em que o banco ainda aceita o pagamento (máx. 60)
         "multa_pct": 2.0,
         "juros_mes_pct": 1.0,

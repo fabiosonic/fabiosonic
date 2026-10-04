@@ -253,3 +253,24 @@ def test_config_antiga_perde_whatsapp_por_api_e_consulta_receita(tmp_path, monke
     c = config.carregar()
     assert "whatsapp" not in c and "enriquecer_contatos" not in c["automacao"]
     assert "zapi" not in (tmp_path / "dados" / "config.json").read_text(encoding="utf-8")
+
+
+def test_titulo_vencido_registra_um_boleto_com_valor_atualizado(banco, monkeypatch):
+    """Vencido: valor original + multa (2%) + juros (1% a.m. pro rata) até o registro, vence em 5 dias, sem nova
+    multa e com juros diários só sobre o original (sem juros sobre juros)."""
+    from datetime import date
+    monkeypatch.setattr(financeiro, "hoje", lambda: date(2026, 10, 5))
+    tid = _titulo(valor="400", venc="2026-07-15")                     # 82 dias de atraso em 05/10/2026
+    t = cobranca.preparar_pagamento(tid)
+    _, pedido = FakeInter.pedidos[0]
+    # 400,00 + 8,00 de multa + 400 × 1% / 30 × 82 = 10,93 de juros
+    assert pedido["valorNominal"] == 418.93 and pedido["dataVencimento"] == "2026-10-10"
+    assert "multa" not in pedido and pedido["mora"] == {"codigo": "VALORDIA", "valor": 0.13}
+    assert pedido["mensagem"]["linha3"] == "Original R$ 400,00 venc. 15/07/2026 + multa e juros ate 05/10/2026"
+    assert (t["boleto_valor_cent"], t["boleto_vencimento"]) == (41893, "2026-10-10")
+    assert financeiro.encargos(t, date(2026, 10, 9))["total_cent"] == 41893      # até o novo vencimento: o do boleto
+    assert financeiro.encargos(t, date(2026, 10, 20))["total_cent"] == 41893 + 133   # depois: + 10 dias de juros
+    texto = cobranca.mensagem(t, 82, em=date(2026, 10, 5))[1]
+    assert "R$ 418,93" in texto and "vence em 10/10/2026" in texto
+    cobranca.preparar_pagamento(tid)
+    assert len(FakeInter.cobrancas) == 1                                # nunca outro boleto

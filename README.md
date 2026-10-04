@@ -482,6 +482,13 @@ boleto (passou o prazo de pagamento após o vencimento, em Configurações › C
 é refeito: as mensagens seguintes levam o **PIX da chave do escritório** com o valor atualizado (sem custo), e o
 pagamento é baixado pelo extrato.
 
+**Título já vencido** (ex.: inadimplência importada): o banco não aceita vencimento no passado, então o único boleto é
+registrado com o **valor atualizado** — original + multa + juros até o dia do registro — e vence em 5 dias
+(Configurações › Cobrança). Ele **não** tem nova multa; depois do novo vencimento o banco cobra só juros diários sobre o
+valor original (sem juros sobre juros). O boleto traz a composição ("Original R$ … venc. … + multa e juros até …"), e as
+telas e mensagens mostram o mesmo valor do boleto. A NFS-e sai pelo valor dos honorários: multa e juros são receita
+financeira, fora da base do ISS.
+
 ### Datas e meses sempre em português
 
 Os campos de data são digitados no padrão brasileiro (**dd/mm/aaaa**, com máscara e botão de calendário) e os de mês

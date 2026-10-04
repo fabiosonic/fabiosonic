@@ -14,7 +14,7 @@ import smtplib
 from email.utils import formataddr
 import ssl
 import urllib.parse
-from datetime import date
+from datetime import date, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -31,7 +31,15 @@ def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
         return t
     prov = cfg["cobranca"]["provedor"]
     if prov == "inter" and not t["banco_id"] and inter.configurado(cfg):
-        financeiro.atualizar_titulo(tid, **inter.criar_cobranca(t, cfg))
+        # um único boleto por título; se já venceu, ele sai com o valor atualizado (multa e juros até hoje)
+        hoje = financeiro.hoje()
+        atualizado, extra = None, {}
+        if date.fromisoformat(t["vencimento"]) < hoje:
+            venc = (hoje + timedelta(days=int(cfg["cobranca"].get("dias_boleto_atrasado", 5)))).isoformat()
+            atualizado = {"valor_cent": financeiro.encargos(t, hoje)["total_cent"], "vencimento": venc,
+                          "original_cent": t["valor_cent"], "venc_original": t["vencimento"], "ate": hoje.isoformat()}
+            extra = {"boleto_valor_cent": atualizado["valor_cent"], "boleto_vencimento": venc}
+        financeiro.atualizar_titulo(tid, **inter.criar_cobranca(t, cfg, atualizado=atualizado), **extra)
         db.registrar("boleto", f"Título {tid} ({t['cliente_nome']}): boleto registrado no Inter")
         try:
             salvar_boleto(tid, cfg)
@@ -232,6 +240,8 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
             assunto = f"Honorários em aberto — vencidos em {_data(t['vencimento'])}"
             abertura = (f"Consta em aberto o pagamento de {_brl(t['valor_cent'])}, vencido em {_data(t['vencimento'])}. "
                         f"Valor atualizado com multa e juros: {_brl(t['total_cent'])}.")
+            if t.get("boleto_vencimento"):
+                abertura += f" O boleto já está com esse valor e vence em {_data(t['boleto_vencimento'])}."
     elif etapa < 0:
         assunto = f"Lembrete: honorários vencem em {_data(t['vencimento'])}"
         abertura = f"Lembramos que o pagamento de {_brl(t['valor_cent'])} vence em {_data(t['vencimento'])}."
@@ -242,6 +252,8 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
         assunto = f"Pagamento em aberto há {t['dias_atraso']} dia(s)"
         abertura = (f"Não identificamos o pagamento de {_brl(t['valor_cent'])}, vencido em {_data(t['vencimento'])}. "
                     f"Valor atualizado com multa e juros: {_brl(t['total_cent'])}.")
+        if t.get("boleto_vencimento") and t["boleto_vencimento"] >= (em or financeiro.hoje()).isoformat():
+            abertura += f" O boleto já está com esse valor e vence em {_data(t['boleto_vencimento'])}."
     cartao = None
     if t.get("cartao_link") and t.get("cartao_status") == "aberto":
         base = t["total_cent"] if etapa > 0 else t["valor_cent"]
