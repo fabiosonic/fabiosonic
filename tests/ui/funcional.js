@@ -241,6 +241,22 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     certo(d.banco_id && d.banco_id !== t.banco_id, 'boleto não foi refeito: ' + d.banco_id);
     certo(/atualizado/.test(await aviso()), await aviso());
   });
+  await passo('Contas a receber: filtro por coluna (texto e lista), contagem e limpar', async () => {
+    await ir('receber'); await p.click('.abas button[data-f="todos"]'); await espera(1500);
+    const B = '.tabela-bloco[data-flt="receber"]';
+    const total = await p.$$eval(B + ' tbody tr[data-fv]', r => r.length);
+    const nome = (await p.$$eval(B + ' tbody tr[data-fv] td:first-child b', t => t.map(x => x.textContent)))[0].split(' ')[0];
+    await p.fill(B + ' input.flt[data-i="0"]', nome.toLowerCase()); await espera(400);
+    const vis = await p.$$eval(B + ' tbody tr[data-fv]:not([hidden])', r => r.length);
+    certo(vis > 0 && vis < total, `filtro de cliente não filtrou: ${vis} de ${total}`);
+    certo(/de \d+ com os filtros/.test(await p.textContent(B + ' .flt-cont')), 'contagem do filtro não apareceu');
+    await p.selectOption(B + ' select.flt[data-i="3"]', { label: 'Pago' }); await espera(400);
+    const pagos = await p.$$eval(B + ' tbody tr[data-fv]:not([hidden]) td:nth-child(4)', t => t.map(x => x.textContent));
+    certo(pagos.every(x => /Pago/.test(x)), 'filtro de situação deixou passar outra situação');
+    await p.click(B + ' .flt-limpar'); await espera(400);
+    certo((await p.$$eval(B + ' tbody tr[data-fv]:not([hidden])', r => r.length)) === total, 'limpar filtros não voltou tudo');
+    await p.click('.abas button[data-f="a_receber"]'); await espera(1200);
+  });
   await passo('Contas a receber: histórico de cobrança', async () => {
     const t = (await api('titulos', { filtro: 'a_receber' }))[0];
     await ir('receber'); await p.evaluate(id => historicoTitulo(id), t.id); await espera(800);

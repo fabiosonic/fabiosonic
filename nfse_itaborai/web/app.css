@@ -767,3 +767,14 @@ td .data-pt input[type="text"], label[style*="row"] .data-pt input[type="text"],
 .imp-sit { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .imp-tits span.fora { border-color: var(--atencao, #f2a516); background: color-mix(in srgb, var(--atencao, #f2a516) 12%, transparent); }
 .imp-tits span small { color: var(--muted); font-size: 11px; margin-left: 4px; }
+
+/* ------------------------------------------------------------------ filtro por coluna (linha sob o cabeçalho) */
+tr.filtros th { padding: 6px 8px; background: var(--superficie); position: static; }
+tr.filtros .flt { width: 100%; min-width: 70px; max-width: 220px; height: 28px; padding: 3px 8px; font-size: 12px; font-weight: 400;
+  border: 1px solid var(--borda); border-radius: 6px; background: var(--superficie2); color: var(--texto); }
+tr.filtros th.n .flt { text-align: right; margin-left: auto; display: block; max-width: 120px; }
+tr.filtros .flt:focus { outline: 2px solid color-mix(in srgb, var(--primaria) 45%, transparent); outline-offset: 0; border-color: var(--primaria); }
+tr.filtros .flt:not([value=""]):not(select), tr.filtros select.flt:has(option:checked:not([value=""])) { border-color: var(--primaria); }
+.flt-barra { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin: 0 0 8px; font-size: 13px; color: var(--texto2); }
+.flt-barra[hidden] { display: none; }
+@media (max-width: 760px) { tr.filtros { display: none; } }

@@ -69,11 +69,51 @@ function selo(sit) {
   const [c, t] = m[sit] || ["neutro", sit];
   return `<span class="selo ${c}">${esc(t)}</span>`;
 }
-function tabela(cols, linhas, vazio = "Nada por aqui.") {
+// ---------------------------------------------------------------- tabelas (com filtro por coluna)
+const FILTROS_COL = {};                    // valores dos filtros por tabela: continuam valendo quando a tela é redesenhada
+const semAcento = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const _txtDiv = document.createElement("div");
+const textoDe = h => { _txtDiv.innerHTML = String(h ?? "").replace(/<(div|br)\b/gi, " <$1"); return _txtDiv.textContent.replace(/\s+/g, " ").trim(); };
+/** op.filtros = nome da tabela: liga uma linha de filtros sob o cabeçalho (texto livre; lista para colunas com `fsel`).
+ *  Por coluna: `fv: linha => texto` (valor usado no filtro), `filtro: false` (sem filtro). op.soma = linha => centavos. */
+function tabela(cols, linhas, vazio = "Nada por aqui.", op = {}) {
   if (!linhas.length) return `<div class="vazio">${vazio}</div>`;
-  return `<div class="tabela"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${c.t}</th>`).join("")}</tr></thead><tbody>${
-    linhas.map(l => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}" data-r="${esc(String(c.t).replace(/<[^>]*>/g, ""))}">${c.f(l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  const ch = op.filtros || "", F = ch ? (FILTROS_COL[ch] = FILTROS_COL[ch] || {}) : {};
+  const rot = c => textoDe(c.t);
+  const comFiltro = cols.map(c => !!ch && c.filtro !== false && !!rot(c) && !/^a[cç][oõ]es$/i.test(rot(c)) && !/<input/i.test(c.t));
+  const L = linhas.map(l => { const html = cols.map(c => c.f(l)); return { html, fv: cols.map((c, i) => comFiltro[i] ? (c.fv ? String(c.fv(l)) : textoDe(html[i])) : ""), s: op.soma ? op.soma(l) || 0 : 0 }; });
+  const ok = r => cols.every((c, i) => { const v = F[i]; if (!v) return true;
+    return c.fsel ? semAcento(r.fv[i]) == semAcento(v) : semAcento(r.fv[i]).includes(semAcento(v)); });
+  const filtros = !ch ? "" : `<tr class="filtros">${cols.map((c, i) => { if (!comFiltro[i]) return "<th></th>";
+    const v = F[i] || "", r = esc(rot(c));
+    if (c.fsel) { const ops = [...new Set(L.map(x => x.fv[i]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+      return `<th><select class="flt" data-i="${i}" aria-label="Filtrar ${r}"><option value="">Todos</option>${ops.map(o => `<option ${semAcento(o) == semAcento(v) ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></th>`; }
+    return `<th class="${c.n ? "n" : ""}"><input class="flt" data-i="${i}" value="${esc(v)}" placeholder="filtrar" aria-label="Filtrar ${r}" ${c.n ? 'inputmode="decimal"' : ""}></th>`; }).join("")}</tr>`;
+  const vis = L.filter(ok);
+  const cab = ch ? `<div class="flt-barra" ${Object.values(F).some(Boolean) ? "" : "hidden"}><span class="flt-cont">${resumoFiltro(vis.length, L.length, vis.reduce((a, r) => a + r.s, 0), !!op.soma)}</span>
+    <button class="btn min sec flt-limpar" type="button">${ic("x")}Limpar filtros</button></div>` : "";
+  return `<div class="tabela-bloco" ${ch ? `data-flt="${esc(ch)}"` : ""}>${cab}<div class="tabela"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${c.t}</th>`).join("")}</tr>${filtros}</thead><tbody>${
+    L.map(r => `<tr ${ch ? `data-fv="${esc(JSON.stringify(r.fv))}" data-s="${r.s}"` : ""} ${ch && !ok(r) ? "hidden" : ""}>${cols.map((c, i) => `<td class="${c.n ? "n" : ""}" data-r="${esc(rot(c))}">${r.html[i]}</td>`).join("")}</tr>`).join("")
+    }${ch ? `<tr class="flt-vazio" ${vis.length ? "hidden" : ""}><td colspan="${cols.length}"><div class="vazio">Nada com esses filtros.</div></td></tr>` : ""}</tbody></table></div></div>`;
 }
+function resumoFiltro(n, total, soma, comSoma) { return `<b>${n}</b> de ${total} com os filtros${comSoma ? ` · <b>${brl(soma)}</b>` : ""}`; }
+function aplicarFiltros(bloco) {
+  const ch = bloco.dataset.flt, F = FILTROS_COL[ch] = {};
+  $$(".flt", bloco).forEach(x => { if (x.value) F[x.dataset.i] = x.value; });
+  const sel = new Set($$("select.flt", bloco).map(x => x.dataset.i));
+  let n = 0, total = 0, soma = 0;
+  $$("tbody tr[data-fv]", bloco).forEach(tr => { total++;
+    const fv = JSON.parse(tr.dataset.fv);
+    const ok = Object.entries(F).every(([i, v]) => sel.has(i) ? semAcento(fv[i]) == semAcento(v) : semAcento(fv[i]).includes(semAcento(v)));
+    tr.hidden = !ok; if (ok) { n++; soma += +tr.dataset.s || 0; } });
+  const vz = $(".flt-vazio", bloco); if (vz) vz.hidden = n > 0;
+  const barra = $(".flt-barra", bloco); barra.hidden = !Object.keys(F).length;
+  $(".flt-cont", bloco).innerHTML = resumoFiltro(n, total, soma, $$("tbody tr[data-fv]", bloco).some(tr => +tr.dataset.s));
+}
+document.addEventListener("input", e => { const b = e.target.closest && e.target.matches(".flt") && e.target.closest(".tabela-bloco"); if (b) aplicarFiltros(b); });
+document.addEventListener("change", e => { const b = e.target.closest && e.target.matches("select.flt") && e.target.closest(".tabela-bloco"); if (b) aplicarFiltros(b); });
+document.addEventListener("click", e => { const btn = e.target.closest && e.target.closest(".flt-limpar"); if (!btn) return;
+  const b = btn.closest(".tabela-bloco"); $$(".flt", b).forEach(x => { x.value = ""; }); aplicarFiltros(b); });
 // ---------------------------------------------------------------- formatação para leitura rápida
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const mesExtenso = c => c ? `${MESES[+c.slice(5, 7) - 1]} de ${c.slice(0, 4)}` : "";

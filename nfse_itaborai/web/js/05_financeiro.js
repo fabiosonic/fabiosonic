@@ -15,7 +15,7 @@ PAGINAS.receber = async el => {
       { t: "Cliente", f: t => celNome(t.cliente_nome, esc(frase(t.descricao))) },
       { t: "Vencimento", f: t => `<span class="nw">${dt(t.vencimento)}</span><div class="sub nw">comp. ${mes(t.competencia)}</div>` },
       { t: "Valor", n: 1, f: t => num(t.valor_cent) + (t.situacao == "atrasado" ? `<div class="sub">atualizado ${num(t.total_cent)}</div>` : t.status == "pago" ? `<div class="sub">pago ${num(t.valor_pago_cent)} em ${dt(t.data_pagamento)}</div>` : "") },
-      { t: "Situação", f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "")
+      { t: "Situação", fsel: 1, fv: t => textoDe(selo(t.situacao)), f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "")
         + (t.situacao == "juridico" ? `<div class="sub">no jurídico desde ${dt(t.juridico_em)}</div>${t.juridico_obs ? `<div class="sub quebra" title="${esc(t.juridico_obs)}">${esc(t.juridico_obs.slice(0, 80))}</div>` : ""}` : "")
         + (t.status == "aberto" && t.cobrar && t.boleto_situacao == "dispensado" ? `<div class="sub">cobrança sem boleto (PIX do escritório)</div>`
           : t.status == "aberto" && t.cobrar && !t.banco_id && !t.pix_copia_cola && !t.linha_digitavel
@@ -23,8 +23,9 @@ PAGINAS.receber = async el => {
         + (t.parcial_status == "pendente" ? `<div>${estadoSelo("atencao", "Pagamento parcial")}</div><div class="sub">faltaram ${brl(t.parcial_dif_cent)}</div>`
           : t.parcial_status == "desconto" ? `<div class="sub">desconto de ${brl(t.parcial_dif_cent)}</div>`
           : t.parcial_status == "cobrar" ? `<div class="sub">saldo de ${brl(t.parcial_dif_cent)} em novo título</div>` : "") },
-      { t: "NFS-e", f: t => selo(t.nfse_status) + (t.nfse_numero ? `<div class="sub">${t.nfse_link && t.nfse_link.startsWith("http") ? `<a href="${esc(t.nfse_link)}" target="_blank">${esc(t.nfse_numero)}</a>` : esc(t.nfse_numero)}</div>` : "") + (t.nfse_erro ? `<div class="sub" title="${esc(t.nfse_erro)}">${esc(t.nfse_erro.slice(0, 60))}…</div>` : "") },
-      { t: "Ações", f: t => acoesTitulo(t) }], lst)}</div>`;
+      { t: "NFS-e", fsel: 1, fv: t => textoDe(selo(t.nfse_status)), f: t => selo(t.nfse_status) + (t.nfse_numero ? `<div class="sub">${t.nfse_link && t.nfse_link.startsWith("http") ? `<a href="${esc(t.nfse_link)}" target="_blank">${esc(t.nfse_numero)}</a>` : esc(t.nfse_numero)}</div>` : "") + (t.nfse_erro ? `<div class="sub" title="${esc(t.nfse_erro)}">${esc(t.nfse_erro.slice(0, 60))}…</div>` : "") },
+      { t: "Ações", f: t => acoesTitulo(t) }], lst, "Nada por aqui.",
+      { filtros: "receber", soma: t => t.status == "aberto" ? t.total_cent : t.status == "pago" ? t.valor_pago_cent : 0 })}</div>`;
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_REC = b.dataset.f; ir("receber"); });
   $("#r_comp").onchange = e => { el._comp = e.target.value; ir("receber"); };
   $("#novo_t").onclick = novoTitulo;
@@ -331,9 +332,9 @@ PAGINAS.cobranca = async el => {
   <div class="card"><h2>WhatsApp ainda não enviado (${fila.length}) ${fila.length && ww.ativo ? '<button class="btn" id="wa_auto">Enviar agora</button>' : ""} ${fila.length ? '<button class="btn sec" id="wa_seq">Enviar manualmente em sequência</button>' : ""}</h2>
     <p class="sub">${ww.ativo ? (ww.enviando ? "<b>Enviando agora pelo WhatsApp…</b> " : "") + "O robô envia esta fila sozinho a cada rodada (de hora em hora) e logo depois de “Rodar régua agora”." : "O WhatsApp do escritório não está conectado: estas mensagens saem sozinhas assim que você conectar em Configurações › WhatsApp. Enquanto isso, dá para enviar manualmente em sequência."} Só entram os clientes marcados em Clientes › “Cobrar por WhatsApp”.</p>
     ${tabela([{ t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Venc.", f: e => dt(e.vencimento) }, { t: "Valor", n: 1, f: e => num(e.valor_cent) },
-      { t: "Etapa", f: e => nomeEtapa(e.etapa) },
-      { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔")}</div>
-  <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Etapa", f: e => nomeEtapa(e.etapa) }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.")}</div>`;
+      { t: "Etapa", fsel: 1, fv: e => textoDe(nomeEtapa(e.etapa)), f: e => nomeEtapa(e.etapa) },
+      { t: "", f: e => `<a class="btn min" href="${esc(e.detalhe)}" target="_blank" onclick="setTimeout(()=>feito(${e.id}),800)">Enviar</a> <button class="btn min sec" onclick="feito(${e.id})">Marcar feito</button>` }], fila, "Nenhuma mensagem pendente ✔", { filtros: "cob_fila" })}</div>
+  <div class="card"><h2>Últimos envios</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Cliente", f: e => celNome(e.cliente_nome) }, { t: "Etapa", fsel: 1, fv: e => textoDe(nomeEtapa(e.etapa)), f: e => nomeEtapa(e.etapa) }, { t: "Canal", fsel: 1, f: e => e.canal }, { t: "Status", fsel: 1, fv: e => textoDe(selo(e.status)), f: e => selo(e.status) }, { t: "Detalhe", f: e => `<span class="sub">${esc(e.canal == "whatsapp" ? "" : e.detalhe)}</span>` }], hist, "Nenhum envio ainda.", { filtros: "cob_hist" })}</div>`;
   if ($("#wa_seq")) $("#wa_seq").onclick = () => enviarSequencia(fila);
   if ($("#wa_auto")) $("#wa_auto").onclick = async () => { await api("whatsapp_web/enviar_fila"); aviso("Enviando a fila pelo WhatsApp em segundo plano…", 6000); setTimeout(() => ir("cobranca"), 4000); };
   $("#rr").onclick = async () => { const r = await api("regua/rodar"); if (r.fora_do_horario) return aviso(r.fora_do_horario, 9000);
@@ -361,9 +362,9 @@ PAGINAS.pagar = async el => {
   el.innerHTML = `<h1>Contas a pagar <span class="acoes"><button class="btn" id="nd">${ic("mais")}Nova despesa</button></span></h1>
   <div class="card"><div class="abas">${[["a_pagar", "A pagar"], ["atrasado", "Vencidas"], ["pago", "Pagas"], ["todos", "Todas"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_PAG ? "on" : ""}">${t}</button>`).join("")}</div>
   <p class="sub">${lst.length} despesa(s) · ${brl(lst.reduce((a, d) => a + d.valor_cent, 0))}</p>
-  ${tabela([{ t: "Descrição", f: d => `${esc(d.descricao)}<div class="sub">${esc(d.fornecedor)}${d.recorrente ? " · recorrente" : ""}</div>` }, { t: "Categoria", f: d => esc(d.categoria) },
-    { t: "Vencimento", f: d => dt(d.vencimento) }, { t: "Valor", n: 1, f: d => num(d.valor_cent) }, { t: "Situação", f: d => selo(d.situacao) },
-    { t: "", f: d => d.status == "aberto" ? `<button class="btn min" onclick="pagarDesp(${d.id})">Pagar</button> <button class="btn min sec ico" title="Editar" aria-label="Editar" onclick='editarDesp(${JSON.stringify(d).replace(/'/g, "&#39;")})'>${ic("editar")}</button> <button class="btn min sec ico perigo-txt" title="Excluir" aria-label="Excluir" onclick="excluirDesp(${d.id})">${ic("lixeira")}</button>` : "" }], lst)}</div>`;
+  ${tabela([{ t: "Descrição", f: d => `${esc(d.descricao)}<div class="sub">${esc(d.fornecedor)}${d.recorrente ? " · recorrente" : ""}</div>` }, { t: "Categoria", fsel: 1, fv: d => d.categoria, f: d => esc(d.categoria) },
+    { t: "Vencimento", f: d => dt(d.vencimento) }, { t: "Valor", n: 1, f: d => num(d.valor_cent) }, { t: "Situação", fsel: 1, fv: d => textoDe(selo(d.situacao)), f: d => selo(d.situacao) },
+    { t: "", f: d => d.status == "aberto" ? `<button class="btn min" onclick="pagarDesp(${d.id})">Pagar</button> <button class="btn min sec ico" title="Editar" aria-label="Editar" onclick='editarDesp(${JSON.stringify(d).replace(/'/g, "&#39;")})'>${ic("editar")}</button> <button class="btn min sec ico perigo-txt" title="Excluir" aria-label="Excluir" onclick="excluirDesp(${d.id})">${ic("lixeira")}</button>` : "" }], lst, "Nada por aqui.", { filtros: "pagar", soma: d => d.valor_cent })}</div>`;
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_PAG = b.dataset.f; ir("pagar"); });
   $("#nd").onclick = () => editarDesp({});
 };
@@ -396,7 +397,7 @@ PAGINAS.conciliacao = async el => {
     { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
       <select class="classif" data-m="${m.id}" data-v="${m.valor_cent}"><option value="">${m.valor_cent > 0 ? "Classificar entrada…" : "Classificar saída…"}</option>${m.valor_cent > 0
         ? '<option value="transferencia">Transferência entre contas</option><option value="aporte">Aporte / dinheiro do sócio</option><option value="outra_receita">Outra receita (não é honorário)</option>'
-        : '<option value="despesa">Lançar como despesa paga</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (retirada, estorno…)</option>'}</select></div>` }], pend, "Tudo conciliado ✔")}</div>
+        : '<option value="despesa">Lançar como despesa paga</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (retirada, estorno…)</option>'}</select></div>`, filtro: false }], pend, "Tudo conciliado ✔", { filtros: "conc_pend", soma: m => m.valor_cent })}</div>
   <div class="card"><div class="card-cab"><h2>${ic("banco")}Extrato da conta</h2><span class="sub">todos os lançamentos importados — entradas e saídas</span></div>
     <div class="barra"><label>Período<select id="ex_per">${(() => { const h = new Date(hojeISO() + "T12:00"), o = [];
       for (let k = 0; k < 12; k++) { const d = new Date(h.getFullYear(), h.getMonth() - k, 1), v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; o.push(`<option value="${v}" ${v == EXT_PER ? "selected" : ""}>${mesExtenso(v)}</option>`); }
@@ -445,8 +446,8 @@ async function extratoConta() {
     ${statTile({ rot: "Resultado do período", icone: "banco", valor: `<span class="${e.resultado < 0 ? "neg" : ""}">${brl(e.resultado)}</span>` })}${statTile({ rot: "Pendentes", icone: "alerta", valor: e.pendentes, estado: e.pendentes ? estadoSelo("atencao", "conciliar") : estadoSelo("bom", "tudo certo") })}</section>`
     + tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) },
       { t: "Entrada", n: 1, f: m => m.valor_cent > 0 ? num(m.valor_cent) : "" }, { t: "Saída", n: 1, f: m => m.valor_cent < 0 ? `<span class="neg">${num(-m.valor_cent)}</span>` : "" },
-      { t: "No sistema", f: m => `<span class="selo ${cls[m.situacao]}">${esc(m.detalhe)}</span>${m.situacao == "classificado" ? ` <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Volta para os não conciliados">Desfazer</button>` : ""}` }],
-      vis, "Nenhum lançamento neste período.");
+      { t: "No sistema", fsel: 1, fv: m => m.situacao == "titulo" ? "Recebimento de título" : m.situacao == "despesa" ? "Despesa" : m.detalhe, f: m => `<span class="selo ${cls[m.situacao]}">${esc(m.detalhe)}</span>${m.situacao == "classificado" ? ` <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Volta para os não conciliados">Desfazer</button>` : ""}` }],
+      vis, "Nenhum lançamento neste período.", { filtros: "conc_extrato", soma: m => m.valor_cent });
 }
 async function classificarMov(id, tipo, categoria = "") {
   const r = await api("conciliacao/classificar", { movimento: id, tipo, categoria });

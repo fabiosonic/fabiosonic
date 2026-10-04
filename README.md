@@ -548,6 +548,14 @@ pagar**; título já lançado não repete. A conferência mostra a situação de
 cobrança, **fora da cobrança**, pago) e o lançamento **recoloca em cobrança** os que estavam fora — reimportar o
 relatório garante que toda a inadimplência esteja lançada e sendo cobrada.
 
+### Filtros por coluna
+
+As listas de Contas a receber, Contas a pagar, Notas emitidas, Clientes, Cobrança e Conciliação têm uma linha de
+filtros logo abaixo do cabeçalho: texto livre por coluna (cliente, vencimento, valor, descrição — sem diferenciar
+acento ou maiúscula) e lista de opções para Situação, NFS-e, Categoria, Etapa e Status. A linha acima da tabela mostra
+quantos itens sobraram e a soma dos valores filtrados; **Limpar filtros** volta tudo. O filtro continua valendo quando
+a lista é atualizada (depois de uma baixa ou edição). Os filtros combinam com as abas e com a competência.
+
 ### Editar título e refazer o boleto
 
 Em **Contas a receber › Mais › Editar título** mudam valor, vencimento, competência e descrição de um título em

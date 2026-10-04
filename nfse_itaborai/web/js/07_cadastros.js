@@ -35,10 +35,10 @@ PAGINAS.clientes = async el => {
   $("#c_ext").onchange = modoExt; $("#ce_pais").onchange = modoExt;
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => celNome(c.razao_social, fmtDoc(c.cpf_cnpj)) },
-      { t: "Contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' },
-      { t: "Cobrar por WhatsApp", f: c => c.telefone ? `<label class="chk" title="Entra na fila de WhatsApp da régua"><input type="checkbox" data-wa="${c.cpf_cnpj}" ${c.whatsapp_cobranca ? "checked" : ""}> sim</label>` : '<span class="sub">sem telefone</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
+      { t: "Contato", fv: c => [c.email, c.telefone].filter(Boolean).join(" ") || "sem contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' },
+      { t: "Cobrar por WhatsApp", fsel: 1, fv: c => !c.telefone ? "sem telefone" : c.whatsapp_cobranca ? "sim" : "não", f: c => c.telefone ? `<label class="chk" title="Entra na fila de WhatsApp da régua"><input type="checkbox" data-wa="${c.cpf_cnpj}" ${c.whatsapp_cobranca ? "checked" : ""}> sim</label>` : '<span class="sub">sem telefone</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
       { t: "", f: c => `<button class="btn min sec" data-ed="${c.cpf_cnpj}">Editar</button> <button class="btn min sec" data-ex="${c.cpf_cnpj}" title="Excluir">${ic("x")}</button>` }],
-      ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)));
+      ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)), "Nada por aqui.", { filtros: "clientes" });
     $$("[data-ed]").forEach(b => b.onclick = () => { preencher(ST.clientes.find(c => c.cpf_cnpj == b.dataset.ed)); scrollTo(0, 0); });
     $$("[data-wa]").forEach(b => b.onchange = async () => { await api("cliente/whatsapp", { cpf_cnpj: b.dataset.wa, ativo: b.checked });
       const c = ST.clientes.find(x => x.cpf_cnpj == b.dataset.wa); if (c) c.whatsapp_cobranca = b.checked;

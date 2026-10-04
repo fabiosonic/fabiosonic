@@ -142,10 +142,11 @@ PAGINAS.notas = async el => {
       { t: "Emissão", f: n => `<span class="nw">${dt(n.data)}</span><div class="sub nw">comp. ${mes(n.competencia)}</div>` },
       { t: "Cliente", f: n => celNome(n.cliente_nome, `${fmtDoc(n.cpf_cnpj)} · ${esc(frase(n.descricao))}`) },
       { t: "Valor", n: 1, f: n => num(n.valor_cent) },
-      { t: "Situação", f: n => n.nfse_status == "emitida" ? selo("emitida") : n.nfse_status == "cancelada" ? selo("nf_cancelada") : selo("teste") },
-      { t: "Origem", f: n => `<span class="sub nw">${n.origem == "importado" ? "importada (XML)" : n.nfse_canal == "nacional" ? "Nacional" : "Itaboraí"}</span>` },
+      { t: "Situação", fsel: 1, fv: n => textoDe(n.nfse_status == "emitida" ? selo("emitida") : n.nfse_status == "cancelada" ? selo("nf_cancelada") : selo("teste")), f: n => n.nfse_status == "emitida" ? selo("emitida") : n.nfse_status == "cancelada" ? selo("nf_cancelada") : selo("teste") },
+      { t: "Origem", fsel: 1, f: n => `<span class="sub nw">${n.origem == "importado" ? "importada (XML)" : n.nfse_canal == "nacional" ? "Nacional" : "Itaboraí"}</span>` },
       { t: "", f: n => `<div class="acoes-linha"><button class="btn min sec" data-cp="${n.id}" title="Abre Emitir nota com os dados desta nota">${ic("copiar")}Copiar</button>` + (n.pode_cancelar ? `${n.nfse_canal == "nacional" && n.nfse_chave ? `<button class="btn min sec" data-sb="${n.id}" title="Emite uma nova nota que substitui esta">Substituir</button>` : ""}<button class="btn min sec ico perigo-txt" data-cn="${n.id}" title="Cancelar esta NFS-e" aria-label="Cancelar esta NFS-e">${ic("x")}</button>` : n.nfse_status == "emitida" && n.origem == "importado" ? '<span class="sub nw" title="Emitida fora do sistema">cancelar no portal</span>' : "") + "</div>" }],
-      r.notas, FILTRO_NF.competencia ? `Nenhuma nota em ${mes(FILTRO_NF.competencia)} com esses filtros.` : "Nenhuma nota com esses filtros.");
+      r.notas, FILTRO_NF.competencia ? `Nenhuma nota em ${mes(FILTRO_NF.competencia)} com esses filtros.` : "Nenhuma nota com esses filtros.",
+      { filtros: "notas", soma: n => n.valor_cent });
     $$("[data-cn]", el).forEach(b => b.onclick = () => cancelarNota(r.notas.find(n => n.id == b.dataset.cn)));
     $$("[data-cp]", el).forEach(b => b.onclick = () => { PREENCHER = { copiar: Number(b.dataset.cp) }; ir("emitir"); });
     $$("[data-sb]", el).forEach(b => b.onclick = () => { const n = r.notas.find(x => x.id == b.dataset.sb);
