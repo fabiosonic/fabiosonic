@@ -140,3 +140,32 @@ def test_migracao_simultanea_nao_quebra(base):  # noqa: F811
     [t.start() for t in ts]
     [t.join() for t in ts]
     assert erros == [] and "manual" in {r[1] for r in sqlite3.connect(db.caminho()).execute("PRAGMA table_info(movimentos)")}
+
+
+def test_recebimento_de_titulo_ja_baixado_pelo_banco(base):  # noqa: F811
+    """Caso real: o Inter reconheceu o boleto (baixa + NFS-e) antes do extrato chegar. O lançamento do extrato é
+    vinculado ao título do mesmo cliente, sem baixar de novo; sem nome no histórico, a sugestão é o título já pago
+    e dá para escolher o cliente à mão."""
+    from nfse_itaborai.tela import tratar
+    config.salvar({"automacao": {"despesas_do_extrato": False}})
+    pago = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "401,14", vencimento="2026-10-05", emitir_nfse=False)
+    outro = financeiro.criar_titulo("54399432000146", "401,14", vencimento="2026-10-05", emitir_nfse=False)
+    financeiro.baixar(pago, "2026-10-05", "401,14", "inter")
+    antes = financeiro.obter_titulo(pago)
+    r = conciliacao.importar("", [{"data": "2026-10-05", "valor_cent": 40114, "fitid": "inter:b1",
+                                   "descricao": "Boleto de cobrança recebido RPS CONSULTORIA E SERVICOS"}])
+    assert r["titulos"] == 1 and conciliacao.nao_conciliados() == []
+    assert financeiro.obter_titulo(outro)["status"] == "aberto"                  # o de outro cliente não é tocado
+    assert financeiro.obter_titulo(pago)["valor_pago_cent"] == antes["valor_pago_cent"]
+    # histórico sem o nome: sugere o título já pago e permite escolher à mão
+    pago2 = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "427,88", vencimento="2026-10-05", emitir_nfse=False)
+    financeiro.baixar(pago2, "2026-10-05", "427,88", "inter")
+    conciliacao.importar("", [{"data": "2026-10-05", "valor_cent": 42788, "fitid": "inter:b2",
+                               "descricao": "Boleto de cobrança recebido"}])
+    m = conciliacao.nao_conciliados()[0]
+    assert m["sugestoes"][0] == {"id": pago2, "cliente": CLI_A["razao_social"], "valor_cent": 42788,
+                                 "vencimento": "2026-10-05", "pago": True}
+    lista = tratar("conciliacao/titulos", {"busca": "rps consult"})
+    assert pago2 in [x["id"] for x in lista] and pago not in [x["id"] for x in lista]   # pago já vinculado sai
+    assert tratar("conciliacao/vincular", {"movimento": m["id"], "titulo": pago2}) == {"ok": True, "baixado": False}
+    assert conciliacao.nao_conciliados() == []

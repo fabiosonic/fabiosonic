@@ -195,10 +195,10 @@ oficiais: prefeitura, Emissor Nacional da NFS-e, Banco Inter e o e-mail da próp
 <tr><td><b>Emitir em lote</b></td><td>Marque vários clientes; o valor vem da última nota de cada um.</td></tr>
 <tr><td><b>Recorrência</b></td><td>Honorários mensais: valor, dia de vencimento, serviço, regra da nota, início e fim, reajuste, acréscimos e descontos. Marque <b>Repetir todo mês</b>; quem não estiver marcado não é cobrado.</td></tr>
 <tr><td><b>Contas a receber</b></td><td>A receber, atrasados, pagos, sem NFS-e, sem cobrança, jurídico. Ações: baixar, cobrar, emitir NFS-e, editar o título (e refazer o boleto), enviar para o jurídico, cancelar, estornar, PDF do boleto. Pagamento parcial pergunta o que fazer com a diferença.</td></tr>
-<tr><td><b>Notas emitidas</b></td><td>Todas as notas, por competência; cancelamento com justificativa no canal em que a nota saiu; substituição (Nacional).</td></tr>
+<tr><td><b>Notas emitidas</b></td><td>Todas as notas, por competência; cancelamento com justificativa no canal em que a nota saiu; substituição (Nacional); botão <span class="menu">Enviar ao cliente</span> manda a nota (PDF, XML e link) por e-mail e WhatsApp.</td></tr>
 <tr><td><b>Cobrança</b></td><td>Régua, fila de WhatsApp e histórico de envios.</td></tr>
 <tr><td><b>Contas a pagar</b></td><td>Despesas por categoria do plano da DRE, inclusive recorrentes.</td></tr>
-<tr><td><b>Conciliação</b></td><td>Extrato do Inter pela API (<span class="menu">Baixar extrato agora</span>) ou arquivo OFX. Recebimentos dão baixa nos títulos; saídas viram despesas classificadas. Cada lançamento pode ser reclassificado por linha da DRE ou marcado “Fora da DRE” (distribuição de lucros, transferência).</td></tr>
+<tr><td><b>Conciliação</b></td><td>Extrato do Inter pela API (<span class="menu">Baixar extrato agora</span>) ou arquivo OFX. Recebimentos dão baixa nos títulos; saídas viram despesas classificadas. Cada lançamento pode ser reclassificado por linha da DRE ou marcado “Fora da DRE” (distribuição de lucros, transferência). Recebimento de boleto já baixado pelo banco é ligado sozinho ao título; se não, use <span class="menu">Vincular a um cliente / título…</span>.</td></tr>
 <tr><td><b>Relatórios</b></td><td>DRE (Lei 6.404/76, art. 187, adaptada ao regime), fluxo de caixa realizado e projetado, indicadores, inadimplência por faixa, análise por cliente, livro caixa e fechamento mensal, todos com Imprimir/PDF.</td></tr>
 <tr><td><b>Clientes</b></td><td>Cadastro, regra fiscal própria, serviço habitual, WhatsApp, importação dos XML e da planilha de contatos.</td></tr>
 </table></div>
@@ -211,7 +211,7 @@ oficiais: prefeitura, Emissor Nacional da NFS-e, Banco Inter e o e-mail da próp
 </ul>
 
 <h2 id="robo">10. O que o robô faz sozinho</h2>
-<p>Com <span class="menu">Configurações › Robô ligado</span>, ele roda ao abrir o sistema e de hora em hora, mesmo com a tela fechada. Cada etapa pode ser desligada.</p>
+<p>Com <span class="menu">Configurações › Robô ligado</span>, ele roda ao abrir o sistema e de hora em hora, mesmo com a tela fechada. Com o sistema aberto, a cada 15 minutos (ajustável) ele também busca o extrato e as baixas do Inter, emite as notas dos pagos e envia as notas aos clientes. Cada etapa pode ser desligada.</p>
 <ol>
 <li>Backup diário (guarda os 30 últimos).</li>
 <li>Lança as despesas recorrentes.</li>

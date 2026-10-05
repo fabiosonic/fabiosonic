@@ -18,7 +18,9 @@ def test_sem_cobranca_emite_nota_mas_fica_fora_da_regua(base, monkeypatch):  # n
     monkeypatch.setattr(cobranca, "enviar_email", lambda *a, **k: enviados.append(a))
     cobranca.rodar_regua(date(2026, 10, 1))
     res = automacao.rodar(em=date(2026, 10, 1), forcar=True)
-    assert not enviados and not financeiro.obter_titulo(t["id"])["pix_copia_cola"], res
+    # fora da régua (nenhuma cobrança, nenhum PIX/boleto) — só a própria nota fiscal vai ao cliente, uma vez
+    assert [a[1] for a in enviados] == [f"Nota fiscal de serviço nº {t['nfse_numero']}"], res
+    assert not financeiro.obter_titulo(t["id"])["pix_copia_cola"]
 
 
 def test_cobra_primeiro_e_emite_a_nota_quando_o_pagamento_entra(base):  # noqa: F811

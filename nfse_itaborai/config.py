@@ -156,6 +156,7 @@ PADRAO = {
         "importar_xml": True,       # clientes, contratos detectados e notas emitidas fora do sistema
         "importar_extratos": True,  # importa .ofx novos da pasta de extratos
         "extrato_inter": True,      # baixa o extrato do Inter pela API (escopo extrato.read) e concilia
+        "intervalo_extrato_min": 15,  # rotina rápida com o sistema aberto: extrato, baixas, NFS-e e envio da nota
         "despesas_do_extrato": True,  # débitos sem conta a pagar viram despesa paga, classificada por regra
         "resumo_diario": True,      # e-mail diário com o resumo para o dono
         "fechamento_mensal": True,  # relatório gerencial do mês anterior (DRE, indicadores, aging), salvo e enviado

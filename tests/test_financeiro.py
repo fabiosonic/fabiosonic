@@ -260,7 +260,9 @@ def test_robo_ponta_a_ponta(base, monkeypatch):
     financeiro.salvar_contrato({"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "374,40", "inicio": "2026-10", "dia_vencimento": 5})
     r = automacao.rodar(date(2026, 10, 2))
     assert r["titulos_gerados"] == 1 and r["nfse"] == {"emitidas": 1, "erros": 0} and r["cobrancas_criadas"] == 1
-    assert r["regua"]["email"] == 1 and enviados == ["Lembrete: honorários vencem em 05/10/2026"]
+    # o lembrete da régua e, logo depois, a nota fiscal emitida (cada uma uma vez)
+    assert enviados[0] == "Lembrete: honorários vencem em 05/10/2026"
+    assert enviados[1:] == [f"Nota fiscal de serviço nº {financeiro.listar_titulos()[0]['nfse_numero']}"]
     t = financeiro.listar_titulos()[0]
     assert t["nfse_status"] == "emitida" and t["pix_copia_cola"].startswith("000201")
     again = automacao.rodar(date(2026, 10, 2))

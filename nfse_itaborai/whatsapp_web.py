@@ -317,7 +317,13 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
             grupos.setdefault(t["cpf_cnpj"], []).append(e)
         else:
             numero, texto = _do_link(e["detalhe"])
-            itens.append({"eventos": [e["id"]], "numero": numero, "texto": texto, "cliente": e["cliente_nome"], "pdf": ""})
+            pdf = ""
+            if e["etapa"] == cobranca.ETAPA_NFSE and _cfg(cfg).get("whatsapp_web_pdf", True):
+                try:
+                    pdf = cobranca.pdf_nfse(t)               # a nota em PDF vai como documento, logo após o texto
+                except Exception:  # noqa: BLE001
+                    pdf = ""
+            itens.append({"eventos": [e["id"]], "numero": numero, "texto": texto, "cliente": e["cliente_nome"], "pdf": pdf})
     for cpf, evs in grupos.items():
         numero, texto_antigo = _do_link(evs[0]["detalhe"])
         devidos = cobranca.todos_do_cliente(cpf, [(e["_t"], e["etapa"]) for e in evs])

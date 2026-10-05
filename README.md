@@ -538,10 +538,16 @@ Tudo segue as opções de Configurações › Cobrança (ligadas por padrão) e 
    valor atualizado de cada um, o total, os dados de pagamento (PIX/linha digitável) de cada título e todos os
    boletos em PDF anexados.
 2. **Pagamento reconhecido** (extrato do Inter, webhook ou baixa) — mensagem de **agradecimento**.
-3. **Nota fiscal** — em seguida, a NFS-e emitida (número, link e o XML no e-mail). Se a nota é emitida após o
-   pagamento, a mensagem sai assim que a emissão for concluída.
+3. **Nota fiscal** — toda NFS-e emitida vai para o cliente: e-mail com o número, o link oficial, o **PDF da nota**
+   (página da prefeitura/Sefin impressa pelo Edge/Chrome do computador) e o XML; no WhatsApp, a mensagem com o PDF.
+   Vale também para cliente **sem cobrança** e para nota emitida **antes do pagamento**. Se a nota é emitida após o
+   pagamento, a mensagem sai assim que a emissão for concluída. Se o PDF não puder ser gerado (sem internet, página
+   da prefeitura fora do ar), a mensagem segue com o link e o XML.
+4. **Reenviar** — em **Notas emitidas**, o botão **Enviar ao cliente** reenvia a nota por e-mail na hora e põe na
+   fila do WhatsApp (respeita o horário comercial).
 
-Pagamentos anteriores à atualização não recebem mensagem (nada de envio em massa do histórico).
+Notas e pagamentos anteriores à atualização não recebem mensagem (nada de envio em massa do histórico); para essas,
+use o botão **Enviar ao cliente**.
 
 ### Recorrência: início, fim, acréscimos e descontos
 
@@ -721,6 +727,12 @@ contas, Saída sem despesa) tira o lançamento das despesas, porque não é cust
 da mesma contraparte e vira regra para as próximas. **Desfazer** cancela a despesa automática e devolve o lançamento para "não conciliados";
 o robô não a recria.
 
+**Recebimento de título já baixado pelo banco**: quando o boleto foi pago e o Inter já deu a baixa, a entrada do
+extrato ("Boleto de cobrança recebido …") é ligada sozinha ao título pago do mesmo cliente e valor. Se houver dúvida,
+a sugestão aparece como **✔ Já pago · Cliente**; e em qualquer lançamento a opção **Vincular a um cliente / título…**
+abre a busca por cliente (títulos em aberto e pagos sem lançamento). Vincular a um título já pago **não** dá nova
+baixa: só registra de onde veio o dinheiro.
+
 ### E-mails enviados pelo sistema
 
 | E-mail | Para | Quando |
@@ -783,7 +795,11 @@ valor e o mês na descrição antes de emitir.
 ### Extrato do Banco Inter pela API (conciliação sem arquivo)
 
 Com o Inter configurado, o robô baixa o extrato da conta direto do banco (API Banking v2,
-`/banking/v2/extrato/completo`) de hora em hora, continua de onde parou e concilia sozinho, como no OFX.
+`/banking/v2/extrato/completo`) **a cada 15 minutos enquanto o sistema está aberto** (intervalo em Configurações ›
+Robô, mínimo 5) e de hora em hora pelo agendador do Windows; continua de onde parou e concilia sozinho, como no OFX.
+A mesma rotina rápida dá as baixas do Inter, emite as notas dos pagos e envia as notas aos clientes. O cartão do
+Inter na Conciliação mostra a última e a próxima busca. Dar baixa, emitir nota ou vincular um lançamento dispara a
+rotina na hora.
 Na tela **Conciliação** há o botão **Baixar extrato agora** (últimos 7, 30, 60 ou 90 dias).
 - A integração do Inter precisa da permissão **"Consultar extrato e saldo"** (escopo `extrato.read`). O token do
   extrato é separado: sem essa permissão, os boletos continuam funcionando e o robô avisa uma vez por dia.

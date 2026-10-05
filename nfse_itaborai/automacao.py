@@ -148,6 +148,93 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     return res
 
 
+# ---------------------------------------------------------------- rotina rápida (pagamentos)
+
+INTERVALO_PAGAMENTOS_MIN = 15
+AGENDA = {"ultima": "", "proxima": "", "resultado": ""}
+
+
+def _intervalo(cfg: dict) -> int:
+    try:
+        return max(5, int(cfg["automacao"].get("intervalo_extrato_min") or INTERVALO_PAGAMENTOS_MIN))
+    except (TypeError, ValueError):
+        return INTERVALO_PAGAMENTOS_MIN
+
+
+def _rodar_pagamentos(em: date) -> dict:
+    """Extrato do Inter e .ofx da pasta, baixas dos boletos, NFS-e de quem pagou e envio da nota/agradecimento."""
+    cfg = config.carregar()
+    auto = cfg["automacao"]
+    if not auto["ativa"]:
+        return {"executado": False}
+    res: dict = {}
+
+    def etapa(nome, ligado, func):
+        if not ligado:
+            return
+        try:
+            res[nome] = func()
+        except Exception as ex:  # noqa: BLE001
+            res[nome] = f"erro: {ex}"
+            db.registrar("robo_erro", f"{nome} (rotina rápida): {ex}")
+    inter_ok = cfg["cobranca"]["provedor"] == "inter" and inter.configurado(cfg)
+    etapa("baixas_banco", auto.get("sincronizar_banco", True) and inter_ok, lambda: cobranca.sincronizar_banco(cfg))
+    etapa("extrato_inter", auto.get("extrato_inter", True) and inter_ok, importacao.importar_extrato_inter)
+    etapa("extratos", auto.get("importar_extratos"), importacao.importar_extratos)
+
+    def notas_pagas():
+        if not emissor.em_producao():
+            return 0
+        n = 0
+        for t in db.linhas("SELECT id FROM titulos WHERE status='pago' AND nfse_status='pendente'"):
+            n += bool(financeiro.emitir_nfse_titulo(t["id"])["sucesso"])
+        return n
+    etapa("nfse", auto["emitir_nfse"], notas_pagas)
+    etapa("envio_notas", auto["regua"], lambda: cobranca.enviar_pos_pagamento(em, cfg))
+    from . import whatsapp_web
+    etapa("whatsapp_web", auto["regua"] and whatsapp_web.ativo(cfg), lambda: whatsapp_web.enviar_fila(cfg))
+    return res
+
+
+def rodar_pagamentos(em: date | None = None) -> dict:
+    """Rotina rápida de todas as empresas (a cada 15 min com o sistema aberto). Não roda junto com o robô completo."""
+    from . import empresas, licenca
+    if not licenca.situacao()["liberado"]:
+        return {"executado": False}
+    em = em or financeiro.hoje()
+    res = {}
+    for e in empresas.listar():
+        with emissor.usar_empresa(empresas.pasta(e)):
+            with _trava() as livre:
+                if not livre:
+                    res[e["nome"]] = {"executado": False, "motivo": "robô em andamento"}
+                    continue
+                try:
+                    res[e["nome"]] = _rodar_pagamentos(em)
+                except Exception as ex:  # noqa: BLE001
+                    db.registrar("robo_erro", f"rotina rápida: {ex}")
+    from datetime import datetime
+    AGENDA["ultima"] = datetime.now(emissor.FUSO).strftime("%Y-%m-%d %H:%M")
+    return res
+
+
+def disparar_pagamentos() -> None:
+    """Roda a rotina rápida agora, em segundo plano (depois de uma baixa ou emissão pela tela)."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return                                   # testes: sem rotina paralela mexendo no banco
+    threading.Thread(target=lambda: _seguro(rodar_pagamentos), daemon=True, name="pagamentos-agora").start()
+
+
+def _seguro(f):
+    try:
+        f()
+    except Exception as ex:  # noqa: BLE001
+        db.registrar("robo_erro", f"rotina rápida: {ex}")
+
+
+_thread_rapida: threading.Thread | None = None
+
+
 _thread: threading.Thread | None = None
 
 
@@ -167,3 +254,17 @@ def iniciar_em_segundo_plano(intervalo_min: int = 60) -> None:
 
     _thread = threading.Thread(target=laco, daemon=True, name="robo-financeiro")
     _thread.start()
+    global _thread_rapida
+    if _thread_rapida and _thread_rapida.is_alive():
+        return
+
+    def laco_rapido():
+        from datetime import datetime, timedelta as td
+        time.sleep(120)                                  # o robô completo já roda ao abrir
+        while True:
+            minutos = _intervalo(config.carregar())
+            _seguro(rodar_pagamentos)
+            AGENDA["proxima"] = (datetime.now(emissor.FUSO) + td(minutes=minutos)).strftime("%Y-%m-%d %H:%M")
+            time.sleep(minutos * 60)
+    _thread_rapida = threading.Thread(target=laco_rapido, daemon=True, name="pagamentos-15min")
+    _thread_rapida.start()

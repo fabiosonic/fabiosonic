@@ -397,14 +397,14 @@ PAGINAS.conciliacao = async el => {
   <div class="card"><h2>Importar extrato (OFX)</h2><p class="sub">Exporte o extrato em OFX no internet banking e selecione aqui. Os recebimentos são casados com as contas a receber e baixados sozinhos; pagamentos casam com contas a pagar.</p>
     <label class="soltar" id="zona"><input type="file" id="ofx" accept=".ofx,.OFX" hidden>${ic("download")}<span><b>Selecione ou arraste o extrato .ofx</b><small>O robô também importa sozinho todo .ofx novo da pasta ${esc(ST.config.pastas.extratos || "")}${(ST.config.financeiro.contas_bancarias || []).length ? ` · conta vinculada: ${esc(ST.config.financeiro.contas_bancarias.join(", "))}` : ""}</small></span></label><div id="ofx_res"></div></div>
   ${ST.config.cobranca.provedor == "inter" ? `<div class="card"><h2>${ic("banco")}Extrato do Banco Inter (automático)</h2>
-    <p class="sub">O robô baixa o extrato da conta Inter direto do banco (sem arquivo) e concilia sozinho, de hora em hora${ST.config.financeiro.extrato_inter_ate ? ` — último dia baixado: <b>${dt(ST.config.financeiro.extrato_inter_ate)}</b>` : ""}. Lançamentos que já vieram por OFX não são duplicados. A integração do Inter precisa da permissão <b>“Consultar extrato e saldo”</b>.</p>
+    <p class="sub">O sistema baixa o extrato da conta Inter direto do banco (sem arquivo) e concilia sozinho <b>a cada ${ST.config.automacao.intervalo_extrato_min || 15} minutos</b> enquanto estiver aberto (e o robô de hora em hora pelo Agendador do Windows)<span id="ext_agenda"></span>${ST.config.financeiro.extrato_inter_ate ? ` — último dia baixado: <b>${dt(ST.config.financeiro.extrato_inter_ate)}</b>` : ""}. Lançamentos que já vieram por OFX não são duplicados. A integração do Inter precisa da permissão <b>“Consultar extrato e saldo”</b>.</p>
     <div class="barra"><label>Período<select id="ext_dias"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="60">Últimos 60 dias</option><option value="90">Últimos 90 dias</option></select></label>
     <button class="btn" id="ext_baixar">${ic("download")}Baixar extrato agora</button></div><div id="ext_res" class="sub"></div></div>` : ""}
   <div class="card"><div class="card-cab"><h2>${ic("alerta")}Lançamentos não conciliados (${pend.length})</h2><span class="sub">vincule ao título, classifique ou lance como despesa</span></div>
   ${tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) }, { t: "Valor", n: 1, f: m => `<span class="${m.valor_cent < 0 ? "neg" : ""}">${num(m.valor_cent)}</span>` },
-    { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => `<button class="btn min sec" onclick="vincular(${m.id},${s.id})" title="Venc. ${dt(s.vencimento)}">${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
+    { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => `<button class="btn min ${s.pago ? "" : "sec"}" onclick="vincular(${m.id},${s.id})" title="${s.pago ? "Título já baixado pelo banco: só vincula, sem baixar de novo" : "Venc. " + dt(s.vencimento)}">${s.pago ? ic("ok") + "Já pago · " : ""}${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
       <select class="classif" data-m="${m.id}" data-v="${m.valor_cent}"><option value="">${m.valor_cent > 0 ? "Classificar entrada…" : "Classificar saída…"}</option>${m.valor_cent > 0
-        ? '<option value="transferencia">Transferência entre contas</option><option value="aporte">Aporte / dinheiro do sócio</option><option value="outra_receita">Outra receita (não é honorário)</option>'
+        ? '<option value="vincular">Vincular a um cliente / título…</option><option value="transferencia">Transferência entre contas</option><option value="aporte">Aporte / dinheiro do sócio</option><option value="outra_receita">Outra receita (não é honorário)</option>'
         : '<option value="despesa">Lançar como despesa paga</option><option value="distribuicao">Distribuição de lucros / retirada do sócio</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (estorno…)</option>'}</select></div>`, filtro: false }], pend, "Tudo conciliado ✔", { filtros: "conc_pend", soma: m => m.valor_cent })}</div>
   <div class="card"><div class="card-cab"><h2>${ic("banco")}Extrato da conta</h2><span class="sub">todos os lançamentos importados — entradas e saídas</span></div>
     <div class="barra"><label>Período<select id="ex_per">${(() => { const h = new Date(hojeISO() + "T12:00"), o = [];
@@ -413,11 +413,14 @@ PAGINAS.conciliacao = async el => {
       <div class="abas">${[["todos", "Todos"], ["entradas", "Entradas"], ["saidas", "Saídas"], ["pendente", "Pendentes"]].map(([k, t]) => `<button data-ef="${k}" class="${k == EXT_FIL ? "on" : ""}">${t}</button>`).join("")}</div></div>
     <div id="ex_tab"><div class="vazio">Carregando…</div></div></div>`;
   $$(".classif", el).forEach(sel => sel.onchange = () => { const v = sel.value; if (!v) return;
+    if (v == "vincular") { sel.value = ""; return escolherTitulo(+sel.dataset.m, +sel.dataset.v); }
     if (v == "despesa") { const c = prompt("Categoria da despesa na DRE (Folha, Pró-labore, Encargos, Benefícios, Aluguel, Energia/Internet, Sistemas, Contador/Assessoria, Serviços de terceiros, Marketing, Material, Impostos, Taxas, Bancárias, Outras):", "Outras"); if (c === null) { sel.value = ""; return; } return classificarMov(+sel.dataset.m, v, c); }
     classificarMov(+sel.dataset.m, v); });
   $("#ex_per").onchange = e => { EXT_PER = e.target.value; extratoConta(); };
   $$("[data-ef]", el).forEach(b => b.onclick = () => { EXT_FIL = b.dataset.ef; $$("[data-ef]", el).forEach(x => x.classList.toggle("on", x == b)); extratoConta(); });
   extratoConta();
+  if ($("#ext_agenda")) api("conciliacao/agenda").then(a => { const h = s => s ? `${dt(s.slice(0, 10))} ${s.slice(11, 16)}` : "";
+    $("#ext_agenda").innerHTML = a.ultima || a.proxima ? ` — ${a.ultima ? "última busca automática: <b>" + h(a.ultima) + "</b>" : ""}${a.proxima ? `${a.ultima ? " · " : ""}próxima: <b>${h(a.proxima)}</b>` : ""}` : ""; }).catch(() => {});
   if ($("#ext_baixar")) $("#ext_baixar").onclick = async () => { const b = $("#ext_baixar"); b.disabled = true; b.textContent = "Baixando…";
     try { const r = await api("conciliacao/inter", { dias: $("#ext_dias").value });
       ULTIMO_EXTRATO = `<div class="msg ok">Extrato do Inter: ${r.lancamentos} lançamento(s) de ${dt(r.periodo.slice(0, 10))} a ${dt(r.periodo.slice(-10))} (${r.entradas} entrada(s) e ${r.saidas} saída(s)) · ${r.novos} novo(s) · <b>${r.titulos}</b> recebimento(s) baixado(s) · ${r.despesas} pagamento(s) conciliado(s)${r.lancamentos === 0 ? " · a conta não teve movimento no período" : ""}</div>`;
@@ -479,7 +482,20 @@ async function classificarMov(id, tipo, categoria = "") {
   aviso(tipo ? (r.aplicados > 1 ? `${r.aplicados} lançamentos da mesma origem classificados ✔` : "Lançamento classificado ✔") : "Classificação desfeita", 5000);
   ir("conciliacao");
 }
-async function vincular(movimento, titulo) { await api("conciliacao/vincular", { movimento, titulo }); aviso("Conciliado e baixado ✔"); ir("conciliacao"); }
+async function vincular(movimento, titulo) { const r = await api("conciliacao/vincular", { movimento, titulo });
+  aviso(r.baixado ? "Conciliado e baixado ✔" : "Conciliado ✔ (título já estava pago: só vinculado)"); fechar(); ir("conciliacao"); }
+// Escolher à mão o cliente/título do recebimento (inclui títulos que o banco já baixou e ainda sem lançamento do extrato)
+async function escolherTitulo(mov, valor) {
+  modal(`<h2>Vincular o recebimento de ${num(valor)}</h2><p class="sub">Escolha o título do cliente. Em aberto: o sistema dá a baixa. Já pago (boleto/PIX reconhecido pelo banco): só vincula, sem baixar de novo e sem nova nota.</p>
+    <label class="inteiro">Cliente (nome ou CPF/CNPJ)<input id="vt_busca" placeholder="digite para procurar" autofocus></label><div id="vt_lista"><div class="vazio">Carregando…</div></div>`, true);
+  const listar = async () => { const l = await api("conciliacao/titulos", { busca: $("#vt_busca").value.trim() });
+    $("#vt_lista").innerHTML = tabela([{ t: "Cliente", f: x => celNome(x.cliente, fmtDoc(x.cpf_cnpj)) }, { t: "Competência", f: x => mes(x.competencia) },
+      { t: "Situação", f: x => x.status == "pago" ? `<span class="selo bom">pago em ${dt(x.data_pagamento.slice(0, 10))}</span>` : `<span class="selo alerta">em aberto · venc. ${dt(x.vencimento)}</span>` },
+      { t: "Valor", n: 1, f: x => `<span class="${x.valor_cent == valor ? "" : "sub"}">${num(x.valor_cent)}</span>` },
+      { t: "", f: x => `<button class="btn min" onclick="vincular(${mov},${x.id})">Vincular</button>` }],
+      l.sort((a, b) => (b.valor_cent == valor) - (a.valor_cent == valor)), "Nenhum título encontrado."); };
+  let tm; $("#vt_busca").oninput = () => { clearTimeout(tm); tm = setTimeout(listar, 250); }; listar();
+}
 
 // ---------------------------------------------------------------- importar inadimplência do Nitrus (PDF)
 function importarNitrus() {

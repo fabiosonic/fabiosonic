@@ -21,3 +21,12 @@ def _licenca_liberada(request, monkeypatch):
     from nfse_itaborai import licenca
     monkeypatch.setattr(licenca, "situacao", lambda hoje=None: {"liberado": True, "status": "ativa", "mensagem": "",
                                                                  "cnpj_instalacao": "", "fornecedor": {}})
+
+
+@pytest.fixture(autouse=True)
+def _sem_pdf_da_nota(request, monkeypatch):
+    """O PDF da NFS-e é impresso pelo Edge a partir do link oficial: nos testes, sem navegador nem internet."""
+    if request.node.get_closest_marker("pdf_real"):
+        return
+    from nfse_itaborai import cobranca
+    monkeypatch.setattr(cobranca, "pdf_nfse", lambda t: "")

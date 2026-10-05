@@ -83,6 +83,31 @@ def importar(conteudo: str, movs: list[dict] | None = None, origem: str = "OFX")
     return {"lancamentos": len(movs), "novos": novos} | r
 
 
+def _mesmo_cliente(m: dict, t: dict) -> bool:
+    """O histórico do extrato traz o CPF/CNPJ ou as duas primeiras palavras do nome do cliente do título."""
+    memo = _norm(m["descricao"])
+    palavras = [p for p in _norm(t["cliente_nome"]).split() if len(p) > 3][:2]
+    return t["cpf_cnpj"] in re.sub(r"\D", "", m["descricao"]) or bool(palavras and all(p in memo for p in palavras))
+
+
+def _ja_pagos(m: dict) -> list[dict]:
+    """Títulos JÁ baixados (boleto/PIX reconhecido pelo banco, baixa manual) que ainda não têm o lançamento do extrato:
+    mesmo valor recebido e pagamento até 5 dias antes ou depois. Os do mesmo cliente vêm primeiro (e sozinhos)."""
+    dmov = date.fromisoformat(m["data"])
+    ok = []
+    for t in db.linhas("SELECT * FROM titulos t WHERE t.status='pago' AND COALESCE(t.data_pagamento,'')!='' "
+                       "AND NOT EXISTS (SELECT 1 FROM movimentos x WHERE x.titulo_id=t.id)"):
+        if m["valor_cent"] not in (t["valor_pago_cent"] or t["valor_cent"], t["valor_cent"]):
+            continue
+        try:
+            if abs((date.fromisoformat(str(t["data_pagamento"])[:10]) - dmov).days) <= 5:
+                ok.append(t)
+        except ValueError:
+            continue
+    do_cliente = [t for t in ok if _mesmo_cliente(m, t)]
+    return do_cliente or ok
+
+
 def _candidatos(m: dict, abertos: list[dict]) -> list[dict]:
     memo = _norm(m["descricao"])
     dmov = date.fromisoformat(m["data"])
@@ -92,11 +117,7 @@ def _candidatos(m: dict, abertos: list[dict]) -> list[dict]:
         return por_id
     def valor_ok(t):
         return m["valor_cent"] in (t["valor_cent"], financeiro.encargos(t, dmov)["total_cent"])
-    def nome_ok(t):
-        doc = t["cpf_cnpj"]
-        palavras = [p for p in _norm(t["cliente_nome"]).split() if len(p) > 3][:2]
-        return doc in re.sub(r"\D", "", m["descricao"]) or (palavras and all(p in memo for p in palavras))
-    por_nome = [t for t in abertos if valor_ok(t) and nome_ok(t)]
+    por_nome = [t for t in abertos if valor_ok(t) and _mesmo_cliente(m, t)]
     if por_nome:
         return por_nome
     limite = (dmov + timedelta(days=10)).isoformat()
@@ -142,6 +163,13 @@ def conciliar() -> dict:
             classificar(m["id"], "transferencia", iguais=False)
             continue
         if m["valor_cent"] > 0:
+            # recebimento de título que o banco já baixou (boleto/PIX do Inter) ou baixado à mão: só vincula
+            pagos = [x for x in _ja_pagos(m) if _mesmo_cliente(m, x)]
+            if len(pagos) == 1:
+                with db.conexao() as con:
+                    con.execute("UPDATE movimentos SET titulo_id=? WHERE id=?", (pagos[0]["id"], m["id"]))
+                baixados += 1
+                continue
             abertos = db.linhas("SELECT * FROM titulos WHERE status='aberto'")
             c = _candidatos(m, abertos)
             if len(c) > 1 and len({t["cpf_cnpj"] for t in c}) == 1 and len({t["valor_cent"] for t in c}) == 1:
@@ -178,16 +206,54 @@ def nao_conciliados() -> list[dict]:
                     "AND COALESCE(classificacao,'')='' ORDER BY data DESC")
     abertos = db.linhas("SELECT * FROM titulos WHERE status='aberto'")
     for m in lst:
-        m["sugestoes"] = [{"id": t["id"], "cliente": t["cliente_nome"], "valor_cent": t["valor_cent"],
-                           "vencimento": t["vencimento"]} for t in _candidatos(m, abertos)][:5] if m["valor_cent"] > 0 else []
+        if m["valor_cent"] <= 0:
+            m["sugestoes"] = []
+            continue
+        pagos = _ja_pagos(m)
+        abertos_c = _candidatos(m, abertos)
+        if any(_mesmo_cliente(m, x) for x in pagos):           # o do próprio cliente, já pago: só ele
+            abertos_c = [x for x in abertos_c if _mesmo_cliente(m, x)]
+        m["sugestoes"] = ([{"id": t["id"], "cliente": t["cliente_nome"], "valor_cent": t["valor_pago_cent"] or t["valor_cent"],
+                            "vencimento": t["vencimento"], "pago": True} for t in pagos]
+                          + [{"id": t["id"], "cliente": t["cliente_nome"], "valor_cent": t["valor_cent"],
+                              "vencimento": t["vencimento"], "pago": False} for t in abertos_c])[:5]
     return lst
 
 
-def vincular(mov_id: int, titulo_id: int) -> None:
+def titulos_para_vincular(busca: str = "") -> list[dict]:
+    """Para escolher à mão: títulos em aberto e títulos pagos ainda sem lançamento do extrato, filtrados pelo
+    nome/CPF/CNPJ do cliente."""
+    b = _norm(busca)
+    out = []
+    for t in db.linhas("SELECT * FROM titulos t WHERE t.status='aberto' OR (t.status='pago' AND NOT EXISTS "
+                       "(SELECT 1 FROM movimentos x WHERE x.titulo_id=t.id)) ORDER BY t.vencimento DESC"):
+        if b and b not in _norm(t["cliente_nome"]) and b not in t["cpf_cnpj"]:
+            continue
+        out.append({"id": t["id"], "cliente": t["cliente_nome"], "cpf_cnpj": t["cpf_cnpj"], "status": t["status"],
+                    "valor_cent": t["valor_pago_cent"] if t["status"] == "pago" and t["valor_pago_cent"] else t["valor_cent"],
+                    "vencimento": t["vencimento"], "data_pagamento": t["data_pagamento"] or "",
+                    "competencia": t["competencia"], "nfse": t["nfse_numero"] or ""})
+        if len(out) >= 60:
+            break
+    return out
+
+
+def vincular(mov_id: int, titulo_id: int) -> dict:
+    """Liga o lançamento do extrato ao título. Título em aberto: dá a baixa. Título já pago (o banco reconheceu o
+    boleto/PIX antes do extrato chegar): só vincula, sem baixar de novo e sem nova nota."""
     m = db.linhas("SELECT * FROM movimentos WHERE id=?", (mov_id,))[0]
-    financeiro.baixar(titulo_id, m["data"], financeiro.reais(m["valor_cent"]), "extrato")
+    t = financeiro.obter_titulo(titulo_id)
+    if not t:
+        raise ValueError("Título não encontrado.")
+    if m["valor_cent"] <= 0:
+        raise ValueError("Só lançamentos de entrada podem ser vinculados a um título.")
+    if t["status"] == "aberto":
+        financeiro.baixar(titulo_id, m["data"], financeiro.reais(m["valor_cent"]), "extrato")
+    elif t["status"] != "pago":
+        raise ValueError("Título cancelado não pode receber o lançamento.")
     with db.conexao() as con:
         con.execute("UPDATE movimentos SET titulo_id=? WHERE id=?", (titulo_id, mov_id))
+    return {"ok": True, "baixado": t["status"] == "aberto"}
 
 
 # ---------------------------------------------------------------- extrato completo e classificação

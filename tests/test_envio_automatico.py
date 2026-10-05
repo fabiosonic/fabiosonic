@@ -120,3 +120,60 @@ def test_email_cobra_tudo_que_o_cliente_tem_em_aberto_mesmo_quando_so_um_vence_h
     assert all(f"000201pix{tid}" in texto for tid in (velho, novo))
     ev = db.linhas("SELECT titulo_id FROM eventos_cobranca WHERE canal='email' AND data='2026-10-01'")
     assert [e["titulo_id"] for e in ev] == [velho]                               # só a etapa do título da vez é registrada
+
+
+def test_nota_emitida_vai_ao_cliente_mesmo_sem_cobranca_e_sem_pagamento(base, monkeypatch):  # noqa: F811
+    """NFS-e emitida (regra 'emitir na geração', ou faturamento sem cobrança) também é enviada ao cliente,
+    uma vez só; notas emitidas antes do recurso não são reenviadas em massa."""
+    env = _cap(monkeypatch)
+    velha = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "90", vencimento="2026-09-10", emitir_nfse=False)
+    financeiro.atualizar_titulo(velha, nfse_status="emitida", nfse_numero="1", nfse_data="2026-09-01")
+    cobranca.rodar_regua(date(2026, 10, 1))                      # liga o recurso em 01/10
+    env.clear()
+    sem_cob = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "350", vencimento="2026-10-20", emitir_nfse=False)
+    financeiro.atualizar_titulo(sem_cob, cobrar=0, nfse_status="emitida", nfse_numero="202600000777",
+                                nfse_data="2026-10-02", nfse_link="https://nfse.exemplo/777")
+    r = cobranca.enviar_pos_pagamento(date(2026, 10, 2))
+    assert r["email"] == 1 and env[0][1] == "Nota fiscal de serviço nº 202600000777"
+    assert "no valor de R$ 350,00" in env[0][2] and "https://nfse.exemplo/777" in env[0][2]
+    assert [e["etapa"] for e in cobranca.fila_whatsapp() if e["titulo_id"] == sem_cob] == [cobranca.ETAPA_NFSE]
+    assert cobranca.enviar_pos_pagamento(date(2026, 10, 2))["email"] == 0          # não repete
+    assert not db.linhas("SELECT 1 FROM eventos_cobranca WHERE titulo_id=? AND etapa=?", (velha, cobranca.ETAPA_NFSE))
+    # botão "Enviar ao cliente": reenvia na hora
+    from nfse_itaborai.tela import tratar
+    monkeypatch.setattr(cobranca.horario, "comercial", lambda **k: True)
+    config.salvar({"smtp": {"host": "smtp.exemplo"}})
+    x = tratar("titulo/enviar_nfse", {"id": sem_cob})
+    assert x["email"] == CLI_A["email"] and len(env) == 2
+
+
+def test_anexo_xml_vai_como_xml_e_nao_como_pdf(base, monkeypatch, tmp_path):  # noqa: F811
+    enviados = []
+
+    class SMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def starttls(self, **k): pass
+        def login(self, *a): pass
+        def send_message(self, msg): enviados.append(msg)
+    monkeypatch.setattr(cobranca.smtplib, "SMTP", SMTP)
+    config.salvar({"smtp": {"host": "smtp.exemplo", "porta": 587, "usuario": "a@b.com", "senha": "x"}})
+    arq = tmp_path / "NFSe_1.xml"
+    arq.write_text("<NFSe/>", encoding="utf-8")
+    cobranca.enviar_email("c@d.com", "t", "x", anexos=[str(arq)], teste=True)
+    tipos = [p.get_content_type() for p in enviados[0].iter_attachments()]
+    assert tipos == ["application/xml"]
+
+
+def test_rotina_rapida_envia_a_nota_sem_esperar_o_robo(base, monkeypatch):  # noqa: F811
+    from nfse_itaborai import automacao
+    env = _cap(monkeypatch)
+    hoje = financeiro.hoje()
+    cobranca.enviar_pos_pagamento(hoje)                           # liga o recurso hoje
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento="2026-12-20", emitir_nfse=False)
+    financeiro.atualizar_titulo(tid, nfse_status="emitida", nfse_numero="55", nfse_data=hoje.isoformat())
+    r = automacao.rodar_pagamentos()
+    assert any(v.get("envio_notas", {}).get("email") == 1 for v in r.values() if isinstance(v, dict))
+    assert [e[1] for e in env] == ["Nota fiscal de serviço nº 55"] and automacao.AGENDA["ultima"]
+    assert config.carregar()["automacao"]["intervalo_extrato_min"] == 15

@@ -460,9 +460,12 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
     msg.set_content(texto)
     if html:
         msg.add_alternative(html, subtype="html")
+    import mimetypes
     for caminho in anexos or []:
-        msg.add_attachment(Path(caminho).read_bytes(), maintype="application", subtype="pdf",
-                           filename=Path(caminho).name)
+        tipo = (mimetypes.guess_type(str(caminho))[0] or "application/octet-stream").split("/", 1)
+        if Path(caminho).suffix.lower() == ".xml":
+            tipo = ["application", "xml"]
+        msg.add_attachment(Path(caminho).read_bytes(), maintype=tipo[0], subtype=tipo[1], filename=Path(caminho).name)
     porta = int(s.get("porta") or 587)
     host = str(s["host"]).strip()
     if s.get("ssl") or porta == 465:
@@ -747,8 +750,11 @@ def mensagem_nfse(t: dict, cfg: dict) -> tuple[str, str]:
     emp = cfg["empresa"]
     link = t["nfse_link"] if str(t.get("nfse_link") or "").startswith("http") else ""
     texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
-                        f"Segue a nota fiscal de serviço (NFS-e nº {t['nfse_numero']}) referente ao pagamento de "
-                        f"{_brl(t['valor_pago_cent'] or t['valor_cent'])} — competência {t['competencia'][5:]}/{t['competencia'][:4]}.",
+                        (f"Segue a nota fiscal de serviço (NFS-e nº {t['nfse_numero']}) referente ao pagamento de "
+                         f"{_brl(t['valor_pago_cent'] or t['valor_cent'])} — competência {t['competencia'][5:]}/{t['competencia'][:4]}."
+                         if t.get("status") == "pago" else
+                         f"Segue a nota fiscal de serviço (NFS-e nº {t['nfse_numero']}) no valor de {_brl(t['valor_cent'])} "
+                         f"— competência {t['competencia'][5:]}/{t['competencia'][:4]}."),
                         *([f"Consulta da nota: {link}"] if link else []),
                         "", "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
     return f"Nota fiscal de serviço nº {t['nfse_numero']}", texto
@@ -766,18 +772,105 @@ def xml_nfse(t: dict) -> str:
     return ""
 
 
+def pdf_nfse(t: dict) -> str:
+    """PDF da NFS-e para anexar: a página oficial da nota (link da prefeitura/Sefin) impressa pelo Edge/Chrome do
+    computador, guardada ao lado do XML. Só vale se a página mostrar o número da nota; senão, '' (vai o link)."""
+    num = str(t.get("nfse_numero") or "").strip()
+    link = str(t.get("nfse_link") or "")
+    if not num or not link.startswith("http"):
+        return ""
+    xml = xml_nfse(t)
+    destino = (Path(xml).parent if xml else emissor.RAIZ / "saida" / "notas_pdf") / f"NFSe_{num}.pdf"
+    if destino.exists() and destino.stat().st_size > 1000:
+        return str(destino)
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return ""
+    try:
+        with sync_playwright() as p:
+            nav = None
+            for kw in ({"channel": "msedge"}, {"channel": "chrome"}, {}):
+                try:
+                    nav = p.chromium.launch(headless=True, **kw)
+                    break
+                except Exception:  # noqa: BLE001 — tenta o próximo navegador
+                    continue
+            if nav is None:
+                return ""
+            try:
+                pg = nav.new_page()
+                pg.goto(link, timeout=40000, wait_until="networkidle")
+                if num.lstrip("0") not in pg.content():
+                    return ""                        # página sem a nota (formulário, erro): manda só o link
+                destino.parent.mkdir(parents=True, exist_ok=True)
+                pg.pdf(path=str(destino), format="A4", print_background=True)
+            finally:
+                nav.close()
+    except Exception:  # noqa: BLE001 — sem PDF a mensagem leva o link da nota e o XML
+        return ""
+    return str(destino) if destino.exists() else ""
+
+
+def anexos_nfse(t: dict) -> list[str]:
+    return [a for a in (pdf_nfse(t), xml_nfse(t)) if a]
+
+
+def enviar_nfse_titulo(tid: int, cfg: dict | None = None) -> dict:
+    """Botão 'Enviar nota ao cliente': (re)envia a NFS-e do título por e-mail agora e põe na fila do WhatsApp."""
+    cfg = cfg or config.carregar()
+    t = financeiro.obter_titulo(tid)
+    if not t or t.get("nfse_status") != "emitida" or not t.get("nfse_numero"):
+        raise ValueError("Este título não tem NFS-e emitida em produção.")
+    if not horario.comercial(cfg=cfg):
+        raise ValueError(horario.motivo(cfg=cfg).replace("O robô envia", "Envie"))
+    cli = clientes.obter(t["cpf_cnpj"]) or {}
+    assunto, texto = mensagem_nfse(t, cfg)
+    out = {"email": "", "whatsapp": ""}
+    with db.conexao() as con:
+        con.execute("DELETE FROM eventos_cobranca WHERE titulo_id=? AND etapa=?", (tid, ETAPA_NFSE))
+    if cli.get("email") and cfg["smtp"].get("host"):
+        enviar_email(cli["email"], assunto, texto, cfg, anexos_nfse(t))
+        out["email"] = cli["email"]
+        _evento(tid, ETAPA_NFSE, "email", "enviado", cli["email"])
+    if cli.get("telefone") and cli.get("whatsapp_cobranca"):
+        _evento(tid, ETAPA_NFSE, "whatsapp", "pendente", link_whatsapp(cli["telefone"], texto))
+        out["whatsapp"] = "na fila do WhatsApp"
+    if not out["email"] and not out["whatsapp"]:
+        raise ValueError("Cliente sem e-mail e sem WhatsApp marcado para cobrança: complete o cadastro em Clientes.")
+    db.registrar("nfse_envio", f"NFS-e {t['nfse_numero']} enviada a {t['cliente_nome']} (manual)")
+    return out
+
+
+def _evento(tid: int, etapa: int, canal: str, status: str, det: str) -> None:
+    with db.conexao() as con:
+        con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
+                    " VALUES (?,?,?,?,?,?)", (tid, etapa, canal, financeiro.hoje().isoformat(), status, det))
+
+
 def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
     """Pagamento reconhecido (baixa manual, banco, extrato ou cartão): agradece e, com a NFS-e emitida, envia a nota.
     Só para pagamentos a partir do dia em que o recurso foi ligado (não reenvia nada do histórico)."""
     cob = cfg["cobranca"]
-    if not cob.get("agradecer_pagamento", True) and not cob.get("enviar_nfse_paga", True):
+    envia_nota = cob.get("enviar_nfse_paga", True)
+    if not cob.get("agradecer_pagamento", True) and not envia_nota:
         return
     desde = cob.get("agradecer_desde")
     if not desde:
         desde = em.isoformat()
         config.salvar({"cobranca": {"agradecer_desde": desde}})
-    for t in db.linhas("SELECT * FROM titulos WHERE status='pago' AND cobrar=1 AND data_pagamento>=?"
-                       " AND COALESCE(parcial_status,'')!='pendente'", (desde,)):   # parcial: espera a decisão
+    desde_nota = cob.get("nfse_envio_desde")
+    if not desde_nota:                    # notas emitidas a partir de hoje (nada do histórico é reenviado em massa)
+        desde_nota = em.isoformat()
+        config.salvar({"cobranca": {"nfse_envio_desde": desde_nota}})
+    pagos = db.linhas("SELECT * FROM titulos WHERE status='pago' AND cobrar=1 AND data_pagamento>=?"
+                      " AND COALESCE(parcial_status,'')!='pendente'", (desde,))    # parcial: espera a decisão
+    vistos = {t["id"] for t in pagos}
+    # NFS-e emitida e ainda não enviada: com ou sem cobrança, paga ou ainda em aberto (regra "emitir na geração")
+    so_nota = [] if not envia_nota else [t for t in db.linhas(
+        "SELECT * FROM titulos WHERE nfse_status='emitida' AND status IN ('aberto','pago') AND COALESCE(nfse_data,'')>=? "
+        "AND COALESCE(juridico_em,'')='' AND COALESCE(parcial_status,'')!='pendente'", (desde_nota,)) if t["id"] not in vistos]
+    for t in pagos + so_nota:
         cli = clientes.obter(t["cpf_cnpj"]) or {}
         for canal, ligado in (("email", cob["regua_email"]), ("whatsapp", cob["regua_whatsapp"])):
             if not ligado:
@@ -789,12 +882,12 @@ def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
             feitas = {e["etapa"] for e in db.linhas("SELECT etapa FROM eventos_cobranca WHERE titulo_id=? AND canal=?",
                                                      (t["id"], canal))}
             fila = []
-            if cob.get("agradecer_pagamento", True) and ETAPA_PAGO not in feitas:
+            pago_cobrado = t["status"] == "pago" and t["cobrar"] == 1 and t["id"] in vistos
+            if pago_cobrado and cob.get("agradecer_pagamento", True) and ETAPA_PAGO not in feitas:
                 fila.append((ETAPA_PAGO, *mensagem_pagamento(t, cfg), []))
-            if cob.get("enviar_nfse_paga", True) and ETAPA_NFSE not in feitas and t["nfse_status"] == "emitida" \
-                    and (ETAPA_PAGO in feitas or fila or not cob.get("agradecer_pagamento", True)):
-                x = xml_nfse(t)
-                fila.append((ETAPA_NFSE, *mensagem_nfse(t, cfg), [x] if x else []))
+            if envia_nota and ETAPA_NFSE not in feitas and t["nfse_status"] == "emitida" \
+                    and (not pago_cobrado or ETAPA_PAGO in feitas or fila or not cob.get("agradecer_pagamento", True)):
+                fila.append((ETAPA_NFSE, *mensagem_nfse(t, cfg), anexos_nfse(t) if canal == "email" else []))
             for etapa, assunto, texto, anexos in fila:   # primeiro o agradecimento, depois a nota
                 if canal == "email":
                     try:
@@ -810,6 +903,17 @@ def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
                 with db.conexao() as con:
                     con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
                                 " VALUES (?,?,?,?,?,?)", (t["id"], etapa, canal, em.isoformat(), status, det))
+
+
+def enviar_pos_pagamento(em: date | None = None, cfg: dict | None = None) -> dict:
+    """Agradecimento e NFS-e logo depois do pagamento/emissão (rotina rápida), sem esperar a régua da hora cheia."""
+    em = em or financeiro.hoje()
+    cfg = cfg or config.carregar()
+    res = {"email": 0, "whatsapp": 0, "erros": 0}
+    if not horario.comercial(cfg=cfg):
+        return res | {"fora_do_horario": horario.motivo(cfg=cfg)}
+    _pos_pagamento(em, cfg, res)
+    return res
 
 
 def fila_whatsapp() -> list[dict]:

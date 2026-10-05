@@ -241,7 +241,7 @@ ROTAS = {
     "certificado/enviar": lambda c: empresas.enviar_certificado(str(c.get("arquivo", "")), str(c.get("senha", ""))),
     "inter/arquivo": lambda c: empresas.enviar_arquivo_inter(str(c.get("tipo", "")), str(c.get("arquivo", ""))),
     # emissão
-    "emitir": lambda c: _emitir_item(c),
+    "emitir": lambda c: _e_envia(_emitir_item(c)),
     "lote": lambda c: [_emitir_item(i) for i in _sem_duplicadas(c.get("itens", []))],
     "conferir": lambda c: _conferir(c),
     "cancelar": lambda c: _resultado(_cancelar_avulso(c), "Cancelamento processado", "Cancelamento não processado"),
@@ -262,8 +262,8 @@ ROTAS = {
     "titulo/editar": lambda c: _editar_titulo(c),
     "contrato/aplicar_abertos": lambda c: financeiro.aplicar_contrato_aos_titulos(_id(c), str(c.get("a_partir") or "")),
     "contrato/abertos": lambda c: {"titulos": financeiro.titulos_abertos_do_contrato(_id(c), str(c.get("a_partir") or ""))},
-    "titulo/baixar": lambda c: financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual"),
-                                                 str(c.get("parcial") or "")),
+    "titulo/baixar": lambda c: _e_envia(financeiro.baixar(_id(c), c.get("data", ""), c.get("valor"), c.get("forma", "manual"),
+                                                 str(c.get("parcial") or ""))),
     "contatos/analisar": lambda c: contatos.analisar(contatos.de_base64(str(c.get("arquivo") or ""))),
     "contatos/aplicar": lambda c: contatos.aplicar(contatos.de_base64(str(c.get("arquivo") or "")), bool(c.get("substituir"))),
     "titulo/parcial": lambda c: financeiro.decidir_parcial(_id(c), str(c.get("decisao") or ""), str(c.get("vencimento") or "")),
@@ -281,7 +281,7 @@ ROTAS = {
     "cliente/fiscal": lambda c: clientes.salvar({**(clientes.obter(str(c.get("cpf_cnpj", ""))) or {}),
                                                  "fiscal": c.get("fiscal") or {"usar_geral": True}}),
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
-    "titulo/emitir_nfse": lambda c: financeiro.emitir_nfse_titulo(_id(c)),
+    "titulo/emitir_nfse": lambda c: _e_envia(financeiro.emitir_nfse_titulo(_id(c))),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),
     "titulo/cartao": lambda c: cartao.gerar_link(_id(c), int(c.get("parcelas") or 0)),
     "cartao/simular": lambda c: cartao.valor_no_cartao(financeiro.cent(c.get("valor") or 0), int(c.get("parcelas") or 1)),
@@ -338,7 +338,10 @@ ROTAS = {
     "conciliacao/extrato": lambda c: conciliacao.extrato(str(c.get("inicio") or ""), str(c.get("fim") or "")),
     "conciliacao/classificar": lambda c: conciliacao.classificar(_id(c, "movimento"), str(c.get("tipo") or ""),
                                                                  c.get("iguais", True) is not False, str(c.get("categoria") or "")),
-    "conciliacao/vincular": lambda c: (conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo")), {"ok": True})[1],
+    "conciliacao/vincular": lambda c: _e_envia(conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo"))),
+    "conciliacao/agenda": lambda c: {"intervalo": automacao._intervalo(config.carregar()), **automacao.AGENDA},
+    "titulo/enviar_nfse": lambda c: cobranca.enviar_nfse_titulo(_id(c)),
+    "conciliacao/titulos": lambda c: conciliacao.titulos_para_vincular(str(c.get("busca") or "")),
     # atualização do sistema pelo ZIP da versão nova
     "atualizacao/analisar": lambda c: atualizacao.analisar(_b64(c)),
     "atualizacao/aplicar": lambda c: _atualizar(c),
@@ -585,6 +588,13 @@ def abrir_se_ja_aberto(porta: int = 8765) -> bool:
             webbrowser.open(f"http://127.0.0.1:{p}")
             return True
     return False
+
+
+def _e_envia(r):
+    """Depois de baixa, emissão ou vínculo pela tela: a nota e o agradecimento saem já (rotina rápida em segundo
+    plano), sem esperar a próxima rodada do robô."""
+    automacao.disparar_pagamentos()
+    return r
 
 
 def _encerrar() -> dict:

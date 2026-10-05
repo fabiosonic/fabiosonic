@@ -139,6 +139,7 @@ class SMTPTeste(FakeSMTP):
 
 cobranca.smtplib.SMTP = SMTPTeste
 cobranca.smtplib.SMTP_SSL = SMTPTeste
+cobranca.pdf_nfse = lambda t: ""  # sem navegador/rede nos testes de tela
 
 config.salvar({
     "empresa": {"nome": "MORAES & OLIVEIRA CONTABILIDADE", "pix_chave": "24.875.410/0001-44"},
