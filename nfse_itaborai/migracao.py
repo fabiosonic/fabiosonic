@@ -262,7 +262,7 @@ def importar(pasta: str) -> dict:
 
 # ---------------------------------------------------------------- reparo: dados de outra empresa trazidos por engano
 # Até a versão 3.8.3, "Versão anterior encontrada" não conferia o CNPJ: a instalação de OUTRA empresa no mesmo
-# computador podia ser trazida, e o nome de fábrica ("MORAES & OLIVEIRA") era tratado como "padrão" e trocado.
+# computador podia ser trazida, e o nome de fábrica (que era o de um escritório) era tratado como "padrão" e trocado.
 
 def _importacoes() -> list[dict]:
     out = []
