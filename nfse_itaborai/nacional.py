@@ -600,8 +600,17 @@ def _requisicao(metodo: str, url: str, cert: Certificado, corpo: dict | None = N
         return ex.code, ex.read()
 
 
+DECLARACAO_XML = '<?xml version="1.0" encoding="UTF-8"?>'
+
+
+def com_declaracao(xml: str) -> str:
+    """O Sefin exige a declaração com encoding UTF-8 no início do XML (sem ela: E1229 - Xml não está utilizando
+    codificação UTF-8). Fica fora do elemento assinado, então não altera a assinatura."""
+    return xml if xml.lstrip().startswith("<?xml") else DECLARACAO_XML + xml
+
+
 def _gz64(xml: str) -> str:
-    return base64.b64encode(gzip.compress(xml.encode("utf-8"))).decode()
+    return base64.b64encode(gzip.compress(com_declaracao(xml).encode("utf-8"))).decode()
 
 
 def _de_gz64(s: str) -> str:
@@ -810,7 +819,7 @@ def emitir(rps: Rps, producao: bool = False, url: str | None = None, contexto: s
         xml, n_dps, alertas = preparar(rps, producao, cert, cfg, numero=numero)
         pasta = emissor.RAIZ / "saida" / datetime.now(emissor.FUSO).strftime("%Y-%m") / f"DPS_{n_dps}"
         pasta.mkdir(parents=True, exist_ok=True)
-        (pasta / "dps.xml").write_text(xml, encoding="utf-8")
+        (pasta / "dps.xml").write_text(com_declaracao(xml), encoding="utf-8")
         status, bruto = _requisicao("POST", base.rstrip("/") + "/nfse", cert, {"dpsXmlGZipB64": _gz64(xml)}, contexto)
         (pasta / "retorno.json").write_bytes(bruto)
         resp = interpretar(status, bruto, xml)

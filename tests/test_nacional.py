@@ -69,10 +69,14 @@ class Sefin(BaseHTTPRequestHandler):
         if self.path.endswith("/eventos"):
             xml = gzip.decompress(base64.b64decode(corpo["pedidoRegistroEventoXmlGZipB64"])).decode()
             Sefin.recebidos.append(("evento", self.path, xml))
+            if not xml.startswith('<?xml version="1.0" encoding="UTF-8"?>'):     # como o Sefin real (E1229)
+                return self._responder(400, {"erros": [{"Codigo": "E1229", "Descricao": "Xml não está utilizando codificação UTF-8."}]})
             evento = f'<evento xmlns="{nacional.NS}"><infEvento>ok</infEvento></evento>'
             return self._responder(201, {"eventoXmlGZipB64": base64.b64encode(gzip.compress(evento.encode())).decode()})
         xml = gzip.decompress(base64.b64decode(corpo["dpsXmlGZipB64"])).decode()
         Sefin.recebidos.append(("dps", self.path, xml))
+        if not xml.startswith('<?xml version="1.0" encoding="UTF-8"?>'):     # como o Sefin real (E1229)
+            return self._responder(400, {"erros": [{"Codigo": "E1229", "Descricao": "Xml não está utilizando codificação UTF-8."}]})
         if not nacional.verificar_assinatura(xml):
             return self._responder(400, {"erros": [{"Codigo": "E0001", "Descricao": "Assinatura inválida"}]})
         n = etree.fromstring(xml.encode()).findtext(".//n:nDPS", namespaces=NS)
