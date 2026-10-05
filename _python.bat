@@ -25,4 +25,11 @@ exit /b 1
 :embutido
 set PY="%~dp0python\python.exe"
 set "PYTHONNOUSERSITE=1"
+rem O motor do WhatsApp automatico (node.exe) vem em 2 pedacos nas partes 2 e 3 do pacote: junta na primeira vez.
+set "NODEDIR=%~dp0python\Lib\site-packages\playwright\driver"
+if exist "%NODEDIR%\node.exe" exit /b 0
+if not exist "%NODEDIR%\node.exe.parte1" exit /b 0
+if not exist "%NODEDIR%\node.exe.parte2" exit /b 0
+copy /b "%NODEDIR%\node.exe.parte1"+"%NODEDIR%\node.exe.parte2" "%NODEDIR%\node.exe" >nul
+if exist "%NODEDIR%\node.exe" del "%NODEDIR%\node.exe.parte1" "%NODEDIR%\node.exe.parte2"
 exit /b 0

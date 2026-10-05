@@ -104,14 +104,29 @@ def main() -> int:
     for f in pasta.rglob("*"):
         if f.is_file() and "python" not in f.relative_to(pasta).parts[:1] and proibido.search(f.read_bytes()):
             raise SystemExit(f"Referência ao escritório em {f}: pacote NÃO gerado.")
-    arq = saida / f"EmissorItaborai_{versao}_completo.zip"
-    if arq.exists():
-        arq.unlink()
-    with zipfile.ZipFile(arq, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        for f in sorted(pasta.rglob("*")):
-            if f.is_file() and "__pycache__" not in f.parts:
+    # Em 3 partes de até ~25 MB (limite de envio por anexo). O node.exe do playwright (motor do WhatsApp automático,
+    # ~90 MB) vai em 2 pedaços que o _python.bat junta na primeira execução (copy /b).
+    driver = pasta / "python" / "Lib" / "site-packages" / "playwright" / "driver"
+    node = (driver / "node.exe").read_bytes()
+    meio = len(node) // 2
+    (driver / "node.exe.parte1").write_bytes(node[:meio])
+    (driver / "node.exe.parte2").write_bytes(node[meio:])
+    (driver / "node.exe").unlink()
+    arquivos = [f for f in sorted(pasta.rglob("*")) if f.is_file() and "__pycache__" not in f.parts]
+    pw = pasta / "python" / "Lib" / "site-packages" / "playwright"
+    partes = {
+        1: [f for f in arquivos if pw not in f.parents],
+        2: [f for f in arquivos if pw in f.parents and f.name != "node.exe.parte2"],
+        3: [driver / "node.exe.parte2"],
+    }
+    for n, lista in partes.items():
+        arq = saida / f"EmissorItaborai_{versao}_completo_parte{n}de3.zip"
+        if arq.exists():
+            arq.unlink()
+        with zipfile.ZipFile(arq, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            for f in lista:
                 z.write(f, f.relative_to(trabalho))
-    print(f"OK: {arq} ({arq.stat().st_size / 1e6:.1f} MB)")
+        print(f"OK: {arq.name} ({arq.stat().st_size / 2**20:.1f} MiB, {len(lista)} arquivos)")
     return 0
 
 
