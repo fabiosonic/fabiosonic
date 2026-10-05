@@ -271,3 +271,19 @@ def test_sem_certificado_mensagem_clara(tmp_path, monkeypatch):
     config.salvar({"emissao": {"canal": "nacional"}})
     with pytest.raises(nacional.ErroCertificado, match="certificado A1"):
         nacional.carregar_certificado()
+
+
+def test_ibscbs_no_nacional_segue_o_regime_e_nao_a_regra_de_itaborai(sefin):
+    """Serviço sem cIndOp/cClassTrib (ex.: importado de notas antigas). No Emissor Nacional o IBS/CBS é obrigatório no
+    regime regular em 2026 e no Simples/MEI a partir de 2027; a exigência para todos desde 01/06/2026 é só do
+    webservice de Itaboraí."""
+    from datetime import date
+    from nfse_itaborai.validacao import ErroValidacao
+    sem = dict(indicador_operacao="", classificacao_tributaria="", competencia=date(2026, 9, 1),
+               data_emissao=datetime(2026, 9, 15, 10, 0))
+    config.salvar({"fiscal": {"regime": "simples", "ibscbs": "auto"}})
+    xml, _, _ = nacional.preparar(_rps(**sem), producao=False)          # Simples em 2026: emite sem o grupo
+    assert etree.fromstring(xml.encode()).find("n:infDPS/n:IBSCBS", NS) is None
+    config.salvar({"fiscal": {"regime": "presumido"}})
+    with pytest.raises(ErroValidacao, match="IBS/CBS"):
+        nacional.preparar(_rps(**sem), producao=False)                  # regime regular: obrigatório

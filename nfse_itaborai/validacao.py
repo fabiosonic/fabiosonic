@@ -22,8 +22,11 @@ class ErroValidacao(Exception):
         self.erros = erros
 
 
-def validar(rps: Rps, hoje: date | None = None) -> list[str]:
-    """Levanta ErroValidacao com os impeditivos; devolve a lista de alertas."""
+def validar(rps: Rps, hoje: date | None = None, exigir_ibscbs: bool | None = None) -> list[str]:
+    """Levanta ErroValidacao com os impeditivos; devolve a lista de alertas.
+
+    exigir_ibscbs: None = regra do webservice de Itaboraí (Nota Técnica 003: obrigatório para todos desde
+    01/06/2026). O Emissor Nacional passa a regra dele (regime regular em 2026; Simples/MEI a partir de 2027)."""
     hoje = hoje or (rps.data_emissao.date() if isinstance(rps.data_emissao, datetime) else date.today())
     erros: list[str] = []
     alertas: list[str] = []
@@ -77,7 +80,8 @@ def validar(rps: Rps, hoje: date | None = None) -> list[str]:
         alertas.append("Item 03.01: confira o NBS atualizado em 01/05/2026 (Nota Técnica 006).")
 
     ind_op, class_trib = so_digitos(rps.indicador_operacao), so_digitos(rps.classificacao_tributaria)
-    if hoje >= INICIO_IBS_CBS and not (ind_op and class_trib):
+    exigir = hoje >= INICIO_IBS_CBS if exigir_ibscbs is None else exigir_ibscbs
+    if exigir and not (ind_op and class_trib):
         erros.append("IBS/CBS obrigatório desde 01/06/2026: informe Indicador da Operação (cIndOp) e "
                      "Classificação Tributária (cClassTrib) — Tabela IBS x CBS / Nota Técnica 003.")
     for nome, v in (("Indicador da Operação", ind_op), ("Classificação Tributária", class_trib)):

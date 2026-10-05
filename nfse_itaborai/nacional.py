@@ -678,7 +678,11 @@ def preparar(rps: Rps, producao: bool, cert: Certificado | None = None, cfg: dic
     numero = numero or _proximo_dps()
     rps.numero = str(numero)
     rps.data_emissao = rps.data_emissao or datetime.now(emissor.FUSO).replace(tzinfo=None, microsecond=0)
-    alertas = validar(rps)
+    from . import fiscal
+    compet = min(rps.competencia or rps.data_emissao.date(), datetime.now(emissor.FUSO).date())
+    # IBS/CBS no Emissor Nacional: obrigatório no regime regular em 2026; Simples/MEI a partir de 01/01/2027
+    # (a exigência para todos desde 01/06/2026 é regra do webservice de Itaboraí, não do nacional)
+    alertas = validar(rps, exigir_ibscbs=fiscal.informar_ibscbs(fiscal.geral(cfg), compet))
     alertas += _regras_raras(rps)
     prest = prestador()
     serie = str(cfg["emissao"].get("serie_dps", "900"))
