@@ -1,12 +1,14 @@
-"""Licença de uso por período (mensalidade).
+"""Licença de uso (serial) por período: plano MENSAL (mensalidade) ou ANUAL (anuidade).
 
 Como funciona:
 - O fornecedor gera a chave de licença com o Gerador de Licenças (fica só com ele, com a chave PRIVADA). A chave
-  traz cliente, CNPJ, validade e quantidade de empresas, assinada digitalmente (RSA 2048, SHA-256).
+  traz cliente, CNPJ, plano (mensal/anual), validade e quantidade de empresas, assinada digitalmente (RSA 2048,
+  SHA-256). O serial é pedido já na instalação (INSTALAR.bat) e na primeira abertura da tela.
 - O sistema só tem a chave PÚBLICA: confere a assinatura, mas não consegue criar licenças. Alterar a validade ou o
   CNPJ dentro da chave invalida a assinatura.
 - A licença vale para o CNPJ da empresa principal da instalação.
-- Sem licença: período de avaliação. Vencida: alguns dias de carência com aviso e, depois, o sistema bloqueia as
+- Sem serial: bloqueado (avaliação só se o fornecedor definir "dias_de_teste" no fornecedor.json). Vencida: alguns
+  dias de carência com aviso e, depois, o sistema bloqueia as
   funções (emissão, cobrança, robô). Consulta, backup e a própria ativação continuam disponíveis.
 - Relógio atrasado de propósito (para "voltar no tempo") é detectado: o sistema guarda a maior data já vista.
 """
@@ -25,7 +27,8 @@ from pathlib import Path
 from . import emissor
 
 PREFIXO = "NFSE1"
-TESTE_DIAS = 15          # avaliação sem licença
+TESTE_DIAS = 0           # avaliação sem serial (0 = serial obrigatório já na instalação; ver dias_teste())
+PLANOS = {"mensal": "Mensalidade", "anual": "Anuidade"}
 CARENCIA_DIAS = 5        # depois do vencimento: funciona com aviso
 AVISO_DIAS = 10          # antes do vencimento: aviso no painel
 
@@ -50,6 +53,27 @@ def fornecedor() -> dict:
         return FORNECEDOR
     d = _ler_json(emissor.BASE / "fornecedor.json")
     return {k: str(d.get(k) or "") for k in ("nome", "whatsapp", "email")}
+
+def dias_teste() -> int:
+    """Dias de avaliação sem serial: 0 (padrão) ou o que o fornecedor definir em fornecedor.json ("dias_de_teste")."""
+    v = _ler_json(emissor.BASE / "fornecedor.json").get("dias_de_teste")
+    try:
+        return max(0, int(v)) if v not in (None, "") else TESTE_DIAS
+    except (TypeError, ValueError):
+        return TESTE_DIAS
+
+
+def plano(lic: dict) -> str:
+    """mensal | anual (licenças antigas, sem o campo: pela duração)."""
+    p = str(lic.get("plano") or "").lower()
+    if p in PLANOS:
+        return p
+    try:
+        dias = (date.fromisoformat(lic["validade"]) - date.fromisoformat(lic.get("emitida") or lic["validade"])).days
+    except (KeyError, ValueError):
+        dias = 0
+    return "anual" if dias > 62 else "mensal"
+
 
 # rotas que funcionam mesmo com a licença bloqueada (ver dados, guardar backup, ativar a licença, sair)
 ROTAS_LIVRES = {"estado", "licenca/status", "licenca/ativar", "sistema/encerrar", "backup/criar", "backup/listar",
@@ -222,13 +246,15 @@ def situacao(hoje: date | None = None) -> dict:
     if lic:
         validade = date.fromisoformat(lic["validade"])
         dias = (validade - hoje).days
+        pl = plano(lic)
         dados = base | {"cliente": lic.get("cliente", ""), "cnpj": lic.get("cnpj", ""), "validade": lic["validade"],
+                        "plano": pl, "plano_nome": PLANOS[pl],
                         "empresas": int(lic.get("empresas") or 0), "id": lic.get("id", ""), "dias": dias}
         if mudou:
             _gravar(est)
         if dias >= 0:
             return dados | {"liberado": True, "status": "aviso" if dias <= AVISO_DIAS else "ativa",
-                            "mensagem": f"Licença válida até {validade:%d/%m/%Y}"
+                            "mensagem": f"{PLANOS[pl]} — licença válida até {validade:%d/%m/%Y}"
                                         + (f" — faltam {dias} dia(s): renove para não interromper." if dias <= AVISO_DIAS else ".")}
         if dias >= -CARENCIA_DIAS:
             return dados | {"liberado": True, "status": "carencia",
@@ -240,12 +266,17 @@ def situacao(hoje: date | None = None) -> dict:
         est["teste_inicio"], mudou = hoje.isoformat(), True
     if mudou:
         _gravar(est)
-    resta = TESTE_DIAS - (hoje - date.fromisoformat(est["teste_inicio"])).days
+    if not dias_teste() and not est["chave"]:
+        return base | {"liberado": False, "status": "sem_licenca", "erro_chave": erro,
+                       "mensagem": (erro + " " if erro else "") + "Informe o serial de liberação (plano mensal ou anual) "
+                                   "recebido do fornecedor para começar a usar o sistema."}
+    resta = dias_teste() - (hoje - date.fromisoformat(est["teste_inicio"])).days
     if resta > 0:
         return base | {"liberado": True, "status": "teste", "dias": resta, "erro_chave": erro,
                        "mensagem": f"Período de avaliação: {resta} dia(s) restante(s)." + (f" {erro}" if erro else "")}
     return base | {"liberado": False, "status": "bloqueada", "erro_chave": erro,
-                   "mensagem": (erro + " " if erro else "") + "O período de avaliação terminou. Ative a chave de licença."}
+                   "mensagem": (erro + " " if erro else "") + ("O período de avaliação terminou. Informe o serial de liberação."
+                                                               if dias_teste() else "Informe o serial de liberação.")}
 
 
 def _fmt(c: str) -> str:
@@ -263,9 +294,14 @@ def ativar(chave: str) -> dict:
     est = _estado()
     est["chave"] = "".join(str(chave).split())
     _gravar(est)
+    if cnpj and not inst:                       # instalação nova: o serial já define o CNPJ da empresa principal
+        arq = emissor.BASE / ".env"
+        linhas = arq.read_text(encoding="utf-8").splitlines() if arq.exists() else []
+        linhas = [l for l in linhas if not l.startswith("ITABORAI_CNPJ=")] + [f"ITABORAI_CNPJ={cnpj}"]
+        arq.write_text("\n".join(linhas) + "\n", encoding="utf-8")
     from . import db
     try:
-        db.registrar("licenca", f"Licença ativada: {lic.get('cliente', '')} até {lic['validade']}")
+        db.registrar("licenca", f"Licença ativada: {lic.get('cliente', '')} — {PLANOS[plano(lic)]} até {lic['validade']}")
     except Exception:  # noqa: BLE001 — registrar no log é secundário
         pass
     return situacao()

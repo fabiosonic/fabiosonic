@@ -30,7 +30,8 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
 ## Início rápido (Windows)
 
 1. Descompacte o pacote numa pasta, por exemplo `C:\EmissorItaborai`.
-2. Dê dois cliques em **`INSTALAR.bat`** (uma única vez). Ele deixa tudo automático:
+2. Dê dois cliques em **`INSTALAR.bat`** (uma única vez). Primeiro ele pede o **serial de liberação** (plano
+   mensal ou anual, recebido do fornecedor) e os dados da empresa; depois deixa tudo automático:
    - o robô financeiro roda **de hora em hora** pelo Agendador do Windows, mesmo com o sistema fechado;
    - o sistema **abre sozinho ao ligar o computador**;
    - cria um atalho na área de trabalho.
@@ -591,19 +592,25 @@ Os campos de data são digitados no padrão brasileiro (**dd/mm/aaaa**, com más
 são escolhidos por extenso (janeiro…dezembro + ano), qualquer que seja o idioma do navegador ou do Windows. Data
 impossível (ex.: 31/02) fica marcada em vermelho e não é aceita.
 
-### Licença de uso (mensalidade)
+### Licença de uso: serial mensal ou anual
 
-O sistema funciona por licença com período, emitida pelo fornecedor:
+O sistema é liberado por **serial**, emitido pelo fornecedor, em dois planos: **mensal (mensalidade)** ou **anual
+(anuidade)**.
 
-- **Avaliação:** instalação nova funciona por 15 dias sem licença.
-- **Ativar:** em Configurações › Licença de uso (ou na tela que aparece quando a licença vence), cole a chave
-  `NFSE1-…` ou abra o arquivo `.lic` recebido. A chave vale para o **CNPJ da empresa principal** desta instalação.
+- **Na instalação:** o `INSTALAR.bat` pede o serial antes de configurar a empresa (também dá para colar o caminho do
+  arquivo `.lic`). Sem serial o sistema não abre: a tela mostra o pedido do serial na primeira abertura. O serial é
+  emitido para o **CNPJ da empresa principal** e, numa instalação nova, já grava esse CNPJ.
+- **Renovar:** em Configurações › Licença de uso, cole o novo serial `NFSE1-…` ou abra o arquivo `.lic`. O cartão
+  mostra o plano (Mensalidade/Anuidade), o licenciado e a validade.
 - **Aviso:** 10 dias antes do vencimento o Painel avisa. Depois de vencida, há 5 dias de carência com aviso.
 - **Bloqueio:** passada a carência, emissão de notas, cobrança, conciliação e o robô param. Os dados continuam
-  guardados; dá para abrir a tela, fazer backup e ativar a nova chave, e tudo volta na hora.
-- **Proteções:** a chave é assinada digitalmente pelo fornecedor (alterar validade ou CNPJ invalida a chave); data do
-  computador atrasada de propósito é detectada; apagar o arquivo de controle não reinicia a avaliação.
-- A licença pode limitar a quantidade de empresas da instalação.
+  guardados; dá para abrir a tela, fazer backup e informar o novo serial, e tudo volta na hora.
+- **Proteções:** o serial é assinado digitalmente pelo fornecedor (alterar plano, validade ou CNPJ invalida o serial);
+  data do computador atrasada de propósito é detectada; apagar o arquivo de controle não reinicia nada.
+- O serial pode limitar a quantidade de empresas da instalação.
+- **Avaliação (opcional, fornecedor):** para distribuir com dias de teste sem serial, preencha `"dias_de_teste"` no
+  `fornecedor.json` (padrão: 0, serial obrigatório). Nesse arquivo também ficam nome, WhatsApp e e-mail do fornecedor,
+  mostrados na tela do serial.
 
 ### Importar inadimplência do Nitrus
 

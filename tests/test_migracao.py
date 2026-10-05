@@ -11,6 +11,13 @@ from nfse_itaborai import clientes, config, db, emissor, financeiro, migracao
 from nfse_itaborai.tela import tratar
 
 
+def _liberar_licenca(monkeypatch):
+    """monkeypatch.undo() também desfaz a licença liberada do conftest: liberar de novo."""
+    from nfse_itaborai import licenca
+    monkeypatch.setattr(licenca, "situacao", lambda hoje=None: {"liberado": True, "status": "ativa", "mensagem": "",
+                                                                 "cnpj_instalacao": "", "fornecedor": {}})
+
+
 def _hash_pasta(p: Path) -> str:
     h = hashlib.sha256()
     for f in sorted(p.rglob("*")):
@@ -161,6 +168,7 @@ def test_reparo_desfaz_o_que_veio_da_outra_empresa(outra_empresa, monkeypatch):
     assert clientes.obter("52998224725") and emissor.ler_env(escritorio / ".env").get("ITABORAI_IE") == "999"
     config.salvar({"cobranca": {"multa_pct": 2.5}})              # algo que o escritório mudou depois
     monkeypatch.undo()
+    _liberar_licenca(monkeypatch)
     monkeypatch.setattr(emissor, "RAIZ", emissor._Raiz(escritorio))
     monkeypatch.setattr(emissor, "BASE", escritorio)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: cliente.parents[2]))
@@ -211,6 +219,7 @@ def test_reparo_sem_backup_traz_os_dados_certos_de_outras_fontes(outra_empresa, 
     assert (c["empresa"]["nome"], c["emissao"]["canal"], c["empresa"]["pix_chave"]) == \
         ("CLINICA DE PSICOLOGIA LTDA", "nacional", "clinica@exemplo.com")      # o estrago
     monkeypatch.undo()
+    _liberar_licenca(monkeypatch)
     monkeypatch.setattr(emissor, "RAIZ", emissor._Raiz(escritorio))
     monkeypatch.setattr(emissor, "BASE", escritorio)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: cliente.parents[2]))

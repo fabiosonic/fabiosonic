@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual do Sistema Financeiro e NFS-e</title>
+<style>
+:root{--tinta:#1d2733;--sub:#566375;--linha:#d9dee5;--fundo:#ffffff;--card:#f5f7fa;--azul:#1f4e8c;--azul-claro:#e8eef7;--alerta:#8a5a00;--alerta-fundo:#fff6e0;--ok:#1e6b3a;--ok-fundo:#e7f4ec}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tinta:#e6ebf1;--sub:#a3afbf;--linha:#33404f;--fundo:#141a21;--card:#1b232c;--azul:#8db4ea;--azul-claro:#1e2c3d;--alerta:#f0c46a;--alerta-fundo:#2d2615;--ok:#7fd3a0;--ok-fundo:#16291e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--tinta);font:16px/1.6 "Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:880px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:30px;line-height:1.2;margin:0 0 4px}
+h2{font-size:22px;margin:44px 0 10px;padding-top:12px;border-top:2px solid var(--azul);color:var(--azul)}
+h3{font-size:17px;margin:24px 0 6px}
+p,li{margin:6px 0}
+.sub{color:var(--sub)}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:15px}
+th,td{border:1px solid var(--linha);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--card)}
+.tabela{overflow-x:auto}
+.caixa{background:var(--card);border:1px solid var(--linha);border-radius:8px;padding:12px 16px;margin:12px 0}
+.atencao{background:var(--alerta-fundo);border-color:var(--alerta);}
+.atencao b:first-child{color:var(--alerta)}
+.dica{background:var(--ok-fundo);border-color:var(--ok)}
+.dica b:first-child{color:var(--ok)}
+ol.passos>li{margin:8px 0}
+nav.sumario{background:var(--azul-claro);border-radius:8px;padding:12px 20px;margin:20px 0}
+nav.sumario ol{columns:2;column-gap:32px;margin:6px 0;padding-left:20px}
+nav.sumario a{color:var(--azul);text-decoration:none}
+code,kbd{font-family:Consolas,Menlo,monospace;font-size:14px;background:var(--card);border:1px solid var(--linha);border-radius:4px;padding:0 4px}
+.menu{font-weight:600}
+@media (max-width:600px){nav.sumario ol{columns:1}h1{font-size:25px}}
+@media print{body{font-size:12pt}main{max-width:none;padding:0}h2{break-before:page}h2:first-of-type{break-before:auto}nav.sumario,.caixa,table{break-inside:avoid}a{color:inherit}}
+</style>
+</head>
+<body>
+<main>
+<h1>Sistema Financeiro e NFS-e</h1>
+<p class="sub">Manual de instalação, configuração e uso · versão 3.9</p>
+<p>O sistema emite as notas fiscais de serviço (NFS-e) da empresa, gera as contas a receber com boleto e PIX, cobra os
+clientes por e-mail e WhatsApp, dá baixa nos pagamentos, concilia o extrato bancário e entrega os relatórios
+gerenciais (DRE, fluxo de caixa, inadimplência). Ele roda no computador da empresa e conversa só com os canais
+oficiais: prefeitura, Emissor Nacional da NFS-e, Banco Inter e o e-mail da própria empresa.</p>
+
+<nav class="sumario"><b>Sumário</b>
+<ol>
+<li><a href="#requisitos">Antes de começar</a></li>
+<li><a href="#instalacao">Instalação e serial</a></li>
+<li><a href="#licenca">Licença: mensalidade e anuidade</a></li>
+<li><a href="#empresa">Configurar a empresa</a></li>
+<li><a href="#emissao">Configurar a emissão da NFS-e</a></li>
+<li><a href="#importar">Importar clientes e serviços dos XML</a></li>
+<li><a href="#cobranca">Configurar cobrança, e-mail e WhatsApp</a></li>
+<li><a href="#producao">Homologação e produção</a></li>
+<li><a href="#dia">O dia a dia: telas do sistema</a></li>
+<li><a href="#robo">O que o robô faz sozinho</a></li>
+<li><a href="#empresas">Várias empresas</a></li>
+<li><a href="#seguranca">Backup, segurança e atualização</a></li>
+<li><a href="#problemas">Problemas comuns</a></li>
+<li><a href="#checklist">Checklist de implantação</a></li>
+</ol></nav>
+
+<h2 id="requisitos">1. Antes de começar</h2>
+<p>Separe estes itens. Os que não se aplicam à empresa podem ficar para depois.</p>
+<div class="tabela"><table>
+<tr><th>Item</th><th>Para que serve</th><th>Onde conseguir</th></tr>
+<tr><td>Computador com Windows 10 ou 11</td><td>O sistema roda nele. Deixe-o ligado no horário comercial para o robô trabalhar.</td><td>—</td></tr>
+<tr><td><b>Serial de liberação</b></td><td>Libera o uso (plano mensal ou anual).</td><td>Fornecedor do sistema, informando o CNPJ da empresa.</td></tr>
+<tr><td>CNPJ, razão social e inscrição municipal</td><td>Identificação da empresa nas notas.</td><td>Cartão CNPJ e cadastro na prefeitura.</td></tr>
+<tr><td>Chave Privada Webservice <i>(Itaboraí)</i></td><td>Emitir pelo webservice da Prefeitura de Itaboraí.</td><td>Portal NFS-e da prefeitura, menu “Chave Privada Webservice”.</td></tr>
+<tr><td>Certificado digital A1 (.pfx) e senha <i>(Nacional)</i></td><td>Emitir pelo Emissor Nacional (nfse.gov.br).</td><td>Autoridade certificadora.</td></tr>
+<tr><td>XML das notas já emitidas</td><td>Cadastrar clientes, serviços e regras fiscais automaticamente.</td><td>Portal da prefeitura ou nfse.gov.br (download dos XML).</td></tr>
+<tr><td>Integração do Banco Inter <i>(opcional)</i></td><td>Boleto com PIX e baixa automática.</td><td>Internet Banking PJ › Soluções para sua empresa › Nova integração.</td></tr>
+<tr><td>Dados do e-mail (SMTP) <i>(opcional)</i></td><td>Enviar cobranças, notas e o resumo diário.</td><td>Seu provedor de e-mail.</td></tr>
+</table></div>
+
+<h2 id="instalacao">2. Instalação e serial</h2>
+<ol class="passos">
+<li>Descompacte o arquivo do sistema numa pasta fixa, por exemplo <code>C:\EmissorNFSe</code>. Não use a pasta Downloads nem a área de trabalho como local definitivo.</li>
+<li>Dê dois cliques em <b><code>INSTALAR.bat</code></b>. Se o Windows perguntar, clique em “Mais informações › Executar assim mesmo”.</li>
+<li>O instalador verifica o Python. Se não houver, ele instala sozinho, só para o seu usuário, sem pedir administrador.</li>
+<li><b>Serial de liberação:</b> cole o serial recebido (começa com <code>NFSE1-</code>) ou o caminho do arquivo <code>.lic</code> e tecle Enter. Sem o serial a instalação para aqui.</li>
+<li><b>Canal de emissão:</b> responda <b>1</b> para Emissor Nacional (certificado A1) ou <b>2</b> para webservice da Prefeitura de Itaboraí (Chave Privada Webservice).</li>
+<li>Confirme o CNPJ (já vem do serial) e informe a inscrição municipal, o optante do Simples e, conforme o canal, a chave do webservice e o próximo número de RPS, ou o código IBGE do município.</li>
+<li>O instalador agenda o robô de hora em hora, faz o sistema abrir sozinho ao ligar o computador e cria o atalho <b>Sistema Financeiro NFS-e</b> na área de trabalho. No fim, o sistema abre no navegador.</li>
+</ol>
+<div class="caixa dica"><b>Dica.</b> O sistema roda escondido, sem janela preta. Para fechar, use <span class="menu">Encerrar o sistema</span> no menu da tela. Para abrir de novo, use o atalho da área de trabalho.</div>
+
+<h2 id="licenca">3. Licença: mensalidade e anuidade</h2>
+<p>O uso é liberado por um <b>serial</b> emitido para o CNPJ da empresa principal, em um destes planos:</p>
+<div class="tabela"><table>
+<tr><th>Plano</th><th>Validade</th><th>Renovação</th></tr>
+<tr><td><b>Mensal</b> (mensalidade)</td><td>1 mês</td><td>A cada pagamento você recebe um novo serial.</td></tr>
+<tr><td><b>Anual</b> (anuidade)</td><td>12 meses</td><td>Um novo serial por ano.</td></tr>
+</table></div>
+<ul>
+<li><b>Onde ver:</b> <span class="menu">Configurações › Licença de uso</span> mostra o plano, o licenciado, o CNPJ e a validade.</li>
+<li><b>Renovar:</b> no mesmo cartão, cole o novo serial ou clique em <span class="menu">Abrir arquivo .lic</span> e depois em <span class="menu">Ativar serial</span>. Vale na hora.</li>
+<li><b>Aviso:</b> 10 dias antes do vencimento o Painel avisa.</li>
+<li><b>Carência:</b> depois de vencido, o sistema funciona por mais 5 dias, com aviso.</li>
+<li><b>Bloqueio:</b> passada a carência, param a emissão de notas, a cobrança, a conciliação e o robô. Seus dados continuam guardados: dá para abrir a tela, consultar, fazer backup e informar o novo serial.</li>
+</ul>
+<div class="caixa atencao"><b>Importante.</b> O serial vale só para o CNPJ para o qual foi emitido. Não altere a data do computador: o sistema detecta relógio atrasado e bloqueia.</div>
+
+<h2 id="empresa">4. Configurar a empresa</h2>
+<p>Abra <span class="menu">Configurações</span>. O <b>checklist de implantação</b> no Painel mostra o que ainda falta e tem um link para cada item.</p>
+<h3>Empresa emissora e credenciais</h3>
+<ul>
+<li><b>Razão social</b>, como no cartão CNPJ.</li>
+<li><b>CNPJ, inscrição municipal e estadual</b>, <b>chave do webservice</b> (Itaboraí), <b>próximo RPS</b> e <b>optante do Simples</b>.</li>
+<li><b>Município da empresa</b> (código IBGE com 7 números; Itaboraí = 3301900).</li>
+</ul>
+<p>Todos esses dados podem ser corrigidos quando precisar. Para proteger o histórico, o sistema não deixa:</p>
+<ul>
+<li>trocar o CNPJ de uma empresa que já tem títulos ou notas (para outra empresa, use <span class="menu">Empresas › Nova empresa</span>);</li>
+<li>usar o CNPJ de outra empresa já cadastrada;</li>
+<li>colocar o próximo RPS ou DPS abaixo de um número já usado em produção.</li>
+</ul>
+<p>O botão <span class="menu">Trazer os dados da empresa de uma versão anterior…</span> lista instalações antigas e backups <b>do mesmo CNPJ</b> e mostra só o que está diferente. Você marca o que quer trazer. Notas, títulos, faturamento, clientes e numeração não são tocados.</p>
+<h3>Regras fiscais (regra geral)</h3>
+<p>Informe o <b>regime</b> (MEI, Simples Nacional, Lucro Presumido ou Lucro Real), a apuração no Simples, o regime especial, o ISS retido e as retenções federais. A tela mostra só os campos que o regime exige. Um tomador com regra diferente (por exemplo, órgão público que retém tributos) recebe a <b>regra específica</b> no cadastro dele, que vale primeiro.</p>
+<h3>Serviços (atividades)</h3>
+<p>Cada atividade tem item da LC 116, desdobro, NBS, CNAE, alíquota do ISS, IBS/CBS e a descrição da nota. Uma fica marcada como <b>padrão</b>. A importação dos XML cria os serviços sozinha (seção 6); confira antes de emitir em produção.</p>
+
+<h2 id="emissao">5. Configurar a emissão da NFS-e</h2>
+<div class="tabela"><table>
+<tr><th>Canal</th><th>Por onde sai</th><th>O que precisa</th><th>Numeração</th></tr>
+<tr><td><b>Itaboraí</b></td><td>Webservice da Prefeitura de Itaboraí</td><td>Chave Privada Webservice</td><td>RPS</td></tr>
+<tr><td><b>Nacional</b></td><td>Emissor Nacional (Sefin/ADN, nfse.gov.br)</td><td>Certificado A1 (.pfx) e senha</td><td>DPS, com série própria (padrão 900)</td></tr>
+</table></div>
+<ol class="passos">
+<li>Em <span class="menu">Configurações › Emissão da NFS-e</span>, escolha o canal.</li>
+<li>No canal Nacional, clique em <span class="menu">Selecionar certificado digital A1</span>, informe a senha e clique em <span class="menu">Salvar certificado</span>. O arquivo fica guardado só na pasta desta empresa.</li>
+<li>Escolha a <b>regra da NFS-e</b>: emitir ao gerar a conta a receber, emitir quando o cliente pagar, só lançar a conta sem nota, ou não lançar. Cada cliente pode ter regra própria na Recorrência.</li>
+<li>Clique em <span class="menu">Salvar e testar certificado e conexão</span>.</li>
+</ol>
+
+<h2 id="importar">6. Importar clientes e serviços dos XML</h2>
+<p>É o jeito mais rápido de deixar a empresa pronta para emitir.</p>
+<ol class="passos">
+<li>Baixe os XML das notas já emitidas (portal da prefeitura ou nfse.gov.br). Podem ser arquivos soltos ou ZIP.</li>
+<li>Dê dois cliques em <b><code>IMPORTAR_CLIENTES.bat</code></b>. A pasta <code>IMPORTAR XML</code> abre: coloque os arquivos nela e tecle Enter na janela.</li>
+<li>O sistema importa e mostra o resumo:
+<ul>
+<li>clientes (com endereço, e-mail e serviço habitual);</li>
+<li>serviços com item, desdobro, NBS, código municipal, alíquota e carga tributária;</li>
+<li>dados da empresa que estavam vazios (nome, inscrição municipal, município);</li>
+<li>numeração (o próximo RPS/DPS continua do maior número já usado);</li>
+<li>regras fiscais do regime e regras próprias dos tomadores (retenções, ISS retido, órgão público).</li>
+</ul></li>
+<li>Confira em <span class="menu">Configurações › Serviços</span> e <span class="menu">Regras fiscais</span>.</li>
+</ol>
+<p>Pela tela, o mesmo caminho fica em <span class="menu">Clientes › Importar clientes dos XML</span>. Notas de outra empresa nunca entram nesta: cada nota vai só para a empresa que a emitiu.</p>
+
+<h2 id="cobranca">7. Configurar cobrança, e-mail e WhatsApp</h2>
+<h3>Banco Inter (boleto com PIX)</h3>
+<ol class="passos">
+<li>No Internet Banking PJ do Inter: <span class="menu">Soluções para sua empresa › Nova integração</span>, com os escopos de emissão, cancelamento e consulta de boletos (e extrato, para a conciliação).</li>
+<li>Baixe o certificado (<code>.crt</code>) e a chave (<code>.key</code>).</li>
+<li>Em <span class="menu">Configurações › Cobrança</span>, informe client_id e client_secret, envie o .crt e o .key pelos botões e clique em <span class="menu">Salvar e testar conexão com o Inter</span>.</li>
+</ol>
+<p>Sem o Inter, o sistema cobra pelo <b>PIX copia e cola</b> da chave da empresa, sem tarifa; a baixa sai pela conciliação do extrato.</p>
+<h3>Multa, juros e régua</h3>
+<ul>
+<li>Multa e juros padrão: 2% e 1% ao mês, pro rata dia (ajustáveis).</li>
+<li>Régua padrão: 3 dias antes, no vencimento e 1, 5, 15 e 30 dias depois. Atrasados são cobrados de novo periodicamente até pagar.</li>
+<li>Envios só de <b>segunda a sexta, das 08:00 às 18:00</b>. Fora disso nada se perde: sai na primeira rodada dentro do horário.</li>
+<li>Um único boleto por título; o vencimento nunca é prorrogado pelo sistema.</li>
+</ul>
+<h3>E-mail (SMTP)</h3>
+<p>Em <span class="menu">Configurações</span>, informe servidor, porta, usuário, senha e remetente, e o e-mail do dono para o resumo diário. Use <span class="menu">Salvar e enviar e-mail de teste</span>.</p>
+<h3>WhatsApp da empresa</h3>
+<ol class="passos">
+<li><span class="menu">Configurações › WhatsApp</span> › <span class="menu">Conectar (ler QR Code)</span>. No celular: WhatsApp › Aparelhos conectados › Conectar um aparelho.</li>
+<li>Em <span class="menu">Clientes</span>, marque <b>Cobrar por WhatsApp</b> nos clientes que devem receber. Os demais recebem só e-mail.</li>
+</ol>
+<p>O envio é feito pelo WhatsApp Web, com intervalo entre mensagens e limite por rodada, para evitar bloqueio.</p>
+<h3>Chave PIX</h3>
+<p>Em <span class="menu">Configurações › Empresa e PIX</span>: chave PIX, cidade, WhatsApp da empresa e assinatura das mensagens.</p>
+
+<h2 id="producao">8. Homologação e produção</h2>
+<p>O sistema começa em <b>homologação</b> (teste): as notas não têm validade e o robô não emite. Teste a emissão de uma nota nesse modo.</p>
+<div class="caixa atencao"><b>Atenção (Itaboraí).</b> A prefeitura informa que, depois que a empresa passa a emitir pelo webservice, não é mais possível emitir notas manualmente no portal, e isso é irreversível. Por isso a produção só é ligada por você, em <span class="menu">Configurações</span>, com confirmação. O sistema nunca liga a produção sozinho.</div>
+
+<h2 id="dia">9. O dia a dia: telas do sistema</h2>
+<div class="tabela"><table>
+<tr><th>Tela</th><th>Para que serve</th></tr>
+<tr><td><b>Painel</b></td><td>Faturado, recebido, a receber, em atraso, inadimplência, a pagar e RBT12 com a alíquota estimada do DAS; gráfico de 12 meses, alertas e vencimentos da semana. Comece o dia por aqui.</td></tr>
+<tr><td><b>Emitir nota</b></td><td>Escolha cliente, serviço e valor. A tela mostra a regra fiscal aplicada e pergunta se gera cobrança (boleto/PIX e régua).</td></tr>
+<tr><td><b>Emitir em lote</b></td><td>Marque vários clientes; o valor vem da última nota de cada um.</td></tr>
+<tr><td><b>Recorrência</b></td><td>Honorários mensais: valor, dia de vencimento, serviço, regra da nota, início e fim, reajuste, acréscimos e descontos. Marque <b>Repetir todo mês</b>; quem não estiver marcado não é cobrado.</td></tr>
+<tr><td><b>Contas a receber</b></td><td>A receber, atrasados, pagos, sem NFS-e, sem cobrança, jurídico. Ações: baixar, cobrar, emitir NFS-e, editar o título (e refazer o boleto), enviar para o jurídico, cancelar, estornar, PDF do boleto. Pagamento parcial pergunta o que fazer com a diferença.</td></tr>
+<tr><td><b>Notas emitidas</b></td><td>Todas as notas, por competência; cancelamento com justificativa no canal em que a nota saiu; substituição (Nacional).</td></tr>
+<tr><td><b>Cobrança</b></td><td>Régua, fila de WhatsApp e histórico de envios.</td></tr>
+<tr><td><b>Contas a pagar</b></td><td>Despesas por categoria do plano da DRE, inclusive recorrentes.</td></tr>
+<tr><td><b>Conciliação</b></td><td>Extrato do Inter pela API (<span class="menu">Baixar extrato agora</span>) ou arquivo OFX. Recebimentos dão baixa nos títulos; saídas viram despesas classificadas. Cada lançamento pode ser reclassificado por linha da DRE ou marcado “Fora da DRE” (distribuição de lucros, transferência).</td></tr>
+<tr><td><b>Relatórios</b></td><td>DRE (Lei 6.404/76, art. 187, adaptada ao regime), fluxo de caixa realizado e projetado, indicadores, inadimplência por faixa, análise por cliente, livro caixa e fechamento mensal, todos com Imprimir/PDF.</td></tr>
+<tr><td><b>Clientes</b></td><td>Cadastro, regra fiscal própria, serviço habitual, WhatsApp, importação dos XML e da planilha de contatos.</td></tr>
+</table></div>
+<p>Todas as listas têm <b>filtros por coluna</b> logo abaixo do cabeçalho, com a soma dos valores filtrados. Datas sempre em dd/mm/aaaa.</p>
+<h3>Rotina sugerida</h3>
+<ul>
+<li><b>Todo dia:</b> olhe o Painel e os alertas; confira a fila de WhatsApp, se usar envio manual.</li>
+<li><b>Toda semana:</b> baixe o extrato na Conciliação e classifique o que ficou sem categoria.</li>
+<li><b>Todo mês:</b> confira a Recorrência antes do dia de geração; no fechamento, leia a DRE e o relatório do mês (o robô envia por e-mail no dia configurado).</li>
+</ul>
+
+<h2 id="robo">10. O que o robô faz sozinho</h2>
+<p>Com <span class="menu">Configurações › Robô ligado</span>, ele roda ao abrir o sistema e de hora em hora, mesmo com a tela fechada. Cada etapa pode ser desligada.</p>
+<ol>
+<li>Backup diário (guarda os 30 últimos).</li>
+<li>Lança as despesas recorrentes.</li>
+<li>Gera os títulos da recorrência no dia configurado (e o 13º honorário, se ligado).</li>
+<li>Emite as NFS-e pendentes (só em produção), sem emitir em dobro.</li>
+<li>Registra boleto/PIX e envia ao cliente.</li>
+<li>Dá baixa nos pagamentos (Inter e extratos) e envia agradecimento e a nota.</li>
+<li>Roda a régua de cobrança.</li>
+<li>Envia o resumo diário e, no dia do fechamento, o relatório do mês.</li>
+</ol>
+<p>Um erro em uma etapa não para as outras e fica registrado no log (Relatórios).</p>
+
+<h2 id="empresas">11. Várias empresas</h2>
+<p>Clique no nome da empresa, no topo do menu, para trocar ou cadastrar outra (dentro do limite do serial). Cada empresa tem as próprias credenciais, certificados, banco de dados, clientes, notas, numeração, boletos e relatórios. <b>Nada é compartilhado entre empresas</b>: o mesmo certificado, chave PIX, credencial do Inter ou e-mail não pode ser usado em duas empresas, e um extrato de outra conta é recusado.</p>
+
+<h2 id="seguranca">12. Backup, segurança e atualização</h2>
+<h3>Backup</h3>
+<ul>
+<li>Automático todo dia; <span class="menu">Fazer backup agora</span> a qualquer momento.</li>
+<li>Informe uma <b>cópia extra</b> (pendrive, HD externo ou pasta da nuvem) e uma <b>senha do backup</b> (anote em local seguro).</li>
+<li>Restaurar: pela lista ou <span class="menu">Restaurar de um arquivo…</span>. Antes, o sistema faz backup do estado atual; a numeração nunca volta atrás; backup de uma empresa nunca é restaurado em outra.</li>
+</ul>
+<h3>Acesso</h3>
+<p>Em <span class="menu">Configurações › Acesso à tela (PIN)</span>, defina um PIN de 4 a 8 números. As senhas ficam protegidas pelo Windows do usuário.</p>
+<h3>Atualizar o sistema</h3>
+<p>Ao receber uma nova versão (.zip), use <span class="menu">Configurações › Atualizar o sistema</span>. Só os arquivos do programa são trocados; dados, backups, credenciais e certificados ficam. Antes, é feito um backup.</p>
+
+<h2 id="problemas">13. Problemas comuns</h2>
+<div class="tabela"><table>
+<tr><th>O que aparece</th><th>O que fazer</th></tr>
+<tr><td>“Informe o serial de liberação”</td><td>Cole o serial recebido do fornecedor. Se ainda não tem, peça informando o CNPJ da empresa.</td></tr>
+<tr><td>“Licença vencida” / sistema bloqueado</td><td>Renove o plano e cole o novo serial em Configurações › Licença de uso.</td></tr>
+<tr><td>A data do computador está anterior ao último uso</td><td>Acerte data e hora do Windows.</td></tr>
+<tr><td>“Falta informar: chave do webservice”</td><td>Digite a chave em Configurações › Empresa emissora. Acontece ao trocar de usuário do Windows ou de computador.</td></tr>
+<tr><td>Nota recusada pela prefeitura</td><td>A mensagem aparece no título (Contas a receber › sem NFS-e). Corrija o dado indicado e emita de novo; o mesmo RPS é reaproveitado.</td></tr>
+<tr><td>Boleto não registrado</td><td>Geralmente falta endereço completo do cliente (cidade e UF). Complete o cadastro; o robô tenta de novo.</td></tr>
+<tr><td>WhatsApp “não conectado”</td><td>Leia o QR Code de novo em Configurações › WhatsApp. O que não saiu fica na fila.</td></tr>
+<tr><td>Mensagens não saíram à noite ou no fim de semana</td><td>Normal: envios só de segunda a sexta, das 08:00 às 18:00.</td></tr>
+<tr><td>O sistema não abre</td><td>Use o atalho da área de trabalho. Para ver a janela de diagnóstico, rode <code>INICIAR.bat</code>.</td></tr>
+</table></div>
+
+<h2 id="checklist">14. Checklist de implantação</h2>
+<ol>
+<li>Instalação com o serial ativado.</li>
+<li>Razão social, CNPJ, inscrição municipal e município conferidos.</li>
+<li>Canal de emissão e credencial (chave do webservice ou certificado A1) testados.</li>
+<li>XML importados; serviços e regras fiscais conferidos.</li>
+<li>Nota de teste em homologação.</li>
+<li>Banco Inter testado, PIX, e-mail e WhatsApp configurados.</li>
+<li>Recorrência conferida (“Repetir todo mês” nos clientes mensais).</li>
+<li>Backup com senha e cópia extra; PIN de acesso.</li>
+<li>Produção ligada por você, com confirmação.</li>
+</ol>
+<p class="sub">Suporte e renovação do serial: contato do fornecedor exibido na tela de licença.</p>
+</main>
+</body>
+</html>

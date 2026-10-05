@@ -54,7 +54,8 @@ def test_chave_assinada_confere_e_adulterada_e_recusada(inst):
         licenca.ler("qualquer coisa")
 
 
-def test_avaliacao_vencimento_carencia_e_bloqueio(inst):
+def test_avaliacao_vencimento_carencia_e_bloqueio(inst, monkeypatch):
+    monkeypatch.setattr(licenca, "TESTE_DIAS", 15)                          # fornecedor que dá avaliação
     h = inst["hoje"]
     s = licenca.situacao()
     assert s["liberado"] and s["status"] == "teste" and s["dias"] == licenca.TESTE_DIAS
@@ -90,7 +91,8 @@ def test_relogio_atrasado_bloqueia(inst):
     assert not s["liberado"] and s.get("relogio")
 
 
-def test_apagar_o_arquivo_nao_reinicia_a_avaliacao(inst):
+def test_apagar_o_arquivo_nao_reinicia_a_avaliacao(inst, monkeypatch):
+    monkeypatch.setattr(licenca, "TESTE_DIAS", 15)
     h = inst["hoje"]
     licenca.situacao()
     h["d"] += timedelta(days=licenca.TESTE_DIAS + 1)
@@ -104,3 +106,38 @@ def test_limite_de_empresas(inst, monkeypatch):
     monkeypatch.setattr(empresas, "listar", lambda: [{"id": "principal"}])
     r = tratar("empresa/criar", {"nome": "OUTRA", "cnpj": "99888777000166"})
     assert "permite 1 empresa" in r["erro"]
+
+
+def test_serial_obrigatorio_ja_na_instalacao(inst):
+    """Padrão: sem avaliação. Instalação nova fica bloqueada até informar o serial; o serial grava o CNPJ."""
+    (inst["pasta"] / ".env").unlink()
+    s = licenca.situacao()
+    assert not s["liberado"] and s["status"] == "sem_licenca" and "serial" in s["mensagem"]
+    assert tratar("titulos", {"filtro": "todos"})["licenca_bloqueada"]
+    s = licenca.ativar(_chave(inst["priv"], "2026-11-04", plano="mensal"))
+    assert s["liberado"] and s["plano"] == "mensal" and s["plano_nome"] == "Mensalidade"
+    assert "Mensalidade" in s["mensagem"]
+    assert emissor.ler_env(inst["pasta"] / ".env")["ITABORAI_CNPJ"] == CNPJ        # instalação já sabe o CNPJ
+
+
+def test_plano_anual_e_licenca_antiga_sem_plano(inst):
+    s = licenca.ativar(_chave(inst["priv"], "2027-10-04", plano="anual"))
+    assert (s["plano"], s["plano_nome"]) == ("anual", "Anuidade")
+    assert licenca.plano({"validade": "2027-10-04", "emitida": "2026-10-04"}) == "anual"
+    assert licenca.plano({"validade": "2026-11-04", "emitida": "2026-10-04"}) == "mensal"
+
+
+def test_fornecedor_pode_dar_dias_de_teste(inst, monkeypatch):
+    (inst["pasta"] / "fornecedor.json").write_text('{"nome": "X", "dias_de_teste": 7}', encoding="utf-8")
+    s = licenca.situacao()
+    assert s["liberado"] and s["status"] == "teste" and s["dias"] == 7
+
+
+def test_instalacao_pede_o_serial(inst, monkeypatch, capsys):
+    from nfse_itaborai import __main__ as cli
+    respostas = iter(["serial-errado", _chave(inst["priv"], "2027-10-04", plano="anual")])
+    monkeypatch.setattr("builtins.input", lambda *_: next(respostas))
+    assert cli.pedir_serial()
+    out = capsys.readouterr().out
+    assert "inválida" in out and "Anuidade" in out
+    assert licenca.situacao()["plano"] == "anual"

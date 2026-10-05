@@ -29,6 +29,37 @@ def _imprimir(resp: cliente.Resposta) -> int:
     return 0 if resp.sucesso else 1
 
 
+def pedir_serial() -> bool:
+    """Instalação: pede o serial de liberação (plano mensal ou anual) antes de configurar a empresa."""
+    from . import licenca
+    s = licenca.situacao()
+    if s["liberado"]:
+        print(f"Licença: {s['mensagem']}")
+        print()
+        return True
+    print("SERIAL DE LIBERAÇÃO")
+    print("Cole o serial recebido do fornecedor (começa com NFSE1-) ou o caminho do arquivo .lic.")
+    forn = s.get("fornecedor") or {}
+    contato = " · ".join(x for x in (forn.get("nome"), forn.get("whatsapp"), forn.get("email")) if x)
+    if contato:
+        print(f"Para adquirir (mensalidade ou anuidade): {contato}")
+    while True:
+        entrada = input("Serial: ").strip().strip('"')
+        if not entrada:
+            print("Sem o serial o sistema não é liberado. Rode novamente quando tiver o serial (ou ative na tela).")
+            return False
+        if not entrada.upper().startswith("NFSE1-") and Path(entrada).is_file():   # caminho do arquivo .lic
+            entrada = Path(entrada).read_text(encoding="utf-8").strip()
+        try:
+            s = licenca.ativar(entrada)
+        except ValueError as ex:
+            print(f"  {ex}")
+            continue
+        print(f"  OK: {s['mensagem']}" + (f" — {s['cliente']}" if s.get("cliente") else ""))
+        print()
+        return True
+
+
 def configurar() -> int:
     """Cria o .env na pasta do emissor, sem precisar editar arquivo à mão."""
     import getpass
@@ -52,6 +83,11 @@ def configurar() -> int:
     canal_atual = config.carregar()["emissao"].get("canal", "municipal") if (emissor.RAIZ / "dados" / "config.json").exists() else ""
     print(f"Configurando {arq}  (Enter mantém o valor entre colchetes)")
     print()
+    if not pedir_serial():
+        return 3
+    for linha in arq.read_text(encoding="utf-8").splitlines() if arq.exists() else []:   # o serial grava o CNPJ
+        if linha.startswith("ITABORAI_CNPJ=") and not padrao.get("ITABORAI_CNPJ"):
+            padrao["ITABORAI_CNPJ"] = linha.split("=", 1)[1].strip()
     print("Como a empresa emite a NFS-e?")
     print("  1 - Emissor Nacional (nfse.gov.br) - usa o certificado digital A1 da empresa")
     print("  2 - Webservice da Prefeitura de Itaboraí - usa a Chave Privada Webservice do portal da prefeitura")
@@ -156,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--producao", action="store_true")
 
     sub.add_parser("configurar", help="cria/atualiza o arquivo .env perguntando os dados")
+    sub.add_parser("serial", help="pede e ativa o serial de liberação (plano mensal ou anual)")
 
     ic = sub.add_parser("importar-clientes", help="importa dos XML de NFS-e: clientes, serviços, empresa e regras fiscais")
     ic.add_argument("pasta", type=Path, nargs="?", help="pasta com os XML (padrão: IMPORTAR XML)")
@@ -187,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
             return _imprimir(emissor.cancelar(a.numero_nfse, a.justificativa, producao=a.producao))
         if a.cmd == "configurar":
             return configurar()
+        if a.cmd == "serial":
+            return 0 if pedir_serial() else 3
         if a.cmd == "importar-clientes":
             return importar_clientes(a.pasta)
         if a.cmd == "robo":

@@ -265,8 +265,8 @@ function contatoFornecedor(f) {
   return partes.length ? `<p class="sub">Fornecedor: ${partes.join(" · ")}</p>` : "";
 }
 function formLicenca(id) {
-  return `<label class="inteiro">Chave de licença<textarea id="${id}_chave" rows="3" placeholder="NFSE1-…" spellcheck="false" style="font-family:Consolas,Menlo,monospace;font-size:12px"></textarea></label>
-    <p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" id="${id}_ok" type="button">${ic("ok")}Ativar licença</button>
+  return `<label class="inteiro">Serial de liberação<textarea id="${id}_chave" rows="3" placeholder="NFSE1-…" spellcheck="false" style="font-family:Consolas,Menlo,monospace;font-size:12px"></textarea></label>
+    <p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" id="${id}_ok" type="button">${ic("ok")}Ativar serial</button>
     <label class="btn sec" style="cursor:pointer">${ic("download")}Abrir arquivo .lic<input type="file" id="${id}_arq" accept=".lic,.txt" hidden></label></p><p id="${id}_msg" class="sub"></p>`;
 }
 function ligarFormLicenca(id, depois) {
@@ -283,21 +283,22 @@ function telaLicenca(lic) {
   if ($("#tela_lic")) return;
   const d = document.createElement("div");
   d.id = "tela_lic"; d.className = "tela-pin";
-  d.innerHTML = `<div class="caixa-pin" style="max-width:560px"><h1>${ic("cadeado")} Licença</h1>
-    <p>${esc(lic.mensagem || "Ative a licença para usar o sistema.")}</p>
-    <p class="sub">Envie ao fornecedor o CNPJ desta instalação: <b>${lic.cnpj_instalacao ? fmtDoc(lic.cnpj_instalacao) : "(configure o CNPJ da empresa)"}</b>. Seus dados continuam guardados; consultas e backup seguem disponíveis.</p>
+  const novo = lic.status == "sem_licenca";
+  d.innerHTML = `<div class="caixa-pin" style="max-width:560px"><h1>${ic("cadeado")} ${novo ? "Serial de liberação" : "Licença"}</h1>
+    <p>${esc(lic.mensagem || "Informe o serial de liberação para usar o sistema.")}</p>
+    <p class="sub">O sistema é licenciado por <b>mensalidade</b> ou <b>anuidade</b>. ${lic.cnpj_instalacao ? `CNPJ desta instalação: <b>${fmtDoc(lic.cnpj_instalacao)}</b>.` : "Informe ao fornecedor o CNPJ da sua empresa: o serial vem para ele e já configura a instalação."}${novo ? "" : " Seus dados continuam guardados; consultas e backup seguem disponíveis."}</p>
     ${contatoFornecedor(lic.fornecedor)}${formLicenca("tl")}</div>`;
   document.body.appendChild(d);
   ligarFormLicenca("tl", r => { if (r.liberado) location.reload(); });
 }
 async function cartaoLicenca(box) {
   const s = await api("licenca/status");
-  const cls = { ativa: "bom", aviso: "atencao", carencia: "critico", teste: "info", bloqueada: "critico" }[s.status] || "neutro";
-  const rot = { ativa: "Ativa", aviso: "Vence em breve", carencia: "Vencida (carência)", teste: "Avaliação", bloqueada: "Bloqueada" }[s.status] || s.status;
+  const cls = { ativa: "bom", aviso: "atencao", carencia: "critico", teste: "info", bloqueada: "critico", sem_licenca: "critico" }[s.status] || "neutro";
+  const rot = { ativa: "Ativa", aviso: "Vence em breve", carencia: "Vencida (carência)", teste: "Avaliação", bloqueada: "Bloqueada", sem_licenca: "Sem serial" }[s.status] || s.status;
   box.innerHTML = `<h2>${ic("cadeado")}Licença de uso</h2>
     <p>${estadoSelo(cls, rot)} ${esc(s.mensagem)}</p>
-    ${s.cliente ? `<p class="sub">Licenciado: <b>${esc(s.cliente)}</b> · CNPJ ${fmtDoc(s.cnpj || "")}${s.empresas ? ` · até ${s.empresas} empresa(s)` : " · empresas ilimitadas"}${s.id ? ` · licença ${esc(s.id)}` : ""}</p>` : ""}
-    <p class="sub">CNPJ desta instalação: <b>${s.cnpj_instalacao ? fmtDoc(s.cnpj_instalacao) : "não configurado"}</b>. Para renovar, cole a nova chave abaixo.</p>
+    ${s.cliente ? `<p class="sub">Licenciado: <b>${esc(s.cliente)}</b>${s.plano_nome ? ` · plano <b>${esc(s.plano_nome)}</b>` : ""} · CNPJ ${fmtDoc(s.cnpj || "")}${s.empresas ? ` · até ${s.empresas} empresa(s)` : " · empresas ilimitadas"}${s.id ? ` · licença ${esc(s.id)}` : ""}</p>` : ""}
+    <p class="sub">CNPJ desta instalação: <b>${s.cnpj_instalacao ? fmtDoc(s.cnpj_instalacao) : "não configurado"}</b>. Para renovar (mensalidade ou anuidade), cole o novo serial abaixo.</p>
     ${contatoFornecedor(s.fornecedor)}${formLicenca("cl")}`;
   ligarFormLicenca("cl", () => { carregarEstado(); cartaoLicenca(box); });
 }

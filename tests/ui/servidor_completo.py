@@ -177,9 +177,11 @@ tela.ROTAS["teste/whatsapp_web_enviados"] = lambda c: {"enviados": FakeWhatsAppW
 from nfse_itaborai import licenca  # noqa: E402
 _PUB, _PRIV = licenca.gerar_chaves(1024)
 licenca.CHAVE_PUBLICA = _PUB
+licenca.TESTE_DIAS = 30           # o pedido do serial na 1ª abertura é testado em test_licenca.py e em licenca_tela.js
 tela.ROTAS["teste/licenca"] = lambda c: {"chave": licenca.emitir(
     {"id": "T-1", "cliente": "ESCRITORIO DE TESTE", "cnpj": str(c.get("cnpj", "24875410000144")),
-     "validade": str(c.get("validade", "2027-10-31")), "empresas": int(c.get("empresas", 0))}, _PRIV)}
+     "validade": str(c.get("validade", "2027-10-31")), "empresas": int(c.get("empresas", 0)),
+     "plano": str(c.get("plano", "anual"))}, _PRIV)}
 srv = ThreadingHTTPServer(("127.0.0.1", porta), tela._Handler)
 print("pronto", flush=True)
 srv.serve_forever()

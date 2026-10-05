@@ -110,8 +110,9 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     certo(/inválida/.test(await p.textContent('#cl_msg')), 'chave adulterada não foi recusada: ' + await p.textContent('#cl_msg'));
     await p.fill('#cl_chave', chave); await p.click('#cl_ok'); await espera(1200);
     s = await api('licenca/status');
-    certo(s.liberado && s.status === 'ativa' && s.validade === '2027-10-31' && s.cliente === 'ESCRITORIO DE TESTE', JSON.stringify(s));
-    return 'licença ativa até 31/10/2027';
+    certo(s.liberado && s.status === 'ativa' && s.validade === '2027-10-31' && s.cliente === 'ESCRITORIO DE TESTE' && s.plano_nome === 'Anuidade', JSON.stringify(s));
+    certo(/Anuidade/.test(await p.textContent('#card_lic')), 'o cartão não mostra o plano');
+    return 'serial anual ativo até 31/10/2027';
   });
   await passo('Configurações: salvar tudo', async () => {
     await ir('config', 1500); await p.click('#salvar'); await espera(1200);
