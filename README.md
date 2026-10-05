@@ -40,9 +40,15 @@ A prefeitura usa o sistema Prefeitur@Rápida (provedor **CTA, versão 2.00**).
      **resumo diário**.
 4. Em **Recorrência**, marque "Repetir todo mês" nos clientes mensais.
 
-### Python instalado sozinho
+### Python incluído no pacote
 
-`INSTALAR.bat` e `INICIAR.bat` procuram o Python 3.10+ (no PATH, no lançador `py` ou na pasta do usuário). Se não
+O pacote **completo** (`EmissorItaborai_<versão>_completo.zip`, montado por `ferramentas/montar_pacote_windows.py`)
+traz a pasta `python\` com o Python 3.12 oficial da Python Software Foundation e os componentes já instalados
+(`lxml`, `cryptography`, `playwright`, `pypdf`). Com ela, `INSTALAR.bat` e os demais `.bat` usam esse Python: a
+instalação não precisa de internet nem instala nada no Windows. As atualizações pelo botão trocam só o programa e
+mantêm a pasta `python\`.
+
+Sem a pasta `python\`, `INSTALAR.bat` e `INICIAR.bat` procuram o Python 3.10+ (no PATH, no lançador `py` ou na pasta do usuário). Se não
 houver, instalam o Python 3.12 **automaticamente, só para o usuário** (sem pedir administrador): primeiro pelo
 `winget` do Windows e, se ele não existir, baixando o instalador oficial de python.org. Depois instalam os
 componentes (`lxml` e `cryptography`). Não é preciso baixar nem configurar nada à mão.
