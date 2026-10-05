@@ -37,7 +37,7 @@ code,kbd{font-family:Consolas,Menlo,monospace;font-size:14px;background:var(--ca
 <body>
 <main>
 <h1>Sistema Financeiro e NFS-e</h1>
-<p class="sub">Manual de instalação, configuração e uso · versão 3.9</p>
+<p class="sub">Manual de instalação, configuração e uso · versão 3.10</p>
 <p>O sistema emite as notas fiscais de serviço (NFS-e) da empresa, gera as contas a receber com boleto e PIX, cobra os
 clientes por e-mail e WhatsApp, dá baixa nos pagamentos, concilia o extrato bancário e entrega os relatórios
 gerenciais (DRE, fluxo de caixa, inadimplência). Ele roda no computador da empresa e conversa só com os canais
@@ -136,6 +136,7 @@ oficiais: prefeitura, Emissor Nacional da NFS-e, Banco Inter e o e-mail da próp
 <li>Escolha a <b>regra da NFS-e</b>: emitir ao gerar a conta a receber, emitir quando o cliente pagar, só lançar a conta sem nota, ou não lançar. Cada cliente pode ter regra própria na Recorrência.</li>
 <li>Clique em <span class="menu">Salvar e testar certificado e conexão</span>.</li>
 </ol>
+<p>Antes de enviar, o sistema confere os campos que o Emissor Nacional exige em cada situação (retenção do ISS, intermediário, exportação, obra, evento, exigibilidade suspensa, IBS/CBS conforme o regime) e mostra, de uma vez, tudo o que falta e onde preencher.</p>
 
 <h2 id="importar">6. Importar clientes e serviços dos XML</h2>
 <p>É o jeito mais rápido de deixar a empresa pronta para emitir.</p>
@@ -152,6 +153,7 @@ oficiais: prefeitura, Emissor Nacional da NFS-e, Banco Inter e o e-mail da próp
 </ul></li>
 <li>Confira em <span class="menu">Configurações › Serviços</span> e <span class="menu">Regras fiscais</span>.</li>
 </ol>
+<p>A importação também guarda, no cadastro de cada tomador, os <b>campos fixos das notas</b> dele (local da prestação, pedido, contrato, obra, imóvel, intermediário, comércio exterior), cadastra clientes do exterior pelo NIF e lê o código interno e a alíquota de cada serviço. Esses campos ficam em <span class="menu">Clientes › editar › Campos fixos das notas deste tomador</span> e entram sozinhos nas próximas notas.</p>
 <p>Pela tela, o mesmo caminho fica em <span class="menu">Clientes › Importar clientes dos XML</span>. Notas de outra empresa nunca entram nesta: cada nota vai só para a empresa que a emitiu.</p>
 
 <h2 id="cobranca">7. Configurar cobrança, e-mail e WhatsApp</h2>

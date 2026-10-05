@@ -153,12 +153,37 @@ regime regular, usa a redução e destaca IBS/CBS normalmente.
 | `IBSCBS` indFinal, tpEnteGov, tpOper, indDest/dest | Regra do tomador |
 | `IBSCBS` gTribRegular, gDif, cCredPres | Configurações › Campos avançados |
 | `IBSCBS` cIndOp, CST/cClassTrib | Cadastro do serviço (e cClassTrib específico na regra do tomador) |
-| `serv/locPrest`, `cTribMun`, `vDescCondIncond`, `vDedRed` (pDR/vDR) | Emitir nota › Mais campos da nota |
-| `obra`, `atvEvento`, `infoCompl` (xPed, idDocTec, docRef) | Emitir nota › Mais campos da nota |
-| `IBSCBS/imovel`, `gReeRepRes`, `gRefNFSe` | Emitir nota › Mais campos da nota |
-| `interm`, `vReceb` | Emitir nota › Mais campos da nota |
+| `serv/locPrest`, `vDedRed` pDR, `obra`, `infoCompl` (xPed, gItemPed, docRef, idDocTec), `IBSCBS/imovel`, `interm`, `comExt` (exceto o valor na moeda) | **Campos fixos das notas do tomador** (Clientes › editar), preenchidos sozinhos pela importação dos XML; ou Emitir nota › Mais campos da nota (vale por cima) |
+| `cTribMun`, `vDescCondIncond`, `vDedRed` (vDR/documentos), `atvEvento`, `gReeRepRes` (dFeNacional, docFiscalOutro, docOutro), `gRefNFSe`, `vReceb`, `comExt/vServMoeda` | Emitir nota › Mais campos da nota |
+| `tribMun/BM` (nBM, pRedBCBM ou vRedBCBM) | Regra do tomador › Casos especiais |
+| `cServ/cIntContrib` | Configurações › Serviços › Código interno (só letras e números) |
+| `tpEmit` 2/3, `cMotivoEmisTI`, `chNFSeRej` | Emitir nota › Mais campos da nota › Emissão pelo tomador ou intermediário |
 | `subst` (substituição de NFS-e) | Notas emitidas › Substituir (preenche a emissão com a chave da nota substituída) |
+| `toma` do exterior (NIF/cNaoNIF, `endExt`) | Clientes › Cliente do exterior (também cadastrado pela importação dos XML) |
 
-Ainda não implementados (pouco usados num escritório contábil): `comExt` (exportação/importação de serviço com
-moeda estrangeira e mecanismos de fomento), tomador/prestador no exterior (NIF, endereço exterior), dedução por
-lista de documentos (`documentos/docDedRed`), emissão pelo tomador ou intermediário (`tpEmit` 2/3).
+## 6. Obrigatórios condicionais conferidos antes do envio (v3.10)
+
+O XSD só diz "elemento ausente"; o sistema confere antes e diz **o que falta e onde preencher**, todas as
+pendências de uma vez:
+
+| Situação | Exige |
+|---|---|
+| ISS retido pelo tomador (`tpRetISSQN = 2`) | tomador identificado (CPF/CNPJ ou cliente do exterior) |
+| ISS retido pelo intermediário (`tpRetISSQN = 3`) | intermediário (CPF/CNPJ e nome) |
+| ISS retido no Simples | alíquota (`pAliq`) |
+| Intermediário ou destinatário informado | nome (`xNome`) |
+| Exportação (`tribISSQN = 3`) | país do resultado (`cPaisResult`) e comércio exterior (moeda e valor) |
+| Serviço prestado no exterior (`cPaisPrestacao`) | comércio exterior (moeda e valor) |
+| Exigibilidade suspensa | número do processo (`nProcesso`) |
+| Obra | CNO/CEI ou CIB |
+| Evento | nome, início, fim e código do evento ou CEP |
+| IBS/CBS informado (regime regular em 2026; Simples/MEI a partir de 2027) | `cIndOp` e `cClassTrib` |
+| Itens 07.02/07.05 (obra) e 12 (eventos) | aviso para identificar a obra / o evento |
+
+## 7. Importação dos XML (v3.10)
+
+Além de clientes, serviço, regime e retenções, a importação lê de cada nota: local da prestação, intermediário,
+obra, imóvel, comércio exterior, pedido e item, documento de referência, ART/RRT, dedução em %, benefício
+municipal (em % ou valor), código interno do serviço, alíquota aplicada pelo Sefin (`pAliqAplic`) e o tomador do
+exterior (NIF, país, cidade, estado e código postal). O que se repete para o tomador vira os campos fixos do
+cadastro dele (só quando ele ainda não tem), e entra sozinho nas próximas notas.

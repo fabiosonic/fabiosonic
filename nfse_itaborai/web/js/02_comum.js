@@ -61,7 +61,8 @@ function blocoFiscal(p) {
         ${L("!mei trib_issqn=1", 'Exigibilidade do ISS suspensa<select data-fz="exig_susp_tp"><option value="">Não</option><option value="1">Por decisão judicial</option><option value="2">Por processo administrativo</option></select>')}
         ${L("exig_susp_tp!=", 'Nº do processo (30 dígitos)<input data-fz="exig_susp_proc" maxlength="30" inputmode="numeric">')}
         ${L("!mei trib_issqn=1", 'Benefício municipal (nº de 14 dígitos)<input data-fz="n_bm" maxlength="14" inputmode="numeric" placeholder="opcional">')}
-        ${L("n_bm!=", 'Redução da base pelo benefício (%)<input data-fz="p_red_bm" inputmode="decimal">')}
+        ${L("n_bm!= v_red_bm=", 'Redução da base pelo benefício (%)<input data-fz="p_red_bm" inputmode="decimal">')}
+        ${L("n_bm!= p_red_bm=", 'ou Redução da base em valor (R$)<input data-fz="v_red_bm" inputmode="decimal">')}
         ${L("ibs", 'Destinatário diferente: CPF/CNPJ<input data-fz="dest_doc" inputmode="numeric" placeholder="vazio = o próprio tomador">')}
         ${L("ibs dest_doc!=", 'Destinatário: nome<input data-fz="dest_nome" maxlength="150">')}
       </div></details>
@@ -143,6 +144,31 @@ function blocoNota() {
       + `<label data-vis="subst_chave!=">Motivo<select data-nx="subst_motivo"><option value="99">99 Outros</option><option value="01">01 Desenquadramento do Simples</option><option value="02">02 Enquadramento no Simples</option><option value="03">03 Inclusão retroativa de imunidade/isenção</option><option value="04">04 Exclusão retroativa de imunidade/isenção</option><option value="05">05 Rejeição pelo tomador/intermediário</option></select></label>`
       + c("subst_xmotivo", "Descrição do motivo", "", "subst_chave!="))}
   </details>`;
+}
+// Campos que se repetem em todas as notas do tomador (cadastro do cliente). Mesmos nomes de blocoNota (data-nx):
+// a emissão junta estes com os da nota, e os da nota valem por cima.
+function blocoFixos() {
+  const c = (k, t, extra = "", vis = "") => `<label${vis ? ` data-vis="${vis}"` : ""}>${t}<input data-nx="${k}" ${extra}></label>`;
+  const G = (vis, titulo, corpo) => `<div class="grupo-nx" data-grupo${vis ? ` data-vis="${vis}"` : ""}><h3 class="bloco">${titulo}</h3><div class="campos">${corpo}</div></div>`;
+  return `<div id="cf_nx"><details class="mais-nota"><summary>${ic("nota")}Campos fixos das notas deste tomador <span class="sub" data-nx-resumo></span></summary>
+    <p class="sub">Preenchidos sozinhos pela importação dos XML (o que se repete nas notas dele) e usados em toda nota deste tomador — manual, em lote, recorrência e robô. Na emissão, o que for preenchido na própria nota vale por cima.</p>
+    ${G("", "Local e documentos", c("local_prestacao", "Município da prestação (IBGE)", 'inputmode="numeric" maxlength="7" placeholder="vazio = da empresa"') + c("local_recolhimento", "Município do recolhimento (IBGE)", 'inputmode="numeric" maxlength="7"', "municipal local_prestacao!=")
+      + c("pedido", "Nº do pedido / ordem de compra", 'maxlength="15"') + c("pedido_item", "Item do pedido", 'maxlength="15"', "nacional pedido!=") + c("doc_ref", "Documento de referência (contrato…)", 'maxlength="255"') + c("doc_tec", "ART / RRT / DRT", 'maxlength="40"', "obra"))}
+    ${G("deducao", "Dedução/redução da base", c("ded_pct", "Dedução/redução (%)", 'inputmode="decimal"'))}
+    ${G("obra", "Obra (construção civil)", c("obra_cno", "CNO / CEI da obra", 'maxlength="30"') + c("obra_cib", "ou CIB (8 caracteres)", 'maxlength="8"') + c("obra_insc_imob", "Inscrição imobiliária (opcional)", 'maxlength="30"'))}
+    ${G("ibs,municipal", "Imóvel (serviços sobre bens imóveis, exceto obra)", c("imovel_cib", "CIB do imóvel", 'maxlength="8"', "nacional") + c("imovel_insc_imob", "Inscrição imobiliária", 'maxlength="30"', "nacional")
+      + c("imovel_cep", "CEP do imóvel", 'maxlength="8" inputmode="numeric"', "municipal") + c("imovel_lgr", "Logradouro", 'maxlength="80"', "municipal imovel_cep!=") + c("imovel_nro", "Número", 'maxlength="6"', "municipal imovel_cep!=")
+      + c("imovel_bairro", "Bairro", 'maxlength="30"', "municipal imovel_cep!=") + c("imovel_cmun", "Município (IBGE)", 'maxlength="7" inputmode="numeric"', "municipal imovel_cep!=") + c("imovel_uf", "UF", 'maxlength="2"', "municipal imovel_cep!="))}
+    ${G("", "Intermediário", c("interm_doc", "Intermediário CPF/CNPJ", 'inputmode="numeric" placeholder="se houver"') + c("interm_nome", "Intermediário nome", 'maxlength="150"', "interm_doc!="))}
+    ${G("nacional", "Exterior — exportação (o valor na moeda vai em cada nota)", c("local_prestacao_pais", "País da prestação (se fora do Brasil)", 'maxlength="2" placeholder="sigla ISO, ex.: US"')
+      + `<label>Moeda<select data-nx="comext_moeda"><option value="">Não se aplica</option>${Object.entries(ST.moedas || {}).map(([k, v]) => `<option value="${k}">${k} — ${esc(v)}</option>`).join("")}</select></label>`
+      + `<label data-vis="comext_moeda!=">Modo de prestação<select data-nx="comext_md"><option value="1">1 Transfronteiriço</option><option value="2">2 Consumo no Brasil</option><option value="3">3 Presença comercial no exterior</option><option value="4">4 Movimento temporário de pessoas físicas</option></select></label>`
+      + `<label data-vis="comext_moeda!=">Vínculo com o cliente<select data-nx="comext_vinc"><option value="0">Sem vínculo</option><option value="1">Controlada</option><option value="2">Controladora</option><option value="3">Coligada</option><option value="4">Matriz</option><option value="5">Filial ou sucursal</option><option value="6">Outro vínculo</option></select></label>`
+      + c("comext_mec_p", "Apoio ao comércio exterior (prestador) — código", 'maxlength="2" inputmode="numeric" placeholder="01 = nenhum"', "comext_moeda!=")
+      + c("comext_mec_t", "Apoio ao comércio exterior (tomador) — código", 'maxlength="2" inputmode="numeric" placeholder="01 = nenhum"', "comext_moeda!=")
+      + `<label data-vis="comext_moeda!=">Movimentação temporária de bens<select data-nx="comext_mov"><option value="1">Não</option><option value="2">Vinculada a declaração de importação</option><option value="3">Vinculada a declaração de exportação</option></select></label>`
+      + `<label data-vis="comext_moeda!=">Enviar ao MDIC<select data-nx="comext_mdic"><option value="0">Não</option><option value="1">Sim</option></select></label>`)}
+  </details></div>`;
 }
 const TIPOS_DED = [["1", "Alimentação/frigobar"], ["2", "Materiais"], ["3", "Produção externa"], ["4", "Reembolso de despesas"], ["5", "Repasse consorciado"], ["6", "Repasse plano de saúde"], ["7", "Serviços"], ["8", "Subempreitada de mão de obra"], ["9", "Profissional parceiro"], ["99", "Outras deduções"]];
 function linhaDed(d = {}) {

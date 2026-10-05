@@ -362,7 +362,9 @@ def _evento(x: dict) -> str:
 
 def _info_compl(x: dict, obs: str) -> str:
     corpo = (_t("idDocTec", _txt(x.get("doc_tec"), 40)) + _t("docRef", _txt(x.get("doc_ref"), 255))
-             + _t("xPed", _txt(x.get("pedido"), 15)) + _t("xInfComp", obs))
+             + _t("xPed", _txt(x.get("pedido"), 15))
+             + (f"<gItemPed>{_t('xItemPed', _txt(x.get('pedido_item'), 15))}</gItemPed>" if x.get("pedido_item") else "")
+             + _t("xInfComp", obs))
     return f"<infoCompl>{corpo}</infoCompl>" if corpo else ""
 
 
@@ -394,7 +396,10 @@ def _ibscbs(rps: Rps, x: dict, ctrib: str) -> str:
     if x.get("ree_valor"):
         chave = so_digitos(x.get("ree_chave"))
         doc = (f"<dFeNacional>{_t('tipoChaveDFe', x.get('ree_tipo_chave') or '1')}{_t('chaveDFe', chave)}</dFeNacional>"
-               if chave else f"<docOutro>{_t('nDoc', _txt(x.get('ree_ndoc'), 255))}{_t('xDoc', _txt(x.get('ree_xdoc'), 255))}</docOutro>")
+               if chave else
+               f"<docFiscalOutro>{_t('cMunDocFiscal', so_digitos(x['ree_cmun'])[:7])}{_t('nDocFiscal', _txt(x.get('ree_ndoc'), 255))}"
+               f"{_t('xDocFiscal', _txt(x.get('ree_xdoc') or 'Documento fiscal', 255))}</docFiscalOutro>" if x.get("ree_cmun") else
+               f"<docOutro>{_t('nDoc', _txt(x.get('ree_ndoc'), 255))}{_t('xDoc', _txt(x.get('ree_xdoc'), 255))}</docOutro>")
         fdoc = so_digitos(x.get("ree_fornec_doc"))
         fornec = (f"<fornec>{_t('CNPJ' if len(fdoc) == 14 else 'CPF', fdoc)}{_t('xNome', _txt(x.get('ree_fornec_nome'), 150))}</fornec>"
                   if fdoc else "")
@@ -481,7 +486,8 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
     serv = ("<serv><locPrest>" + loc + "</locPrest>"
             + "<cServ>" + _t("cTribNac", so_digitos(rps.codigo_desdobro)[:6])
             + _t("cTribMun", so_digitos(rps.codigo_tributacao_municipio)[:3] if len(so_digitos(rps.codigo_tributacao_municipio)) == 3 else "")
-            + _t("xDescServ", desc) + _t("cNBS", so_digitos(rps.codigo_nbs)) + "</cServ>"
+            + _t("xDescServ", desc) + _t("cNBS", so_digitos(rps.codigo_nbs))
+            + _t("cIntContrib", re.sub(r"[^A-Za-z0-9]", "", str(x.get("cod_interno") or ""))[:20]) + "</cServ>"
             + _com_ext(x) + _obra(x) + _evento(x) + _info_compl(x, obs) + "</serv>")
 
     retido = rps.iss_retido == ISS_RETIDO_SIM
@@ -502,7 +508,9 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
         ded = f"<vDedRed>{_t('vDR', _v(rps.valor_deducoes))}</vDedRed>"
     susp = (f"<exigSusp>{_t('tpSusp', x['exig_susp_tp'])}{_t('nProcesso', x.get('exig_susp_proc'))}</exigSusp>"
             if x.get("exig_susp_tp") else "")
-    bm = (f"<BM>{_t('nBM', x['n_bm'])}{_t('pRedBCBM', _v(Decimal(str(x['p_red_bm']))) if x.get('p_red_bm') else '')}</BM>"
+    bm = (f"<BM>{_t('nBM', x['n_bm'])}"
+          + (_t("vRedBCBM", _v(Decimal(str(x["v_red_bm"])))) if x.get("v_red_bm") else
+             _t("pRedBCBM", _v(Decimal(str(x["p_red_bm"])))) if x.get("p_red_bm") else "") + "</BM>"
           if x.get("n_bm") else "")
     tp_ret = ("3" if x.get("ret_iss_por") == "intermediario" else "2") if retido else "1"
     # alíquota só para ME/EPP com retenção (E0625); não optante em município conveniado usa a parametrizada (E0617)
@@ -529,6 +537,7 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
             + _t("serie", serie) + _t("nDPS", numero) + _t("dCompet", compet.isoformat())
             + _t("tpEmit", tp_emit if tp_emit in ("2", "3") else "1")
             + (_t("cMotivoEmisTI", x.get("motivo_emis_ti") or "1") if tp_emit in ("2", "3") else "")
+            + (_t("chNFSeRej", so_digitos(x.get("ch_nfse_rej"))) if tp_emit in ("2", "3") and x.get("ch_nfse_rej") else "")
             + _t("cLocEmi", cmun)
             + _subst(x) + prest + toma + interm + serv + valores + ibscbs + "</infDPS></DPS>")
 
@@ -682,8 +691,17 @@ def preparar(rps: Rps, producao: bool, cert: Certificado | None = None, cfg: dic
     compet = min(rps.competencia or rps.data_emissao.date(), datetime.now(emissor.FUSO).date())
     # IBS/CBS no Emissor Nacional: obrigatório no regime regular em 2026; Simples/MEI a partir de 01/01/2027
     # (a exigência para todos desde 01/06/2026 é regra do webservice de Itaboraí, não do nacional)
-    alertas = validar(rps, exigir_ibscbs=fiscal.informar_ibscbs(fiscal.geral(cfg), compet))
-    alertas += _regras_raras(rps)
+    # todas as críticas de uma vez: o usuário vê tudo o que falta, não um erro por tentativa
+    from .validacao import ErroValidacao
+    alertas, erros = [], []
+    for critica in (lambda: validar(rps, exigir_ibscbs=fiscal.informar_ibscbs(fiscal.geral(cfg), compet)),
+                    lambda: _regras_raras(rps), lambda: _obrigatorios(rps, fiscal.geral(cfg)["regime"])):
+        try:
+            alertas += critica()
+        except ErroValidacao as ex:
+            erros += [e for e in ex.erros if e not in erros]
+    if erros:
+        raise ErroValidacao(erros)
     prest = prestador()
     serie = str(cfg["emissao"].get("serie_dps", "900"))
     xml = gerar_dps(rps, prest, producao, serie, str(numero), cfg)
@@ -695,6 +713,63 @@ def preparar(rps: Rps, producao: bool, cert: Certificado | None = None, cfg: dic
     assinado = assinar(xml, "infDPS", cert)
     validar_xsd(assinado)
     return assinado, str(numero), alertas
+
+
+ONDE_TOMADOR = "Clientes › editar o cliente › Campos fixos das notas deste tomador (ou Emitir › Mais campos da nota)"
+ONDE_REGRA = "Clientes › editar o cliente › Regra específica deste tomador"
+
+
+def _obrigatorios(rps: Rps, regime: str) -> list[str]:
+    """Campos que a DPS v1.01 passa a exigir conforme o caso (regras do leiaute nacional). Cada mensagem diz o que
+    falta e onde preencher; o XSD só diria 'elemento ausente'."""
+    from .validacao import ErroValidacao
+    x, erros, alertas = rps.extras or {}, [], []
+    tom = rps.tomador
+    trib = str(x.get("trib_issqn") or "1")
+    retido = rps.iss_retido == ISS_RETIDO_SIM and regime != "mei" and trib == "1"
+    doc_tom = so_digitos(tom.cpf_cnpj) if not tom.estrangeiro else ""
+    if (doc_tom or tom.estrangeiro) and not (tom.razao_social or "").strip():
+        erros.append("Tomador sem nome/razão social (obrigatório na DPS): complete o cadastro em Clientes.")
+    if retido and x.get("ret_iss_por") == "intermediario" and not so_digitos(x.get("interm_doc")):
+        erros.append(f"ISS retido pelo intermediário: informe CPF/CNPJ e nome do intermediário — {ONDE_TOMADOR}.")
+    elif retido and not doc_tom and not tom.estrangeiro:
+        erros.append("ISS retido pelo tomador: o tomador precisa estar identificado com CPF/CNPJ (Clientes).")
+    if retido and regime == "simples" and not rps.aliquota_iss:
+        erros.append(f"ISS retido (Simples Nacional): informe a alíquota do ISS retido — {ONDE_REGRA} › Alíquota do "
+                     "ISS retido (ou a alíquota no serviço, em Configurações › Serviços).")
+    if so_digitos(x.get("interm_doc")) and not str(x.get("interm_nome") or "").strip():
+        erros.append(f"Intermediário: informe o nome (obrigatório junto com o CPF/CNPJ) — {ONDE_TOMADOR}.")
+    if so_digitos(x.get("dest_doc")) and not str(x.get("dest_nome") or "").strip():
+        erros.append(f"Destinatário diferente do tomador: informe o nome — {ONDE_REGRA} › Casos especiais.")
+    if trib == "3" and not x.get("pais_result"):
+        erros.append(f"Exportação de serviço: informe o país onde se verificou o resultado — {ONDE_REGRA} › Casos especiais.")
+    if x.get("exig_susp_tp") and not so_digitos(x.get("exig_susp_proc")):
+        erros.append(f"Exigibilidade do ISS suspensa: informe o número do processo — {ONDE_REGRA} › Casos especiais.")
+    comext = bool(x.get("comext_moeda") and x.get("comext_valor"))
+    if x.get("local_prestacao_pais") and not comext:
+        erros.append("Serviço prestado no exterior: preencha Comércio exterior (moeda e valor na moeda estrangeira) "
+                     "em Mais campos da nota › Exterior.")
+    if x.get("comext_moeda") and not x.get("comext_valor"):
+        erros.append("Comércio exterior: informe o valor do serviço na moeda estrangeira (Mais campos da nota › Exterior).")
+    if any(x.get(k) for k in ("obra_cno", "obra_cib", "obra_insc_imob")) and not (x.get("obra_cno") or x.get("obra_cib")):
+        erros.append(f"Obra: informe o CNO/CEI ou o CIB da obra — {ONDE_TOMADOR} › Obra.")
+    if any(str(k).startswith("evento_") and v for k, v in x.items()):
+        falta = [n for k, n in (("evento_nome", "nome"), ("evento_ini", "início"), ("evento_fim", "fim")) if not x.get(k)]
+        if not (x.get("evento_id") or x.get("evento_cep")):
+            falta.append("código do evento ou CEP do local")
+        if falta:
+            erros.append("Evento: informe " + ", ".join(falta) + " (Mais campos da nota › Evento).")
+    ctrib = so_digitos(rps.codigo_desdobro)[:4]
+    if ctrib in ("0702", "0705") and not (x.get("obra_cno") or x.get("obra_cib")):
+        alertas.append(f"Serviço de construção civil (item {ctrib[:2]}.{ctrib[2:]}): o município pode exigir a "
+                       f"identificação da obra (CNO/CEI ou CIB) — {ONDE_TOMADOR} › Obra.")
+    if ctrib.startswith("12") and not x.get("evento_nome"):
+        alertas.append("Serviço de diversões/eventos (item 12): informe os dados do evento em Mais campos da nota › Evento.")
+    if dinheiro(rps.desconto_incondicionado) + dinheiro(rps.desconto_condicionado) > rps.valor_servicos:
+        erros.append("Descontos maiores que o valor do serviço.")
+    if erros:
+        raise ErroValidacao(erros)
+    return alertas
 
 
 def _regras_raras(rps: Rps) -> list[str]:

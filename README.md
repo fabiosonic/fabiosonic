@@ -372,6 +372,20 @@ exportação, ISS suspenso, benefício municipal, CST de PIS/COFINS, consumo pes
 quem difere da regra geral ganha **regra específica** — tomador que já tem regra gravada não é alterado. Detalhes por regime em
 `docs/NFSE_NACIONAL_CAMPOS_POR_REGIME.md`.
 
+## Campos fixos das notas do tomador e obrigatórios do Emissor Nacional
+
+- **Campos fixos das notas deste tomador** (Clientes › editar): local da prestação, pedido e item, documento de
+  referência, ART/RRT, dedução em %, obra, imóvel, intermediário e comércio exterior (sem o valor na moeda, que é de
+  cada nota). Entram sozinhos em toda nota do tomador — manual, em lote, recorrência e robô — e aparecem
+  preenchidos em Emitir › Mais campos da nota; o que for digitado na nota vale por cima.
+- **Importação dos XML**: preenche esses campos fixos com o que se repete nas notas de cada tomador (só se ele ainda
+  não tiver), cadastra clientes do exterior (NIF, país, cidade, código postal; reimportar não duplica), guarda o
+  código interno do serviço (`cIntContrib`), a alíquota aplicada (`pAliqAplic`) e o benefício municipal em valor.
+- **Obrigatórios condicionais** do leiaute nacional (v1.01) conferidos antes do envio, todos de uma vez e dizendo
+  onde preencher: retenção pelo tomador/intermediário, alíquota do ISS retido no Simples, nomes do intermediário e
+  do destinatário, país do resultado na exportação, comércio exterior, processo da exigibilidade suspensa, obra,
+  evento e IBS/CBS conforme o regime. Detalhes em `docs/NFSE_NACIONAL_CAMPOS_POR_REGIME.md`.
+
 ## Notas emitidas
 
 Aba **Notas emitidas**: todas as NFS-e (do sistema e importadas dos XML), abrindo na competência atual.

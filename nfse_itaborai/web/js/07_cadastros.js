@@ -20,13 +20,14 @@ PAGINAS.clientes = async el => {
     <label class="chk inteiro"><input type="checkbox" id="c_wa"> <b>Enviar cobrança por WhatsApp</b> <span class="sub">— para clientes que já conversam com o escritório pelo WhatsApp</span></label>
     <h3 class="bloco">Emissão</h3><label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
     ${blocoFiscal("cf")}
+    ${blocoFixos()}
     <p><button class="btn" id="sc">Salvar cliente</button> <button class="btn sec" id="lc">Novo</button></p></div>
     <div class="card"><div class="barra"><label style="flex:1">Procurar<input id="c_f" placeholder="nome ou CNPJ"></label></div><div id="c_tab"></div></div>`;
   const END = ["tipo_logradouro", "logradouro", "numero", "complemento", "bairro", "cep", "cidade", "codigo_municipio", "uf"];
   let chaveExt = "";
   const modoExt = () => { const ext = $("#c_ext").checked, outro = $("#ce_pais").value == "outro";
     $$("[data-ex]", el).forEach(l => l.hidden = !ext || (l.hasAttribute("data-outro") && !outro)); $$("[data-br]", el).forEach(l => l.hidden = ext); };
-  const preencher = c => { $("#c_tit").innerHTML = `${ic("clientes")}${c.cpf_cnpj ? "Editar cliente: " + esc(nomeCli(c.razao_social)) : "Novo cliente"}`; preencherFiscal("cf", c.fiscal); $("#c_doc").value = c.estrangeiro ? "" : c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || "");
+  const preencher = c => { $("#c_tit").innerHTML = `${ic("clientes")}${c.cpf_cnpj ? "Editar cliente: " + esc(nomeCli(c.razao_social)) : "Novo cliente"}`; preencherFiscal("cf", c.fiscal); preencherNota($("#cf_nx"), c.padroes_nota || {}); atuFixos(); $("#c_doc").value = c.estrangeiro ? "" : c.cpf_cnpj || ""; $$("#fcli [name]").forEach(i => i.value = (END.includes(i.name) ? (c.endereco || {})[i.name] : c[i.name]) || "");
     const x = c.estrangeiro || {}; chaveExt = c.estrangeiro ? c.cpf_cnpj : ""; $("#c_ext").checked = !!c.estrangeiro;
     $("#ce_pais").value = x.pais_iso ? ((ST.paises || {})[x.pais_iso] ? x.pais_iso : "outro") : ""; $("#ce_iso").value = x.pais_iso || ""; $("#ce_bacen").value = x.pais_bacen || "";
     $("#ce_nif").value = x.nif || ""; $("#ce_sem").value = x.sem_nif || ""; $("#ce_pessoa").value = x.pessoa || "1";
@@ -49,12 +50,13 @@ PAGINAS.clientes = async el => {
   $("#imp_cont").onclick = importarContatos;
   $("#imp_xml").onclick = () => importarXml($("#imp_area"));
   ligarFiscal("cf");
+  const atuFixos = ligarNota($("#cf_nx"), () => (servDe($("#fcli [name=servico_id]").value) || {}).item_lista_servico || "");
   $("#sc").onclick = async () => { const f = form($("#fcli")), e = {}; END.forEach(k => { e[k] = f[k]; delete f[k]; });
     const ext = $("#c_ext").checked, pais = $("#ce_pais").value;
     const estrangeiro = ext ? { pais_iso: pais == "outro" ? $("#ce_iso").value.trim() : pais, pais_bacen: pais == "outro" ? $("#ce_bacen").value.trim() : "",
       nif: $("#ce_nif").value.trim(), sem_nif: $("#ce_sem").value, pessoa: $("#ce_pessoa").value, cidade: $("#ce_cidade").value.trim(),
       estado: $("#ce_estado").value.trim(), cod_postal: $("#ce_postal").value.trim() } : null;
-    const r = await api("cliente/salvar", { ...f, cpf_cnpj: ext ? chaveExt : $("#c_doc").value, endereco: e, fiscal: lerFiscal("cf"), whatsapp_cobranca: $("#c_wa").checked, ...(estrangeiro ? { estrangeiro } : {}) });
+    const r = await api("cliente/salvar", { ...f, cpf_cnpj: ext ? chaveExt : $("#c_doc").value, endereco: e, fiscal: lerFiscal("cf"), padroes_nota: lerNota($("#cf_nx")), whatsapp_cobranca: $("#c_wa").checked, ...(estrangeiro ? { estrangeiro } : {}) });
     if (ext) chaveExt = r.cpf_cnpj; aviso("Cliente salvo ✔"); await carregarEstado(); desenhar(); };
 };
 
@@ -63,7 +65,7 @@ async function importarXml(area) {
   const a = await api("importador/analisar");
   const rot = { descricao: "Descrição", item_lista_servico: "Item LC 116", codigo_desdobro: "Desdobro", codigo_nbs: "NBS", cnae: "CNAE",
     aliquota_iss: "Alíquota ISS (%)", tipo_tributacao: "Tipo de tributação", iss_retido: "ISS retido (1/2)", indicador_operacao: "IBS/CBS cIndOp", classificacao_tributaria: "IBS/CBS cClassTrib",
-    codigo_tributacao_municipio: "Código tributação municipal", ibpt_percentual: "Carga tributária aprox. (%)" };
+    codigo_tributacao_municipio: "Código tributação municipal", ibpt_percentual: "Carga tributária aprox. (%)", codigo_interno: "Código interno" };
   const opcoes = sel => a.empresas.map(e => `<option value="${esc(e.id)}" ${e.id == sel ? "selected" : ""}>${esc(e.nome)} — ${fmtDoc(e.cnpj)}</option>`).join("");
   area.innerHTML = `<div class="card"><h2>${ic("download")}Importar clientes dos XML</h2>
     <p class="sub">Coloque os XML (ou ZIP) das notas emitidas na pasta <b>${esc(a.pasta)}</b>, de qualquer empresa. Cada nota é ligada à empresa que a emitiu (CNPJ do prestador): os clientes de uma empresa nunca vão para outra. Depois de importados, os arquivos ficam guardados em “importados”, separados por empresa. O robô também importa sozinho as notas novas que você colocar na pasta.</p>
@@ -133,7 +135,7 @@ function editarServico(s) {
     ${f("nome", "Nome da atividade", 'placeholder="ex.: Consultoria" maxlength="60"')}<label class="chk"><input type="checkbox" name="padrao" ${s.padrao ? "checked" : ""}> Serviço padrão da empresa</label>
     <label class="inteiro">Descrição que vai na nota<input name="descricao" maxlength="190" value="${esc(base.descricao || "")}"></label>
     ${f("item_lista_servico", "Item LC 116 (ex.: 17.19)")}${f("codigo_desdobro", "Desdobro nacional (6 dígitos)")}${f("codigo_nbs", "NBS (9 dígitos)")}${f("codigo_tributacao_municipio", "Código de tributação municipal", 'maxlength="9" placeholder="se o município exigir"')}${f("cnae", "CNAE")}
-    ${f("aliquota_iss", "Alíquota ISS (%)")}${f("tipo_tributacao", "Tipo de tributação (4 = Simples)")}${f("iss_retido", "ISS retido (1 sim / 2 não)")}${f("indicador_operacao", "IBS/CBS: cIndOp")}${f("classificacao_tributaria", "IBS/CBS: cClassTrib")}${f("ibpt_percentual", "Carga tributária IBPT (%)")}
+    ${f("aliquota_iss", "Alíquota ISS (%)")}${f("tipo_tributacao", "Tipo de tributação (4 = Simples)")}${f("iss_retido", "ISS retido (1 sim / 2 não)")}${f("indicador_operacao", "IBS/CBS: cIndOp")}${f("classificacao_tributaria", "IBS/CBS: cClassTrib")}${f("ibpt_percentual", "Carga tributária IBPT (%)")}${f("codigo_interno", "Código interno (opcional)", 'maxlength="20" placeholder="só letras e números"')}
     <label class="inteiro">Observações na nota<input name="observacoes" value="${esc(base.observacoes || "")}"></label></div>
     <p class="sub">Confira os códigos com o cadastro municipal da empresa e a Tabela IBS x CBS. Item, NBS e alíquota errados geram rejeição da nota.</p>
     <p><button class="btn" id="ok">Salvar serviço</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);

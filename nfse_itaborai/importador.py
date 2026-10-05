@@ -22,7 +22,7 @@ from .clientes import _achar, _digitos, _local, _texto
 NOME_PASTA = "IMPORTAR XML"
 CAMPOS_SERVICO = ("descricao", "item_lista_servico", "codigo_desdobro", "codigo_nbs", "cnae", "aliquota_iss",
                   "tipo_tributacao", "iss_retido", "indicador_operacao", "classificacao_tributaria",
-                  "codigo_tributacao_municipio", "ibpt_percentual")
+                  "codigo_tributacao_municipio", "ibpt_percentual", "codigo_interno")
 
 
 def caixa() -> Path:
@@ -148,6 +148,7 @@ def servico_de_xml(raiz) -> dict:
                 "indicador_operacao": _digitos(_texto(raiz, "IndicadorOperacao")),
                 "classificacao_tributaria": _digitos(_texto(raiz, "ClassificacaoTributaria")),
                 "codigo_tributacao_municipio": _texto(raiz, "CodigoTributacaoMunicipio"), "ibpt_percentual": "",
+                "codigo_interno": "",
                 "_nome": ""}
     dps = _achar(raiz, "infDPS")
     ctrib = _digitos(_texto(dps, "cServ/cTribNac"))
@@ -165,11 +166,13 @@ def servico_de_xml(raiz) -> dict:
     return {"descricao": _texto(dps, "cServ/xDescServ"),
             "item_lista_servico": f"{ctrib[:2]}.{ctrib[2:4]}" if len(ctrib) >= 4 else "",
             "codigo_desdobro": ctrib, "codigo_nbs": _digitos(_texto(dps, "cServ/cNBS")), "cnae": "",
-            "aliquota_iss": _texto(dps, "tribMun/pAliq"),
+            # alíquota: a informada na DPS (ISS retido) ou a aplicada pelo Sefin na NFS-e gerada
+            "aliquota_iss": _texto(dps, "tribMun/pAliq") or _texto(raiz, "infNFSe/valores/pAliqAplic"),
             "tipo_tributacao": "4" if sn in ("2", "3") else "", "iss_retido": "1" if ret in ("2", "3") else ("2" if ret else ""),
             "indicador_operacao": _digitos(_texto(dps, "IBSCBS/cIndOp")),
             "classificacao_tributaria": _digitos(_texto(dps, "gIBSCBS/cClassTrib")),
             "codigo_tributacao_municipio": _digitos(_texto(dps, "cServ/cTribMun")), "ibpt_percentual": ibpt,
+            "codigo_interno": _texto(dps, "cServ/cIntContrib"),
             # nome da atividade como o próprio Emissor Nacional descreve o código (ex.: "Psicologia.")
             "_nome": _texto(raiz, "xTribNac").rstrip(". ") or _texto(raiz, "xTribMun").rstrip(". ")}
 
@@ -222,7 +225,7 @@ def analisar() -> dict:
         g["nome"] = g["nome"] or nome
         g["notas"] += 1
         if cli:
-            g["clientes"].add(cli["cpf_cnpj"])
+            g["clientes"].add(cli.get("chave_ext") or cli["cpf_cnpj"])
         g["servicos"].append(servico_de_xml(raiz))
         g.setdefault("fatos", []).append(leitura_fiscal.fatos(raiz))
     cadastradas = {e["cnpj"]: e for e in empresas.listar() if e.get("cnpj")}
@@ -232,7 +235,7 @@ def analisar() -> dict:
         existentes, catalogo = set(), []
         if emp:
             with emissor.usar_empresa(empresas.pasta(emp)):
-                existentes = {c["cpf_cnpj"] for c in clientes.listar()}
+                existentes = {clientes.chave_cliente(c) for c in clientes.listar()}
                 catalogo = servicos.listar()
         saida.append({"cnpj": g["cnpj"], "nome": g["nome"], "notas": g["notas"],
                       "empresa_id": emp["id"] if emp else "", "empresa_nome": emp["nome"] if emp else "",
@@ -367,12 +370,14 @@ def _ligar_clientes_aos_servicos(pasta: Path, cnpj: str) -> int:
             continue
         ass = servicos.assinatura(servico_de_xml(raiz))
         sid = catalogo.get(ass) or (next((v for k, v in catalogo.items() if k[0] == ass[0]), None) if not ass[1] else None)
-        if sid and cli.get("ultima_data", "") >= ultimo.get(cli["cpf_cnpj"], ("",))[0]:
-            ultimo[cli["cpf_cnpj"]] = (cli.get("ultima_data", ""), sid)
+        chave = cli.get("chave_ext") or cli["cpf_cnpj"]
+        if sid and cli.get("ultima_data", "") >= ultimo.get(chave, ("",))[0]:
+            ultimo[chave] = (cli.get("ultima_data", ""), sid)
     n = 0
     for c in clientes.listar():
-        if c["cpf_cnpj"] in ultimo and not c.get("servico_id"):
-            clientes.salvar({**c, "servico_id": ultimo[c["cpf_cnpj"]][1]})
+        chave = clientes.chave_cliente(c)
+        if chave in ultimo and not c.get("servico_id"):
+            clientes.salvar({**c, "servico_id": ultimo[chave][1]})
             n += 1
     return n
 

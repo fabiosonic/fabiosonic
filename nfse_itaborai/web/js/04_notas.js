@@ -42,7 +42,9 @@ PAGINAS.emitir = async el => {
   const trocaServ = id => { $("#e_serv").value = servDe(id).id; $("#e_desc").value = servDe(id).descricao || ""; };
   $("#e_serv").onchange = () => trocaServ($("#e_serv").value);
   $("#e_cli").oninput = () => { const c = ST.clientes.find(x => x.cpf_cnpj == docDe($("#e_cli").value)); if (c && c.ultimo_valor && !$("#e_valor").value) $("#e_valor").value = Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-    if (c && c.servico_id) trocaServ(c.servico_id); atuRegra(); if (c) preencherFiscal("ef", c.fiscal); };
+    if (c && c.servico_id) trocaServ(c.servico_id); atuRegra(); if (c) preencherFiscal("ef", c.fiscal);
+    // campos fixos das notas deste tomador (cadastro): entram já preenchidos em "Mais campos da nota"
+    if (c && c.padroes_nota) { Object.entries(c.padroes_nota).forEach(([k, v]) => { const i = $(`.mais-nota [data-nx="${k}"]`, el); if (i && !i.value) i.value = v; }); atuNota(); } };
   ligarFiscal("ef");
   const atuNota = ligarNota(el, () => servDe($("#e_serv").value).item_lista_servico);
   $("#e_serv").addEventListener("change", atuNota);

@@ -32,7 +32,7 @@ def _n(v) -> Decimal:
 def _pct(valor: Decimal, base: Decimal) -> str:
     if not valor or not base:
         return ""
-    return str((valor / base * 100).quantize(Decimal("0.01"), ROUND_HALF_UP).normalize())
+    return format((valor / base * 100).quantize(Decimal("0.01"), ROUND_HALF_UP).normalize(), "f")
 
 
 def _regime(op: str, p_pis: Decimal) -> str:
@@ -56,7 +56,7 @@ def _nacional(raiz) -> dict:
     cst = _texto(pc, "CST")
     g = {"op_simp_nac": op, "regime": _regime(op, p_pis), "reg_ap_trib_sn": _texto(dps, "regTrib/regApTribSN"),
          "reg_esp_trib": _texto(dps, "regTrib/regEspTrib"), "pis_cofins_cst": cst,
-         "p_pis": str(p_pis.normalize()) if p_pis else "", "p_cofins": str(p_cof.normalize()) if p_cof else ""}
+         "p_pis": format(p_pis.normalize(), "f") if p_pis else "", "p_cofins": format(p_cof.normalize(), "f") if p_cof else ""}
     tot = _achar(dps, "totTrib")
     if _achar(tot, "pTotTribSN") is not None:
         g |= {"tot_trib_modo": "simples", "p_tot_sn": _texto(tot, "pTotTribSN")}
@@ -81,7 +81,7 @@ def _nacional(raiz) -> dict:
          "trib_issqn": _texto(tm, "tribISSQN") or "1", "tp_imunidade": _texto(tm, "tpImunidade"),
          "pais_result": _texto(tm, "cPaisResult"), "exig_susp_tp": _texto(tm, "exigSusp/tpSusp"),
          "exig_susp_proc": _texto(tm, "exigSusp/nProcesso"), "n_bm": _texto(tm, "BM/nBM"),
-         "p_red_bm": _texto(tm, "BM/pRedBCBM"), "pis_cofins_cst": cst}
+         "p_red_bm": _texto(tm, "BM/pRedBCBM"), "v_red_bm": _texto(tm, "BM/vRedBCBM"), "pis_cofins_cst": cst}
     # retenções federais em % do valor do serviço
     tf = _achar(dps, "tribFed")
     t["ret_irrf_pct"] = _pct(_n(_texto(tf, "vRetIRRF")), vserv)
@@ -100,7 +100,7 @@ def _nacional(raiz) -> dict:
         total = v_csll / vserv * 100 if vserv else Decimal(0)
         if padrao and abs(total - padrao) <= Decimal("0.02"):
             for (k, p), r in zip(PADRAO_PCC.items(), ret):
-                t[f"ret_{k}_pct"] = str(p.normalize()) if r else ""
+                t[f"ret_{k}_pct"] = format(p.normalize(), "f") if r else ""
         else:
             t["ret_csll_pct"] = _pct(v_csll, vserv)
     if ibs is not None:
@@ -109,8 +109,41 @@ def _nacional(raiz) -> dict:
               "dest_doc": _digitos(_texto(ibs, "dest/CNPJ") or _texto(ibs, "dest/CPF")),
               "dest_nome": _texto(ibs, "dest/xNome")}
     toma = _achar(dps, "toma")
-    return {"geral": g, "tomador": t, "doc": _digitos(_texto(toma, "CNPJ") or _texto(toma, "CPF")),
+    return {"geral": g, "tomador": t, "nota": campos_fixos(dps), "doc": doc_tomador(toma),
             "data": _texto(dps, "dhEmi")[:10]}
+
+
+def doc_tomador(toma) -> str:
+    """CPF/CNPJ do tomador; do exterior, a chave pelo NIF (ou nome + país) — ver clientes.chave_exterior."""
+    from .clientes import chave_exterior
+    if toma is None:
+        return ""
+    doc = _digitos(_texto(toma, "CNPJ") or _texto(toma, "CPF"))
+    if doc:
+        return doc
+    if _achar(toma, "NIF") is not None or _achar(toma, "cNaoNIF") is not None:
+        return chave_exterior(_texto(toma, "NIF"), _texto(toma, "xNome"), _texto(toma, "endExt/cPais"))
+    return ""
+
+
+def campos_fixos(dps) -> dict:
+    """Campos da nota que se repetem para o tomador (local da prestação, intermediário, obra, imóvel, comércio
+    exterior, pedido, documentos, dedução %): viram os 'campos fixos das notas' do cadastro dele."""
+    serv, ibs = _achar(dps, "serv"), _achar(dps, "IBSCBS")
+    obra, imovel, ce, interm = _achar(serv, "obra"), _achar(ibs, "imovel"), _achar(serv, "comExt"), _achar(dps, "interm")
+    n = {"local_prestacao": _texto(serv, "locPrest/cLocPrestacao"), "local_prestacao_pais": _texto(serv, "locPrest/cPaisPrestacao"),
+         "ded_pct": _texto(dps, "vDedRed/pDR"),
+         "obra_cno": _texto(obra, "cObra"), "obra_cib": _texto(obra, "cCIB"), "obra_insc_imob": _texto(obra, "inscImobFisc"),
+         "pedido": _texto(serv, "infoCompl/xPed"), "pedido_item": _texto(serv, "gItemPed/xItemPed"),
+         "doc_ref": _texto(serv, "infoCompl/docRef"), "doc_tec": _texto(serv, "infoCompl/idDocTec"),
+         "imovel_cib": _texto(imovel, "cCIB"), "imovel_insc_imob": _texto(imovel, "inscImobFisc"),
+         "interm_doc": _digitos(_texto(interm, "CNPJ") or _texto(interm, "CPF")), "interm_nome": _texto(interm, "xNome")}
+    if ce is not None:
+        n |= {"comext_md": _texto(ce, "mdPrestacao"), "comext_vinc": _texto(ce, "vincPrest"),
+              "comext_moeda": _texto(ce, "tpMoeda"), "comext_mec_p": _texto(ce, "mecAFComexP"),
+              "comext_mec_t": _texto(ce, "mecAFComexT"), "comext_mov": _texto(ce, "movTempBens"),
+              "comext_mdic": _texto(ce, "mdic")}
+    return {k: v for k, v in n.items() if v}
 
 
 def _municipal(raiz) -> dict:
@@ -205,7 +238,7 @@ def aplicar_geral(notas: list[dict]) -> list[str]:
 
 CAMPOS_COMPARAR = ("iss_retido", "aliquota_iss_retido", "ret_iss_por", "ret_irrf_pct", "ret_pis_pct", "ret_cofins_pct",
                    "ret_csll_pct", "ret_inss_pct", "trib_issqn", "tp_imunidade", "pais_result", "exig_susp_tp",
-                   "exig_susp_proc", "n_bm", "p_red_bm", "pis_cofins_cst", "ind_final", "class_trib", "tp_ente_gov",
+                   "exig_susp_proc", "n_bm", "p_red_bm", "v_red_bm", "pis_cofins_cst", "ind_final", "class_trib", "tp_ente_gov",
                    "tp_oper", "dest_doc", "dest_nome")
 
 
@@ -214,7 +247,7 @@ def _norm(v) -> str:
         return "1" if v else ""
     s = str(v or "").strip().replace(",", ".")
     try:
-        return str(Decimal(s).normalize()) if s and s.replace(".", "", 1).isdigit() else s
+        return format(Decimal(s).normalize(), "f") if s and s.replace(".", "", 1).isdigit() else s
     except Exception:  # noqa: BLE001
         return s
 
@@ -236,9 +269,22 @@ def aplicar_tomadores(notas: list[dict]) -> int:
         if n.get("doc"):
             ultima[n["doc"]] = n
     n_regras = 0
+    from . import config, fiscal as _f
+    casa = _digitos(config.carregar()["emissao"].get("municipio_emissor") or "3301900")
     for c in clientes.listar():
-        nota = ultima.get(c["cpf_cnpj"])
-        if not nota or "fiscal" in c:
+        nota = ultima.get(clientes.chave_cliente(c))
+        if not nota:
+            continue
+        fixos = dict(nota.get("nota") or {})
+        if fixos.get("local_prestacao") == casa:
+            fixos.pop("local_prestacao")                # o município da empresa já é o padrão
+        if fixos and not c.get("padroes_nota"):
+            try:
+                clientes.salvar({**c, "padroes_nota": _f.padroes_nota(fixos)})
+                c = clientes.obter(c["cpf_cnpj"]) or c
+            except ValueError:
+                pass
+        if "fiscal" in c:
             continue
         t = dict(nota["tomador"])
         if t.get("class_trib") == cclass_comum:

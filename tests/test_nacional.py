@@ -287,3 +287,34 @@ def test_ibscbs_no_nacional_segue_o_regime_e_nao_a_regra_de_itaborai(sefin):
     config.salvar({"fiscal": {"regime": "presumido"}})
     with pytest.raises(ErroValidacao, match="IBS/CBS"):
         nacional.preparar(_rps(**sem), producao=False)                  # regime regular: obrigatório
+
+
+def test_campos_restantes_do_leiaute_e_obrigatorios_condicionais(sefin):
+    """Item do pedido, código interno, benefício municipal em valor, documento fiscal de outro município no
+    reembolso: saem na DPS e passam no XSD v1.01. Os obrigatórios de cada caso barram com mensagem de onde preencher."""
+    from nfse_itaborai.validacao import ErroValidacao
+    config.salvar({"fiscal": {"ibscbs": "sempre"}})
+    x = {"pedido": "PED-9", "pedido_item": "3", "cod_interno": "OBRA-01", "n_bm": "33045570100001", "v_red_bm": "1000",
+         "ree_valor": "50", "ree_cmun": "3304557", "ree_ndoc": "123", "ree_xdoc": "NFS-e municipal", "ree_dt_emi": "2026-09-01"}
+    raiz = etree.fromstring(nacional.preparar(_rps(extras=x), producao=False)[0].encode())
+    v = lambda p: raiz.findtext(p, namespaces=NS)  # noqa: E731
+    assert v(".//n:gItemPed/n:xItemPed") == "3" and v(".//n:cIntContrib") == "OBRA01"
+    assert v(".//n:BM/n:vRedBCBM") == "1000.00" and raiz.find(".//n:BM/n:pRedBCBM", NS) is None
+    assert v(".//n:docFiscalOutro/n:cMunDocFiscal") == "3304557" and v(".//n:docFiscalOutro/n:nDocFiscal") == "123"
+    casos = [
+        ({"interm_doc": "54399432000146"}, "Intermediário: informe o nome"),
+        ({"exig_susp_tp": "1"}, "número do processo"),
+        ({"trib_issqn": "3"}, "país onde se verificou o resultado"),
+        ({"obra_insc_imob": "123"}, "CNO/CEI ou o CIB"),
+        ({"evento_nome": "SHOW"}, "Evento: informe início, fim"),
+        ({"local_prestacao_pais": "US"}, "Serviço prestado no exterior"),
+        ({"dest_doc": "33000167000101"}, "Destinatário diferente"),
+    ]
+    for extras, msg in casos:
+        with pytest.raises(ErroValidacao, match=msg):
+            nacional.preparar(_rps(extras=extras), producao=False)
+    with pytest.raises(ErroValidacao, match="ISS retido \\(Simples Nacional\\): informe a alíquota"):
+        nacional.preparar(_rps(iss_retido="1", aliquota_iss=Decimal(0)), producao=False)
+    with pytest.raises(ErroValidacao, match="ISS retido pelo intermediário"):
+        nacional.preparar(_rps(iss_retido="1", aliquota_iss=Decimal(2), extras={"ret_iss_por": "intermediario"}),
+                          producao=False)

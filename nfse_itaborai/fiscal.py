@@ -21,7 +21,7 @@ OP_SIMP_NAC = {"mei": "2", "simples": "3", "presumido": "1", "real": "1"}
 PIS_COFINS = {"presumido": ("0.65", "3.00"), "real": ("1.65", "7.60")}
 RETENCOES = ("ret_irrf_pct", "ret_pis_pct", "ret_cofins_pct", "ret_csll_pct", "ret_inss_pct")
 # situação do ISS, exigibilidade suspensa, benefício municipal, PIS/COFINS, ente governamental e destinatário
-TOMADOR_EXTRA = ("trib_issqn", "tp_imunidade", "pais_result", "exig_susp_tp", "exig_susp_proc", "n_bm", "p_red_bm",
+TOMADOR_EXTRA = ("trib_issqn", "tp_imunidade", "pais_result", "exig_susp_tp", "exig_susp_proc", "n_bm", "p_red_bm", "v_red_bm",
                  "ret_iss_por", "pis_cofins_cst", "tp_ente_gov", "tp_oper", "dest_doc", "dest_nome")
 # campos só da regra geral (prestador): carga aproximada, PIS/COFINS próprio e IBS/CBS avançado
 GERAL_EXTRA = ("tot_trib_modo", "p_tot_fed", "p_tot_est", "p_tot_mun", "pis_cofins_cst", "p_pis", "p_cofins",
@@ -80,14 +80,15 @@ def normalizar_tomador(d: dict | None) -> dict:
         v = _dec(d.get(k))
         if v < 0 or v > 20:
             raise ValueError("Percentual de retenção fora do intervalo (0 a 20%).")
-        out[k] = str(v.normalize()) if v else "0"
+        out[k] = format(v.normalize(), "f") if v else "0"
     if out["aliquota_iss_retido"] and not (0 <= _dec(out["aliquota_iss_retido"]) <= 5):
         raise ValueError("Alíquota do ISS retido deve estar entre 0 e 5% (LC 116/2003).")
     dig = lambda k, n=99: "".join(ch for ch in str(d.get(k) or "") if ch.isdigit())[:n]  # noqa: E731
     out |= {"trib_issqn": dig("trib_issqn", 1) or "1", "tp_imunidade": dig("tp_imunidade", 1),
             "pais_result": str(d.get("pais_result") or "").strip().upper()[:2],
             "exig_susp_tp": dig("exig_susp_tp", 1), "exig_susp_proc": dig("exig_susp_proc", 30),
-            "n_bm": dig("n_bm", 14), "p_red_bm": str(_dec(d.get("p_red_bm")).normalize()) if _dec(d.get("p_red_bm")) else "",
+            "n_bm": dig("n_bm", 14), "p_red_bm": format(_dec(d.get("p_red_bm")).normalize(), "f") if _dec(d.get("p_red_bm")) else "",
+            "v_red_bm": format(_dec(d.get("v_red_bm")).normalize(), "f") if _dec(d.get("v_red_bm")) else "",
             "ret_iss_por": "intermediario" if d.get("ret_iss_por") == "intermediario" else "tomador",
             "pis_cofins_cst": dig("pis_cofins_cst", 2), "tp_ente_gov": dig("tp_ente_gov", 1), "tp_oper": dig("tp_oper", 1),
             "dest_doc": dig("dest_doc", 14), "dest_nome": str(d.get("dest_nome") or "").strip()[:150]}
@@ -201,7 +202,7 @@ def resumo(f: dict) -> str:
         partes.append("ISS retido" + (f" {f['aliquota_iss_retido']}%" if f.get("aliquota_iss_retido") else ""))
     nomes = {"ret_irrf_pct": "IRRF", "ret_pis_pct": "PIS", "ret_cofins_pct": "COFINS", "ret_csll_pct": "CSLL",
              "ret_inss_pct": "INSS"}
-    ret = [f"{nomes[k]} {str(_dec(f.get(k)).normalize()).replace('.', ',')}%" for k in RETENCOES if _dec(f.get(k))]
+    ret = [f"{nomes[k]} {format(_dec(f.get(k)).normalize(), 'f').replace('.', ',')}%" for k in RETENCOES if _dec(f.get(k))]
     partes.append("retenções: " + ", ".join(ret) if ret else "sem retenções federais")
     return " · ".join(partes)
 
@@ -223,7 +224,22 @@ CAMPOS_NOTA = {
     "local_prestacao_pais": "a2", "comext_md": 1, "comext_vinc": 1, "comext_moeda": 3, "comext_valor": "v",
     "comext_mec_p": 2, "comext_mec_t": 2, "comext_mov": 1, "comext_di": "t12", "comext_re": "t12", "comext_mdic": 1,
     "tp_emit": 1, "motivo_emis_ti": 1, "prest_op_simp_nac": 1, "toma_doc": 14, "toma_nome": "t150",
+    # demais campos do leiaute v1.01: item do pedido, benefício municipal em valor, documento fiscal de outro
+    # município no reembolso, NFS-e rejeitada (emissão pelo tomador) e código interno do serviço
+    "pedido_item": "t15", "v_red_bm": "v", "ree_cmun": 7, "ch_nfse_rej": 50, "cod_interno": "t20",
 }
+# Campos da nota que se repetem em todas as notas de um tomador: ficam no cadastro dele (lidos dos XML ou
+# preenchidos na tela) e entram sozinhos na emissão manual, em lote, na recorrência e no robô.
+NOTA_TOMADOR = ("local_prestacao", "local_recolhimento", "local_prestacao_pais", "ded_pct", "obra_cno", "obra_cib",
+                "obra_insc_imob", "pedido", "pedido_item", "doc_ref", "doc_tec", "imovel_cib", "imovel_insc_imob",
+                "imovel_cep", "imovel_cmun", "imovel_uf", "imovel_tipo_lgr", "imovel_lgr", "imovel_nro",
+                "imovel_bairro", "imovel_cpl", "interm_doc", "interm_nome", "comext_md", "comext_vinc", "comext_moeda",
+                "comext_mec_p", "comext_mec_t", "comext_mov", "comext_mdic")
+
+
+def padroes_nota(d: dict | None) -> dict:
+    """Só os campos de NOTA_TOMADOR, normalizados (os demais são de cada nota)."""
+    return {k: v for k, v in normalizar_nota({k: (d or {}).get(k) for k in NOTA_TOMADOR}).items()}
 TIPOS_DED = {"1": "Alimentação e bebidas/frigobar", "2": "Materiais", "3": "Produção externa", "4": "Reembolso de despesas",
              "5": "Repasse consorciado", "6": "Repasse plano de saúde", "7": "Serviços", "8": "Subempreitada de mão de obra",
              "9": "Profissional parceiro", "99": "Outras deduções"}

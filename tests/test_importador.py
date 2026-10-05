@@ -204,3 +204,75 @@ def test_importar_clientes_bat_lucro_presumido_completo(multi, capsys):  # noqa:
         s = servicos.padrao()
         assert (s["nome"], s["aliquota_iss"], s["ibpt_percentual"]) == ("Engenharia", "5.00", "18.33")
         assert emissor.env("ITABORAI_IM") == "778899" and len(clientes.listar()) == 2
+
+
+def _completa(prest: str, n: int) -> str:
+    """Nota nacional sintética com os grupos raros: obra, pedido/item, documento de referência, intermediário,
+    dedução %, benefício municipal em valor e código interno do serviço."""
+    return f"""<?xml version="1.0" encoding="utf-8"?><NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+<infNFSe><xTribNac>Construção civil.</xTribNac><emit><CNPJ>{prest}</CNPJ><xNome>CONSTRUTORA EXEMPLO LTDA</xNome></emit>
+<valores><pAliqAplic>3.00</pAliqAplic></valores><DPS versao="1.01"><infDPS>
+<dhEmi>2026-09-1{n}T10:00:00-03:00</dhEmi><prest><CNPJ>{prest}</CNPJ><regTrib><opSimpNac>3</opSimpNac><regApTribSN>1</regApTribSN><regEspTrib>0</regEspTrib></regTrib></prest>
+<toma><CNPJ>33000167000101</CNPJ><xNome>INCORPORADORA ALFA</xNome></toma>
+<interm><CNPJ>54399432000146</CNPJ><xNome>GERENCIADORA BETA</xNome></interm>
+<serv><locPrest><cLocPrestacao>3304557</cLocPrestacao></locPrest><cServ><cTribNac>070201</cTribNac><xDescServ>EXECUCAO DE OBRA</xDescServ>
+<cNBS>114012100</cNBS><cIntContrib>OBRA01</cIntContrib></cServ><obra><inscImobFisc>12345</inscImobFisc><cObra>900012345678</cObra></obra>
+<infoCompl><docRef>CONTRATO 77/2026</docRef><xPed>PED-9</xPed><gItemPed><xItemPed>3</xItemPed></gItemPed></infoCompl></serv>
+<valores><vServPrest><vServ>50000.00</vServ></vServPrest><vDedRed><pDR>40.00</pDR></vDedRed><trib><tribMun><tribISSQN>1</tribISSQN>
+<BM><nBM>33045570100001</nBM><vRedBCBM>1000.00</vRedBCBM></BM><tpRetISSQN>1</tpRetISSQN></tribMun>
+<totTrib><pTotTribSN>6.00</pTotTribSN></totTrib></trib></valores>
+</infDPS></DPS></infNFSe></NFSe>"""
+
+
+def _exterior(prest: str) -> str:
+    return f"""<?xml version="1.0" encoding="utf-8"?><NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+<infNFSe><emit><CNPJ>{prest}</CNPJ></emit><DPS versao="1.01"><infDPS><dhEmi>2026-09-20T10:00:00-03:00</dhEmi>
+<prest><CNPJ>{prest}</CNPJ><regTrib><opSimpNac>3</opSimpNac><regEspTrib>0</regEspTrib></regTrib></prest>
+<toma><NIF>98-7654321</NIF><xNome>ACME CORP</xNome><end><endExt><cPais>US</cPais><cEndPost>10001</cEndPost><xCidade>NEW YORK</xCidade>
+<xEstProvReg>NY</xEstProvReg></endExt><xLgr>5TH AVENUE</xLgr><nro>100</nro><xBairro>MANHATTAN</xBairro></end></toma>
+<serv><locPrest><cLocPrestacao>3303302</cLocPrestacao></locPrest><cServ><cTribNac>070201</cTribNac><xDescServ>CONSULTORIA DE OBRA</xDescServ></cServ>
+<comExt><mdPrestacao>1</mdPrestacao><vincPrest>0</vincPrest><tpMoeda>220</tpMoeda><vServMoeda>1000.00</vServMoeda><mecAFComexP>01</mecAFComexP>
+<mecAFComexT>01</mecAFComexT><movTempBens>1</movTempBens><mdic>0</mdic></comExt></serv>
+<valores><vServPrest><vServ>5000.00</vServ></vServPrest><trib><tribMun><tribISSQN>3</tribISSQN><cPaisResult>US</cPaisResult><tpRetISSQN>1</tpRetISSQN></tribMun>
+<totTrib><pTotTribSN>6.00</pTotTribSN></totTrib></trib></valores></infDPS></DPS></infNFSe></NFSe>"""
+
+
+def test_importacao_le_todos_os_campos_da_nota(multi):  # noqa: F811
+    """Tudo o que se repete para o tomador vai para o cadastro dele (campos fixos e regra fiscal), o cliente do
+    exterior é cadastrado com NIF e endereço no exterior, e o serviço guarda o código interno e a alíquota aplicada.
+    A próxima nota do tomador sai com esses campos sem digitar nada."""
+    from nfse_itaborai import servicos
+    empresas.criar({"nome": "CONSTRUTORA EXEMPLO LTDA", "cnpj": PADARIA, "canal": "nacional", "municipio": "3303302"})
+    pasta = multi / "empresas" / PADARIA
+    for n in (1, 2):
+        (importador.caixa() / f"c{n}.xml").write_text(_completa(PADARIA, n), encoding="utf-8")
+    (importador.caixa() / "ext.xml").write_text(_exterior(PADARIA), encoding="utf-8")
+    from nfse_itaborai import __main__ as cli
+    assert cli.importar_clientes() == 0                      # IMPORTAR_CLIENTES.bat
+    with emissor.usar_empresa(pasta):
+        alfa = clientes.obter("33000167000101")
+        fixos = alfa["padroes_nota"]
+        assert fixos["local_prestacao"] == "3304557" and fixos["obra_cno"] == "900012345678"
+        assert fixos["obra_insc_imob"] == "12345" and fixos["ded_pct"] == "40.00"
+        assert (fixos["pedido"], fixos["pedido_item"], fixos["doc_ref"]) == ("PED-9", "3", "CONTRATO 77/2026")
+        assert (fixos["interm_doc"], fixos["interm_nome"]) == ("54399432000146", "GERENCIADORA BETA")
+        assert alfa["fiscal"]["n_bm"] == "33045570100001" and alfa["fiscal"]["v_red_bm"] == "1000"
+        s = servicos.padrao()
+        assert s["codigo_interno"] == "OBRA01" and s["aliquota_iss"] == "3.00"
+        acme = next(c for c in clientes.listar() if c.get("estrangeiro"))
+        assert acme["cpf_cnpj"].startswith("99") and acme["razao_social"] == "ACME CORP"
+        assert (acme["estrangeiro"]["nif"], acme["estrangeiro"]["pais_iso"], acme["estrangeiro"]["cidade"]) == \
+            ("98-7654321", "US", "NEW YORK")
+        assert acme["padroes_nota"]["comext_moeda"] == "220" and acme["padroes_nota"]["comext_md"] == "1"
+        assert acme["fiscal"]["trib_issqn"] == "3" and acme["fiscal"]["pais_result"] == "US"
+        # reimportar não duplica o cliente do exterior
+        (importador.caixa() / "ext2.xml").write_text(_exterior(PADARIA), encoding="utf-8")
+    assert cli.importar_clientes() == 0
+    with emissor.usar_empresa(pasta):
+        assert len([c for c in clientes.listar() if c.get("estrangeiro")]) == 1
+        # próxima nota do tomador: campos fixos e código interno entram sozinhos
+        d = lote.montar_rps("33000167000101", "1000")
+        x = d["extras"]
+        assert x["obra_cno"] == "900012345678" and x["pedido_item"] == "3" and x["cod_interno"] == "OBRA01"
+        assert x["interm_doc"] == "54399432000146" and x["v_red_bm"] == "1000" and d["local_prestacao"] == "3304557"
+        assert d["valor_deducoes"] == "400.00"

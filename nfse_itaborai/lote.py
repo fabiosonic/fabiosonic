@@ -26,7 +26,10 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
     pct = str(p.get("ibpt_percentual") or "0").replace(",", ".")
     ibpt = (v * Decimal(pct) / 100).quantize(Decimal("0.01"))
     from . import fiscal
-    x = fiscal.normalizar_nota(extras)
+    # campos fixos do tomador (cadastro) + os desta nota, que valem por cima
+    x = {**fiscal.padroes_nota(cli.get("padroes_nota")), **fiscal.normalizar_nota(extras)}
+    if p.get("codigo_interno") and not x.get("cod_interno"):
+        x["cod_interno"] = str(p["codigo_interno"]).strip()[:20]
     ded = Decimal(x.get("ded_valor") or 0) or (v * Decimal(x.get("ded_pct") or 0) / 100).quantize(Decimal("0.01"))
     ded = ded or sum((Decimal(dd["valor_deducao"]) for dd in x.get("ded_docs") or []), Decimal(0))
     return fiscal.aplicar({

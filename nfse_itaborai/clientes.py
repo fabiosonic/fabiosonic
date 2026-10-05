@@ -72,6 +72,7 @@ def normalizar(c: dict) -> dict:
         # cobrança por WhatsApp só para quem o escritório escolher (clientes que já conversam pelo WhatsApp)
         **({"whatsapp_cobranca": bool(c["whatsapp_cobranca"])} if "whatsapp_cobranca" in c else {}),
         **({"fiscal": _fiscal(c["fiscal"])} if "fiscal" in c else {}),
+        **({"padroes_nota": _padroes(c["padroes_nota"])} if isinstance(c.get("padroes_nota"), dict) else {}),
         **({"estrangeiro": _estrangeiro(c["estrangeiro"])} if c.get("estrangeiro") else {}),
     }
 
@@ -105,12 +106,31 @@ def _estrangeiro(d: dict) -> dict:
     return out
 
 
+def chave_exterior(nif: str, nome: str = "", pais: str = "") -> str:
+    """Identidade do cliente do exterior nos XML (não tem CPF/CNPJ): o NIF, ou nome + país."""
+    nif = "".join(str(nif or "").split()).upper()
+    return f"EXT:{nif}" if nif else f"EXT:{' '.join(str(nome or '').upper().split())}|{str(pais or '').upper()}"
+
+
+def chave_cliente(c: dict) -> str:
+    """CPF/CNPJ, ou a chave_exterior do cliente do exterior (para casar com as notas importadas)."""
+    x = c.get("estrangeiro")
+    if x:
+        return chave_exterior(x.get("nif"), c.get("razao_social"), x.get("pais_iso"))
+    return _digitos(c.get("cpf_cnpj"))
+
+
 def _nova_chave_exterior(lista: list[dict]) -> str:
     usados = {_digitos(c.get("cpf_cnpj")) for c in lista}
     n = 1
     while f"{PREFIXO_EXTERIOR}{n:07d}" in usados:
         n += 1
     return f"{PREFIXO_EXTERIOR}{n:07d}"
+
+
+def _padroes(d: dict) -> dict:
+    from .fiscal import padroes_nota
+    return padroes_nota(d)
 
 
 def _fiscal(d: dict) -> dict:
@@ -142,7 +162,8 @@ def salvar(c: dict) -> dict:
     antigo = obter(c["cpf_cnpj"]) or {}
     # regra fiscal e serviço habitual do tomador só mudam quando vierem no cadastro (importações não apagam)
     lista.append({**{k: antigo[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "fiscal",
-                                            "servico_id", "estrangeiro", "whatsapp_cobranca", "codigo_externo") if k in antigo}, **c})
+                                            "servico_id", "estrangeiro", "whatsapp_cobranca", "codigo_externo", "padroes_nota")
+                    if k in antigo}, **c})
     _gravar(lista)
     return c
 
@@ -218,6 +239,16 @@ def cliente_de_xml(xml: str, cnpj_prestador: str | None = None) -> dict | None:
         toma = _achar(dps, "toma")
         if toma is None:
             return None
+        ext = None
+        if not (_texto(toma, "CNPJ") or _texto(toma, "CPF")) and (_achar(toma, "NIF") is not None
+                                                                 or _achar(toma, "cNaoNIF") is not None):
+            # tomador do exterior: NIF (ou motivo de não ter), país, cidade, estado/província e código postal
+            from . import paises
+            iso = _texto(toma, "endExt/cPais").upper()
+            ext = {"nif": _texto(toma, "NIF"), "sem_nif": "2" if _texto(toma, "cNaoNIF") == "2" else "1",
+                   "pais_iso": iso, "pais_bacen": paises.bacen(iso), "cidade": _texto(toma, "endExt/xCidade"),
+                   "estado": _texto(toma, "endExt/xEstProvReg"), "cod_postal": _texto(toma, "endExt/cEndPost"),
+                   "pessoa": "1"}
         c = {
             "cpf_cnpj": _texto(toma, "CNPJ") or _texto(toma, "CPF"),
             "razao_social": _texto(toma, "xNome"), "inscricao_municipal": _texto(toma, "IM"),
@@ -228,6 +259,8 @@ def cliente_de_xml(xml: str, cnpj_prestador: str | None = None) -> dict | None:
             "ultima_nfse": _texto(raiz, "nNFSe"), "ultima_data": _texto(dps, "dhEmi")[:10],
             "ultimo_valor": _texto(dps, "vServ"),
         }
+        if ext:
+            c["estrangeiro"] = ext
     elif _local(raiz.tag) == "RetornoNfse" or _achar(raiz, "TomadorServico") is not None:
         prest = _texto(raiz, "PrestadorServico/Cnpj") or _texto(raiz, "Cnpj")
         t = _achar(raiz, "TomadorServico")
@@ -250,6 +283,13 @@ def cliente_de_xml(xml: str, cnpj_prestador: str | None = None) -> dict | None:
         return None
     if cnpj_prestador and _digitos(prest) and _digitos(prest) != _digitos(cnpj_prestador):
         return None
+    if c.get("estrangeiro"):
+        try:
+            c = normalizar(c)
+        except ValueError:
+            return None                              # exterior sem país/cidade na nota: não dá para cadastrar
+        c["chave_ext"] = chave_exterior(c["estrangeiro"].get("nif"), c["razao_social"], c["estrangeiro"].get("pais_iso"))
+        return c
     if len(_digitos(c["cpf_cnpj"])) not in (11, 14):
         return None
     return normalizar(c)
@@ -268,18 +308,21 @@ def importar_xmls(pasta: Path, cnpj_prestador: str | None = None) -> dict:
             ignorados += 1
             continue
         lidos += 1
-        doc = c["cpf_cnpj"]
+        doc = c.get("chave_ext") or c["cpf_cnpj"]
         anterior = encontrados.get(doc)
         c["notas_vistas"] = (anterior or {}).get("notas_vistas", 0) + 1
         if anterior is None or c.get("ultima_data", "") >= anterior.get("ultima_data", ""):
             encontrados[doc] = c
         else:
             anterior["notas_vistas"] = c["notas_vistas"]
-    atuais = {_digitos(c["cpf_cnpj"]): c for c in listar()}
+    atuais = {chave_cliente(c): c for c in listar()}
     novos = 0
     for doc, c in encontrados.items():
         if doc not in atuais:
             novos += 1
+            if c.get("estrangeiro"):                 # cliente do exterior: ganha a chave interna 99xxxxxxx
+                c["cpf_cnpj"] = _nova_chave_exterior(list(atuais.values()))
+            c.pop("chave_ext", None)
             atuais[doc] = c
             continue
         # Cliente já cadastrado: o cadastro (que pode ter sido corrigido à mão) prevalece;
