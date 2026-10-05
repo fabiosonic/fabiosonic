@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 from . import __version__, emissor
 
 PASTAS_PROGRAMA = ("nfse_itaborai", "schemas", "docs")
-ARQUIVOS_PROGRAMA = ("README.md", "pyproject.toml", ".gitattributes", ".gitignore")
+ARQUIVOS_PROGRAMA = ("README.md", "MANUAL.html", "MANUAL.pdf", "pyproject.toml", ".gitattributes", ".gitignore")
 EXTENSOES_RAIZ = (".bat", ".vbs")
 MAX_BYTES = 50 * 1024 * 1024
 

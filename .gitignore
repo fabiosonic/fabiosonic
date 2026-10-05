@@ -17,3 +17,5 @@ chave_privada*.json
 GeradorLicencas/
 licencas_emitidas.csv
 /servicos.json
+
+/python/

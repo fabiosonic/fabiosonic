@@ -2,6 +2,8 @@
 rem Localiza o Python 3.10+ e grava o comando na variavel PY.
 rem Uso: call "%~dp0_python.bat" [instalar]  -> com "instalar", instala o Python sozinho se faltar.
 set "PY="
+rem 1) Python que vem DENTRO do pacote (pasta python\), ja com todos os componentes: nao precisa de internet.
+if exist "%~dp0python\python.exe" goto :embutido
 python -c "import sys; assert sys.version_info >= (3, 10)" >nul 2>nul && set "PY=python"
 if not defined PY py -3 -c "import sys; assert sys.version_info >= (3, 10)" >nul 2>nul && set "PY=py -3"
 if not defined PY for /d %%D in ("%LOCALAPPDATA%\Programs\Python\Python3*") do if exist "%%~D\python.exe" set PY="%%~D\python.exe"
@@ -19,3 +21,8 @@ echo Nao foi possivel instalar o Python automaticamente.
 echo Instale pelo site que vai abrir, marque "Add Python to PATH" e rode este arquivo de novo.
 start https://www.python.org/downloads/
 exit /b 1
+
+:embutido
+set PY="%~dp0python\python.exe"
+set "PYTHONNOUSERSITE=1"
+exit /b 0
