@@ -32,12 +32,20 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
         x["cod_interno"] = str(p["codigo_interno"]).strip()[:20]
     ded = Decimal(x.get("ded_valor") or 0) or (v * Decimal(x.get("ded_pct") or 0) / 100).quantize(Decimal("0.01"))
     ded = ded or sum((Decimal(dd["valor_deducao"]) for dd in x.get("ded_docs") or []), Decimal(0))
+    from . import config
+    cfg = config.carregar()
+    obs = p.get("observacoes") or ""
+    emp = cfg.get("empresa") or {}
+    if cfg["emissao"].get("canal", "municipal") != "nacional" and emp.get("contato_na_nota", True):
+        contato = " · ".join(x for x in (_fone(emp.get("telefone")), str(emp.get("email") or "").strip()) if x)
+        if contato and contato not in obs:
+            obs = (obs + " — " if obs else "") + f"Contato do prestador: {contato}"
     return fiscal.aplicar({
         "numero": "", "competencia": competencia,
         "itens": [{"descricao": (descricao or p["descricao"]).strip(), "quantidade": 1, "valor_unitario": str(v)}],
         **{k: p[k] for k in ("item_lista_servico", "codigo_nbs", "codigo_desdobro", "cnae", "aliquota_iss",
-                             "tipo_tributacao", "iss_retido", "indicador_operacao", "classificacao_tributaria",
-                             "observacoes")},
+                             "tipo_tributacao", "iss_retido", "indicador_operacao", "classificacao_tributaria")},
+        "observacoes": obs,
         "valor_total_tributos": str(ibpt),
         "tomador": clientes.para_dict_tomador(cli),
         # local da prestação e do recolhimento: município da empresa emissora (multiempresa)
@@ -48,6 +56,11 @@ def montar_rps(cpf_cnpj: str, valor, descricao: str = "", competencia: str = "",
         "valor_deducoes": str(ded), "codigo_obra": x.get("obra_cno", "") if len(x.get("obra_cno", "")) <= 6 else "",
         "extras": x,
     }, cli)
+
+
+def _fone(v) -> str:
+    d = "".join(ch for ch in str(v or "") if ch.isdigit())
+    return f"({d[:2]}) {d[2:-4]}-{d[-4:]}" if len(d) in (10, 11) else d
 
 
 def _municipio() -> str:

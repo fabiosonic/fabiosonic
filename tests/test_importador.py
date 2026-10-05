@@ -212,7 +212,7 @@ def _completa(prest: str, n: int) -> str:
     return f"""<?xml version="1.0" encoding="utf-8"?><NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
 <infNFSe><xTribNac>Construção civil.</xTribNac><emit><CNPJ>{prest}</CNPJ><xNome>CONSTRUTORA EXEMPLO LTDA</xNome></emit>
 <valores><pAliqAplic>3.00</pAliqAplic></valores><DPS versao="1.01"><infDPS>
-<dhEmi>2026-09-1{n}T10:00:00-03:00</dhEmi><prest><CNPJ>{prest}</CNPJ><regTrib><opSimpNac>3</opSimpNac><regApTribSN>1</regApTribSN><regEspTrib>0</regEspTrib></regTrib></prest>
+<dhEmi>2026-09-1{n}T10:00:00-03:00</dhEmi><prest><CNPJ>{prest}</CNPJ><fone>2133334444</fone><email>obras@construtora.com.br</email><regTrib><opSimpNac>3</opSimpNac><regApTribSN>1</regApTribSN><regEspTrib>0</regEspTrib></regTrib></prest>
 <toma><CNPJ>33000167000101</CNPJ><xNome>INCORPORADORA ALFA</xNome></toma>
 <interm><CNPJ>54399432000146</CNPJ><xNome>GERENCIADORA BETA</xNome></interm>
 <serv><locPrest><cLocPrestacao>3304557</cLocPrestacao></locPrest><cServ><cTribNac>070201</cTribNac><xDescServ>EXECUCAO DE OBRA</xDescServ>
@@ -257,6 +257,8 @@ def test_importacao_le_todos_os_campos_da_nota(multi):  # noqa: F811
         assert (fixos["pedido"], fixos["pedido_item"], fixos["doc_ref"]) == ("PED-9", "3", "CONTRATO 77/2026")
         assert (fixos["interm_doc"], fixos["interm_nome"]) == ("54399432000146", "GERENCIADORA BETA")
         assert alfa["fiscal"]["n_bm"] == "33045570100001" and alfa["fiscal"]["v_red_bm"] == "1000"
+        emp = config.carregar()["empresa"]
+        assert (emp["email"], emp["telefone"]) == ("obras@construtora.com.br", "2133334444")
         s = servicos.padrao()
         assert s["codigo_interno"] == "OBRA01" and s["aliquota_iss"] == "3.00"
         acme = next(c for c in clientes.listar() if c.get("estrangeiro"))

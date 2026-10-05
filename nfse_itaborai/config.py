@@ -15,6 +15,9 @@ PADRAO = {
         "pix_cidade": "ITABORAI",
         "whatsapp": "",             # número do escritório, aparece nas mensagens
         "assinatura": "",           # assinatura das mensagens (vazia = nome da empresa)
+        "email": "",                # e-mail da empresa na NFS-e (Emissor Nacional: prest/email no DANFSe)
+        "telefone": "",             # telefone da empresa na NFS-e (Emissor Nacional: prest/fone no DANFSe)
+        "contato_na_nota": True,    # Itaboraí não tem campo de contato do prestador: vai nas observações da nota
     },
     "smtp": {"host": "", "porta": 587, "usuario": "", "senha": "", "remetente": "", "ssl": False,
              "copia_para": ""},
@@ -262,6 +265,15 @@ def salvar_da_tela(novo: dict) -> dict:
     for sec, campo in SEGREDOS:
         if novo.get(sec, {}).get(campo) == "••••••":
             novo[sec].pop(campo)
+    emp = novo.get("empresa") or {}
+    if "telefone" in emp:
+        emp["telefone"] = re.sub(r"\D", "", str(emp["telefone"] or ""))
+        if emp["telefone"] and not 10 <= len(emp["telefone"]) <= 13:
+            raise ValueError("Telefone da empresa: DDD + número (10 ou 11 dígitos).")
+    if "email" in emp:
+        emp["email"] = str(emp["email"] or "").strip()
+        if emp["email"] and (not re.fullmatch(r"[^@\s;,]+@[^@\s;,]+\.[^@\s;,]+", emp["email"]) or len(emp["email"]) > 80):
+            raise ValueError("E-mail da empresa inválido (um único e-mail, até 80 caracteres).")
     em = novo.get("emissao") or {}
     mun = em.get("municipio_emissor")
     if mun not in (None, "") and not re.fullmatch(r"\d{7}", str(mun).strip()):

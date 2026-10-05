@@ -444,8 +444,14 @@ def gerar_dps(rps: Rps, prestador: Prestador, producao: bool, serie: str, numero
     reg = (_t("opSimpNac", op_sn)
            + (_t("regApTribSN", e.get("reg_ap_trib_sn", "2")) if op_sn == "3" else "")
            + _t("regEspTrib", "0" if regime == "mei" else e.get("reg_esp_trib", "0")))
+    emp = cfg.get("empresa") or {}
+    fone_p = so_digitos(emp.get("telefone"))
+    email_p = str(emp.get("email") or "").strip()
     prest = (f"<prest>{_t('CNPJ', cnpj)}"
              + (_t("IM", so_digitos(prestador.inscricao_municipal)) if e.get("informar_im") else "")
+             # contato da empresa no DANFSe (cadastro da empresa: Configurações › Empresa emissora)
+             + (_t("fone", fone_p) if 6 <= len(fone_p) <= 20 else "")
+             + (_t("email", email_p[:80]) if "@" in email_p else "")
              + f"<regTrib>{reg}</regTrib></prest>")
 
     tom = rps.tomador

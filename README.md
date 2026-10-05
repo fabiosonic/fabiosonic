@@ -372,6 +372,14 @@ exportação, ISS suspenso, benefício municipal, CST de PIS/COFINS, consumo pes
 quem difere da regra geral ganha **regra específica** — tomador que já tem regra gravada não é alterado. Detalhes por regime em
 `docs/NFSE_NACIONAL_CAMPOS_POR_REGIME.md`.
 
+## E-mail e telefone da empresa na nota
+
+Em Configurações › Empresa emissora e credenciais ficam o **e-mail** e o **telefone** da empresa. No Emissor Nacional
+eles vão nos campos próprios do prestador (`prest/email` e `prest/fone`) e aparecem no DANFSe. O webservice de
+Itaboraí não tem campo de contato do prestador (a prefeitura usa o próprio cadastro): com a opção "incluir e-mail e
+telefone nas observações" ligada (padrão), eles vão nas observações da nota. A importação dos XML preenche os dois
+quando estiverem vazios.
+
 ## Campos fixos das notas do tomador e obrigatórios do Emissor Nacional
 
 - **Campos fixos das notas deste tomador** (Clientes › editar): local da prestação, pedido e item, documento de

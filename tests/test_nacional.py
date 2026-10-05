@@ -322,3 +322,24 @@ def test_campos_restantes_do_leiaute_e_obrigatorios_condicionais(sefin):
     with pytest.raises(ErroValidacao, match="ISS retido pelo intermediário"):
         nacional.preparar(_rps(iss_retido="1", aliquota_iss=Decimal(2), extras={"ret_iss_por": "intermediario"}),
                           producao=False)
+
+
+def test_email_e_telefone_da_empresa_na_nota(sefin):
+    """Cadastro da empresa: e-mail e telefone vão para prest/email e prest/fone (aparecem no DANFSe)."""
+    r = tratar("config/salvar", {"empresa": {"email": "contato@empresa.com.br", "telefone": "(21) 99876-5432"}})
+    assert "erro" not in r
+    raiz = etree.fromstring(nacional.preparar(_rps(), producao=False)[0].encode())
+    assert raiz.findtext(".//n:prest/n:fone", namespaces=NS) == "21998765432"
+    assert raiz.findtext(".//n:prest/n:email", namespaces=NS) == "contato@empresa.com.br"
+    assert "inválido" in tratar("config/salvar", {"empresa": {"email": "a@b.com; c@d.com"}})["erro"]
+    assert "DDD" in tratar("config/salvar", {"empresa": {"telefone": "1234"}})["erro"]
+
+
+def test_contato_nas_observacoes_no_webservice_de_itaborai(sefin):
+    """Itaboraí não tem campo de contato do prestador: com a opção ligada, vai nas observações da nota."""
+    config.salvar({"emissao": {"canal": "municipal"}, "empresa": {"email": "contato@empresa.com.br",
+                                                                   "telefone": "21998765432"}})
+    obs = lote.montar_rps("32396063000103", "100")["observacoes"]
+    assert "Contato do prestador: (21) 99876-5432 · contato@empresa.com.br" in obs
+    config.salvar({"empresa": {"contato_na_nota": False}})
+    assert "Contato" not in (lote.montar_rps("32396063000103", "100")["observacoes"] or "")

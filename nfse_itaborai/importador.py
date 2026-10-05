@@ -55,6 +55,8 @@ def empresa_de_xml(raiz) -> dict:
                 "numero": _digitos(_texto(raiz, "IdentificacaoRps/Numero")), "serie": "", "cmun": ""}
     dps = _achar(raiz, "infDPS")
     return {"canal": "nacional", "nome": _texto(raiz, "emit/xNome") or _texto(dps, "prest/xNome"),
+            "email": _texto(dps, "prest/email") or _texto(raiz, "emit/email"),
+            "telefone": _digitos(_texto(dps, "prest/fone") or _texto(raiz, "emit/fone")),
             "im": _digitos(_texto(raiz, "emit/IM") or _texto(dps, "prest/IM")),
             "numero": _digitos(_texto(dps, "nDPS")), "serie": _texto(dps, "serie"),
             "cmun": _digitos(_texto(dps, "cLocEmi") or _texto(raiz, "emit/enderNac/cMun"))}
@@ -112,6 +114,11 @@ def completar_empresa(pasta: Path, cnpj: str) -> list[str]:
     if nome and not cfg["empresa"].get("nome"):
         config.salvar({"empresa": {"nome": nome, **({} if cfg["empresa"].get("assinatura") else {"assinatura": nome})}})
         feito.append(f"nome da empresa: {nome}")
+    for campo, rotulo in (("email", "e-mail da empresa"), ("telefone", "telefone da empresa")):
+        v = freq(campo)
+        if v and not cfg["empresa"].get(campo):
+            config.salvar({"empresa": {campo: v}})
+            feito.append(f"{rotulo}: {v}")
     im = freq("im")
     if im and im != "0" and not _digitos(emissor.env("ITABORAI_IM") or ""):
         empresas.salvar_credenciais({"im": im})
