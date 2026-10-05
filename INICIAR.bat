@@ -22,9 +22,10 @@ schtasks /create /f /sc hourly /mo 1 /tn "Robo Financeiro NFS-e Itaborai" /tr "w
 powershell -NoProfile -Command "$st=[Environment]::GetFolderPath('Startup'); $old=Join-Path $st 'Sistema Financeiro NFS-e.bat'; $lnk=Join-Path $st 'Sistema Financeiro NFS-e.lnk'; if ((Test-Path $old) -or (Test-Path $lnk)) { Remove-Item $old -ErrorAction SilentlyContinue; $s=(New-Object -ComObject WScript.Shell).CreateShortcut($lnk); $s.TargetPath='wscript.exe'; $s.Arguments='\"%~dp0SISTEMA.vbs\"'; $s.WorkingDirectory='%~dp0'; $s.Save() }" >nul 2>nul
 powershell -NoProfile -Command "$p=[Environment]::GetFolderPath('Desktop')+'\Sistema Financeiro NFS-e.lnk'; if (Test-Path $p) { $s=(New-Object -ComObject WScript.Shell).CreateShortcut($p); $s.TargetPath='wscript.exe'; $s.Arguments='\"%~dp0SISTEMA.vbs\"'; $s.WorkingDirectory='%~dp0'; $s.IconLocation='%SystemRoot%\System32\shell32.dll,165'; $s.Save() }" >nul 2>nul
 if not exist ".env" %PY% -m nfse_itaborai configurar
-if /i "%MODO%"=="oculto" (
-  %PY% -m nfse_itaborai tela >> dados\tela.log 2>&1
-  exit /b 0
-)
+if /i "%MODO%"=="oculto" goto :oculto
 %PY% -m nfse_itaborai tela
 pause
+exit /b 0
+:oculto
+%PY% -m nfse_itaborai tela >> dados\tela.log 2>&1
+exit /b 0

@@ -133,6 +133,48 @@ def configurar() -> int:
     return 0
 
 
+def diagnostico() -> int:
+    """Diagnóstico para o suporte (DIAGNOSTICO.bat): ambiente, componentes, licença e o fim dos logs. Sem senhas."""
+    import importlib
+    import platform
+    from . import __version__
+    base = emissor.BASE
+    print(f"Sistema: versão {__version__} em {base}")
+    print(f"Python: {sys.version.split()[0]} em {sys.executable} ({platform.platform()})")
+    for mod in ("sqlite3", "ssl", "ctypes", "lxml.etree", "cryptography.hazmat.primitives.serialization.pkcs12",
+                "pypdf", "playwright.sync_api"):
+        try:
+            importlib.import_module(mod)
+            print(f"  OK  {mod}")
+        except Exception as ex:  # noqa: BLE001 - diagnóstico: mostra qualquer falha
+            print(f"  ERRO {mod}: {type(ex).__name__}: {ex}")
+    driver = Path(sys.executable).parent / "Lib" / "site-packages" / "playwright" / "driver"
+    if driver.is_dir():
+        print("  node.exe (WhatsApp automático): " + ("OK" if (driver / "node.exe").exists() else
+              "FALTA — extraia as partes 2 e 3 do pacote na mesma pasta"))
+    print(f".env: {'existe' if (base / '.env').exists() else 'NÃO existe (rode INSTALAR.bat)'}")
+    try:
+        from . import licenca
+        s = licenca.situacao()
+        print(f"Licença: {s.get('status')} — {s.get('mensagem')}")
+    except Exception as ex:  # noqa: BLE001
+        print(f"Licença: erro ao ler ({type(ex).__name__}: {ex})")
+    try:
+        from .tela import _quem_esta_na_porta
+        abertos = [(p, o) for p in range(8765, 8785) if (o := _quem_esta_na_porta(p))]
+        print("Telas abertas: " + (", ".join(f"porta {p} versão {o.get('versao')} pasta {o.get('pasta')}"
+                                             for p, o in abertos) or "nenhuma"))
+    except Exception as ex:  # noqa: BLE001
+        print(f"Telas abertas: erro ao verificar ({ex})")
+    for nome, n in (("tela.log", 40), ("robo.log", 15)):
+        arq = base / "dados" / nome
+        if arq.exists():
+            linhas = arq.read_text(encoding="utf-8", errors="replace").splitlines()[-n:]
+            print(f"--- últimas linhas de dados\\{nome} ---")
+            print("\n".join(linhas))
+    return 0
+
+
 def importar_clientes(pasta: Path | None = None) -> int:
     """Importação completa pelos XML (IMPORTAR_CLIENTES.bat), com o resumo do que foi preenchido."""
     from . import importador, licenca
@@ -200,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("robo", help="roda a rotina financeira (para o Agendador do Windows)")
 
     sub.add_parser("ja-aberto", help="se esta versão já estiver rodando, só abre o navegador (sai com 0)")
+    sub.add_parser("aberto", help="sai com 0 se esta versão já estiver rodando (não abre o navegador)")
+    sub.add_parser("diagnostico", help="mostra o diagnóstico do ambiente para o suporte")
 
     t = sub.add_parser("tela", help="abre a tela de emissão no navegador (http://127.0.0.1:8765)")
     t.add_argument("--porta", type=int, default=8765)
@@ -233,6 +277,13 @@ def main(argv: list[str] | None = None) -> int:
             r = automacao.rodar_todas()
             print(json.dumps(r, ensure_ascii=False, indent=2, default=str))
             return 0
+        if a.cmd == "aberto":
+            from . import __version__
+            from .tela import _quem_esta_na_porta
+            return 0 if any((o := _quem_esta_na_porta(p)).get("versao") == __version__
+                            and o.get("pasta") == str(emissor.BASE) for p in range(8765, 8785)) else 1
+        if a.cmd == "diagnostico":
+            return diagnostico()
         if a.cmd == "ja-aberto":
             from .tela import abrir_se_ja_aberto
             return 0 if abrir_se_ja_aberto() else 1

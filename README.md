@@ -63,6 +63,15 @@ Para ver a janela (diagnóstico), rode `INICIAR.bat` direto.
 
 Para desligar a automação, use `DESINSTALAR_AUTOMACAO.bat`. Seus dados são mantidos.
 
+**Diagnóstico:** `DIAGNOSTICO.bat` mostra versão, Python usado, componentes (lxml, cryptography, pypdf, playwright e
+o node.exe do WhatsApp), `.env`, licença, telas abertas e o fim de `dados\tela.log` e `dados\robo.log`, e grava
+`diagnostico.txt` (sem senhas). Se a tela não abrir em 40 s, o `INSTALAR.bat` mostra esse mesmo diagnóstico. Os `.bat`
+não usam blocos entre parênteses com o caminho do Python, então funcionam em pastas como `Sistema (1)`.
+
+**Uma instalação principal por computador:** o robô agendado, a abertura com o Windows e os atalhos apontam para a
+última pasta instalada/aberta pelo `INICIAR.bat`, e telas de outras pastas são fechadas (evita dois robôs da mesma
+empresa emitindo em dobro). Para voltar a uma pasta, abra o `INICIAR.bat` dela.
+
 ## Atualizar de uma versão anterior
 
 **Pelo botão (recomendado, a partir da 3.2.0):** em **Configurações › Atualizar o sistema**, selecione o ZIP da

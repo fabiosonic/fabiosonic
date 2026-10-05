@@ -85,6 +85,7 @@ oficiais: prefeitura, Emissor Nacional da NFS-e, Banco Inter e o e-mail da próp
 <li>Confirme o CNPJ (já vem do serial) e informe a inscrição municipal, o optante do Simples e, conforme o canal, a chave do webservice e o próximo número de RPS, ou o código IBGE do município.</li>
 <li>O instalador agenda o robô de hora em hora, faz o sistema abrir sozinho ao ligar o computador e cria o atalho <b>Sistema Financeiro NFS-e</b> na área de trabalho. No fim, o sistema abre no navegador.</li>
 </ol>
+<div class="caixa atencao"><b>Um computador, uma instalação por empresa.</b> O robô agendado e a abertura automática apontam para a última pasta instalada. Não instale uma cópia de teste no computador onde a empresa já usa o sistema: se isso acontecer, abra uma vez o <code>INICIAR.bat</code> da pasta verdadeira para ela voltar a ser a principal.</div>
 <div class="caixa dica"><b>Dica.</b> O sistema roda escondido, sem janela preta. Para fechar, use <span class="menu">Encerrar o sistema</span> no menu da tela. Para abrir de novo, use o atalho da área de trabalho.</div>
 
 <h2 id="licenca">3. Licença: mensalidade e anuidade</h2>
@@ -246,7 +247,8 @@ oficiais: prefeitura, Emissor Nacional da NFS-e, Banco Inter e o e-mail da próp
 <tr><td>Boleto não registrado</td><td>Geralmente falta endereço completo do cliente (cidade e UF). Complete o cadastro; o robô tenta de novo.</td></tr>
 <tr><td>WhatsApp “não conectado”</td><td>Leia o QR Code de novo em Configurações › WhatsApp. O que não saiu fica na fila.</td></tr>
 <tr><td>Mensagens não saíram à noite ou no fim de semana</td><td>Normal: envios só de segunda a sexta, das 08:00 às 18:00.</td></tr>
-<tr><td>O sistema não abre</td><td>Use o atalho da área de trabalho. Para ver a janela de diagnóstico, rode <code>INICIAR.bat</code>.</td></tr>
+<tr><td>O sistema não abre</td><td>Dê dois cliques em <code>DIAGNOSTICO.bat</code>, na pasta do sistema. Ele mostra o que falta (Python, componentes, serial) e o motivo registrado; o resultado fica em <code>diagnostico.txt</code> para enviar ao suporte. O <code>INSTALAR.bat</code> também mostra o motivo se a tela não abrir.</td></tr>
+<tr><td>Instalei pelo pacote em partes</td><td>As 3 partes precisam ser extraídas na <b>mesma pasta</b> (fica uma única pasta <code>EmissorItaborai</code>). Se a parte 2 ou 3 faltar, só o WhatsApp automático deixa de funcionar.</td></tr>
 </table></div>
 
 <h2 id="checklist">14. Checklist de implantação</h2>

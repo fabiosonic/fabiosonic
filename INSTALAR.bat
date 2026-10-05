@@ -18,7 +18,13 @@ echo [1/5] Componentes - validador XSD, criptografia, WhatsApp Web e leitura de 
 %PY% -c "import lxml, cryptography, playwright, pypdf" 2>nul && (echo    OK: ja incluidos no pacote.) || %PY% -m pip install --quiet --disable-pip-version-check lxml cryptography playwright pypdf
 if exist "%~dp0python\python.exe" if not exist "%~dp0python\Lib\site-packages\playwright\driver\node.exe" echo    AVISO: faltam as partes 2 e 3 do pacote (WhatsApp automatico). Extraia as 3 partes na mesma pasta e rode de novo.
 echo [2/5] Serial de liberacao e configuracao da empresa...
-if not exist ".env" (%PY% -m nfse_itaborai configurar) else (%PY% -m nfse_itaborai serial)
+rem (sem blocos entre parenteses com %PY%: o caminho da pasta pode ter parenteses, ex.: "pasta (1)")
+if exist ".env" goto :so_serial
+%PY% -m nfse_itaborai configurar
+goto :passo3
+:so_serial
+%PY% -m nfse_itaborai serial
+:passo3
 echo [3/5] Robo financeiro de hora em hora, sem janela (Agendador do Windows)...
 schtasks /create /f /sc hourly /mo 1 /tn "Robo Financeiro NFS-e Itaborai" /tr "wscript.exe \"%~dp0SISTEMA.vbs\" robo" >nul
 if errorlevel 1 (echo    Aviso: nao foi possivel agendar o robo. Rode como administrador.) else (echo    OK: robo agendado.)
@@ -32,4 +38,21 @@ echo.
 echo Pronto! O sistema vai abrir no navegador. Ele roda escondido, sem janela preta:
 echo para fechar, use o botao "Encerrar o sistema" no menu da tela.
 start "" wscript.exe "%~dp0SISTEMA.vbs"
+rem Confere se a tela subiu; se nao subir em 40 s, mostra o motivo aqui (o sistema roda escondido)
+set /a ESPERA=0
+:espera
+timeout /t 2 >nul
+%PY% -m nfse_itaborai aberto >nul 2>nul && goto :abriu
+set /a ESPERA+=1
+if %ESPERA% lss 20 goto :espera
+echo.
+echo ATENCAO: o sistema nao abriu. Motivo registrado em dados\tela.log:
+echo ------------------------------------------------------------
+%PY% -m nfse_itaborai diagnostico
+echo ------------------------------------------------------------
+echo Envie esta tela (ou o arquivo diagnostico.txt) ao suporte.
+pause
+exit /b 1
+:abriu
+echo OK: sistema aberto no navegador.
 timeout /t 5 >nul
