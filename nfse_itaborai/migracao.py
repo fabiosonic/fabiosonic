@@ -179,6 +179,11 @@ def importar(pasta: str) -> dict:
                          "os dados de uma empresa nunca são copiados para outra.")
     feitos = []
     with emissor.usar_empresa(emissor.BASE):
+        try:                                   # ponto de volta: o reparo (e você) sempre têm o "antes" exato
+            from . import backup
+            backup.criar("antes_da_versao_anterior", emissor.BASE)
+        except Exception:  # noqa: BLE001 - backup não impede a importação
+            pass
         destino = emissor.raiz()
         # .env: chaves ausentes; numeração do RPS pelo maior valor
         antigo_env, atual_env = emissor.ler_env(origem / ".env"), emissor.ler_env(destino / ".env")
@@ -286,31 +291,153 @@ def misturas() -> list[dict]:
     return out
 
 
-def _backup_antes(quando: str) -> tuple[dict, list, dict, set] | None:
-    """config, clientes, .env e certificados do backup .zip mais recente feito ANTES da importação."""
+def _backups() -> list[tuple[str, dict, list, dict, set]]:
+    """(criado_em, config, clientes, .env, certificados) de cada backup .zip desta instalação, do mais novo ao mais velho."""
+    import io
     import zipfile
-    from . import backup
-    melhores = sorted((a for a in backup.pasta_backups(emissor.BASE).glob("backup_*.zip")),
-                      key=lambda a: a.name, reverse=True)
-    for arq in melhores:
+    from . import backup, segredos
+    out = []
+    senha = None
+    for arq in sorted(backup._backups(emissor.BASE), key=lambda a: a.name, reverse=True):
         try:
-            with zipfile.ZipFile(arq) as z:
-                m = json.loads(z.read(backup.MANIFESTO))
-                if not m.get("criado_em") or m["criado_em"] >= quando:
+            if arq.suffix == backup.EXT_PROTEGIDO:          # backup com senha: abre com a senha de backup desta empresa
+                senha = backup._senha_backup(emissor.BASE) if senha is None else senha
+                if not senha:
                     continue
-                cfg = json.loads(z.read("dados/config.json")) if "dados/config.json" in z.namelist() else {}
-                cli = json.loads(z.read("dados/clientes.json")) if "dados/clientes.json" in z.namelist() else []
+                fonte = io.BytesIO(segredos.decifrar_com_senha(arq.read_bytes(), senha))
+            else:
+                fonte = arq
+            with zipfile.ZipFile(fonte) as z:
+                nomes = z.namelist()
+                m = json.loads(z.read(backup.MANIFESTO))
+                cfg = json.loads(z.read("dados/config.json")) if "dados/config.json" in nomes else {}
+                cli = json.loads(z.read("dados/clientes.json")) if "dados/clientes.json" in nomes else []
                 env = {}
-                if ".env" in z.namelist():
+                if ".env" in nomes:
                     for linha in z.read(".env").decode("utf-8").splitlines():
                         if "=" in linha and not linha.lstrip().startswith("#"):
                             k, v = linha.split("=", 1)
                             env[k.strip()] = v.strip()
-                certs = {n.rsplit("/", 1)[-1] for n in z.namelist() if n.startswith("dados/certificados/")}
-                return cfg, cli, env, certs
-        except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+                certs = {n.rsplit("/", 1)[-1] for n in nomes if n.startswith("dados/certificados/")}
+                out.append((m.get("criado_em") or "", cfg, cli, env, certs))
+        except Exception:  # noqa: BLE001 - backup ilegível (senha trocada, arquivo corrompido): só não serve de fonte
             continue
+    return out
+
+
+def _backup_antes(quando: str) -> tuple[dict, list, dict, set] | None:
+    """config, clientes, .env e certificados do backup .zip mais recente feito ANTES da importação."""
+    for criado, cfg, cli, env, certs in _backups():
+        if criado and criado < quando:
+            return cfg, cli, env, certs
     return None
+
+
+def _pelas_notas(cnpj: str) -> dict:
+    """Canal, município e razão social desta empresa segundo as notas AUTORIZADAS (prefeitura/Sefin) para o CNPJ dela."""
+    from collections import Counter
+    from . import importador
+    pastas = [emissor.BASE / "saida", emissor.BASE / importador.NOME_PASTA / "importados" / cnpj]
+    dados = []
+    for pasta in pastas:
+        for arq in (pasta.rglob("NFSe_*.xml") if pasta.name == "saida" else pasta.glob("*.xml")) if pasta.is_dir() else []:
+            raiz = importador._ler(arq)
+            if raiz is not None and importador._prestador(raiz)[0] == cnpj:
+                dados.append(importador.empresa_de_xml(raiz))
+    if not dados:
+        return {}
+    freq = lambda campo: (Counter(d[campo] for d in dados if d.get(campo)).most_common(1) or [("", 0)])[0][0]  # noqa: E731
+    canal = freq("canal")
+    cmun = freq("cmun") if canal == "nacional" else "3301900"      # canal municipal = webservice de Itaboraí
+    return {k: v for k, v in {"empresa": {"nome": freq("nome")}, "emissao": {"canal": canal, "municipio_emissor": cmun}}.items()}
+
+
+def _pelo_certificado(cnpj: str, cfgs: list[dict]) -> str:
+    """Razão social do certificado A1 (CN = 'RAZAO SOCIAL:CNPJ') desta empresa, se algum dos .pfx conhecidos for dela."""
+    try:
+        from . import nacional
+    except ImportError:  # pragma: no cover
+        return ""
+    for c in cfgs:
+        if not c.get("emissao", {}).get("certificado_pfx"):
+            continue
+        try:
+            cert = nacional.carregar_certificado(c)
+        except Exception:  # noqa: BLE001 - qualquer falha: só não serve de fonte
+            continue
+        if cert.cnpj == cnpj:
+            return cert.titular.rsplit(":", 1)[0].strip()
+    return ""
+
+
+def fontes_proprias(quando: str = "") -> list[tuple[bool, dict]]:
+    """Configurações desta empresa vindas de fontes que NÃO passaram pela mistura, da mais confiável à menos:
+    backup anterior à importação, os demais backups, outras instalações do MESMO CNPJ, as notas autorizadas e o
+    certificado A1 deste CNPJ. Cada item: (anterior_a_importacao, config). Só o backup anterior à importação é
+    prova de que um valor igual ao da outra empresa também era desta; nas demais fontes ele é ignorado."""
+    aqui = _cnpj(emissor.BASE)
+    bks = _backups()
+    antes = [b for b in bks if quando and b[0] and b[0] < quando]
+    depois = [b for b in bks if b not in antes]
+    desta = lambda b: clientes._digitos(b[3].get("ITABORAI_CNPJ", "")) in ("", aqui)  # noqa: E731
+    fontes = [(True, _aberto(b[1])) for b in antes if desta(b)] + [(False, _aberto(b[1])) for b in depois if desta(b)]
+    fontes += [(False, _aberto(_cfg(p))) for p in localizar() if mesma_empresa(p)]
+    fontes.append((False, _pelas_notas(aqui)))
+    nome = _pelo_certificado(aqui, [c for _, c in fontes if c] + [config.carregar()])
+    if nome:
+        fontes.append((False, {"empresa": {"nome": nome}}))
+    return [(a, f) for a, f in fontes if f]
+
+
+GENERICAS = {"LTDA", "EIRELI", "UNIPESSOAL", "EPP", "SOCIEDADE", "SERVICOS", "CONTABILIDADE", "CONTABIL", "ASSESSORIA",
+             "CONSULTORIA", "COMERCIO", "CLINICA", "PSICOLOGIA", "ADVOCACIA", "ADVOGADOS", "ASSOCIADOS", "DOS", "DAS", "DES"}
+
+
+def _palavras(nome: str) -> set[str]:
+    import re
+    import unicodedata
+    s = unicodedata.normalize("NFKD", nome or "").encode("ascii", "ignore").decode().upper().replace("&", " E ")
+    return {w for w in re.findall(r"[A-Z0-9]+", s) if len(w) > 2 and w not in GENERICAS}
+
+
+def identidade() -> dict | None:
+    """Confere o nome da empresa com a razão social OFICIAL deste CNPJ (certificado A1 dele ou notas do Emissor
+    Nacional). Nome sem nenhuma palavra em comum com o oficial = nome de outra empresa: o Painel avisa."""
+    aqui = _cnpj(emissor.BASE)
+    if not aqui:
+        return None
+    with emissor.usar_empresa(emissor.BASE):
+        cfg = config.carregar()
+        oficial, fonte = _pelo_certificado(aqui, [cfg]), "certificado digital"
+        if not oficial:
+            oficial, fonte = _pelas_notas(aqui).get("empresa", {}).get("nome", ""), "notas autorizadas"
+    nome = cfg["empresa"].get("nome", "")
+    if not oficial or not nome or _palavras(nome) & _palavras(oficial) or not _palavras(oficial):
+        return None
+    return {"nome": nome, "oficial": oficial, "fonte": fonte, "cnpj": aqui}
+
+
+def usar_nome_oficial() -> dict:
+    """Troca o nome (e a assinatura, se era o mesmo nome) pela razão social oficial deste CNPJ."""
+    i = identidade()
+    if not i:
+        raise ValueError("O nome da empresa já confere com a razão social oficial.")
+    with emissor.usar_empresa(emissor.BASE):
+        emp = config.carregar()["empresa"]
+        novo = {"nome": i["oficial"]} | ({"assinatura": i["oficial"]} if emp.get("assinatura") in ("", i["nome"]) else {})
+        config.salvar({"empresa": novo})
+        db.registrar("migracao", f"Nome da empresa corrigido de '{i['nome']}' para '{i['oficial']}' ({i['fonte']})")
+    return {"nome": i["oficial"]}
+
+
+# Dados que identificam a outra empresa: se não houver fonte com o valor desta, ficam VAZIOS (para você preencher),
+# nunca com o da outra.
+IDENTIFICAM = {("empresa", "nome"), ("empresa", "pix_chave"), ("empresa", "pix_cidade"), ("empresa", "whatsapp"),
+               ("empresa", "assinatura"), ("smtp", "usuario"), ("smtp", "senha"), ("smtp", "remetente"),
+               ("smtp", "copia_para"), ("resumo", "email_dono"), ("emissao", "certificado_pfx"),
+               ("emissao", "certificado_senha"), ("cobranca", "inter_client_id"), ("cobranca", "inter_client_secret"),
+               ("cobranca", "inter_certificado"), ("cobranca", "inter_chave"), ("cobranca", "inter_conta"),
+               ("financeiro", "contas_bancarias")}
 
 
 def _aberto(cfg: dict) -> dict:
@@ -323,8 +450,10 @@ def _aberto(cfg: dict) -> dict:
 
 
 def reparar() -> dict:
-    """Desfaz o que veio da outra empresa. Só volta o que ainda está IGUAL ao da outra instalação (o que você mudou
-    depois fica como está); o valor de antes vem do backup automático anterior à importação. Clientes da outra
+    """Desfaz o que veio da outra empresa e TRAZ DE VOLTA os dados desta. Só mexe no que ainda está IGUAL ao da outra
+    instalação (o que você mudou depois fica como está). O valor certo vem de fontes_proprias(): backups, outras
+    instalações do mesmo CNPJ, notas autorizadas e certificado A1 deste CNPJ. Dado que identifica a outra empresa
+    (nome, PIX, e-mail, banco, certificado) sem fonte desta fica vazio, nunca com o da outra. Clientes da outra
     empresa saem do cadastro, desde que não tenham títulos nem notas aqui."""
     feito: list[str] = []
     pendente: list[str] = []
@@ -338,17 +467,26 @@ def reparar() -> dict:
         bk = _backup_antes(m["quando"])
         with emissor.usar_empresa(emissor.BASE):
             atual = config.carregar()
-            antes = _aberto(bk[0]) if bk else {}
+            fontes = fontes_proprias(m["quando"])
             volta: dict = {}
             for sec, campos in CAMPOS.items():
                 for k in campos:
                     a, o = atual.get(sec, {}).get(k), outra_cfg.get(sec, {}).get(k)
                     if _vazio(o) or a != o:
                         continue                                  # não veio da outra (ou já foi corrigido)
-                    if bk and k in antes.get(sec, {}) and antes[sec][k] != a:
-                        volta.setdefault(sec, {})[k] = antes[sec][k]
-                        feito.append(f"{sec}.{k}: {o!s:.40} → {antes[sec][k]!s:.40}")
-                    elif not bk:
+                    certo = next((v for antes_da, f in fontes if not _vazio(v := f.get(sec, {}).get(k))
+                                  and (antes_da or v != o)), None)
+                    if sec == "empresa" and k == "assinatura" and certo is None:
+                        certo = volta.get("empresa", {}).get("nome") or certo
+                    if certo is not None and certo == a:
+                        continue                                  # esta empresa usa o mesmo valor (ex.: smtp.gmail.com)
+                    if certo is not None:
+                        volta.setdefault(sec, {})[k] = certo
+                        feito.append(f"{sec}.{k}: {o!s:.40} → {certo!s:.40}")
+                    elif (sec, k) in IDENTIFICAM:
+                        volta.setdefault(sec, {})[k] = [] if isinstance(o, list) else ""
+                        pendente.append(f"{sec}.{k}: o valor da outra empresa foi apagado — preencha com o desta")
+                    else:
                         pendente.append(f"{sec}.{k} = {o!s:.40} (veio da outra empresa; confira)")
             if volta:
                 config.salvar(volta)
@@ -374,18 +512,20 @@ def reparar() -> dict:
             tirados = 0
             for c in outra_cli:
                 doc = clientes._digitos(c.get("cpf_cnpj"))
-                if doc and doc not in antes_cli and doc not in com_titulo and clientes.obter(doc):
+                aqui_c = clientes.obter(doc) if doc else None
+                ident = lambda x: ((x.get("razao_social") or "").strip().upper(), (x.get("email") or "").strip().lower())  # noqa: E731
+                copia = bool(aqui_c) and (bool(bk) or ident(aqui_c) == ident(c))   # sem backup: só a cópia idêntica
+                if doc and doc not in antes_cli and doc not in com_titulo and copia:
                     clientes.excluir(doc)
                     tirados += 1
             if tirados:
                 feito.append(f"{tirados} cliente(s) da outra empresa retirados do cadastro")
             # certificados copiados da outra instalação
-            if bk:
-                for arq_c in (origem / "dados" / "certificados").glob("*") if (origem / "dados" / "certificados").is_dir() else []:
-                    aqui = emissor.BASE / "dados" / "certificados" / arq_c.name
-                    if aqui.exists() and arq_c.name not in bk[3] and aqui.read_bytes() == arq_c.read_bytes():
-                        aqui.unlink()
-                        feito.append(f"arquivo {arq_c.name} da outra empresa apagado")
+            for arq_c in (origem / "dados" / "certificados").glob("*") if (origem / "dados" / "certificados").is_dir() else []:
+                aqui = emissor.BASE / "dados" / "certificados" / arq_c.name
+                if aqui.exists() and (not bk or arq_c.name not in bk[3]) and aqui.read_bytes() == arq_c.read_bytes():
+                    aqui.unlink()
+                    feito.append(f"arquivo {arq_c.name} da outra empresa apagado")
         db.registrar("migracao_reparo", f"reparado|{m['pasta']}|{m['quando']}")
         db.registrar("migracao", f"Reparo dos dados trazidos de {m['pasta']} (CNPJ {m['cnpj']}): "
                      + ("; ".join(feito) or "nada a desfazer") + (f" — sem backup anterior: {'; '.join(pendente)}" if pendente else ""))

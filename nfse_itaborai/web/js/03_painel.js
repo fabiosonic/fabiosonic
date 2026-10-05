@@ -189,11 +189,15 @@ function montarGrafico(alvo, serie, specs, opts = {}) {
 }
 
 // ---------------------------------------------------------------- painel
+async function usarNomeOficial() {
+  const r = await api("migracao/usar_nome_oficial");
+  aviso(`Nome da empresa: ${r.nome}`); await carregarEstado(); ir("painel");
+}
 async function repararMistura() {
-  if (!confirm("Desfazer o que veio da outra empresa? Só volta o que ainda está igual ao dela; o resto fica como está. Os valores de antes vêm do backup automático anterior.")) return;
+  if (!confirm("Desfazer o que veio da outra empresa e trazer de volta os dados desta? Só muda o que ainda está igual ao da outra; o resto fica como está. Os dados certos vêm dos backups, de outras instalações deste mesmo CNPJ, das notas autorizadas e do certificado digital.")) return;
   const r = await api("migracao/reparar");
-  modal(`<h2>Dados da outra empresa desfeitos</h2>${r.desfeito.length ? `<ul>${r.desfeito.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "<p>Nada a desfazer.</p>"}
-    ${r.conferir.length ? `<div class="msg">Sem backup anterior para estes campos — confira em Configurações:<ul>${r.conferir.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+  modal(`<h2>Dados desta empresa trazidos de volta</h2>${r.desfeito.length ? `<ul>${r.desfeito.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "<p>Nada a desfazer.</p>"}
+    ${r.conferir.length ? `<div class="msg">Sem fonte com o dado desta empresa para estes campos — preencha em Configurações:<ul>${r.conferir.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
     <p><button class="btn" onclick="fechar();carregarEstado().then(()=>ir('config'))">Conferir Configurações</button></p>`);
 }
 PAGINAS.painel = async el => {
@@ -206,7 +210,9 @@ PAGINAS.painel = async el => {
   if (p.criticos.length) A("critico", "bloqueio", `<b>${p.criticos.length}</b> cliente(s) com atraso crítico (≥ ${ST.config.cobranca.bloquear_apos_dias} dias): ${p.criticos.slice(0, 3).map(n => esc(nomeCli(n))).join(", ")}${p.criticos.length > 3 ? ` e mais ${p.criticos.length - 3} — <a href="#" onclick="ABA_REL='aging';ir('relatorios');return false">ver todos</a>` : ""}`);
   (p.divergencias_recorrencia || []).forEach(d => A("atencao", "contratos", `<b>${esc(nomeCli(d.cliente))}</b>: o título de ${mes(d.competencia)} está com <b>${brl(d.valor_cent)}</b>, mas a recorrência hoje dá <b>${brl(d.valor_recorrencia)}</b>${d.boleto ? " (o boleto já emitido continua com o valor antigo)" : ""} — <a href="#" onclick="aplicarRecorrencia(${d.contrato_id});return false">aplicar o valor da recorrência${d.boleto ? " e refazer o boleto" : ""}</a> · <a href="#" onclick="editarTitulo(${d.titulo_id});return false">editar o título</a>`));
   try { (await api("migracao/misturas")).forEach(m => A("critico", "alerta",
-    `Esta instalação recebeu dados de <b>outra empresa</b>${m.nome ? ` (${esc(m.nome)}${m.cnpj ? ", CNPJ " + fmtDoc(m.cnpj) : ""})` : ""} em ${dt(m.quando.slice(0, 10))}, pela opção “Versão anterior”. <a href="#" onclick="repararMistura();return false">Desfazer agora</a> — volta nome, canal, município e regras desta empresa e tira os clientes da outra.`)); } catch (e) { /* sem permissão: ignora */ }
+    `Esta instalação recebeu dados de <b>outra empresa</b>${m.nome ? ` (${esc(m.nome)}${m.cnpj ? ", CNPJ " + fmtDoc(m.cnpj) : ""})` : ""} em ${dt(m.quando.slice(0, 10))}, pela opção “Versão anterior”. <a href="#" onclick="repararMistura();return false">Desfazer agora</a> — traz de volta nome, canal, município e regras desta empresa e tira os clientes da outra.`)); } catch (e) { /* sem permissão: ignora */ }
+  try { const i = await api("migracao/identidade"); if (i) A("critico", "alerta",
+    `O nome da empresa está <b>${esc(i.nome)}</b>, mas a razão social do CNPJ ${fmtDoc(i.cnpj)} (${esc(i.fonte)}) é <b>${esc(i.oficial)}</b>. <a href="#" onclick="usarNomeOficial();return false">Usar ${esc(i.oficial)}</a> · <a href="#" onclick="ir('config');return false">corrigir à mão</a>`); } catch (e) { /* sem permissão: ignora */ }
   const lic = ST.licenca || {};
   if (["aviso", "carencia", "teste"].includes(lic.status)) A(lic.status == "carencia" ? "critico" : lic.status == "aviso" ? "atencao" : "info", "cadeado",
     `${esc(lic.mensagem)} — <a href="#" onclick="ir('config');setTimeout(()=>{const c=$('#card_lic');c&&c.scrollIntoView({behavior:'smooth'})},600);return false">licença</a>`);

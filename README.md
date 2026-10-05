@@ -91,10 +91,16 @@ guardada no navegador.
 **Versão anterior só da mesma empresa.** A opção "Versão anterior encontrada" só oferece e só importa instalações do
 **mesmo CNPJ**. A instalação de outra empresa no mesmo computador (por exemplo, a de um cliente do escritório) nunca é
 misturada: nem nome, nem credenciais, nem clientes, nem certificado. Se uma versão até a 3.8.3 trouxe dados de outra
-empresa, o Painel mostra o aviso **"Esta instalação recebeu dados de outra empresa — Desfazer agora"**: o reparo volta
-nome, canal, município e regras pelo backup automático anterior, tira os clientes e o certificado da outra empresa e
-mantém o que foi alterado depois. A razão social pode ser corrigida à mão em Configurações › Empresa emissora e
-credenciais.
+empresa, o Painel mostra o aviso **"Esta instalação recebeu dados de outra empresa — Desfazer agora"**: o reparo
+**traz de volta os dados desta empresa** (nome, canal, município, PIX, e-mail, banco, regras), buscando-os nesta ordem:
+backup anterior à importação, demais backups, outras instalações do mesmo CNPJ no computador, notas autorizadas pela
+prefeitura/Sefin para este CNPJ e certificado digital A1 deste CNPJ. Dado que identifica a outra empresa e não tem
+fonte desta fica **vazio** (para você preencher), nunca com o da outra. Também tira os clientes e o certificado da
+outra empresa e mantém o que foi alterado depois. Antes de trazer uma versão anterior o sistema faz um backup.
+
+**Nome conferido com o CNPJ.** Se o nome da empresa não tiver nenhuma palavra em comum com a razão social do
+certificado digital (ou das notas do Emissor Nacional) deste CNPJ, o Painel avisa e oferece **"Usar …"** com o nome
+oficial. A razão social também pode ser corrigida à mão em Configurações › Empresa emissora e credenciais.
 
 ## O sistema
 

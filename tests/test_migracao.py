@@ -177,3 +177,81 @@ def test_reparo_desfaz_o_que_veio_da_outra_empresa(outra_empresa, monkeypatch):
     assert not (escritorio / "dados" / "certificados" / "certificado-cliente.pfx").exists()
     assert tratar("migracao/misturas", {}) == []                 # não oferece de novo
     assert b["nome"]
+
+
+def test_reparo_sem_backup_traz_os_dados_certos_de_outras_fontes(outra_empresa, monkeypatch):
+    """Sem backup anterior (a versão antiga não fazia): o nome, o canal e o município CERTOS vêm de outra instalação
+    do mesmo CNPJ e das notas autorizadas; o que identifica a outra empresa e não tem fonte fica vazio, nunca dela."""
+    from nfse_itaborai import backup
+    cliente, escritorio = outra_empresa
+    cfg_cli = json.loads((cliente / "dados" / "config.json").read_text(encoding="utf-8"))
+    cfg_cli["empresa"]["pix_chave"] = "clinica@exemplo.com"
+    (cliente / "dados" / "config.json").write_text(json.dumps(cfg_cli), encoding="utf-8")
+    # versão mais antiga do próprio escritório, mesmo CNPJ, em outra pasta
+    antiga = escritorio.parent / "EmissorAntigo"
+    (antiga / "nfse_itaborai").mkdir(parents=True)
+    (antiga / "dados").mkdir()
+    (antiga / ".env").write_text("ITABORAI_CNPJ=24875410000144\n", encoding="utf-8")
+    (antiga / "dados" / "config.json").write_text(json.dumps({"empresa": {"nome": "ESCRITORIO CONTABIL LTDA"}}),
+                                                  encoding="utf-8")
+    # nota autorizada pela prefeitura (canal municipal) emitida por este CNPJ
+    nota = escritorio / "saida" / "2026-09" / "RPS_10"
+    nota.mkdir(parents=True)
+    (nota / "NFSe_123.xml").write_text("<Nfse><IdentificacaoRps><Numero>10</Numero></IdentificacaoRps><PrestadorServico>"
+                                       "<IdentificacaoPrestador><Cnpj>24875410000144</Cnpj></IdentificacaoPrestador>"
+                                       "</PrestadorServico></Nfse>", encoding="utf-8")
+    monkeypatch.setattr(migracao, "mesma_empresa", lambda p: True)          # como a versão antiga fazia
+    monkeypatch.setattr(backup, "criar", lambda *a, **k: {})                # e sem backup antes
+    monkeypatch.setitem(config.PADRAO["empresa"], "nome", "ESCRITORIO CONTABIL LTDA")
+    monkeypatch.setitem(config.PADRAO["emissao"], "canal", "municipal")
+    monkeypatch.setitem(config.PADRAO["emissao"], "municipio_emissor", "3301900")
+    config.salvar({"emissao": {"canal": "municipal", "municipio_emissor": "3301900"}})
+    migracao.importar(str(cliente))
+    c = config.carregar()
+    assert (c["empresa"]["nome"], c["emissao"]["canal"], c["empresa"]["pix_chave"]) == \
+        ("CLINICA DE PSICOLOGIA LTDA", "nacional", "clinica@exemplo.com")      # o estrago
+    monkeypatch.undo()
+    monkeypatch.setattr(emissor, "RAIZ", emissor._Raiz(escritorio))
+    monkeypatch.setattr(emissor, "BASE", escritorio)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: cliente.parents[2]))
+    assert not list(backup.pasta_backups(escritorio).glob("backup_*.zip"))
+    r = tratar("migracao/reparar", {})
+    c = config.carregar()
+    assert c["empresa"]["nome"] == "ESCRITORIO CONTABIL LTDA"                 # da instalação antiga do mesmo CNPJ
+    assert c["empresa"]["assinatura"] == "Escritório Contábil"                # não tinha sido trocada
+    assert (c["emissao"]["canal"], c["emissao"]["municipio_emissor"]) == ("municipal", "3301900")   # pelas notas
+    assert c["empresa"]["pix_chave"] == ""                                     # da outra: apagado, nunca mantido
+    assert any("pix_chave" in x for x in r["conferir"])
+    assert not clientes.obter("52998224725") and clientes.obter("32396063000103")
+    assert not (escritorio / "dados" / "certificados" / "certificado-cliente.pfx").exists()
+
+
+def test_nome_diferente_do_certificado_deste_cnpj_e_avisado_e_corrigido(outra_empresa, monkeypatch):
+    _, escritorio = outra_empresa
+    assert migracao.identidade() is None                                       # sem certificado: nada a comparar
+    monkeypatch.setattr(migracao, "_pelo_certificado", lambda cnpj, cfgs: "ESCRITORIO CONTABIL E ASSESSORIA LTDA")
+    assert tratar("migracao/identidade", {}) is None                           # mesmo nome, escrita diferente
+    config.salvar({"empresa": {"nome": "CLINICA DE PSICOLOGIA LTDA", "assinatura": "CLINICA DE PSICOLOGIA LTDA"}})
+    i = tratar("migracao/identidade", {})
+    assert i["oficial"] == "ESCRITORIO CONTABIL E ASSESSORIA LTDA" and i["fonte"] == "certificado digital"
+    tratar("migracao/usar_nome_oficial", {})
+    e = config.carregar()["empresa"]
+    assert e["nome"] == e["assinatura"] == "ESCRITORIO CONTABIL E ASSESSORIA LTDA"
+    assert tratar("migracao/identidade", {}) is None
+
+
+def test_reparo_le_o_backup_protegido_por_senha(outra_empresa, monkeypatch):
+    from nfse_itaborai import backup
+    cliente, escritorio = outra_empresa
+    config.salvar({"seguranca": {"backup_senha": "segredo123"}})
+    assert backup.criar("automatico")["nome"].endswith(backup.EXT_PROTEGIDO)
+    import time
+    time.sleep(1.1)
+    with monkeypatch.context() as antiga:                          # como a versão antiga fazia
+        antiga.setattr(migracao, "mesma_empresa", lambda p: True)
+        antiga.setattr(backup, "criar", lambda *a, **k: {})
+        antiga.setitem(config.PADRAO["empresa"], "nome", "ESCRITORIO CONTABIL LTDA")
+        migracao.importar(str(cliente))
+    assert config.carregar()["empresa"]["nome"] == "CLINICA DE PSICOLOGIA LTDA"
+    tratar("migracao/reparar", {})
+    assert config.carregar()["empresa"]["nome"] == "ESCRITORIO CONTABIL LTDA"
