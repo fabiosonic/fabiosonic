@@ -200,6 +200,8 @@ ROTAS = {
     "empresas": lambda c: empresas.listar(),
     "migracao/procurar": lambda c: migracao.procurar(),
     "migracao/importar": lambda c: migracao.importar(str(c.get("pasta", ""))),
+    "migracao/misturas": lambda c: migracao.misturas(),
+    "migracao/reparar": lambda c: migracao.reparar(),
     "importador/analisar": lambda c: importador.analisar(),
     "importador/importar": lambda c: importador.importar(str(c.get("empresa_id", "")), str(c.get("cnpj", "")),
                                                          c.get("servico") or None, c.get("servicos") or None),

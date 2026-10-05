@@ -87,6 +87,15 @@ cartão) e reabre sozinho. Se o robô estiver rodando naquele momento, ele pede 
 **Cores:** o botão "Tema" no menu alterna entre automático (segue o Windows), claro e escuro. A escolha fica
 guardada no navegador.
 
+
+**Versão anterior só da mesma empresa.** A opção "Versão anterior encontrada" só oferece e só importa instalações do
+**mesmo CNPJ**. A instalação de outra empresa no mesmo computador (por exemplo, a de um cliente do escritório) nunca é
+misturada: nem nome, nem credenciais, nem clientes, nem certificado. Se uma versão até a 3.8.3 trouxe dados de outra
+empresa, o Painel mostra o aviso **"Esta instalação recebeu dados de outra empresa — Desfazer agora"**: o reparo volta
+nome, canal, município e regras pelo backup automático anterior, tira os clientes e o certificado da outra empresa e
+mantém o que foi alterado depois. A razão social pode ser corrigida à mão em Configurações › Empresa emissora e
+credenciais.
+
 ## O sistema
 
 | Menu | O que faz |

@@ -101,3 +101,79 @@ def test_financeiro_atual_com_dados_nao_e_substituido(cenario):
 
 def test_pasta_qualquer_e_recusada(cenario, tmp_path):
     assert "não reconhecida" in tratar("migracao/importar", {"pasta": str(tmp_path)})["erro"]
+
+
+@pytest.fixture
+def outra_empresa(tmp_path, monkeypatch):
+    """Duas instalações no mesmo computador: a do escritório (Desktop) e a de um cliente (Downloads, outro CNPJ)."""
+    casa = tmp_path / "casa"
+    cliente = casa / "Downloads" / "EmissorItaborai_limpo" / "EmissorItaborai"
+    escritorio = casa / "Desktop" / "Escritorio"
+    for p in (cliente, escritorio):
+        (p / "nfse_itaborai").mkdir(parents=True)
+        (p / "dados" / "certificados").mkdir(parents=True)
+    (cliente / ".env").write_text("ITABORAI_CNPJ=59165665000106\nITABORAI_IE=999\n", encoding="utf-8")
+    (cliente / "dados" / "certificados" / "certificado-cliente.pfx").write_bytes(b"PFX-CLIENTE")
+    (cliente / "dados" / "config.json").write_text(json.dumps({
+        "empresa": {"nome": "CLINICA DE PSICOLOGIA LTDA", "assinatura": "CLINICA DE PSICOLOGIA LTDA"},
+        "emissao": {"canal": "nacional", "municipio_emissor": "3304557", "op_simp_nac": "3"},
+        "financeiro": {"aliquota_simples_pct": 6.0}}), encoding="utf-8")
+    (cliente / "dados" / "clientes.json").write_text(json.dumps([
+        {"cpf_cnpj": "52998224725", "razao_social": "PACIENTE DA CLINICA", "endereco": {}}]), encoding="utf-8")
+    monkeypatch.setattr(emissor, "RAIZ", emissor._Raiz(escritorio))
+    monkeypatch.setattr(emissor, "BASE", escritorio)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: casa))
+    for k in ("ITABORAI_CNPJ", "ITABORAI_IM", "ITABORAI_CHAVE", "ITABORAI_IE"):
+        monkeypatch.delenv(k, raising=False)
+    (escritorio / ".env").write_text("ITABORAI_CNPJ=24875410000144\nITABORAI_IM=1034265\nITABORAI_CHAVE=minha\n", encoding="utf-8")
+    config.salvar({"empresa": {"nome": "ESCRITORIO CONTABIL LTDA", "assinatura": "Escritório Contábil"},
+                   "emissao": {"canal": "municipal", "municipio_emissor": "3301900"}})
+    clientes.salvar({"cpf_cnpj": "32396063000103", "razao_social": "CLIENTE DO ESCRITORIO"})
+    return cliente, escritorio
+
+
+def test_instalacao_de_outra_empresa_nunca_e_oferecida_nem_importada(outra_empresa):
+    cliente, escritorio = outra_empresa
+    assert cliente in migracao.localizar()                       # ela existe no computador…
+    assert tratar("migracao/procurar", {}) == []                  # …mas nunca é oferecida
+    r = tratar("migracao/importar", {"pasta": str(cliente)})
+    assert "outra empresa" in r["erro"]
+    assert config.carregar()["empresa"]["nome"] == "ESCRITORIO CONTABIL LTDA"
+    assert [c["razao_social"] for c in clientes.listar()] == ["CLIENTE DO ESCRITORIO"]
+    assert not (escritorio / "dados" / "certificados" / "certificado-cliente.pfx").exists()
+
+
+def test_reparo_desfaz_o_que_veio_da_outra_empresa(outra_empresa, monkeypatch):
+    """Caso real: instalação de um cliente trazida pela versão antiga (sem conferir o CNPJ). O reparo volta nome,
+    canal, município e regras do backup anterior, tira os clientes e o certificado da outra empresa e mantém o que
+    o escritório mudou depois."""
+    from nfse_itaborai import backup
+    cliente, escritorio = outra_empresa
+    b = backup.criar("automatico")                               # backup automático de antes
+    import time
+    time.sleep(1.1)
+    monkeypatch.setattr(migracao, "mesma_empresa", lambda p: True)      # como a versão antiga fazia
+    monkeypatch.setitem(config.PADRAO["empresa"], "nome", "ESCRITORIO CONTABIL LTDA")   # nome de fábrica = do escritório
+    monkeypatch.setitem(config.PADRAO["empresa"], "assinatura", "Escritório Contábil")
+    migracao.importar(str(cliente))
+    c = config.carregar()
+    assert c["empresa"]["nome"] == "CLINICA DE PSICOLOGIA LTDA" and c["emissao"]["canal"] == "nacional"   # o estrago
+    assert clientes.obter("52998224725") and emissor.ler_env(escritorio / ".env").get("ITABORAI_IE") == "999"
+    config.salvar({"cobranca": {"multa_pct": 2.5}})              # algo que o escritório mudou depois
+    monkeypatch.undo()
+    monkeypatch.setattr(emissor, "RAIZ", emissor._Raiz(escritorio))
+    monkeypatch.setattr(emissor, "BASE", escritorio)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: cliente.parents[2]))
+    assert [m["cnpj"] for m in tratar("migracao/misturas", {})] == ["59165665000106"]
+    r = tratar("migracao/reparar", {})
+    assert r["conferir"] == [] and any("empresa.nome" in x for x in r["desfeito"])
+    c = config.carregar()
+    assert (c["empresa"]["nome"], c["empresa"]["assinatura"]) == ("ESCRITORIO CONTABIL LTDA", "Escritório Contábil")
+    assert (c["emissao"]["canal"], c["emissao"]["municipio_emissor"]) == ("municipal", "3301900")
+    assert c["cobranca"]["multa_pct"] == 2.5                     # mudança posterior preservada
+    assert not clientes.obter("52998224725") and clientes.obter("32396063000103")
+    assert "ITABORAI_IE" not in emissor.ler_env(escritorio / ".env")
+    assert emissor.ler_env(escritorio / ".env")["ITABORAI_CNPJ"] == "24875410000144"
+    assert not (escritorio / "dados" / "certificados" / "certificado-cliente.pfx").exists()
+    assert tratar("migracao/misturas", {}) == []                 # não oferece de novo
+    assert b["nome"]

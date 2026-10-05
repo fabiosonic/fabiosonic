@@ -50,6 +50,17 @@ def localizar(profundidade: int = 4) -> list[Path]:
     return sorted(achadas.values(), key=lambda x: -(_mtime(x)))
 
 
+def _cnpj(pasta: Path) -> str:
+    return clientes._digitos(emissor.ler_env(Path(pasta) / ".env").get("ITABORAI_CNPJ", ""))
+
+
+def mesma_empresa(pasta: Path) -> bool:
+    """Só é 'versão anterior' a instalação do MESMO CNPJ desta. Outra empresa no mesmo computador (ex.: a instalação
+    de um cliente do escritório) nunca é misturada com esta — nem nome, nem credenciais, nem clientes."""
+    aqui = _cnpj(emissor.BASE)
+    return bool(aqui) and _cnpj(pasta) == aqui
+
+
 def _mtime(p: Path) -> float:
     try:
         return max(f.stat().st_mtime for f in [p / ".env", p / "dados"] if f.exists())
@@ -109,7 +120,7 @@ def resumo(pasta: Path) -> dict:
 
 
 def procurar() -> list[dict]:
-    return [r for r in (resumo(p) for p in localizar()) if r["itens"]]
+    return [r for r in (resumo(p) for p in localizar() if mesma_empresa(p)) if r["itens"]]
 
 
 def _vazio(v) -> bool:
@@ -163,6 +174,9 @@ def importar(pasta: str) -> dict:
     origem = Path(pasta).resolve()
     if origem not in localizar() and not (origem / "nfse_itaborai").is_dir():
         raise ValueError("Pasta não reconhecida como uma instalação do sistema.")
+    if not mesma_empresa(origem):
+        raise ValueError(f"A instalação em {origem} é de outra empresa (CNPJ {_cnpj(origem) or 'não informado'}): "
+                         "os dados de uma empresa nunca são copiados para outra.")
     feitos = []
     with emissor.usar_empresa(emissor.BASE):
         destino = emissor.raiz()
@@ -244,3 +258,135 @@ def importar(pasta: str) -> dict:
         empresas._gravar(reg)
     db.registrar("migracao", f"Importado de {origem}: {', '.join(feitos) or 'nada novo'}")
     return {"pasta": str(origem), "importado": feitos}
+
+
+# ---------------------------------------------------------------- reparo: dados de outra empresa trazidos por engano
+# Até a versão 3.8.3, "Versão anterior encontrada" não conferia o CNPJ: a instalação de OUTRA empresa no mesmo
+# computador podia ser trazida, e o nome de fábrica ("MORAES & OLIVEIRA") era tratado como "padrão" e trocado.
+
+def _importacoes() -> list[dict]:
+    out = []
+    for r in db.linhas("SELECT quando, mensagem FROM log WHERE tipo='migracao' AND mensagem LIKE 'Importado de %' ORDER BY id"):
+        pasta = r["mensagem"][len("Importado de "):].split(": ", 1)[0]
+        out.append({"quando": r["quando"], "pasta": pasta, "detalhe": r["mensagem"]})
+    return out
+
+
+def misturas() -> list[dict]:
+    """Importações feitas de uma instalação de OUTRO CNPJ e ainda não reparadas."""
+    aqui = _cnpj(emissor.BASE)
+    reparadas = {r["mensagem"].split("|", 1)[1] for r in db.linhas(
+        "SELECT mensagem FROM log WHERE tipo='migracao_reparo' AND mensagem LIKE 'reparado|%'")}
+    out = []
+    for i in _importacoes():
+        p = Path(i["pasta"])
+        cnpj = _cnpj(p) if p.is_dir() else ""
+        if p.is_dir() and aqui and cnpj != aqui and f"{i['pasta']}|{i['quando']}" not in reparadas:
+            out.append(i | {"cnpj": cnpj, "nome": _cfg(p).get("empresa", {}).get("nome", "")})
+    return out
+
+
+def _backup_antes(quando: str) -> tuple[dict, list, dict, set] | None:
+    """config, clientes, .env e certificados do backup .zip mais recente feito ANTES da importação."""
+    import zipfile
+    from . import backup
+    melhores = sorted((a for a in backup.pasta_backups(emissor.BASE).glob("backup_*.zip")),
+                      key=lambda a: a.name, reverse=True)
+    for arq in melhores:
+        try:
+            with zipfile.ZipFile(arq) as z:
+                m = json.loads(z.read(backup.MANIFESTO))
+                if not m.get("criado_em") or m["criado_em"] >= quando:
+                    continue
+                cfg = json.loads(z.read("dados/config.json")) if "dados/config.json" in z.namelist() else {}
+                cli = json.loads(z.read("dados/clientes.json")) if "dados/clientes.json" in z.namelist() else []
+                env = {}
+                if ".env" in z.namelist():
+                    for linha in z.read(".env").decode("utf-8").splitlines():
+                        if "=" in linha and not linha.lstrip().startswith("#"):
+                            k, v = linha.split("=", 1)
+                            env[k.strip()] = v.strip()
+                certs = {n.rsplit("/", 1)[-1] for n in z.namelist() if n.startswith("dados/certificados/")}
+                return cfg, cli, env, certs
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+            continue
+    return None
+
+
+def _aberto(cfg: dict) -> dict:
+    from . import segredos
+    c = json.loads(json.dumps(cfg))
+    for sec, campo in config.SEGREDOS:
+        if campo in c.get(sec, {}):
+            c[sec][campo] = segredos.revelar(c[sec][campo])
+    return c
+
+
+def reparar() -> dict:
+    """Desfaz o que veio da outra empresa. Só volta o que ainda está IGUAL ao da outra instalação (o que você mudou
+    depois fica como está); o valor de antes vem do backup automático anterior à importação. Clientes da outra
+    empresa saem do cadastro, desde que não tenham títulos nem notas aqui."""
+    feito: list[str] = []
+    pendente: list[str] = []
+    for m in misturas():
+        origem = Path(m["pasta"])
+        outra_cfg, outra_env = _aberto(_cfg(origem)), emissor.ler_env(origem / ".env")
+        try:
+            outra_cli = json.loads((origem / "dados" / "clientes.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            outra_cli = []
+        bk = _backup_antes(m["quando"])
+        with emissor.usar_empresa(emissor.BASE):
+            atual = config.carregar()
+            antes = _aberto(bk[0]) if bk else {}
+            volta: dict = {}
+            for sec, campos in CAMPOS.items():
+                for k in campos:
+                    a, o = atual.get(sec, {}).get(k), outra_cfg.get(sec, {}).get(k)
+                    if _vazio(o) or a != o:
+                        continue                                  # não veio da outra (ou já foi corrigido)
+                    if bk and k in antes.get(sec, {}) and antes[sec][k] != a:
+                        volta.setdefault(sec, {})[k] = antes[sec][k]
+                        feito.append(f"{sec}.{k}: {o!s:.40} → {antes[sec][k]!s:.40}")
+                    elif not bk:
+                        pendente.append(f"{sec}.{k} = {o!s:.40} (veio da outra empresa; confira)")
+            if volta:
+                config.salvar(volta)
+            # .env: chaves acrescentadas pela importação
+            arq = emissor.BASE / ".env"
+            linhas = arq.read_text(encoding="utf-8").splitlines() if arq.exists() else []
+            env_atual = emissor.ler_env(arq)
+            env_antes = bk[2] if bk else None
+            novas = []
+            for linha in linhas:
+                k = linha.split("=", 1)[0].strip()
+                v = env_atual.get(k)
+                if k in outra_env and v == outra_env[k] and k not in ("ITABORAI_PROXIMO_RPS", "ITABORAI_PROXIMO_LOTE") \
+                        and env_antes is not None and k not in env_antes and "=" in linha:
+                    feito.append(f".env: {k} removido (era da outra empresa)")
+                    continue
+                novas.append(linha)
+            if novas != linhas:
+                arq.write_text("\n".join(novas) + "\n", encoding="utf-8")
+            # clientes da outra empresa
+            antes_cli = {clientes._digitos(c.get("cpf_cnpj")) for c in (bk[1] if bk else [])}
+            com_titulo = {r["cpf_cnpj"] for r in db.linhas("SELECT DISTINCT cpf_cnpj FROM titulos")}
+            tirados = 0
+            for c in outra_cli:
+                doc = clientes._digitos(c.get("cpf_cnpj"))
+                if doc and doc not in antes_cli and doc not in com_titulo and clientes.obter(doc):
+                    clientes.excluir(doc)
+                    tirados += 1
+            if tirados:
+                feito.append(f"{tirados} cliente(s) da outra empresa retirados do cadastro")
+            # certificados copiados da outra instalação
+            if bk:
+                for arq_c in (origem / "dados" / "certificados").glob("*") if (origem / "dados" / "certificados").is_dir() else []:
+                    aqui = emissor.BASE / "dados" / "certificados" / arq_c.name
+                    if aqui.exists() and arq_c.name not in bk[3] and aqui.read_bytes() == arq_c.read_bytes():
+                        aqui.unlink()
+                        feito.append(f"arquivo {arq_c.name} da outra empresa apagado")
+        db.registrar("migracao_reparo", f"reparado|{m['pasta']}|{m['quando']}")
+        db.registrar("migracao", f"Reparo dos dados trazidos de {m['pasta']} (CNPJ {m['cnpj']}): "
+                     + ("; ".join(feito) or "nada a desfazer") + (f" — sem backup anterior: {'; '.join(pendente)}" if pendente else ""))
+    return {"desfeito": feito, "conferir": pendente}
