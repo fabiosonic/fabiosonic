@@ -255,3 +255,61 @@ def test_reparo_le_o_backup_protegido_por_senha(outra_empresa, monkeypatch):
     assert config.carregar()["empresa"]["nome"] == "CLINICA DE PSICOLOGIA LTDA"
     tratar("migracao/reparar", {})
     assert config.carregar()["empresa"]["nome"] == "ESCRITORIO CONTABIL LTDA"
+
+
+def test_trazer_dados_da_ultima_versao_da_empresa_sem_tocar_no_historico(outra_empresa):
+    """Busca os dados da empresa na versão anterior mais recente do MESMO CNPJ; a que estava com o nome de outra
+    empresa é marcada; notas, títulos e clientes ficam como estão."""
+    cliente, escritorio = outra_empresa
+    for nome, cfg in (("Antiga1", {"empresa": {"nome": "ESCRITORIO CONTABIL LTDA", "pix_chave": "pix@escritorio.com"},
+                                   "emissao": {"canal": "municipal", "municipio_emissor": "3301900"}}),
+                      ("Antiga2", {"empresa": {"nome": "CLINICA DE PSICOLOGIA LTDA"}})):
+        p = escritorio.parent / nome
+        (p / "nfse_itaborai").mkdir(parents=True)
+        (p / "dados").mkdir()
+        (p / "nfse_itaborai" / "__init__.py").write_text('__version__ = "3.7.2"\n', encoding="utf-8")
+        (p / ".env").write_text("ITABORAI_CNPJ=24875410000144\nITABORAI_IE=12345\n", encoding="utf-8")
+        (p / "dados" / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+    import os
+    import time
+    os.utime(escritorio.parent / "Antiga1" / ".env", (time.time() - 3600,) * 2)    # Antiga2 é a mais recente
+    financeiro.criar_titulo("32396063000103", "300", vencimento="2026-09-10", emitir_nfse=False)
+    config.salvar({"empresa": {"nome": "CLINICA DE PSICOLOGIA LTDA", "pix_chave": ""}})
+    r = tratar("migracao/dados_anteriores", {})
+    origens = [f["origem"] for f in r["fontes"]]
+    assert str(cliente) not in origens                                          # outro CNPJ nunca aparece
+    antiga1 = next(f for f in r["fontes"] if f["origem"].endswith("Antiga1"))
+    antiga2 = next(f for f in r["fontes"] if f["origem"].endswith("Antiga2"))
+    assert antiga2["suspeita"] and not antiga1["suspeita"] and r["sugerida"] == antiga1["id"]
+    assert antiga1["versao"] == "3.7.2"
+    campos = {d["campo"] for d in antiga1["diferencas"]}
+    assert {"empresa.nome", "empresa.pix_chave", "env.ITABORAI_IE"} <= campos
+    x = tratar("migracao/trazer_dados", {"fonte": antiga1["id"], "campos": ["empresa.nome", "empresa.pix_chave",
+                                                                             "env.ITABORAI_IE"]})
+    assert "Razão social" in x["trazidos"]
+    c = config.carregar()
+    assert (c["empresa"]["nome"], c["empresa"]["pix_chave"]) == ("ESCRITORIO CONTABIL LTDA", "pix@escritorio.com")
+    env = emissor.ler_env(escritorio / ".env")
+    assert env["ITABORAI_IE"] == "12345" and env["ITABORAI_CNPJ"] == "24875410000144" and env["ITABORAI_CHAVE"] == "minha"
+    assert len(financeiro.listar_titulos("todos")) == 1 and clientes.obter("32396063000103")
+    assert any("antes_de_trazer_dados" in a.name for a in (escritorio / "dados" / "backup").iterdir())
+    assert "erro" in tratar("migracao/trazer_dados", {"fonte": f"inst:{cliente}", "campos": ["empresa.nome"]})
+
+
+def test_edicao_dos_dados_da_empresa_com_travas(outra_empresa):
+    _, escritorio = outra_empresa
+    from nfse_itaborai import empresas
+    assert tratar("empresa/credenciais/salvar", {"im": "999", "ie": "777"})["im"] == "999"   # edita à vontade
+    assert "erro" in tratar("config/salvar", {"emissao": {"municipio_emissor": "123"}})
+    tratar("config/salvar", {"emissao": {"municipio_emissor": "3304557"}})
+    assert config.carregar()["emissao"]["municipio_emissor"] == "3304557"
+    financeiro.criar_titulo("32396063000103", "300", vencimento="2026-09-10", emitir_nfse=False)
+    r = tratar("empresa/credenciais/salvar", {"cnpj": "11222333000181"})
+    assert "misturaria" in r["erro"]
+    assert emissor.ler_env(escritorio / ".env")["ITABORAI_CNPJ"] == "24875410000144"
+    nota = escritorio / "saida" / "2026-09" / "RPS_50"
+    nota.mkdir(parents=True)
+    (nota / "resumo.json").write_text(json.dumps({"sucesso": True, "ambiente": "producao"}), encoding="utf-8")
+    assert empresas.historico(escritorio)["maior_rps"] == 50
+    assert "RPS 50" in tratar("empresa/credenciais/salvar", {"proximo_rps": "40"})["erro"]
+    assert tratar("empresa/credenciais/salvar", {"proximo_rps": "51"})["proximo_rps"] == "51"

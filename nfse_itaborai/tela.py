@@ -203,6 +203,8 @@ ROTAS = {
     "migracao/misturas": lambda c: migracao.misturas(),
     "migracao/reparar": lambda c: migracao.reparar(),
     "migracao/identidade": lambda c: migracao.identidade(),
+    "migracao/dados_anteriores": lambda c: migracao.dados_anteriores(),
+    "migracao/trazer_dados": lambda c: migracao.trazer_dados(str(c.get("fonte", "")), list(c.get("campos") or [])),
     "migracao/usar_nome_oficial": lambda c: migracao.usar_nome_oficial(),
     "importador/analisar": lambda c: importador.analisar(),
     "importador/importar": lambda c: importador.importar(str(c.get("empresa_id", "")), str(c.get("cnpj", "")),

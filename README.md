@@ -98,6 +98,16 @@ prefeitura/Sefin para este CNPJ e certificado digital A1 deste CNPJ. Dado que id
 fonte desta fica **vazio** (para você preencher), nunca com o da outra. Também tira os clientes e o certificado da
 outra empresa e mantém o que foi alterado depois. Antes de trazer uma versão anterior o sistema faz um backup.
 
+**Dados da empresa editáveis e trazidos da última versão.** Em Configurações › Empresa emissora e credenciais todos
+os dados da empresa podem ser corrigidos: razão social, CNPJ, inscrições, chave do webservice, Simples, município
+(código IBGE), além de PIX, e-mail, banco e certificado nos cartões próprios. O botão **"Trazer os dados da empresa de
+uma versão anterior…"** lista as instalações e os backups do **mesmo CNPJ**, da mais recente à mais antiga, sugere a
+mais recente que não estava com o nome de outra empresa e mostra só o que está diferente do atual; você marca o que
+trazer. Antes de aplicar o sistema faz backup. **Notas emitidas, títulos, faturamento, clientes e numeração nunca são
+tocados.** Travas: o CNPJ não pode ser trocado quando a empresa já tem títulos ou notas (misturaria o histórico — para
+outra empresa use Empresas › Nova empresa), nem para o CNPJ de outra empresa cadastrada; o próximo RPS/DPS nunca fica
+abaixo de um número já usado em produção.
+
 **Nome conferido com o CNPJ.** Se o nome da empresa não tiver nenhuma palavra em comum com a razão social do
 certificado digital (ou das notas do Emissor Nacional) deste CNPJ, o Painel avisa e oferece **"Usar …"** com o nome
 oficial. A razão social também pode ser corrigida à mão em Configurações › Empresa emissora e credenciais.

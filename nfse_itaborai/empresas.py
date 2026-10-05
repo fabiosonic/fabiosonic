@@ -140,6 +140,58 @@ def credenciais(destino: Path | None = None) -> dict:
     return out
 
 
+def historico(destino: Path | None = None) -> dict:
+    """O que a empresa já fez (e não pode ser bagunçado por uma edição de cadastro): títulos, notas emitidas e o
+    maior RPS/DPS já aceito em produção."""
+    import sqlite3
+    destino = Path(destino or emissor.raiz())
+    tit = notas = 0
+    banco = destino / "dados" / "sistema.db"
+    if banco.exists():
+        try:
+            with sqlite3.connect(f"file:{banco}?mode=ro", uri=True) as con:
+                tit = con.execute("SELECT COUNT(*) FROM titulos").fetchone()[0]
+                notas = con.execute("SELECT COUNT(*) FROM titulos WHERE nfse_status='emitida'").fetchone()[0]
+        except sqlite3.Error:
+            pass
+    maior = {"RPS": 0, "DPS": 0}
+    saida = destino / "saida"
+    for resumo in saida.glob("*/*/resumo.json") if saida.is_dir() else []:
+        tipo, _, n = resumo.parent.name.partition("_")
+        if tipo not in maior or not n.isdigit():
+            continue
+        try:
+            r = json.loads(resumo.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if r.get("sucesso") and r.get("ambiente") == "producao":
+            maior[tipo] = max(maior[tipo], int(n))
+            notas = max(notas, 1)
+    return {"titulos": tit, "notas": notas, "maior_rps": maior["RPS"], "maior_dps": maior["DPS"]}
+
+
+def _conferir_edicao(novos: dict, destino: Path) -> None:
+    """Travas de segurança: o cadastro pode ser editado, mas nunca de um jeito que misture empresas ou repita nota."""
+    atual = emissor.ler_env(destino / ".env")
+    cnpj_novo, cnpj_atual = novos.get("ITABORAI_CNPJ"), so_digitos(atual.get("ITABORAI_CNPJ", ""))
+    if cnpj_novo and cnpj_novo != cnpj_atual:
+        for e, p in [(e, pasta(e)) for e in _ler()["empresas"] if pasta(e).resolve() != destino.resolve()]:
+            if so_digitos(emissor.ler_env(p / ".env").get("ITABORAI_CNPJ", "")) == cnpj_novo:
+                raise ValueError(f"O CNPJ {cnpj_novo} já é da empresa {e['nome']} cadastrada aqui. Os dados de uma "
+                                 "empresa nunca vão para outra.")
+        h = historico(destino)
+        if cnpj_atual and (h["titulos"] or h["notas"]):
+            raise ValueError(f"Esta empresa já tem {h['titulos']} título(s) e notas emitidas no CNPJ {cnpj_atual}. "
+                             "Trocar o CNPJ misturaria esse histórico com outra empresa. Para outra empresa use "
+                             "Empresas › Nova empresa.")
+    rps = novos.get("ITABORAI_PROXIMO_RPS")
+    if rps and rps != so_digitos(atual.get("ITABORAI_PROXIMO_RPS", "")):
+        maior = historico(destino)["maior_rps"]
+        if maior and int(rps) <= maior:
+            raise ValueError(f"O RPS {maior} já foi usado em nota emitida em produção: o próximo RPS não pode ser "
+                             f"menor que {maior + 1} (a prefeitura recusaria ou duplicaria a numeração).")
+
+
 def salvar_credenciais(d: dict, destino: Path | None = None) -> dict:
     """Atualiza as credenciais no .env da empresa (mantém a chave quando vier mascarada)."""
     destino = Path(destino or emissor.raiz())
@@ -160,6 +212,7 @@ def salvar_credenciais(d: dict, destino: Path | None = None) -> dict:
             from . import segredos
             valor = segredos.proteger(valor)
         novos[var] = valor
+    _conferir_edicao(novos, destino)
     feitos = set()
     for i, linha in enumerate(linhas):
         k = linha.split("=", 1)[0].strip()

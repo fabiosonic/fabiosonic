@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import json
 
 from . import emissor, segredos
@@ -261,6 +262,17 @@ def salvar_da_tela(novo: dict) -> dict:
     for sec, campo in SEGREDOS:
         if novo.get(sec, {}).get(campo) == "••••••":
             novo[sec].pop(campo)
+    em = novo.get("emissao") or {}
+    mun = em.get("municipio_emissor")
+    if mun not in (None, "") and not re.fullmatch(r"\d{7}", str(mun).strip()):
+        raise ValueError("Município: informe o código IBGE com 7 dígitos (Itaboraí = 3301900).")
+    dps = em.get("proximo_dps")
+    if dps not in (None, "") and str(dps) != str(carregar()["emissao"].get("proximo_dps", "")):
+        from . import empresas
+        maior = empresas.historico()["maior_dps"]
+        if maior and int(dps) <= maior:
+            raise ValueError(f"A DPS {maior} já foi usada em nota emitida em produção: a próxima não pode ser "
+                             f"menor que {maior + 1}.")
     bs = (novo.get("seguranca") or {}).get("backup_senha")
     if bs and len(bs) < 6:
         raise ValueError("A senha do backup precisa ter ao menos 6 caracteres.")

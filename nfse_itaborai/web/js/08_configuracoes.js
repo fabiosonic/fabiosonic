@@ -25,6 +25,30 @@ async function posRestauracao(r) {
   ir(PAG);
 }
 
+// ---------------------------------------------------------------- dados da empresa de uma versão anterior
+async function dadosAnteriores() {
+  const r = await api("migracao/dados_anteriores");
+  const fontes = r.fontes.filter(f => f.diferencas.length);
+  if (!fontes.length) return modal(`<h2>Dados da empresa</h2><p>Nenhuma versão anterior deste CNPJ${r.cnpj ? " (" + fmtDoc(r.cnpj) + ")" : ""} tem dados diferentes dos atuais. Se precisar, corrija à mão em Configurações.</p><p><button class="btn" onclick="fechar()">Fechar</button></p>`);
+  const linha = f => `<option value="${esc(f.id)}" ${f.id == r.sugerida ? "selected" : ""}>${esc(f.tipo)} · ${dt(f.quando.slice(0, 10))} ${f.quando.slice(11, 16)}${f.versao ? " · versão " + esc(f.versao) : ""}${f.id == r.sugerida ? " — sugerida (a mais recente com os dados desta empresa)" : ""}${f.suspeita ? " — ⚠ já estava com o nome de outra empresa" : ""}</option>`;
+  const tabela = id => { const f = fontes.find(x => x.id == id); const sus = f.suspeita;
+    return `<p class="sub">${esc(f.origem)}</p><div class="tabela"><table><thead><tr><th></th><th>Dado</th><th>Hoje</th><th>Nesta versão</th></tr></thead><tbody>${f.diferencas.map(d => `<tr><td><input type="checkbox" data-campo="${esc(d.campo)}" ${sus ? "" : "checked"}></td><td>${esc(d.rotulo)}</td><td>${esc(fmtValor(d.atual))}</td><td><b>${esc(fmtValor(d.valor))}</b></td></tr>`).join("")}</tbody></table></div>`; };
+  modal(`<h2>Trazer os dados da empresa de uma versão anterior</h2>
+    <p class="sub">Só versões com o <b>mesmo CNPJ</b> (${fmtDoc(r.cnpj)}). Vêm apenas os dados cadastrais marcados; <b>notas emitidas, títulos, faturamento, clientes e numeração do RPS/DPS não são tocados</b>. Antes de aplicar o sistema faz um backup.</p>
+    <label>Versão<select id="da_fonte">${fontes.map(linha).join("")}</select></label>
+    <div id="da_tab">${tabela(r.sugerida || fontes[0].id)}</div>
+    <p><button class="btn" id="da_ok">${ic("ok")}Trazer os dados marcados</button> <button class="btn sec" onclick="fechar()">Cancelar</button></p>`, true);
+  if (!r.sugerida) $("#da_fonte").value = fontes[0].id;
+  $("#da_fonte").onchange = e => $("#da_tab").innerHTML = tabela(e.target.value);
+  $("#da_ok").onclick = async () => {
+    const campos = $$("[data-campo]").filter(i => i.checked).map(i => i.dataset.campo);
+    if (!campos.length) return aviso("Marque ao menos um dado.");
+    const x = await api("migracao/trazer_dados", { fonte: $("#da_fonte").value, campos });
+    fechar(); aviso(`Dados trazidos: ${x.trazidos.join(", ")}`, 6000); await carregarEstado(); ir("config");
+  };
+}
+function fmtValor(v) { return v === true ? "Sim" : v === false ? "Não" : Array.isArray(v) ? v.join(", ") : (v ?? "") === "" ? "—" : String(v); }
+
 // ---------------------------------------------------------------- configurações
 PAGINAS.config = async el => {
   const [c, cred] = await Promise.all([api("config"), api("empresa/credenciais")]);
@@ -51,7 +75,10 @@ PAGINAS.config = async el => {
     ${ck("automacao", "regua", "Régua de cobrança")}${ck("automacao", "sincronizar_banco", "Baixa automática dos boletos (Inter)")}${ck("automacao", "despesas_recorrentes", "Despesas recorrentes")}${ck("automacao", "backup", "Backup diário")}</div></div>
   <div class="card"><h2>${ic("clientes")}Empresa emissora e credenciais</h2><p class="sub">Dados da empresa em uso (${esc((ST.empresa || {}).nome || "")}). Ficam só neste computador, no arquivo .env da empresa.</p>
     <div class="campos"><label class="inteiro">Razão social (nome da empresa)<input data-s="empresa" data-k="nome" value="${esc(c.empresa.nome || "")}" maxlength="150" placeholder="como no cartão CNPJ"></label>${cr("cnpj", "CNPJ")}${cr("im", "Inscrição municipal")}${cr("ie", "Inscrição estadual")}${cr("chave", "Chave do webservice (Itaboraí)", "password")}${cr("proximo_rps", "Próximo RPS", "number")}
-    <label>Optante do Simples<select data-cred="simples"><option value="S" ${cred.simples != "N" ? "selected" : ""}>Sim</option><option value="N" ${cred.simples == "N" ? "selected" : ""}>Não</option></select></label></div></div>
+    <label>Optante do Simples<select data-cred="simples"><option value="S" ${cred.simples != "N" ? "selected" : ""}>Sim</option><option value="N" ${cred.simples == "N" ? "selected" : ""}>Não</option></select></label>
+    ${tx("emissao", "municipio_emissor", "Município da empresa (código IBGE)", "text", 'maxlength="7" inputmode="numeric" placeholder="Itaboraí = 3301900"')}</div>
+    <p class="sub">Todos os dados acima podem ser corrigidos. Por segurança, o CNPJ não pode ser trocado depois que a empresa já tem títulos ou notas (isso misturaria o histórico com outra empresa) e o próximo RPS/DPS nunca fica abaixo de um número já usado em produção. Notas emitidas, títulos e faturamento nunca são alterados por esta tela.</p>
+    <p><button class="btn sec" id="dados_ant" type="button">${ic("download")}Trazer os dados da empresa de uma versão anterior…</button></p></div>
   <div class="card"><h2>${ic("nota")}Serviços (atividades) da empresa <span class="acoes"><button class="btn min" id="novo_serv" type="button">${ic("mais")}Novo serviço</button></span></h2>
     <p class="sub">Cada atividade (contabilidade, consultoria, treinamento…) tem o próprio item da LC 116, NBS, alíquota e descrição. Na emissão você escolhe o serviço; o <b>padrão</b> vem selecionado quando o cliente não tem serviço habitual. Os serviços também são criados sozinhos ao importar os XML das notas.</p>
     <div id="lista_serv">${tabelaServicos()}</div></div>
@@ -154,6 +181,7 @@ PAGINAS.config = async el => {
     await carregarEstado(); return true;
   };
   $("#salvar").onclick = async () => { if (await salvarTudo()) aviso("Configurações salvas ✔"); };
+  $("#dados_ant").onclick = () => dadosAnteriores();
   $("#novo_serv").onclick = () => editarServico({}); ligarServicos();
   // Regras fiscais: só os campos que o regime escolhido exige (atualiza ao trocar o regime)
   const VIS_CFG = { reg_ap_trib_sn: "simples", reg_esp_trib: "!mei", iss_retido: "!mei", aliquota_iss_retido: "simples iss_retido=1",

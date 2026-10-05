@@ -530,3 +530,123 @@ def reparar() -> dict:
         db.registrar("migracao", f"Reparo dos dados trazidos de {m['pasta']} (CNPJ {m['cnpj']}): "
                      + ("; ".join(feito) or "nada a desfazer") + (f" — sem backup anterior: {'; '.join(pendente)}" if pendente else ""))
     return {"desfeito": feito, "conferir": pendente}
+
+
+# ---------------------------------------------------------------- dados cadastrais: trazer de uma versão anterior
+# Só os DADOS DA EMPRESA (identificação, canal, município, PIX, e-mail, banco, regras de cobrança). Nunca mexe no
+# que já foi feito: notas emitidas, títulos, faturamento, clientes, contratos, numeração de RPS/DPS.
+
+ROTULOS = {
+    "empresa.nome": "Razão social", "empresa.assinatura": "Assinatura das mensagens", "empresa.pix_chave": "Chave PIX",
+    "empresa.pix_cidade": "Cidade (PIX)", "empresa.whatsapp": "WhatsApp", "smtp.host": "E-mail: servidor",
+    "smtp.porta": "E-mail: porta", "smtp.usuario": "E-mail: usuário", "smtp.senha": "E-mail: senha",
+    "smtp.remetente": "E-mail: remetente", "smtp.ssl": "E-mail: SSL", "smtp.copia_para": "E-mail: cópia para",
+    "resumo.email_dono": "E-mail do dono", "resumo.dia_fechamento": "Dia do fechamento",
+    "emissao.canal": "Canal de emissão", "emissao.certificado_pfx": "Certificado A1",
+    "emissao.certificado_senha": "Senha do certificado", "emissao.serie_dps": "Série da DPS",
+    "emissao.municipio_emissor": "Município (IBGE)", "emissao.op_simp_nac": "Situação no Simples",
+    "emissao.reg_ap_trib_sn": "Apuração no Simples", "emissao.reg_esp_trib": "Regime especial",
+    "cobranca.inter_client_id": "Inter: client id", "cobranca.inter_client_secret": "Inter: client secret",
+    "cobranca.inter_certificado": "Inter: certificado", "cobranca.inter_chave": "Inter: chave",
+    "cobranca.inter_conta": "Inter: conta", "cobranca.inter_sandbox": "Inter: sandbox", "cobranca.multa_pct": "Multa (%)",
+    "cobranca.juros_mes_pct": "Juros ao mês (%)", "cobranca.regua_dias": "Régua de cobrança (dias)",
+    "cobranca.bloquear_apos_dias": "Atraso crítico (dias)", "financeiro.dia_vencimento_padrao": "Dia de vencimento",
+    "financeiro.prazo_avulso_dias": "Prazo do avulso (dias)", "financeiro.dia_geracao": "Dia de geração",
+    "financeiro.aliquota_simples_pct": "Alíquota do Simples (%)", "financeiro.iss_fixo": "ISS fixo",
+    "financeiro.iss_fixo_mensal": "ISS fixo mensal", "financeiro.contas_bancarias": "Contas bancárias",
+    "financeiro.inicio_financeiro": "Início do financeiro",
+    "env.ITABORAI_IM": "Inscrição municipal", "env.ITABORAI_IE": "Inscrição estadual",
+    "env.ITABORAI_SIMPLES": "Optante do Simples", "env.ITABORAI_CHAVE": "Chave do webservice",
+}
+ENV_DADOS = ("ITABORAI_IM", "ITABORAI_IE", "ITABORAI_SIMPLES", "ITABORAI_CHAVE")
+OCULTOS = {f"{s}.{c}" for s, c in config.SEGREDOS} | {"env.ITABORAI_CHAVE"}
+
+
+def _versao_de(pasta: Path) -> str:
+    import re
+    try:
+        m = re.search(r'__version__\s*=\s*"([^"]+)"', (pasta / "nfse_itaborai" / "__init__.py").read_text(encoding="utf-8"))
+        return m.group(1) if m else ""
+    except OSError:
+        return ""
+
+
+def _valores(cfg: dict, env: dict) -> dict:
+    out = {f"{s}.{k}": cfg.get(s, {}).get(k) for s, ks in CAMPOS.items() for k in ks}
+    out |= {f"env.{k}": env.get(k, "") for k in ENV_DADOS}
+    from . import segredos
+    if out.get("env.ITABORAI_CHAVE"):
+        out["env.ITABORAI_CHAVE"] = segredos.revelar(out["env.ITABORAI_CHAVE"])
+    return out
+
+
+def _fontes_cadastro() -> list[dict]:
+    """Versões anteriores que trabalharam com os dados DESTA empresa (mesmo CNPJ), da mais recente à mais antiga:
+    outras instalações no computador e os backups desta instalação."""
+    from datetime import datetime
+    aqui = _cnpj(emissor.BASE)
+    nomes_outras = {(_cfg(p).get("empresa", {}).get("nome") or "").strip().upper()
+                    for p in localizar() if _cnpj(p) and _cnpj(p) != aqui} - {""}
+    fontes = []
+    for p in localizar():
+        if mesma_empresa(p):
+            fontes.append({"id": f"inst:{p}", "tipo": "Instalação", "origem": str(p), "versao": _versao_de(p),
+                           "quando": datetime.fromtimestamp(_mtime(p)).strftime("%Y-%m-%d %H:%M:%S"),
+                           "valores": _valores(_aberto(_cfg(p)), emissor.ler_env(p / ".env"))})
+    for criado, cfg, _cli, env, _certs in _backups():
+        if clientes._digitos(env.get("ITABORAI_CNPJ", "")) in ("", aqui) and cfg:
+            fontes.append({"id": f"bk:{criado}", "tipo": "Backup", "origem": f"backup de {criado}", "versao": "",
+                           "quando": criado, "valores": _valores(_aberto(cfg), env)})
+    for f in fontes:
+        nome = (f["valores"].get("empresa.nome") or "").strip().upper()
+        f["suspeita"] = bool(nome) and nome in nomes_outras            # já estava com o nome de outra empresa
+    return sorted(fontes, key=lambda f: f["quando"], reverse=True)
+
+
+def _mostrar(chave: str, v):
+    if chave in OCULTOS:
+        return "•••••• (preenchida)" if v not in (None, "") else ""
+    return v
+
+
+def dados_anteriores() -> dict:
+    """Para a tela: cada versão anterior desta empresa com o que nela está DIFERENTE do atual; a sugerida é a mais
+    recente que não estava com o nome de outra empresa."""
+    with emissor.usar_empresa(emissor.BASE):
+        atual = _valores(_aberto(config.carregar()), emissor.ler_env(emissor.BASE / ".env"))
+    out = []
+    for f in _fontes_cadastro():
+        dif = [{"campo": k, "rotulo": ROTULOS.get(k, k), "atual": _mostrar(k, atual.get(k)), "valor": _mostrar(k, v)}
+               for k, v in f["valores"].items() if not _vazio(v) and v != atual.get(k)]
+        out.append({k: f[k] for k in ("id", "tipo", "origem", "versao", "quando", "suspeita")} | {"diferencas": dif})
+    sugerida = next((f["id"] for f in out if not f["suspeita"] and f["diferencas"]), "")
+    return {"cnpj": _cnpj(emissor.BASE), "fontes": out, "sugerida": sugerida}
+
+
+def trazer_dados(fonte: str, campos: list[str]) -> dict:
+    """Aplica os campos escolhidos da versão anterior. Faz backup antes. Notas, títulos, clientes e numeração não
+    são tocados."""
+    f = next((x for x in _fontes_cadastro() if x["id"] == fonte), None)
+    if not f:
+        raise ValueError("Versão anterior não encontrada (ou é de outro CNPJ).")
+    validos = [c for c in campos if c in f["valores"] and not _vazio(f["valores"][c])]
+    if not validos:
+        raise ValueError("Escolha ao menos um dado para trazer.")
+    from . import backup, empresas
+    with emissor.usar_empresa(emissor.BASE):
+        backup.criar("antes_de_trazer_dados", emissor.BASE)
+        novo: dict = {}
+        cred: dict = {}
+        env_campo = {v: k for k, v in empresas.CAMPOS_ENV.items()}
+        for c in validos:
+            sec, k = c.split(".", 1)
+            if sec == "env":
+                cred[env_campo[k]] = f["valores"][c]
+            else:
+                novo.setdefault(sec, {})[k] = f["valores"][c]
+        if novo:
+            config.salvar(novo)
+        if cred:
+            empresas.salvar_credenciais(cred, emissor.BASE)
+        db.registrar("migracao", f"Dados da empresa trazidos de {f['origem']}: " + ", ".join(ROTULOS.get(c, c) for c in validos))
+    return {"trazidos": [ROTULOS.get(c, c) for c in validos]}
