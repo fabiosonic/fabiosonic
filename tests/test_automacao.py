@@ -133,11 +133,17 @@ def test_resumo_diario_uma_vez_por_dia(auto, monkeypatch):
 
 
 def test_falha_de_rede_fica_pendente_para_nova_tentativa(auto, monkeypatch):
-    monkeypatch.setattr(lote, "emitir_um", lambda *a, **k: {"sucesso": False, "erros": ["Falha de comunicação: timed out"]})
+    # servidor fora do ar antes do envio: nada chegou à prefeitura, o robô tenta de novo
+    monkeypatch.setattr(lote, "emitir_um", lambda *a, **k: {"sucesso": False, "erros": ["Falha de comunicação: Connection refused"]})
     tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300")
     financeiro.emitir_nfse_titulo(tid)
     t = financeiro.obter_titulo(tid)
-    assert t["nfse_status"] == "pendente" and "timed out" in t["nfse_erro"]
+    assert t["nfse_status"] == "pendente" and "refused" in t["nfse_erro"]
+    # tempo esgotado depois do envio: a nota pode ter saído — não reenvia sozinho (evita nota em duplicidade)
+    monkeypatch.setattr(lote, "emitir_um", lambda *a, **k: {"sucesso": False, "erros": ["Falha de comunicação: timed out"]})
+    financeiro.emitir_nfse_titulo(tid)
+    t = financeiro.obter_titulo(tid)
+    assert t["nfse_status"] == "emitindo" and "timed out" in t["nfse_erro"]
 
 
 # ---------------------------------------------------------------- WhatsApp automático

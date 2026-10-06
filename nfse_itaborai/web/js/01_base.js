@@ -64,7 +64,7 @@ function fechar() { $("#modal").hidden = true; }
 $("#modal").addEventListener("click", e => { if (e.target.id == "modal") fechar(); });
 function selo(sit) {
   const m = { pago: ["bom", "Pago"], aberto: ["neutro", "Em aberto"], atrasado: ["critico", "Atrasado"], cancelado: ["neutro", "Cancelado"],
-    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], emitindo: ["serio", "Em emissão — conferir no portal"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"], apos_pagamento: ["neutro", "Após o pagamento"], sem_cobranca: ["neutro", "Sem cobrança"], juridico: ["serio", "Jurídico"], suspenso: ["neutro", "Suspenso"], nf_cancelada: ["critico", "Cancelada"],
+    emitida: ["bom", "Emitida"], teste: ["alerta", "Teste"], emitindo: ["serio", "Em emissão — conferir no portal"], duplicidade: ["serio", "Possível duplicidade — confirmar"], pendente: ["alerta", "Pendente"], erro: ["critico", "Erro"], nao_emitir: ["neutro", "Sem NFS-e"], apos_pagamento: ["neutro", "Após o pagamento"], sem_cobranca: ["neutro", "Sem cobrança"], juridico: ["serio", "Jurídico"], suspenso: ["neutro", "Suspenso"], nf_cancelada: ["critico", "Cancelada"],
     bom: ["bom", "Bom"], "atenção": ["alerta", "Atenção"], risco: ["critico", "Risco"], enviado: ["bom", "Enviado"], feito: ["bom", "Feito"],
     sem_contato: ["alerta", "Sem contato"] };
   const [c, t] = m[sit] || ["neutro", sit];

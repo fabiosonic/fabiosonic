@@ -63,11 +63,12 @@ function acoesTitulo(t) {
   }
   // A nota sai sozinha quando o pagamento é reconhecido (banco, conciliação ou baixa). O botão aparece só quando algo
   // deu errado: título PAGO sem nota válida, ou nota recusada (erro) / travada em emissão.
-  const semNota = t.status != "cancelado" && !t.nfse_numero && ["nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo"].includes(t.nfse_status);
-  if (semNota && (t.status == "pago" || ["erro", "emitindo"].includes(t.nfse_status)))
+  const semNota = t.status != "cancelado" && !t.nfse_numero && ["nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo", "duplicidade"].includes(t.nfse_status);
+  if (semNota && (t.status == "pago" || ["erro", "emitindo", "duplicidade"].includes(t.nfse_status)))
     prin.unshift(`<button class="btn min" onclick="forcarNfse(${t.id},'${t.nfse_status}')" title="A nota deste título não saiu automaticamente: emite agora">${ic("nota")}Emitir NFS-e</button>`);
   else if (semNota && t.status == "aberto" && ["pendente", "teste"].includes(t.nfse_status))
     mais.push(it(`${ic("nota")}Emitir NFS-e agora`, `forcarNfse(${t.id},'${t.nfse_status}')`));
+  if (semNota) mais.push(it(`${ic("ok")}Já tem NFS-e emitida (informar o número)`, `informarNfse(${t.id})`));
   if (t.status == "pago") prin.push(`<button class="btn min sec" onclick="estornar(${t.id})">Estornar</button>`);
   if (t.status == "aberto") mais.unshift(it(`${ic("editar")}Editar título (valor, vencimento…)`, `editarTitulo(${t.id})`));
   mais.push(it(`${ic("relogio")}Histórico`, `historicoTitulo(${t.id})`));
@@ -142,19 +143,33 @@ async function forcarNfse(id, sit) {
   const t = (ULTIMOS_TITULOS || []).find(x => x.id == id) || {};
   const motivo = { nao_emitir: "está marcado para <b>não emitir</b> nota", apos_pagamento: "está programado para emitir só <b>após o pagamento</b>",
     pendente: "está com a nota <b>pendente</b>", erro: `teve <b>erro</b> na emissão${t.nfse_erro ? `: <i>${esc(t.nfse_erro)}</i>` : ""}`,
-    teste: "tem só nota de <b>teste</b> (homologação)", emitindo: "ficou <b>em emissão</b> (a resposta da prefeitura/Sefin não chegou)" }[sit] || "";
+    teste: "tem só nota de <b>teste</b> (homologação)", emitindo: "ficou <b>em emissão</b> (a resposta da prefeitura/Sefin não chegou)",
+    duplicidade: `foi parado por <b>possível duplicidade</b>: ${esc(t.nfse_erro || "")}` }[sit] || "";
   modal(`<h2>${ic("nota")}Emitir NFS-e agora</h2><p>Este título ${motivo}. A nota será emitida ${ST.producao ? "<b>em produção, com validade fiscal</b>" : "em <b>homologação (teste)</b>"}, pelo valor e serviço do título.</p>
     ${sit == "emitindo" ? `<div class="bloco-modal"><b>Atenção:</b> a tentativa anterior pode ter chegado ao portal. Antes de emitir, confira em Notas emitidas/portal se a nota <b>não</b> saiu.
-      <label class="chk"><input type="checkbox" id="fn_conf"> Conferi no portal: a nota deste título <b>não</b> foi emitida.</label></div>` : ""}
+      <label class="chk"><input type="checkbox" id="fn_conf"> Conferi no portal: a nota deste título <b>não</b> foi emitida.</label>
+      <p class="sub">Se a nota <b>saiu</b> no portal, não emita de novo: <a href="#" onclick="fechar();informarNfse(${id});return false">informe o número dela</a>.</p></div>` : ""}
     <p><button class="btn" id="fn_ok">${ic("nota")}Emitir agora</button> <button class="btn sec" onclick="fechar()">Voltar</button></p><div id="fn_res"></div>`);
   $("#fn_ok").onclick = async () => {
     if (sit == "emitindo" && !$("#fn_conf").checked) return aviso("Marque a confirmação de que conferiu no portal.", 6000);
     $("#fn_res").innerHTML = '<p class="sub">Enviando a nota…</p>';
     const r = await api("titulo/forcar_nfse", { id, conferido_portal: sit == "emitindo" });
     if (r.sucesso) { fechar(); aviso(`NFS-e ${r.nfse || ""} emitida ✔ — vai para o cliente com o PDF/XML.`, 9000); return ir(PAG); }
+    if (r.duplicidade) { fechar(); return confirmarDuplicidades([{ ...r, titulo_id: id, cliente: t.cliente_nome, valor: num(t.nota_cent || t.valor_cent) }], () => ir(PAG)); }
     $("#fn_res").innerHTML = `<div class="bloco-modal"><b>Não emitiu:</b><ul>${(r.erros || []).map(e => `<li>${esc(e)}</li>`).join("")}</ul>
       <span class="sub">Corrija o que foi apontado (cadastro do cliente, serviço ou configurações) e clique em “Emitir agora” de novo.</span></div>`;
   };
+}
+async function informarNfse(id) {
+  const t = (ULTIMOS_TITULOS || []).find(x => x.id == id) || {};
+  modal(`<h2>${ic("ok")}NFS-e já emitida</h2><p>Use quando a nota deste título <b>já existe no portal</b> mas o sistema não a registrou (ex.: a resposta da prefeitura não chegou).
+    O número fica gravado no título e o sistema <b>não emite outra</b> — nada é enviado à prefeitura.</p>
+    <p class="sub">${esc(t.cliente_nome || "")} · ${t.valor_cent ? brl(t.valor_cent) : ""} · competência ${esc((t.competencia || "").split("-").reverse().join("/"))}</p>
+    <div class="campos" id="fin"><label>Número da NFS-e<input name="numero" inputmode="numeric" placeholder="ex.: 99003894"></label>
+    <label>Data de emissão<input type="date" name="data" value="${hojeISO()}"></label>
+    <label class="inteiro">Link da nota (opcional)<input name="link" placeholder="https://…"></label></div>
+    <p><button class="btn" id="fin_ok">Gravar no título</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#fin_ok").onclick = async () => { await api("titulo/informar_nfse", { id, ...form($("#fin")) }); fechar(); aviso("NFS-e registrada no título ✔ — o sistema não emitirá outra para ele.", 8000); ir(PAG); };
 }
 async function cancelarTitulo(id, nfse) {
   if (nfse == "emitida") {

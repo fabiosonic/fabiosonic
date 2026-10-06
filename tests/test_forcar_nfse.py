@@ -26,7 +26,8 @@ def test_pago_sem_nfse_emite_ao_forcar_e_nao_emite_duas_vezes(base):  # noqa: F8
 def test_apos_pagamento_e_erro_tambem_emitem(base):  # noqa: F811
     for sit in ("apos_pagamento", "erro"):
         tid = _titulo(nfse_status=sit, nfse_erro="E999 falha" if sit == "erro" else "")
-        r = tratar("titulo/forcar_nfse", {"id": tid})
+        # o segundo título igual (mesmo cliente, valor e serviço) só sai confirmando a duplicidade
+        r = tratar("titulo/forcar_nfse", {"id": tid, "confirmar_duplicidade": sit == "erro"})
         assert r["sucesso"] and financeiro.obter_titulo(tid)["nfse_erro"] == ""
 
 

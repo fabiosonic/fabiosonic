@@ -86,7 +86,8 @@ PAGINAS.emitir = async el => {
       + `\n\n${cli.razao_social}\nServiço: ${servDe($("#e_serv").value).nome}\nR$ ${v}\nCobrança: ${fat.cobrar ? "sim (boleto/PIX + régua)" : "não"}\nRegras fiscais: ${fz.usar_geral ? "regra geral" : "específicas deste tomador (ficam guardadas nele)"}`)) return;
     if (!mesmoFiscal(fz, cli.fiscal)) { await api("cliente/fiscal", { cpf_cnpj: cli.cpf_cnpj, fiscal: fz }); await carregarEstado(); }
     $("#e_btn").disabled = true; $("#e_res").innerHTML = '<div class="msg">Enviando…</div>';
-    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value, ...fat, extras: lerNota(el) }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = ""; }
+    try { const r = await api("emitir", { cpf_cnpj: doc, valor: v, descricao: $("#e_desc").value, servico_id: $("#e_serv").value, vencimento: $("#e_venc").value, ...fat, extras: lerNota(el) }); $("#e_res").innerHTML = linhaRes(r); if (r.sucesso) $("#e_valor").value = "";
+      if (r.duplicidade) confirmarDuplicidades([r], () => { $("#e_res").innerHTML = '<div class="msg">Veja o resultado em Contas a receber.</div>'; }); }
     finally { $("#e_btn").disabled = false; }
   };
 };
@@ -114,7 +115,8 @@ PAGINAS.lote = async el => {
     if (itens.some(i => !valorNum(i.valor))) return aviso("Há cliente marcado sem valor.");
     if (!confirm(`${itens.length} cliente(s) — ${nomeCanal()}\nNota fiscal: regra de cada cliente (geral: ${nomeRegra(ST.regra_geral)})\n${ST.producao ? "Notas com validade fiscal" : "Teste em homologação"}\n${$("#l_tot").textContent}`)) return;
     $("#l_btn").disabled = true; $("#l_res").innerHTML = '<div class="msg">Enviando, aguarde…</div>';
-    try { const r = await api("lote", { itens }); $("#l_res").innerHTML = `<div class="msg"><b>${r.filter(x => x.sucesso).length} de ${r.length} emitida(s).</b></div>` + r.map(linhaRes).join(""); }
+    try { const r = await api("lote", { itens }); $("#l_res").innerHTML = `<div class="msg"><b>${r.filter(x => x.sucesso).length} de ${r.length} emitida(s).</b>${r.some(x => x.duplicidade) ? ` ${r.filter(x => x.duplicidade).length} parada(s) por possível duplicidade — confirme a seguir.` : ""}</div>` + r.map(linhaRes).join("");
+      confirmarDuplicidades(r); }
     finally { $("#l_btn").disabled = false; }
   };
 };

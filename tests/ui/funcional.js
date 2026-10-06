@@ -171,7 +171,12 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await p.check('.lc[data-doc="32396063000103"]'); await p.check('.lc[data-doc="35979895000132"]');
     await p.fill('.lv[data-doc="35979895000132"]', '1.000,00'); await p.dispatchEvent('.lv[data-doc="35979895000132"]', 'input');
     await p.click('#l_btn'); await espera(9000);
-    const r = await p.textContent('#l_res'); certo(/2 de 2 emitida/.test(r), r.slice(0, 300));
+    let r = await p.textContent('#l_res');
+    // mesmo cliente, serviço e competência de uma nota já emitida: o sistema pergunta antes (proteção de duplicidade)
+    if (/possível duplicidade/.test(r)) { certo(await p.$('#dp_sim'), 'a pergunta da duplicidade não apareceu'); await p.click('#dp_sim'); await espera(5000); }
+    const ts = await api('titulos', { filtro: 'todos' });
+    certo(['32396063000103', '35979895000132'].every(d => ts.some(x => x.cpf_cnpj === d && x.nfse_status === 'emitida')), r.slice(0, 300));
+    return /possível duplicidade/.test(r) ? 'com confirmação de duplicidade' : '';
   });
   await passo('Emitir com ISS retido (regra específica do tomador)', async () => {
     await ir('emitir', 1500); await escolherCliente('#e_cli', 'ESPACO CULTIVAR FONOAUDIOLOGIA LTDA — 54.399.432/0001-46');
@@ -211,7 +216,11 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     const t = (await api('titulos', { filtro: 'todos' })).find(x => x.valor_cent === 25000);
     await ir('receber', 1500); await p.evaluate(([id, v]) => baixar(id, v), [t.id, t.total_cent]); await espera(300);
     await p.click('#ok'); await espera(5000);
-    const d = (await api('titulos', { filtro: 'todos' })).find(x => x.id === t.id);
+    let d = (await api('titulos', { filtro: 'todos' })).find(x => x.id === t.id);
+    if (d.nfse_status === 'duplicidade') {            // mesma competência e serviço de outra nota do cliente: confirma
+      await api('titulo/forcar_nfse', { id: t.id, confirmar_duplicidade: true });
+      d = (await api('titulos', { filtro: 'todos' })).find(x => x.id === t.id);
+    }
     certo(d.status === 'pago' && d.nfse_status === 'emitida', `status ${d.status}, NFS-e ${d.nfse_status}`);
   });
   await passo('Contas a receber: estornar pagamento', async () => {
@@ -296,6 +305,8 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await p.fill('#fb [name=valor]', '200,00'); await p.dispatchEvent('#fb [name=valor]', 'input');
     certo(!(await p.isHidden('#fb_parcial')), 'a pergunta do pagamento parcial não apareceu');
     await p.check('[name=fb_dec][value=cobrar]'); await p.click('#ok'); await espera(5000);
+    if ((await api('titulos', { filtro: 'todos' })).find(x => x.id === r.titulo_id).nfse_status === 'duplicidade')
+      await api('titulo/forcar_nfse', { id: r.titulo_id, confirmar_duplicidade: true });
     const ts = await api('titulos', { filtro: 'todos' }), t = ts.find(x => x.id === r.titulo_id);
     certo(t.parcial_status === 'cobrar' && t.nota_cent === 20000 && t.nfse_status === 'emitida', JSON.stringify(t).slice(0, 300));
     const saldo = ts.find(x => x.id === t.saldo_titulo_id);
@@ -488,7 +499,10 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await api('config/salvar', { emissao: { canal: 'nacional' } });
     await ir('emitir', 1500); await escolherCliente('#e_cli', RPS);
     await p.fill('#e_valor', '374,40'); await p.click('#e_btn'); await espera(6000);
-    const r = await p.textContent('#e_res'); certo(/Nacional · chave/.test(r), r);
+    let r = await p.textContent('#e_res');
+    if (await p.$('#dp_sim')) { await p.click('#dp_sim'); await espera(6000); r = await aviso(); }   // confirma a duplicidade
+    const t = (await api('titulos', { filtro: 'todos' })).filter(x => x.cpf_cnpj === '32396063000103' && x.nfse_canal === 'nacional' && x.nfse_status === 'emitida');
+    certo(t.length, r);
   });
   await passo('Nacional: exportação para cliente do exterior', async () => {
     const c = (await api('estado')).clientes.find(x => x.estrangeiro);

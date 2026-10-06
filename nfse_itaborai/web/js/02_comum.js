@@ -260,3 +260,27 @@ $("#amb").onclick = async () => {
 };
 
 function nomeCanal(curto) { return ST.canal == "nacional" ? (curto ? "Nacional" : "Emissor Nacional (nfse.gov.br)") : (curto ? "Itaboraí" : "Webservice da Prefeitura de Itaboraí"); }
+
+// ---------------------------------------------------------------- nota que parece duplicada: o sistema pergunta
+// lista = resultados de emissão com .duplicidade e .titulo_id; pergunta um a um e chama fim() no final
+function confirmarDuplicidades(lista, fim = () => {}) {
+  const pend = (lista || []).filter(r => r && r.duplicidade && r.duplicidade.length && r.titulo_id);
+  if (!pend.length) return fim();
+  const r = pend.shift(), seguir = () => confirmarDuplicidades(pend, fim);
+  modal(`<h2>${ic("alerta")}Possível nota em duplicidade</h2>
+    <p><b>${esc(r.cliente || "")}</b> — nota de <b>R$ ${esc(String(r.valor || ""))}</b>. Este cliente <b>já tem</b>:</p>
+    <div class="tabela"><table><thead><tr><th>NFS-e</th><th>Emitida em</th><th>Competência</th><th class="n">Valor</th><th>Por que parece igual</th></tr></thead><tbody>
+    ${r.duplicidade.map(d => `<tr><td><b>${esc(d.nfse)}</b></td><td>${dt(d.data)}</td><td>${esc((d.competencia || "").split("-").reverse().join("/"))}</td><td class="n">${num(d.valor_cent)}</td><td>${esc(d.motivo)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <p>Está correto emitir <b>mais esta</b> nota? (ex.: serviços de meses diferentes, um serviço extra)</p>
+    <p><button class="btn" id="dp_sim">${ic("nota")}Sim, está correto — emitir</button>
+      <button class="btn sec perigo" id="dp_nao">${ic("x")}Não — é duplicada (não emitir e cancelar este lançamento)</button>
+      <button class="btn sec" id="dp_dep">Decidir depois</button></p>
+    <p class="sub">“Decidir depois”: o título fica em Contas a receber como <b>Possível duplicidade</b>, sem nota, até você confirmar no botão “Emitir NFS-e”.</p><div id="dp_res"></div>`);
+  $("#dp_sim").onclick = async () => { $("#dp_res").innerHTML = '<p class="sub">Emitindo…</p>';
+    const x = await api("titulo/forcar_nfse", { id: r.titulo_id, confirmar_duplicidade: true });
+    aviso(x.sucesso ? `NFS-e ${x.nfse || ""} emitida ✔` : "Não emitiu: " + (x.erros || []).join("; "), 9000); fechar(); seguir(); };
+  $("#dp_nao").onclick = async () => { await api("titulo/cancelar", { id: r.titulo_id, motivo: "Nota em duplicidade — não emitida" });
+    aviso("Lançamento cancelado; nenhuma nota foi emitida ✔", 7000); fechar(); seguir(); };
+  $("#dp_dep").onclick = () => { fechar(); seguir(); };
+}

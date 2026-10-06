@@ -58,7 +58,7 @@ def _emitir_item(it: dict) -> dict:
         return base | {"sucesso": False, "erros": getattr(ex, "erros", None) or [str(ex)]}
     return base | {k: r.get(k) for k in ("sucesso", "erros", "alertas", "rps", "nfse", "link", "titulo_id",
                                          "canal", "chave", "aguardando_pagamento", "sem_nota", "boleto",
-                                         "contrato_id")}
+                                         "contrato_id", "duplicidade")}
 
 
 def _cancelar_nfse_titulo(tid: int, justificativa: str) -> dict:
@@ -282,7 +282,10 @@ ROTAS = {
                                                  "fiscal": c.get("fiscal") or {"usar_geral": True}}),
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
     "titulo/emitir_nfse": lambda c: _e_envia(financeiro.emitir_nfse_titulo(_id(c))),
-    "titulo/forcar_nfse": lambda c: _e_envia(financeiro.forcar_nfse(_id(c), bool(c.get("conferido_portal")))),
+    "titulo/informar_nfse": lambda c: financeiro.informar_nfse(_id(c), str(c.get("numero") or ""), str(c.get("link") or ""),
+                                                              str(c.get("data") or "")),
+    "titulo/forcar_nfse": lambda c: _e_envia(financeiro.forcar_nfse(_id(c), bool(c.get("conferido_portal")),
+                                                                    confirmar_duplicidade=bool(c.get("confirmar_duplicidade")))),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),
     "titulo/cartao": lambda c: cartao.gerar_link(_id(c), int(c.get("parcelas") or 0)),
     "cartao/simular": lambda c: cartao.valor_no_cartao(financeiro.cent(c.get("valor") or 0), int(c.get("parcelas") or 1)),

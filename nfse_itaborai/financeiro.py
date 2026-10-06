@@ -576,7 +576,8 @@ def listar_titulos(filtro: str = "todos", cpf_cnpj: str = "", competencia: str =
     elif filtro == "sem_cobranca":
         lst = [t for t in lst if t["situacao"] == "sem_cobranca"]
     elif filtro == "sem_nfse":
-        lst = [t for t in lst if t["status"] != "cancelado" and (t["nfse_status"] in ("pendente", "erro", "teste", "emitindo")
+        lst = [t for t in lst if t["status"] != "cancelado" and (t["nfse_status"] in ("pendente", "erro", "teste", "emitindo",
+                                                                                     "duplicidade")
                or t["status"] == "pago" and t["nfse_status"] == "apos_pagamento")]
     return lst
 
@@ -807,10 +808,75 @@ def valor_da_nota(t: dict) -> int:
     return t.get("nota_cent") or t["valor_cent"]
 
 
-NFSE_FORCAVEL = ("nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo", "cancelada", "nf_cancelada")
+NFSE_FORCAVEL = ("nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo", "cancelada", "nf_cancelada",
+                 "duplicidade")
+JANELA_DUPLICIDADE_DIAS = 10
 
 
-def forcar_nfse(tid: int, conferido_portal: bool = False, url: str | None = None) -> dict:
+def _desc_norm(txt: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(txt or "")).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", " ", t).strip()
+
+
+def notas_parecidas(t: dict, em: date | None = None) -> list[dict]:
+    """Notas válidas já emitidas para o MESMO cliente e o MESMO serviço (descrição) que fazem esta parecer duplicada:
+    mesma competência, ou mesmo valor emitida há 10 dias ou menos (ex.: o cliente pagou o boleto errado e a nota de
+    outro mês saiu também). A mensalidade normal (um mês depois) e serviços diferentes (13º, extra) não entram."""
+    if json.loads(t.get("extras") or "{}").get("subst_chave"):
+        return []                                  # substituição: a nota nova troca a antiga de propósito
+    desde = ((em or hoje()) - timedelta(days=JANELA_DUPLICIDADE_DIAS)).isoformat()
+    valor, desc = valor_da_nota(t), _desc_norm(t.get("descricao"))
+    out = []
+    for r in db.linhas("SELECT id, competencia, descricao, valor_cent, nota_cent, nfse_numero, nfse_data, status, "
+                       "saldo_titulo_id "
+                       "FROM titulos WHERE cpf_cnpj=? AND id!=? AND nfse_status='emitida' AND COALESCE(nfse_numero,'')!=''"
+                       " ORDER BY nfse_data DESC, id DESC", (t["cpf_cnpj"], t.get("id") or 0)):
+        if _desc_norm(r["descricao"]) != desc:
+            continue
+        if (t.get("id") and r["saldo_titulo_id"] == t["id"]) or (t.get("saldo_titulo_id") and t["saldo_titulo_id"] == r["id"]):
+            continue                               # pagamento parcial: a nota do saldo completa a do valor pago
+        mesma_comp = bool(t.get("competencia")) and r["competencia"] == t["competencia"]
+        mesmo_valor = valor_da_nota(r) == valor and (r["nfse_data"] or "") >= desde
+        if mesma_comp or mesmo_valor:
+            out.append({"titulo_id": r["id"], "nfse": r["nfse_numero"], "data": r["nfse_data"], "competencia": r["competencia"],
+                        "valor_cent": valor_da_nota(r), "descricao": r["descricao"], "situacao": r["status"],
+                        "motivo": "mesma competência e mesmo serviço" if mesma_comp
+                        else f"mesmo valor e serviço, emitida há {JANELA_DUPLICIDADE_DIAS} dias ou menos"})
+    return out
+
+
+def _texto_duplicidade(dup: list[dict]) -> str:
+    return ("Possível duplicidade — o cliente já tem: " + "; ".join(
+        f"NFS-e {d['nfse']} de {d['data'][8:10]}/{d['data'][5:7]}/{d['data'][:4] if d['data'] else ''} "
+        f"(competência {d['competencia'][5:]}/{d['competencia'][:4]}, R$ {_br(d['valor_cent'])}, {d['motivo']})"
+        for d in dup) + ". Confirme se esta nota está correta antes de emitir.")
+
+
+def informar_nfse(tid: int, numero: str, link: str = "", data: str = "") -> dict:
+    """A nota deste título já existe (emitida e não registrada — ex.: a resposta da prefeitura não chegou): grava o
+    número no título para o sistema nunca emitir outra. Não envia nada à prefeitura."""
+    t = obter_titulo(tid)
+    if not t:
+        raise ValueError("Título não encontrado.")
+    numero = re.sub(r"\s", "", str(numero or ""))
+    if not re.fullmatch(r"[0-9A-Za-z]{1,50}", numero):
+        raise ValueError("Informe o número da NFS-e (como aparece no portal).")
+    if t["nfse_status"] == "emitida" and t.get("nfse_numero"):
+        raise ValueError(f"Este título já tem a NFS-e nº {t['nfse_numero']}.")
+    outro = db.linhas("SELECT id, cliente_nome FROM titulos WHERE nfse_numero=? AND id!=? AND nfse_status='emitida'",
+                      (numero, tid))
+    if outro:
+        raise ValueError(f"A NFS-e nº {numero} já está ligada ao título {outro[0]['id']} ({outro[0]['cliente_nome']}).")
+    atualizar_titulo(tid, nfse_status="emitida", nfse_numero=numero, nfse_erro="",
+                     nfse_link=link if str(link or "").startswith("http") else t.get("nfse_link") or "",
+                     nfse_data=data or t.get("nfse_data") or hoje().isoformat())
+    db.registrar("nfse", f"Título {tid} ({t['cliente_nome']}): NFS-e nº {numero} informada na tela (já emitida no portal)")
+    return {"ok": True, "titulo": obter_titulo(tid)}
+
+
+def forcar_nfse(tid: int, conferido_portal: bool = False, url: str | None = None,
+                confirmar_duplicidade: bool = False) -> dict:
     """Botão "Emitir NFS-e agora": emite a nota do título mesmo marcado "sem NFS-e", "após o pagamento", com erro ou
     travado em emissão. Nunca emite uma segunda nota para o mesmo título (com número de NFS-e válido, recusa)."""
     t = obter_titulo(tid)
@@ -829,15 +895,29 @@ def forcar_nfse(tid: int, conferido_portal: bool = False, url: str | None = None
     anterior = t["nfse_status"]
     atualizar_titulo(tid, nfse_status="pendente", nfse_erro="")
     db.registrar("nfse", f"Título {tid} ({t['cliente_nome']}): emissão forçada na tela (antes: {anterior})")
-    return emitir_nfse_titulo(tid, url) | {"anterior": anterior}
+    r = emitir_nfse_titulo(tid, url, confirmar_duplicidade=confirmar_duplicidade) | {"anterior": anterior}
+    t = obter_titulo(tid)
+    if r.get("sucesso") and t["status"] == "aberto" and t.get("cobrar", 1) and not tem_meio_de_pagamento(t) \
+            and anterior == "duplicidade" and emissor.em_producao():
+        _cobrar_agora(tid, r)          # avulso que esperava a confirmação: boleto/PIX junto com a nota
+    return r
 
 
-def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
-    """Emite a NFS-e do título (homologação ou produção, conforme o ambiente) e grava o resultado."""
+def emitir_nfse_titulo(tid: int, url: str | None = None, confirmar_duplicidade: bool = False) -> dict:
+    """Emite a NFS-e do título (homologação ou produção, conforme o ambiente) e grava o resultado.
+    Nota que parece duplicada (notas_parecidas) só sai com confirmar_duplicidade: sem ela (robô, baixa automática),
+    o título fica "possível duplicidade" esperando a confirmação na tela."""
     t = obter_titulo(tid)
     if t["nfse_status"] in ("emitida", "nao_emitir"):
         return {"sucesso": t["nfse_status"] == "emitida", "erros": [] if t["nfse_status"] == "emitida"
                 else ["Título marcado para não emitir NFS-e."], "titulo": t}
+    if t["nfse_status"] in ("pendente", "teste", "erro") and not confirmar_duplicidade:
+        dup = notas_parecidas(t)
+        if dup:
+            atualizar_titulo(tid, nfse_status="duplicidade", nfse_erro=_texto_duplicidade(dup)[:500])
+            db.registrar("nfse", f"Título {tid} ({t['cliente_nome']}): emissão parada — possível duplicidade com a(s) "
+                                 f"NFS-e {', '.join(d['nfse'] for d in dup)}")
+            return {"sucesso": False, "duplicidade": dup, "erros": [_texto_duplicidade(dup)], "titulo": obter_titulo(tid)}
     # Reserva atômica: só um processo (tela, robô da tela ou robô agendado) emite cada título.
     with db.conexao() as con:
         reservado = con.execute("UPDATE titulos SET nfse_status='emitindo' WHERE id=? AND nfse_status IN "
@@ -869,6 +949,17 @@ def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
         msg = "; ".join(r.get("erros", []))[:500]
         transitoria = any(x in msg.lower() for x in ("falha de comunicação", "timed out", "tempo esgotado",
                                                      "connection", "temporarily"))
+        # Sem resposta depois de enviar (tempo esgotado, conexão caída no meio): a prefeitura/Sefin pode ter emitido a
+        # nota sem o sistema saber. Não tenta de novo sozinho (sairia outra nota): fica "em emissão — conferir no
+        # portal". Só o que falhou ANTES de enviar (servidor recusou a conexão, endereço não encontrado) volta a pendente.
+        antes_de_enviar = any(x in msg.lower() for x in ("refused", "recusad", "getaddrinfo", "name or service",
+                                                         "nodename", "no route", "unreachable", "inacessível"))
+        if transitoria and not antes_de_enviar:
+            atualizar_titulo(tid, nfse_status="emitindo", nfse_erro="Sem resposta da prefeitura/Sefin depois do envio: "
+                             "confira no portal se a nota saiu. Se saiu, informe o número no título (Mais › Já tem "
+                             "NFS-e emitida); se não saiu, use Emitir NFS-e. (" + msg[:300] + ")")
+            db.registrar("nfse", f"Título {tid} ({t['cliente_nome']}): sem resposta após o envio — conferir no portal")
+            return r | {"titulo": obter_titulo(tid)}
         # rede/servidor fora do ar: fica pendente e o robô tenta de novo; recusa da prefeitura vai para revisão
         atualizar_titulo(tid, nfse_status="pendente" if transitoria else "erro", nfse_erro=msg)
     db.registrar("nfse", f"Título {tid} ({t['cliente_nome']}): {'NFS-e ' + r.get('nfse', '') if r['sucesso'] else 'erro'}")
@@ -919,6 +1010,8 @@ def _faturar_avulsa(cpf_cnpj, valor, descricao, vencimento, url, servico_id, cob
         return r | {"titulo": obter_titulo(tid)}
     tid = criar_titulo(cpf_cnpj, valor, descricao, vencimento, servico_id=servico_id, cobrar=cobrar, extras=extras)
     r = emitir_nfse_titulo(tid, url=url)
+    if r.get("duplicidade"):
+        return r | {"titulo_id": tid}  # espera a confirmação na tela (Sim → emite e cobra; Não → cancela)
     if not r["sucesso"]:
         cancelar_titulo(tid, "NFS-e não emitida")
     elif not emissor.em_producao():

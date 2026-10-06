@@ -584,6 +584,21 @@ apontam os pagos há mais de um dia sem nota e as notas recusadas/travadas. Prot
 outra (para corrigir, substituição em Notas emitidas); título cancelado não emite; "em emissão" exige confirmar no
 portal que a nota não saiu (evita duplicidade).
 
+### Proteção contra NFS-e em duplicidade
+
+- **Conferência antes de emitir:** se o cliente já tem nota válida do **mesmo serviço** (mesma descrição) da **mesma
+  competência**, ou de **mesmo valor emitida há 10 dias ou menos**, o sistema mostra as notas parecidas e **pergunta se
+  está correto** antes de emitir (Emitir nota, Emitir em lote, botão "Emitir NFS-e"): "Sim, emitir", "Não — é
+  duplicada" (cancela o lançamento sem emitir) ou "Decidir depois". A mensalidade normal (um mês depois), o 13º e
+  serviços com outra descrição não são barrados.
+- **No automático** (baixa pelo banco, conciliação, robô) não há a quem perguntar: a nota fica parada como
+  **"Possível duplicidade — confirmar"** e o botão "Emitir NFS-e" pede a confirmação. O painel de saúde aponta esses títulos.
+- **Resposta perdida:** se a prefeitura/Sefin não responde depois do envio (tempo esgotado), a nota pode ter saído. O
+  sistema não reenvia sozinho (antes reenviava e podia sair outra nota): fica "Em emissão — conferir no portal". Falha
+  antes do envio (servidor recusou a conexão) continua sendo tentada de novo pelo robô.
+- **Nota que existe no portal mas não no sistema:** em Contas a receber › Mais › "Já tem NFS-e emitida (informar o
+  número)" grava o número no título, e o sistema nunca emite outra para ele (nada é enviado à prefeitura).
+
 ### Estorno de pagamento (ex.: cliente pagou o boleto errado)
 
 Ao estornar a baixa de um título, a NFS-e que ainda não saiu volta a **aguardar o pagamento** quando a regra do título
