@@ -61,8 +61,13 @@ function acoesTitulo(t) {
     if (ST.config.cobranca.cartao_provedor) { mais.push(it(`${ic("receber")}Pagar com cartão (link)`, `linkCartao(${t.id},${t.valor_cent})`));
       if (t.cartao_link) prin.push(`<button class="btn min sec" onclick="pagoCartao(${t.id})" title="O cliente pagou pelo link da InfinitePay">Pago no cartão</button>`); }
   }
-  if (t.status != "cancelado" && !t.nfse_numero && ["nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo"].includes(t.nfse_status))
-    prin.unshift(`<button class="btn min" onclick="forcarNfse(${t.id},'${t.nfse_status}')" title="Emite a nota fiscal deste título agora, mesmo marcado sem NFS-e, após o pagamento ou com erro">${ic("nota")}Emitir NFS-e</button>`);
+  // A nota sai sozinha quando o pagamento é reconhecido (banco, conciliação ou baixa). O botão aparece só quando algo
+  // deu errado: título PAGO sem nota válida, ou nota recusada (erro) / travada em emissão.
+  const semNota = t.status != "cancelado" && !t.nfse_numero && ["nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo"].includes(t.nfse_status);
+  if (semNota && (t.status == "pago" || ["erro", "emitindo"].includes(t.nfse_status)))
+    prin.unshift(`<button class="btn min" onclick="forcarNfse(${t.id},'${t.nfse_status}')" title="A nota deste título não saiu automaticamente: emite agora">${ic("nota")}Emitir NFS-e</button>`);
+  else if (semNota && t.status == "aberto" && ["pendente", "teste"].includes(t.nfse_status))
+    mais.push(it(`${ic("nota")}Emitir NFS-e agora`, `forcarNfse(${t.id},'${t.nfse_status}')`));
   if (t.status == "pago") prin.push(`<button class="btn min sec" onclick="estornar(${t.id})">Estornar</button>`);
   if (t.status == "aberto") mais.unshift(it(`${ic("editar")}Editar título (valor, vencimento…)`, `editarTitulo(${t.id})`));
   mais.push(it(`${ic("relogio")}Histórico`, `historicoTitulo(${t.id})`));

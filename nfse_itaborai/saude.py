@@ -66,8 +66,16 @@ def checklist(em: date | None = None) -> dict:
         item("cadastro", not incompletos, "Cadastro completo para boleto",
              f"{len(incompletos)} cliente(s) sem cidade, CEP ou endereço: "
              + _nomes(incompletos), "clientes")
-    erros = db.linhas("SELECT COUNT(*) n FROM titulos WHERE status='aberto' AND nfse_status='erro'")[0]["n"]
-    item("nfse_erro", erros == 0, "NFS-e sem erro", f"{erros} título(s) com NFS-e recusada para revisar.", "receber")
+    erros = db.linhas("SELECT COUNT(*) n FROM titulos WHERE status IN ('aberto','pago') AND nfse_status IN ('erro','emitindo')"
+                      " AND COALESCE(nfse_numero,'')=''")[0]["n"]
+    # pago e a nota não saiu sozinha (a emissão é automática ao reconhecer o pagamento): algo falhou
+    pagos_sem = db.linhas("SELECT COUNT(*) n FROM titulos WHERE status='pago' AND nfse_status IN ('apos_pagamento','pendente')"
+                          " AND COALESCE(nfse_numero,'')='' AND data_pagamento<?", (em.isoformat(),))[0]["n"] \
+        if emissor.em_producao() else 0
+    item("nfse_erro", erros + pagos_sem == 0, "NFS-e de todos os pagamentos",
+         " ".join(x for x in (f"{erros} título(s) com a nota recusada ou travada em emissão." if erros else "",
+                              f"{pagos_sem} título(s) pago(s) há mais de um dia sem nota." if pagos_sem else "")
+                  if x) + " Em Contas a receber, use o botão “Emitir NFS-e” na linha de cada um.", "receber")
     ultima = (db.linhas("SELECT quando FROM log WHERE tipo='robo' ORDER BY id DESC LIMIT 1") or [{"quando": ""}])[0]["quando"]
     recente = bool(ultima) and datetime.strptime(ultima, "%Y-%m-%d %H:%M:%S").date() >= em - timedelta(days=1)
     item("robo", cfg["automacao"]["ativa"] and recente, "Robô trabalhando",

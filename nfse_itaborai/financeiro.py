@@ -576,8 +576,8 @@ def listar_titulos(filtro: str = "todos", cpf_cnpj: str = "", competencia: str =
     elif filtro == "sem_cobranca":
         lst = [t for t in lst if t["situacao"] == "sem_cobranca"]
     elif filtro == "sem_nfse":
-        lst = [t for t in lst if t["nfse_status"] in ("pendente", "erro", "teste", "emitindo")
-               and t["status"] != "cancelado"]
+        lst = [t for t in lst if t["status"] != "cancelado" and (t["nfse_status"] in ("pendente", "erro", "teste", "emitindo")
+               or t["status"] == "pago" and t["nfse_status"] == "apos_pagamento")]
     return lst
 
 

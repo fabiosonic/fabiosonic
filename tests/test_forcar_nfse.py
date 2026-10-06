@@ -41,3 +41,18 @@ def test_cancelado_nao_emite(base):  # noqa: F811
     tid = _titulo(nfse_status="nao_emitir")
     financeiro.cancelar_titulo(tid, "teste")
     assert "cancelado" in tratar("titulo/forcar_nfse", {"id": tid})["erro"]
+
+
+def test_painel_aponta_pago_sem_nota_e_nota_recusada(base):  # noqa: F811
+    """A emissão é automática ao reconhecer o pagamento; o painel avisa quando algo falhou."""
+    from datetime import date
+
+    from nfse_itaborai import saude
+    item = lambda: {x["id"]: x for x in saude.checklist(date(2026, 10, 7))["itens"]}["nfse_erro"]  # noqa: E731
+    assert item()["ok"]
+    tid = _titulo(nfse_status="apos_pagamento")
+    financeiro.atualizar_titulo(tid, status="pago", data_pagamento="2026-10-05", valor_pago_cent=100000)
+    _titulo(nfse_status="erro", nfse_erro="E160 recusada")
+    i = item()
+    assert not i["ok"] and "1 título(s) pago(s)" in i["detalhe"] and "recusada" in i["detalhe"]
+    assert tid in [t["id"] for t in financeiro.listar_titulos("sem_nfse")]

@@ -573,14 +573,16 @@ NFS-e e a assinatura continuam automáticos. "Pré-visualizar" mostra o resultad
 padrão" volta ao texto do sistema. Campo inexistente (ex.: `{valr}`) é recusado ao salvar. Os modelos são de cada
 empresa. Pela API oficial do WhatsApp valem os modelos aprovados na Meta.
 
-### Forçar a emissão da NFS-e (botão "Emitir NFS-e")
+### Forçar a emissão da NFS-e (botão "Emitir NFS-e") — só quando algo falhou
 
-No Contas a receber, todo título sem nota válida mostra o botão **Emitir NFS-e** na linha: marcado "Sem NFS-e",
-programado para "após o pagamento", pendente, com erro (o motivo aparece na janela), só com nota de teste ou travado
-"em emissão". Vale para títulos em aberto e **pagos**. A nota sai no ambiente atual (produção ou homologação), pelo
-valor e serviço do título, e vai para o cliente com PDF/XML. Proteções: título com NFS-e válida não emite outra
-(para corrigir, use a substituição em Notas emitidas); título cancelado não emite; "em emissão" exige confirmar que a
-nota não chegou ao portal (evita duplicidade). Se a prefeitura/Sefin recusar, os motivos aparecem na própria janela.
+A emissão continua **automática**: o pagamento reconhecido (banco Inter, conciliação do extrato ou baixa) emite a
+NFS-e na hora e a envia ao cliente; se a prefeitura/Sefin estiver fora do ar, o robô tenta de novo sozinho. O botão
+**Emitir NFS-e** aparece na linha do Contas a receber **só quando a nota não saiu**: título **pago** sem nota válida
+(também o marcado "Sem NFS-e"), nota **recusada** (erro — o motivo aparece na janela) ou **travada em emissão**.
+Títulos em aberto que aguardam o pagamento não mostram o botão. O painel (Saúde do sistema) e a aba "Sem NFS-e"
+apontam os pagos há mais de um dia sem nota e as notas recusadas/travadas. Proteções: título com NFS-e válida não emite
+outra (para corrigir, substituição em Notas emitidas); título cancelado não emite; "em emissão" exige confirmar no
+portal que a nota não saiu (evita duplicidade).
 
 ### Recorrência salva gera o título do mês na hora
 
