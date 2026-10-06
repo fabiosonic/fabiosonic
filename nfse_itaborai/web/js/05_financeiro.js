@@ -3,9 +3,11 @@
 "use strict";
 // ---------------------------------------------------------------- contas a receber
 let FILTRO_REC = "a_receber";
+let ULTIMOS_TITULOS = [];
 PAGINAS.receber = async el => {
   const comp = (el._comp ?? "");
   const lst = await api("titulos", { filtro: FILTRO_REC, competencia: comp });
+  ULTIMOS_TITULOS = lst;
   const soma = lst.reduce((a, t) => a + (t.status == "aberto" ? t.total_cent : t.status == "pago" ? t.valor_pago_cent : 0), 0);
   el.innerHTML = `<h1>Contas a receber <span class="acoes"><button class="btn" id="novo_t">${ic("mais")}Título avulso</button><button class="btn sec" id="imp_nitrus" title="Lança os títulos em aberto do relatório de Inadimplência do Nitrus (PDF)">${ic("download")}Importar do Nitrus</button><button class="btn sec" id="pdf_bol">${ic("download")}PDFs dos boletos</button><a class="btn sec" href="/export/titulos.csv">${ic("download")}Exportar CSV</a></span></h1>
   <div class="card"><div class="abas">${[["a_receber", "A receber"], ["atrasado", "Atrasados"], ["juridico", "Jurídico"], ["pago", "Pagos"], ["sem_cobranca", "Sem cobrança"], ["sem_nfse", "Sem NFS-e"], ["cancelado", "Cancelados"], ["todos", "Todos"]].map(([k, t]) => `<button data-f="${k}" class="${k == FILTRO_REC ? "on" : ""}">${t}</button>`).join("")}
@@ -58,8 +60,9 @@ function acoesTitulo(t) {
     if (t.banco_id) mais.push(`<a href="/boleto/${t.id}.pdf" target="_blank">${ic("download")}Boleto em PDF</a>`);
     if (ST.config.cobranca.cartao_provedor) { mais.push(it(`${ic("receber")}Pagar com cartão (link)`, `linkCartao(${t.id},${t.valor_cent})`));
       if (t.cartao_link) prin.push(`<button class="btn min sec" onclick="pagoCartao(${t.id})" title="O cliente pagou pelo link da InfinitePay">Pago no cartão</button>`); }
-    if (["pendente", "erro", "teste"].includes(t.nfse_status)) mais.push(it(`${ic("nota")}Emitir NFS-e`, `emitirTitulo(${t.id})`));
   }
+  if (t.status != "cancelado" && !t.nfse_numero && ["nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo"].includes(t.nfse_status))
+    prin.unshift(`<button class="btn min" onclick="forcarNfse(${t.id},'${t.nfse_status}')" title="Emite a nota fiscal deste título agora, mesmo marcado sem NFS-e, após o pagamento ou com erro">${ic("nota")}Emitir NFS-e</button>`);
   if (t.status == "pago") prin.push(`<button class="btn min sec" onclick="estornar(${t.id})">Estornar</button>`);
   if (t.status == "aberto") mais.unshift(it(`${ic("editar")}Editar título (valor, vencimento…)`, `editarTitulo(${t.id})`));
   mais.push(it(`${ic("relogio")}Histórico`, `historicoTitulo(${t.id})`));
@@ -129,6 +132,24 @@ async function emitirTitulo(id) {
   if (!confirm(ST.producao ? "Emitir a NFS-e VÁLIDA deste título?" : "Emitir NFS-e de teste (homologação)?")) return;
   aviso("Enviando NFS-e…"); const r = await api("titulo/emitir_nfse", { id });
   aviso(r.sucesso ? `NFS-e ${r.nfse} emitida ✔` : "Erro: " + (r.erros || []).join("; "), 7000); ir(PAG);
+}
+async function forcarNfse(id, sit) {
+  const t = (ULTIMOS_TITULOS || []).find(x => x.id == id) || {};
+  const motivo = { nao_emitir: "está marcado para <b>não emitir</b> nota", apos_pagamento: "está programado para emitir só <b>após o pagamento</b>",
+    pendente: "está com a nota <b>pendente</b>", erro: `teve <b>erro</b> na emissão${t.nfse_erro ? `: <i>${esc(t.nfse_erro)}</i>` : ""}`,
+    teste: "tem só nota de <b>teste</b> (homologação)", emitindo: "ficou <b>em emissão</b> (a resposta da prefeitura/Sefin não chegou)" }[sit] || "";
+  modal(`<h2>${ic("nota")}Emitir NFS-e agora</h2><p>Este título ${motivo}. A nota será emitida ${ST.producao ? "<b>em produção, com validade fiscal</b>" : "em <b>homologação (teste)</b>"}, pelo valor e serviço do título.</p>
+    ${sit == "emitindo" ? `<div class="bloco-modal"><b>Atenção:</b> a tentativa anterior pode ter chegado ao portal. Antes de emitir, confira em Notas emitidas/portal se a nota <b>não</b> saiu.
+      <label class="chk"><input type="checkbox" id="fn_conf"> Conferi no portal: a nota deste título <b>não</b> foi emitida.</label></div>` : ""}
+    <p><button class="btn" id="fn_ok">${ic("nota")}Emitir agora</button> <button class="btn sec" onclick="fechar()">Voltar</button></p><div id="fn_res"></div>`);
+  $("#fn_ok").onclick = async () => {
+    if (sit == "emitindo" && !$("#fn_conf").checked) return aviso("Marque a confirmação de que conferiu no portal.", 6000);
+    $("#fn_res").innerHTML = '<p class="sub">Enviando a nota…</p>';
+    const r = await api("titulo/forcar_nfse", { id, conferido_portal: sit == "emitindo" });
+    if (r.sucesso) { fechar(); aviso(`NFS-e ${r.nfse || ""} emitida ✔ — vai para o cliente com o PDF/XML.`, 9000); return ir(PAG); }
+    $("#fn_res").innerHTML = `<div class="bloco-modal"><b>Não emitiu:</b><ul>${(r.erros || []).map(e => `<li>${esc(e)}</li>`).join("")}</ul>
+      <span class="sub">Corrija o que foi apontado (cadastro do cliente, serviço ou configurações) e clique em “Emitir agora” de novo.</span></div>`;
+  };
 }
 async function cancelarTitulo(id, nfse) {
   if (nfse == "emitida") {

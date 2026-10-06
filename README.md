@@ -573,6 +573,15 @@ NFS-e e a assinatura continuam automáticos. "Pré-visualizar" mostra o resultad
 padrão" volta ao texto do sistema. Campo inexistente (ex.: `{valr}`) é recusado ao salvar. Os modelos são de cada
 empresa. Pela API oficial do WhatsApp valem os modelos aprovados na Meta.
 
+### Forçar a emissão da NFS-e (botão "Emitir NFS-e")
+
+No Contas a receber, todo título sem nota válida mostra o botão **Emitir NFS-e** na linha: marcado "Sem NFS-e",
+programado para "após o pagamento", pendente, com erro (o motivo aparece na janela), só com nota de teste ou travado
+"em emissão". Vale para títulos em aberto e **pagos**. A nota sai no ambiente atual (produção ou homologação), pelo
+valor e serviço do título, e vai para o cliente com PDF/XML. Proteções: título com NFS-e válida não emite outra
+(para corrigir, use a substituição em Notas emitidas); título cancelado não emite; "em emissão" exige confirmar que a
+nota não chegou ao portal (evita duplicidade). Se a prefeitura/Sefin recusar, os motivos aparecem na própria janela.
+
 ### Recorrência salva gera o título do mês na hora
 
 Ao salvar a recorrência de um cliente (botão "Salvar alterações" ou o cadastro da recorrência), se o mês de início

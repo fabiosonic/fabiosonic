@@ -787,6 +787,31 @@ def valor_da_nota(t: dict) -> int:
     return t.get("nota_cent") or t["valor_cent"]
 
 
+NFSE_FORCAVEL = ("nao_emitir", "apos_pagamento", "pendente", "erro", "teste", "emitindo", "cancelada", "nf_cancelada")
+
+
+def forcar_nfse(tid: int, conferido_portal: bool = False, url: str | None = None) -> dict:
+    """Botão "Emitir NFS-e agora": emite a nota do título mesmo marcado "sem NFS-e", "após o pagamento", com erro ou
+    travado em emissão. Nunca emite uma segunda nota para o mesmo título (com número de NFS-e válido, recusa)."""
+    t = obter_titulo(tid)
+    if not t:
+        raise ValueError("Título não encontrado.")
+    if t["status"] == "cancelado":
+        raise ValueError("Título cancelado: não emite nota.")
+    if t["nfse_status"] == "emitida" or (t.get("nfse_numero") and t["nfse_status"] not in ("cancelada", "nf_cancelada")):
+        raise ValueError(f"Este título já tem a NFS-e nº {t.get('nfse_numero') or '?'} válida — não emito outra. "
+                         "Para corrigir uma nota, use a substituição em Notas emitidas.")
+    if t["nfse_status"] not in NFSE_FORCAVEL:
+        raise ValueError(f"Situação da nota não permite emitir agora ({t['nfse_status']}).")
+    if t["nfse_status"] == "emitindo" and not conferido_portal:
+        raise ValueError("A tentativa anterior pode ter chegado à prefeitura/Sefin. Confira no portal se a nota "
+                         "NÃO foi emitida e marque a confirmação antes de emitir de novo (evita nota em duplicidade).")
+    anterior = t["nfse_status"]
+    atualizar_titulo(tid, nfse_status="pendente", nfse_erro="")
+    db.registrar("nfse", f"Título {tid} ({t['cliente_nome']}): emissão forçada na tela (antes: {anterior})")
+    return emitir_nfse_titulo(tid, url) | {"anterior": anterior}
+
+
 def emitir_nfse_titulo(tid: int, url: str | None = None) -> dict:
     """Emite a NFS-e do título (homologação ou produção, conforme o ambiente) e grava o resultado."""
     t = obter_titulo(tid)

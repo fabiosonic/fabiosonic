@@ -282,6 +282,7 @@ ROTAS = {
                                                  "fiscal": c.get("fiscal") or {"usar_geral": True}}),
     "titulo/cancelar_nfse": lambda c: _cancelar_nfse_titulo(_id(c), str(c.get("justificativa", ""))),
     "titulo/emitir_nfse": lambda c: _e_envia(financeiro.emitir_nfse_titulo(_id(c))),
+    "titulo/forcar_nfse": lambda c: _e_envia(financeiro.forcar_nfse(_id(c), bool(c.get("conferido_portal")))),
     "titulo/pagamento": lambda c: cobranca.preparar_pagamento(_id(c)),
     "titulo/cartao": lambda c: cartao.gerar_link(_id(c), int(c.get("parcelas") or 0)),
     "cartao/simular": lambda c: cartao.valor_no_cartao(financeiro.cent(c.get("valor") or 0), int(c.get("parcelas") or 1)),
