@@ -178,6 +178,9 @@ def _rodar_pagamentos(em: date) -> dict:
             res[nome] = f"erro: {ex}"
             db.registrar("robo_erro", f"{nome} (rotina rápida): {ex}")
     inter_ok = cfg["cobranca"]["provedor"] == "inter" and inter.configurado(cfg)
+    # recorrência: o título do mês não depende só da rodada de hora em hora (o boleto/NFS-e saem na rodada do robô)
+    etapa("titulos_gerados", auto["gerar_titulos"] and em.day >= int(cfg["financeiro"]["dia_geracao"]),
+          lambda: len(financeiro.gerar_titulos(em=em)))
     etapa("baixas_banco", auto.get("sincronizar_banco", True) and inter_ok, lambda: cobranca.sincronizar_banco(cfg))
     etapa("extrato_inter", auto.get("extrato_inter", True) and inter_ok, importacao.importar_extrato_inter)
     etapa("extratos", auto.get("importar_extratos"), importacao.importar_extratos)
@@ -223,6 +226,13 @@ def disparar_pagamentos() -> None:
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return                                   # testes: sem rotina paralela mexendo no banco
     threading.Thread(target=lambda: _seguro(rodar_pagamentos), daemon=True, name="pagamentos-agora").start()
+
+
+def disparar_robo() -> None:
+    """Rodada completa do robô agora, em segundo plano (ex.: recorrência salva gerou o título do mês)."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    threading.Thread(target=lambda: _seguro(rodar_todas), daemon=True, name="robo-agora").start()
 
 
 def _seguro(f):

@@ -1,6 +1,6 @@
 """Emissor de NFS-e da Prefeitura de Itaboraí/RJ via webservice (conversão de RPS em NFS-e)."""
 
-__version__ = "3.14.1"
+__version__ = "3.14.2"
 
 import warnings as _w
 

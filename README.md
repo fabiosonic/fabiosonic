@@ -573,6 +573,15 @@ NFS-e e a assinatura continuam automáticos. "Pré-visualizar" mostra o resultad
 padrão" volta ao texto do sistema. Campo inexistente (ex.: `{valr}`) é recusado ao salvar. Os modelos são de cada
 empresa. Pela API oficial do WhatsApp valem os modelos aprovados na Meta.
 
+### Recorrência salva gera o título do mês na hora
+
+Ao salvar a recorrência de um cliente (botão "Salvar alterações" ou o cadastro da recorrência), se o mês de início
+já chegou e o dia de geração do mês já passou (Configurações › Financeiro, padrão dia 1), o título do mês aparece
+**na hora** no Contas a receber, e o robô roda em segundo plano para registrar o boleto/PIX e emitir a NFS-e conforme
+a regra. Clientes "a confirmar" (sem "Repetir todo mês") e inícios em meses futuros não geram nada. A rotina rápida
+(a cada 15 minutos com o sistema aberto) também gera os títulos da recorrência, sem depender da rodada de hora em
+hora. Salvar de novo não duplica o título.
+
 ### Recorrência: início, fim, acréscimos e descontos
 
 Cada recorrência tem **mês de início** e **mês final** (opcional): depois do mês final não são gerados novos títulos.

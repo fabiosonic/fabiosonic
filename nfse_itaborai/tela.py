@@ -301,14 +301,14 @@ ROTAS = {
     "titulo/historico": lambda c: cobranca.historico(_id(c)),
     # contratos / recorrência
     "contratos": lambda c: financeiro.listar_contratos(),
-    "contrato/salvar": lambda c: financeiro.salvar_contrato(c),
+    "contrato/salvar": lambda c: _contrato_salvo(financeiro.salvar_contrato(c)),
     "contrato/ajustes": lambda c: financeiro.listar_ajustes(_id(c)),
     "contrato/ajuste_salvar": lambda c: financeiro.salvar_ajuste(c),
     "contrato/ajuste_excluir": lambda c: (financeiro.excluir_ajuste(_id(c)), {"ok": True})[1],
     "contrato/excluir": lambda c: (financeiro.excluir_contrato(_id(c)), {"ok": True})[1],
     "recorrencia": lambda c: {"preenchidos": financeiro.preencher_recorrencia(), "linhas": financeiro.lista_recorrencia(),
                               "regra_geral": financeiro.regra_geral(), "regras": financeiro.REGRAS_NFSE},
-    "recorrencia/salvar": lambda c: financeiro.salvar_recorrencia(c.get("linhas") or [], bool(c.get("aplicar_abertos"))),
+    "recorrencia/salvar": lambda c: _robo_se_gerou(financeiro.salvar_recorrencia(c.get("linhas") or [], bool(c.get("aplicar_abertos")))),
     "recorrencia/gerar": lambda c: {"gerados": len(financeiro.gerar_titulos(str(c.get("competencia") or "") or None))},
     "contratos/historico": lambda c: {"criados": financeiro.contratos_do_historico(c.get("dia_vencimento") or None)},
     "contratos/confirmar": lambda c: {"confirmados": importacao.confirmar_contratos(c.get("ids") or None)},
@@ -384,6 +384,18 @@ def _sem_duplicadas(itens: list[dict]) -> list[dict]:
             vistos.add(chave)
             out.append(it)
     return out
+
+
+def _robo_se_gerou(r: dict) -> dict:
+    """Títulos da recorrência gerados agora: o robô roda em segundo plano para registrar o boleto/PIX e emitir a
+    NFS-e conforme a regra (na geração ou na baixa), sem esperar a rodada de hora em hora."""
+    if r.get("gerados"):
+        automacao.disparar_robo()
+    return r
+
+
+def _contrato_salvo(k: dict) -> dict:
+    return _robo_se_gerou(k | {"gerados": financeiro.gerar_do_mes_ao_salvar([k["id"]]) if k.get("ativo") else []})
 
 
 def _rodar_regua() -> dict:

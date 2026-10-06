@@ -52,7 +52,8 @@ def test_padrao_da_empresa_vale_para_contratos(base):  # noqa: F811
     tratar("contrato/salvar", {"cpf_cnpj": CLI_A["cpf_cnpj"], "valor": "1000", "dia_vencimento": 10, "inicio": "2026-01"})
     ids = financeiro.gerar_titulos("2026-11")
     assert ids and financeiro.obter_titulo(ids[0])["nfse_status"] == "apos_pagamento"
-    assert db.linhas("SELECT COUNT(*) n FROM titulos WHERE nfse_status='apos_pagamento'")[0]["n"] == 1
+    # salvar a recorrência já gera o mês atual (v3.14.2); todos seguem o padrão da empresa
+    assert {t["nfse_status"] for t in db.linhas("SELECT nfse_status FROM titulos WHERE contrato_id IS NOT NULL")} == {"apos_pagamento"}
 
 
 def test_regra_geral_e_regra_da_recorrencia_do_cliente(base):  # noqa: F811

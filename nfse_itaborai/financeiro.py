@@ -258,11 +258,21 @@ def lista_recorrencia() -> list[dict]:
     return sorted(linhas, key=lambda x: (not x["repetir"], x["cliente_nome"].upper()))
 
 
+def gerar_do_mes_ao_salvar(ids: list[int], em: date | None = None) -> list[int]:
+    """Recorrência salva na tela: o título do mês sai na hora (sem esperar a rodada do robô), se o mês já começou a
+    gerar (Configurações › Financeiro › dia de geração) e a geração automática estiver ligada."""
+    em = em or hoje()
+    cfg = config.carregar()
+    if not ids or not cfg["automacao"].get("gerar_titulos", True) or em.day < int(cfg["financeiro"].get("dia_geracao") or 1):
+        return []
+    return gerar_titulos(em=em, contratos=[int(i) for i in ids])
+
+
 def salvar_recorrencia(linhas: list[dict], aplicar_abertos: bool = False) -> dict:
     """Grava as linhas alteradas na aba Recorrência. 'repetir' = entra na cobrança mensal (confirmado).
     aplicar_abertos: o novo valor vai também aos títulos em aberto já gerados deste mês em diante (boleto refeito)."""
     atuais = {k["id"]: k for k in db.linhas("SELECT * FROM contratos")}
-    salvos, ajustados = 0, []
+    salvos, ajustados, ids = 0, [], []
     for l in linhas:
         valor = l.get("valor_cent") if "valor_cent" in l else cent(l.get("valor") or 0)
         dados = {"servico_id": l.get("servico_id") or "", "nfse_quando": l.get("nfse_quando") or "",
@@ -281,16 +291,17 @@ def salvar_recorrencia(linhas: list[dict], aplicar_abertos: bool = False) -> dic
             if dados["confirmado"] and not k["confirmado"] and k["inicio"] < competencia_de(hoje()) \
                     and dados.get("inicio", k["inicio"]) == k["inicio"]:
                 dados["inicio"] = competencia_de(hoje())   # confirmou agora: cobra a partir deste mês
-            salvar_contrato({**k, "descricao": k["descricao"] if k.get("servico_id") == dados["servico_id"] else "",
-                             **dados, "id": k["id"]})
+            ids.append(salvar_contrato({**k, "descricao": k["descricao"] if k.get("servico_id") == dados["servico_id"] else "",
+                                        **dados, "id": k["id"]})["id"])
             if aplicar_abertos and valor != k["valor_cent"]:
                 ajustados += aplicar_contrato_aos_titulos(k["id"])["titulos"]
         elif valor > 0:
-            salvar_contrato({"cpf_cnpj": l["cpf_cnpj"], **dados, "inicio": dados.get("inicio") or competencia_de(hoje())})
+            ids.append(salvar_contrato({"cpf_cnpj": l["cpf_cnpj"], **dados,
+                                        "inicio": dados.get("inicio") or competencia_de(hoje())})["id"])
         else:
             continue
         salvos += 1
-    return {"salvos": salvos, "titulos_ajustados": ajustados}
+    return {"salvos": salvos, "titulos_ajustados": ajustados, "gerados": gerar_do_mes_ao_salvar(ids)}
 
 
 # ---------------------------------------------------------------- títulos (contas a receber)
@@ -421,8 +432,9 @@ def _mesmo_honorario(descricao: str, do_contrato: str) -> bool:
     return bool(a) and (a == b or a == "HONORARIOS CONTABEIS MENSAIS" or (b and a == n("HONORARIOS " + b)))
 
 
-def gerar_titulos(competencia: str | None = None, em: date | None = None) -> list[int]:
-    """Recorrência: cria o título do mês para cada contrato ativo (idempotente). Aplica reajuste anual."""
+def gerar_titulos(competencia: str | None = None, em: date | None = None, contratos: list[int] | None = None) -> list[int]:
+    """Recorrência: cria o título do mês para cada contrato ativo (idempotente). Aplica reajuste anual.
+    contratos: só estes (recorrência salva agora na tela)."""
     em = em or hoje()
     comp = competencia or competencia_de(em)
     ano, mes = _mes(comp)
@@ -431,6 +443,8 @@ def gerar_titulos(competencia: str | None = None, em: date | None = None) -> lis
     with db.conexao() as con:
         for k in con.execute("SELECT * FROM contratos WHERE ativo=1 AND confirmado=1").fetchall():
             k = dict(k)
+            if contratos is not None and k["id"] not in contratos:
+                continue
             if comp < k["inicio"] or (k["fim"] and comp > k["fim"]):
                 continue
             regra = regra_do_contrato(k, geral)

@@ -269,7 +269,8 @@ PAGINAS.contratos = async el => {
     if (novos && !confirm(`${novos} cliente(s) passam a ser faturados todo mês a partir deste mês. Confirmar?`)) return;
     const mudouValor = linhas.filter(l => l.id && (L.find(x => x.id == l.id) || {}).valor_original !== undefined && L.find(x => x.id == l.id).valor_original != l.valor_cent).length;
     const aplicar = mudouValor > 0 && confirm(`${mudouValor} recorrência(s) com valor alterado. Aplicar o novo valor também aos títulos EM ABERTO já gerados deste mês em diante?\n\nO boleto desses títulos é cancelado no banco e refeito com o valor novo. Títulos com NFS-e emitida não mudam.`);
-    const x = await api("recorrencia/salvar", { linhas, aplicar_abertos: aplicar }); aviso(`${x.salvos} recorrência(s) salva(s) ✔` + (x.titulos_ajustados && x.titulos_ajustados.length ? ` ${x.titulos_ajustados.length} título(s) em aberto atualizado(s) com boleto refeito.` : ""), 8000); await carregarEstado(); ir("contratos"); };
+    const x = await api("recorrencia/salvar", { linhas, aplicar_abertos: aplicar }); aviso(`${x.salvos} recorrência(s) salva(s) ✔` + (x.titulos_ajustados && x.titulos_ajustados.length ? ` ${x.titulos_ajustados.length} título(s) em aberto atualizado(s) com boleto refeito.` : "")
+      + (x.gerados && x.gerados.length ? ` ${x.gerados.length} título(s) do mês gerado(s) no Contas a receber — boleto/PIX e NFS-e saem em instantes, conforme a regra.` : ""), 10000); await carregarEstado(); ir("contratos"); };
   $("#nc").onclick = () => editarContrato({});
   $("#gerar").onclick = async () => { const c = prompt("Competência (AAAA-MM):", hojeISO().slice(0, 7)); if (!c) return;
     const x = await api("recorrencia/gerar", { competencia: c }); aviso(`${x.gerados} título(s) gerado(s) ✔`); };
@@ -323,6 +324,7 @@ function editarContrato(c) {
       const ab = await api("contrato/abertos", { id: c.id });
       if (ab.titulos.length && confirm(`Há ${ab.titulos.length} título(s) em aberto já gerado(s) com o valor antigo. Aplicar o novo valor a eles (boleto cancelado no banco e refeito)?`)) {
         const r = await api("contrato/aplicar_abertos", { id: c.id }); extra = ` ${r.titulos.length} título(s) atualizado(s)${r.boletos ? `, ${r.boletos} boleto(s) refeito(s)` : ""}.`; } }
+    if (k.gerados && k.gerados.length) extra += ` Título de ${mesExtenso(hojeISO().slice(0, 7))} gerado no Contas a receber.`;
     aviso("Recorrência salva ✔" + extra, 8000); await carregarEstado(); ir("contratos"); };
 }
 async function encerrar(id) { if (confirm("Tirar este cliente da recorrência? Ele deixa de gerar cobranças.")) { await api("contrato/excluir", { id }); ir("contratos"); } }
