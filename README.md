@@ -584,6 +584,14 @@ apontam os pagos há mais de um dia sem nota e as notas recusadas/travadas. Prot
 outra (para corrigir, substituição em Notas emitidas); título cancelado não emite; "em emissão" exige confirmar no
 portal que a nota não saiu (evita duplicidade).
 
+### Estorno de pagamento (ex.: cliente pagou o boleto errado)
+
+Ao estornar a baixa de um título, a NFS-e que ainda não saiu volta a **aguardar o pagamento** quando a regra do título
+é emitir na baixa (Configurações › Emissão, ou a regra da recorrência do cliente). Antes ela ficava "Pendente" e o robô
+emitiria a nota de um honorário não pago. Nota já emitida não muda (para desfazer, cancele ou substitua a NFS-e). Na
+atualização, os títulos que já tinham sido estornados e ficaram "Pendente" são corrigidos sozinhos (só os que tiveram
+baixa registrada).
+
 ### Recorrência salva gera o título do mês na hora
 
 Ao salvar a recorrência de um cliente (botão "Salvar alterações" ou o cadastro da recorrência), se o mês de início

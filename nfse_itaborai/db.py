@@ -224,6 +224,40 @@ def _migrar(con: sqlite3.Connection) -> None:
         mensagens.importar_historico(con)
         con.execute("PRAGMA user_version=5")
         con.commit()
+    if con.execute("PRAGMA user_version").fetchone()[0] < 6:
+        _corrigir_estornados(con)
+        con.execute("PRAGMA user_version=6")
+        con.commit()
+
+
+def _corrigir_estornados(con: sqlite3.Connection) -> None:
+    """Uma vez: títulos que tiveram baixa e depois estorno ficavam com a NFS-e "pendente" (o robô emitiria a nota sem
+    pagamento). Voltam a aguardar o pagamento quando a regra do título é emitir na baixa."""
+    from . import config
+    try:
+        e = config.carregar()["emissao"]
+    except Exception:  # noqa: BLE001 — sem configuração legível, nada é mudado
+        return
+    q = (e.get("nfse_quando") or "").strip()
+    geral = {"agora": "geracao", "pagamento": "baixa"}.get(q, q) or ("baixa" if e.get("nfse_apos_pagamento") else "geracao")
+    for t in con.execute("SELECT id, cpf_cnpj, contrato_id FROM titulos WHERE status='aberto' AND nfse_status='pendente'"
+                         " AND COALESCE(nfse_numero,'')=''").fetchall():
+        if not con.execute("SELECT 1 FROM log WHERE tipo='baixa' AND mensagem LIKE ?", (f"Título {t['id']} (%",)).fetchone():
+            continue                                    # nunca foi baixado: não é estorno
+        k = None
+        if t["contrato_id"]:
+            k = con.execute("SELECT emitir_nfse, nfse_quando FROM contratos WHERE id=?", (t["contrato_id"],)).fetchone()
+        if not k:
+            k = con.execute("SELECT emitir_nfse, nfse_quando FROM contratos WHERE cpf_cnpj=? AND ativo=1"
+                            " ORDER BY confirmado DESC, id", (t["cpf_cnpj"],)).fetchone()
+        rk = ""
+        if k:
+            rk = "lancar" if not k["emitir_nfse"] else (k["nfse_quando"] or "").strip()
+            rk = {"agora": "geracao", "pagamento": "baixa"}.get(rk, rk)
+        if (rk or geral) == "baixa":
+            con.execute("UPDATE titulos SET nfse_status='apos_pagamento' WHERE id=?", (t["id"],))
+            con.execute("INSERT INTO log (quando, tipo, mensagem) VALUES (?,?,?)", (agora(), "estorno",
+                        f"Título {t['id']}: pagamento estornado — NFS-e volta a aguardar o pagamento (correção)"))
 
 
 def agora() -> str:

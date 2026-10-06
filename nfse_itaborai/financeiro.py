@@ -683,13 +683,33 @@ def decidir_parcial(tid: int, decisao: str, vencimento: str = "") -> dict:
     return obter_titulo(tid) | extra | {"nfse_resultado": nota_txt}
 
 
+def regra_do_titulo(t: dict, geral: str | None = None) -> str:
+    """Regra da NFS-e que vale para o título: a da recorrência que o gerou; avulso, a do cliente (ou a geral)."""
+    if t.get("contrato_id"):
+        k = db.linhas("SELECT * FROM contratos WHERE id=?", (t["contrato_id"],))
+        if k:
+            return regra_do_contrato(k[0], geral)
+    return regra_do_cliente(t["cpf_cnpj"], geral)
+
+
+def nfse_apos_estorno(t: dict) -> str:
+    """Pagamento estornado: a nota que ainda não saiu volta a esperar o pagamento quando a regra é emitir na baixa
+    (senão o robô emitiria a nota de um título que não foi pago). Nota já emitida não muda."""
+    if t.get("nfse_numero") or t["nfse_status"] not in ("pendente", "erro"):
+        return t["nfse_status"]
+    return "apos_pagamento" if regra_do_titulo(t) == "baixa" else t["nfse_status"]
+
+
 def estornar(tid: int) -> None:
     t = obter_titulo(tid)
     if t.get("saldo_titulo_id") and obter_titulo(t["saldo_titulo_id"])["status"] == "aberto":
         cancelar_titulo(t["saldo_titulo_id"], f"Estorno do pagamento parcial do título {tid}")
     atualizar_titulo(tid, status="aberto", data_pagamento="", valor_pago_cent=0, forma_pagamento="",
                      parcial_status="", parcial_dif_cent=0, desconto_cent=0, saldo_titulo_id=0,
-                     nota_cent=t["nota_cent"] if not t.get("parcial_status") else 0)
+                     nota_cent=t["nota_cent"] if not t.get("parcial_status") else 0,
+                     nfse_status=nfse_apos_estorno(t))
+    db.registrar("estorno", f"Título {tid} ({t['cliente_nome']}): pagamento estornado"
+                 + (" — NFS-e volta a aguardar o pagamento" if nfse_apos_estorno(t) != t["nfse_status"] else ""))
     with db.conexao() as con:
         con.execute("UPDATE movimentos SET titulo_id=NULL WHERE titulo_id=?", (tid,))
 
