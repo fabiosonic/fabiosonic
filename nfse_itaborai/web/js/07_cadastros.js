@@ -16,7 +16,9 @@ PAGINAS.clientes = async el => {
     <label>Complemento<input name="complemento"></label><label>Bairro<input name="bairro"></label><label data-br>CEP<input name="cep"></label>
     <label data-ex hidden>Cidade (exterior)<input id="ce_cidade" maxlength="55"></label><label data-ex hidden>Estado / província<input id="ce_estado" maxlength="60"></label><label data-ex hidden>Código postal<input id="ce_postal" maxlength="11"></label>
     <label data-br>Cidade<input name="cidade" placeholder="automática pelo cód. IBGE"></label><label data-br>Cód. IBGE município<input name="codigo_municipio"></label><label data-br>UF<input name="uf" maxlength="2"></label>
-    <label data-br>Inscrição municipal<input name="inscricao_municipal"></label><h3 class="bloco">Contato e cobrança</h3><label>E-mail (cobrança)<input name="email"></label><label>Telefone / WhatsApp<input name="telefone"></label>
+    <label data-br>Inscrição municipal<input name="inscricao_municipal"></label><h3 class="bloco">Contato e cobrança</h3><label>E-mail principal (vai na NFS-e e no boleto)<input name="email"></label><label>Telefone / WhatsApp principal<input name="telefone"></label>
+    <label style="grid-column:span 2">Outros e-mails que recebem as mensagens<input name="emails_extras" placeholder="financeiro@cliente.com; socio@cliente.com"></label><label style="grid-column:span 2">Outros WhatsApp que recebem as mensagens<input name="whatsapps_extras" placeholder="(21) 99999-0000; (21) 98888-0000"></label>
+    <p class="sub inteiro" style="margin:-4px 0 4px">Cobranças, boletos, notas fiscais e avisos vão para <b>todos</b> os e-mails (numa mesma mensagem) e para <b>todos</b> os WhatsApp cadastrados. Separe por ponto e vírgula.</p>
     <label class="chk inteiro"><input type="checkbox" id="c_wa"> <b>Enviar cobrança por WhatsApp</b> <span class="sub">— para clientes que já conversam com o escritório pelo WhatsApp</span></label>
     <h3 class="bloco">Emissão</h3><label class="inteiro">Serviço habitual (vem selecionado ao emitir)<select name="servico_id">${opcoesServ("", "Padrão da empresa")}</select></label></div>
     ${blocoFiscal("cf")}
@@ -32,11 +34,13 @@ PAGINAS.clientes = async el => {
     $("#ce_pais").value = x.pais_iso ? ((ST.paises || {})[x.pais_iso] ? x.pais_iso : "outro") : ""; $("#ce_iso").value = x.pais_iso || ""; $("#ce_bacen").value = x.pais_bacen || "";
     $("#ce_nif").value = x.nif || ""; $("#ce_sem").value = x.sem_nif || ""; $("#ce_pessoa").value = x.pessoa || "1";
     $("#ce_cidade").value = x.cidade || ""; $("#ce_estado").value = x.estado || ""; $("#ce_postal").value = x.cod_postal || ""; modoExt();
-    $("#c_wa").checked = !!c.whatsapp_cobranca; };
+    $("#c_wa").checked = !!c.whatsapp_cobranca;
+    $("#fcli [name=emails_extras]").value = (c.emails_extras || []).join("; "); $("#fcli [name=whatsapps_extras]").value = (c.whatsapps_extras || []).map(fone).join("; "); };
   $("#c_ext").onchange = modoExt; $("#ce_pais").onchange = modoExt;
   const desenhar = () => { const f = $("#c_f").value.toLowerCase().replace(/[./-]/g, "");
     $("#c_tab").innerHTML = `<p class="sub">${ST.clientes.length} cliente(s). Sem e-mail ou telefone o cliente não recebe a régua de cobrança.</p>` + tabela([{ t: "Cliente", f: c => celNome(c.razao_social, fmtDoc(c.cpf_cnpj)) },
-      { t: "Contato", fv: c => [c.email, c.telefone].filter(Boolean).join(" ") || "sem contato", f: c => (c.email ? `<span title="${esc(c.email)}">${ic("email")}</span> ` : "") + (c.telefone ? `<span title="${esc(c.telefone)}">${ic("fone")}</span>` : "") || '<span class="sub">sem contato</span>' },
+      { t: "Contato", fv: c => [c.email, c.telefone, ...(c.emails_extras || []), ...(c.whatsapps_extras || [])].filter(Boolean).join(" ") || "sem contato", f: c => { const em = [c.email, ...(c.emails_extras || [])].filter(Boolean), wa = [c.telefone, ...(c.whatsapps_extras || [])].filter(Boolean);
+        return (em.length ? `<span title="${esc(em.join("\n"))}">${ic("email")}${em.length > 1 ? `<small>${em.length}</small>` : ""}</span> ` : "") + (wa.length ? `<span title="${esc(wa.join("\n"))}">${ic("fone")}${wa.length > 1 ? `<small>${wa.length}</small>` : ""}</span>` : "") || '<span class="sub">sem contato</span>'; } },
       { t: "Cobrar por WhatsApp", fsel: 1, fv: c => !c.telefone ? "sem telefone" : c.whatsapp_cobranca ? "sim" : "não", f: c => c.telefone ? `<label class="chk" title="Entra na fila de WhatsApp da régua"><input type="checkbox" data-wa="${c.cpf_cnpj}" ${c.whatsapp_cobranca ? "checked" : ""}> sim</label>` : '<span class="sub">sem telefone</span>' }, { t: "Última nota", f: c => c.ultimo_valor ? `${dt(c.ultima_data)} · ${Number(c.ultimo_valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "" },
       { t: "", f: c => `<button class="btn min sec" data-ed="${c.cpf_cnpj}">Editar</button> <button class="btn min sec" data-ex="${c.cpf_cnpj}" title="Excluir">${ic("x")}</button>` }],
       ST.clientes.filter(c => !f || c.razao_social.toLowerCase().includes(f) || c.cpf_cnpj.includes(f)), "Nada por aqui.", { filtros: "clientes" });

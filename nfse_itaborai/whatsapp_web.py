@@ -349,6 +349,7 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
                           "tipo": "Boleto (PDF)", "titulo_id": t["id"],
                           "texto": f"Boleto com vencimento em {t['vencimento'][8:]}/{t['vencimento'][5:7]}/{t['vencimento'][:4]}"})
     itens = itens[:maximo]
+    itens = _para_todos_os_numeros(itens)
     try:
         saida = enviar(itens, cfg)
     except Desconectado as ex:
@@ -378,6 +379,23 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
     res["pendentes"] = len([e for e in fila if e["id"] not in feitos])
     db.registrar("whatsapp", f"WhatsApp Web: {res}")
     return res
+
+
+def _para_todos_os_numeros(itens: list[dict]) -> list[dict]:
+    """Cliente com mais de um WhatsApp cadastrado: cada mensagem da fila vai também para os números adicionais.
+    A situação do evento (enviado/erro) segue o envio ao número principal; os demais ficam na aba Mensagens."""
+    from . import clientes, financeiro
+    saida = []
+    for it in itens:
+        saida.append(it)
+        t = financeiro.obter_titulo(it["titulo_id"]) if it.get("titulo_id") else None
+        if not t:
+            continue
+        principal = numero_de(it["numero"])
+        for n in clientes.whatsapps(clientes.obter(t["cpf_cnpj"])):
+            if numero_de(n) and numero_de(n) != principal:
+                saida.append(it | {"numero": numero_de(n), "eventos": []})
+    return saida
 
 
 def _pdf_do_titulo(tid: int, cfg: dict) -> str:

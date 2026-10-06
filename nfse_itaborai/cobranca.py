@@ -450,6 +450,16 @@ def mensagem_html(t: dict, etapa: int, cfg: dict | None = None, em: date | None 
             f'</table></td></tr></table></body></html>')
 
 
+def _para(cli: dict) -> str:
+    """Destinatários do e-mail ao cliente: o principal e os adicionais, na mesma mensagem."""
+    return ", ".join(clientes.emails(cli))
+
+
+def _wa1(cli: dict) -> str:
+    """WhatsApp principal do cliente (os adicionais recebem a mesma mensagem no envio da fila)."""
+    return (clientes.whatsapps(cli) or [""])[0]
+
+
 def link_whatsapp(telefone: str, texto: str) -> str:
     d = clientes._digitos(telefone)
     if d and not d.startswith("55"):
@@ -567,19 +577,20 @@ def _registrar_whatsapp(t: dict, etapa: int, cli: dict, cfg: dict, em: date, res
     """Evento de WhatsApp da régua: API oficial envia já; senão vai para a fila (WhatsApp Web ou envio manual)."""
     if not cli.get("whatsapp_cobranca"):
         return                                   # cliente não marcado para receber cobrança por WhatsApp
-    if not cli.get("telefone"):
+    if not clientes.whatsapps(cli):
         status, det = "sem_contato", "cliente sem telefone"
         res["sem_contato"] += 1
     elif whatsapp.configurado(cfg) and not texto:  # API oficial (modelos aprovados na Meta): envia sozinho
         try:
-            whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg, em)
-            status, det = "enviado", whatsapp.numero(cli["telefone"])
+            for n in clientes.whatsapps(cli):     # o principal e os adicionais
+                whatsapp.enviar_cobranca(t, etapa, n, cfg, em)
+            status, det = "enviado", ", ".join(whatsapp.numero(n) for n in clientes.whatsapps(cli))
             res["whatsapp"] += 1
         except Exception as ex:  # noqa: BLE001 — registra a falha; o e-mail segue normalmente
             status, det = "erro", str(ex)[:300]
             res["erros"] += 1
     else:
-        status, det = "pendente", link_whatsapp(cli["telefone"], texto or mensagem(t, etapa, cfg, em, "whatsapp")[1])
+        status, det = "pendente", link_whatsapp(_wa1(cli), texto or mensagem(t, etapa, cfg, em, "whatsapp")[1])
         res["whatsapp"] += 1
     with db.conexao() as con:
         con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
@@ -635,15 +646,15 @@ def _avisos_suspensao(abertos: list[dict], em: date, cfg: dict, res: dict) -> No
             if all(t["id"] in avisados for t in velhos) or (recente and (em - date.fromisoformat(recente)).days < 30):
                 continue
             if canal == "email":
-                if not cli.get("email"):
+                if not clientes.emails(cli):
                     status, det = "sem_contato", "cliente sem e-mail"
                     res["sem_contato"] += 1
                 else:
                     try:
-                        enviar_email(cli["email"], assunto, texto, cfg,
+                        enviar_email(_para(cli), assunto, texto, cfg,
                                      ref={"tipo": "Aviso de suspensão", "titulo_id": velhos[0]["id"],
                                           "cliente": velhos[0]["cliente_nome"]})
-                        status, det = "enviado", cli["email"]
+                        status, det = "enviado", _para(cli)
                         res["email"] += 1
                     except Exception as ex:  # noqa: BLE001
                         status, det = "erro", str(ex)[:300]
@@ -746,7 +757,7 @@ def todos_do_cliente(cpf_cnpj: str, itens: list[tuple[dict, int]]) -> list[tuple
 def _email_cobranca(cli: dict, itens: list[tuple[dict, int]], em: date, cfg: dict, res: dict) -> None:
     """Um e-mail por cliente com TODOS os títulos em aberto dele (soma e valor atualizado) e todos os boletos
     anexados; um título só usa a mensagem da etapa."""
-    if not cli.get("email"):
+    if not clientes.emails(cli):
         status, det = "sem_contato", "cliente sem e-mail"
         res["sem_contato"] += 1
     else:
@@ -760,10 +771,10 @@ def _email_cobranca(cli: dict, itens: list[tuple[dict, int]], em: date, cfg: dic
             else:
                 assunto, texto = mensagem_grupo(todos, cfg, em)
                 html = mensagem_grupo_html(todos, cfg, em)
-            enviar_email(cli["email"], assunto, texto, cfg, pdfs, html=html,
+            enviar_email(_para(cli), assunto, texto, cfg, pdfs, html=html,
                          ref={"tipo": mensagens.tipo_da_etapa(itens[0][1]), "titulo_id": itens[0][0]["id"],
                               "cliente": itens[0][0]["cliente_nome"]})
-            status, det = "enviado", cli["email"] + (f" (e-mail com {len(todos)} títulos)" if len(todos) > 1 else "")
+            status, det = "enviado", _para(cli) + (f" (e-mail com {len(todos)} títulos)" if len(todos) > 1 else "")
             res["email"] += 1
         except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
             status, det = "erro", str(ex)[:300]
@@ -1004,13 +1015,13 @@ def enviar_nfse_titulo(tid: int, cfg: dict | None = None) -> dict:
     out = {"email": "", "whatsapp": ""}
     with db.conexao() as con:
         con.execute("DELETE FROM eventos_cobranca WHERE titulo_id=? AND etapa=?", (tid, ETAPA_NFSE))
-    if cli.get("email") and cfg["smtp"].get("host"):
-        enviar_email(cli["email"], assunto, texto, cfg, anexos_nfse(t),
+    if clientes.emails(cli) and cfg["smtp"].get("host"):
+        enviar_email(_para(cli), assunto, texto, cfg, anexos_nfse(t),
                      ref={"tipo": "Nota fiscal", "titulo_id": tid, "cliente": t["cliente_nome"]})
-        out["email"] = cli["email"]
-        _evento(tid, ETAPA_NFSE, "email", "enviado", cli["email"])
-    if cli.get("telefone") and cli.get("whatsapp_cobranca"):
-        _evento(tid, ETAPA_NFSE, "whatsapp", "pendente", link_whatsapp(cli["telefone"], texto))
+        out["email"] = _para(cli)
+        _evento(tid, ETAPA_NFSE, "email", "enviado", _para(cli))
+    if clientes.whatsapps(cli) and cli.get("whatsapp_cobranca"):
+        _evento(tid, ETAPA_NFSE, "whatsapp", "pendente", link_whatsapp(_wa1(cli), texto))
         out["whatsapp"] = "na fila do WhatsApp"
     if not out["email"] and not out["whatsapp"]:
         raise ValueError("Cliente sem e-mail e sem WhatsApp marcado para cobrança: complete o cadastro em Clientes.")
@@ -1051,9 +1062,9 @@ def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
         for canal, ligado in (("email", cob["regua_email"]), ("whatsapp", cob["regua_whatsapp"])):
             if not ligado:
                 continue
-            if canal == "email" and not cli.get("email"):
+            if canal == "email" and not clientes.emails(cli):
                 continue
-            if canal == "whatsapp" and not (cli.get("whatsapp_cobranca") and cli.get("telefone")):
+            if canal == "whatsapp" and not (cli.get("whatsapp_cobranca") and clientes.whatsapps(cli)):
                 continue
             feitas = {e["etapa"] for e in db.linhas("SELECT etapa FROM eventos_cobranca WHERE titulo_id=? AND canal=?",
                                                      (t["id"], canal))}
@@ -1067,16 +1078,16 @@ def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
             for etapa, assunto, texto, anexos in fila:   # primeiro o agradecimento, depois a nota
                 if canal == "email":
                     try:
-                        enviar_email(cli["email"], assunto, texto, cfg, anexos,
+                        enviar_email(_para(cli), assunto, texto, cfg, anexos,
                                      ref={"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"],
                                           "cliente": t["cliente_nome"]})
-                        status, det = "enviado", cli["email"]
+                        status, det = "enviado", _para(cli)
                         res["email"] += 1
                     except Exception as ex:  # noqa: BLE001
                         status, det = "erro", str(ex)[:300]
                         res["erros"] += 1
                 else:
-                    status, det = "pendente", link_whatsapp(cli["telefone"], texto)   # sai pela fila do WhatsApp
+                    status, det = "pendente", link_whatsapp(_wa1(cli), texto)   # sai pela fila do WhatsApp
                     res["whatsapp"] += 1
                 with db.conexao() as con:
                     con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
@@ -1125,26 +1136,29 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
         t = _atualizar_cartao(t, cfg)
     assunto, texto = mensagem(t, etapa, cfg)
     cli = clientes.obter(t["cpf_cnpj"]) or {}
-    out = {"whatsapp": link_whatsapp(cli.get("telefone", ""), mensagem(t, etapa, cfg, canal="whatsapp")[1]), "email": "",
+    out = {"whatsapp": link_whatsapp(_wa1(cli), mensagem(t, etapa, cfg, canal="whatsapp")[1]), "email": "",
            "texto": texto, "whatsapp_enviado": "", "whatsapp_erro": ""}
-    if cli.get("telefone") and cli.get("whatsapp_cobranca") and whatsapp.configurado(cfg):
+    if clientes.whatsapps(cli) and cli.get("whatsapp_cobranca") and whatsapp.configurado(cfg):
         try:
-            whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg)
-            out["whatsapp_enviado"] = whatsapp.numero(cli["telefone"])
+            for n in clientes.whatsapps(cli):
+                whatsapp.enviar_cobranca(t, etapa, n, cfg)
+            out["whatsapp_enviado"] = ", ".join(whatsapp.numero(n) for n in clientes.whatsapps(cli))
         except Exception as ex:  # noqa: BLE001 — mostra o motivo na tela; o link manual continua disponível
             out["whatsapp_erro"] = str(ex)
-    elif cli.get("telefone") and cli.get("whatsapp_cobranca") and whatsapp_web.ativo(cfg):
+    elif clientes.whatsapps(cli) and cli.get("whatsapp_cobranca") and whatsapp_web.ativo(cfg):
         try:                                   # WhatsApp Web do escritório: envia na hora, sozinho
-            out["whatsapp_enviado"] = whatsapp_web.enviar_um(cli["telefone"], mensagem(t, etapa, cfg, canal="whatsapp")[1], cfg,
-                                                             pdf=whatsapp_web._pdf_do_titulo(t["id"], cfg),
-                                                             ref={"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"],
-                                                                  "cliente": t["cliente_nome"]})
+            out["whatsapp_enviado"] = ", ".join(
+                whatsapp_web.enviar_um(n, mensagem(t, etapa, cfg, canal="whatsapp")[1], cfg,
+                                       pdf=whatsapp_web._pdf_do_titulo(t["id"], cfg),
+                                       ref={"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"],
+                                            "cliente": t["cliente_nome"]})
+                for n in clientes.whatsapps(cli))
         except Exception as ex:  # noqa: BLE001
             out["whatsapp_erro"] = str(ex)
-    if cli.get("email") and cfg["smtp"].get("host"):
+    if clientes.emails(cli) and cfg["smtp"].get("host"):
         pdf_ = _pdf_boleto(t, cfg)
-        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [], html=mensagem_html(t, etapa, cfg),
+        enviar_email(_para(cli), assunto, texto, cfg, [pdf_] if pdf_ else [], html=mensagem_html(t, etapa, cfg),
                      ref={"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"], "cliente": t["cliente_nome"]})
-        out["email"] = cli["email"]
+        out["email"] = _para(cli)
     out["pdf"] = t.get("boleto_pdf") or (_pdf_boleto(t, cfg) if t.get("banco_id") else "")
     return out

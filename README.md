@@ -730,6 +730,16 @@ O boleto já registrado no banco **não é cancelado**: se o cliente pagar, a ba
 pagamento" sai pelo valor pago). A baixa manual também funciona. **Voltar do jurídico** (menu Mais da aba Jurídico)
 retoma a cobrança normal.
 
+### Vários e-mails e WhatsApp por cliente
+
+No cadastro do cliente (Clientes › Editar), além do **e-mail e telefone principais** (os que vão na NFS-e e no
+boleto do Inter), há **Outros e-mails** e **Outros WhatsApp que recebem as mensagens** (separados por ponto e
+vírgula). Cobranças, boletos, lembretes, notas fiscais, agradecimentos e avisos de suspensão vão para **todos**: por
+e-mail numa única mensagem com todos os endereços; pelo WhatsApp do escritório, a mesma mensagem (e o PDF) para cada
+número; pela API oficial, um envio por número. O botão "Cobrar" também envia para todos. No "Enviar manualmente em
+sequência" (WhatsApp sem conexão) o link abre no número principal. E-mail ou número inválido é recusado ao salvar;
+importações de contatos e do Nitrus não apagam os adicionais.
+
 ### Mensagens (e-mails e WhatsApp enviados)
 
 A aba **Mensagens** mostra tudo o que o sistema mandou: cobranças, boletos, lembretes, notas fiscais, agradecimentos,

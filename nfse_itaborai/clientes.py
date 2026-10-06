@@ -49,6 +49,43 @@ def obter(cpf_cnpj: str) -> dict | None:
     return next((c for c in listar() if _digitos(c.get("cpf_cnpj")) == doc), None)
 
 
+_EMAIL = re.compile(r"[^@\s;,]+@[^@\s;,]+\.[^@\s;,]+")
+
+
+def _partes(v) -> list[str]:
+    itens = v if isinstance(v, (list, tuple)) else re.split(r"[;,\s\n]+", str(v or ""))
+    return [str(x).strip() for x in itens if str(x).strip()]
+
+
+def _lista_emails(v) -> list[str]:
+    ruins = [x for x in _partes(v) if not _EMAIL.fullmatch(x)]
+    if ruins:
+        raise ValueError("E-mail adicional inválido: " + ", ".join(ruins))
+    return list(dict.fromkeys(x.lower() for x in _partes(v)))
+
+
+def _lista_fones(v) -> list[str]:
+    nums = [_digitos(x) for x in (v if isinstance(v, (list, tuple)) else re.split(r"[;,/\n]+", str(v or "")))]
+    ruins = [n for n in nums if n and not 10 <= len(n) <= 13]
+    if ruins:
+        raise ValueError("WhatsApp adicional inválido (DDD + número): " + ", ".join(ruins))
+    return list(dict.fromkeys(n[-11:] for n in nums if n))
+
+
+def emails(c: dict | None) -> list[str]:
+    """Todos os e-mails que recebem as mensagens do cliente: o principal (pode ter vários separados por ;) e os adicionais."""
+    c = c or {}
+    todos = [x for x in _partes(c.get("email")) if _EMAIL.fullmatch(x)] + list(c.get("emails_extras") or [])
+    return list(dict.fromkeys(x.lower() for x in todos))
+
+
+def whatsapps(c: dict | None) -> list[str]:
+    """Todos os números de WhatsApp do cliente: o telefone principal e os adicionais (sem repetir)."""
+    c = c or {}
+    todos = [_digitos(c.get("telefone"))[-11:]] + list(c.get("whatsapps_extras") or [])
+    return list(dict.fromkeys(n for n in todos if len(n) >= 10))
+
+
 def normalizar(c: dict) -> dict:
     e = c.get("endereco") or {}
     cod = _digitos(e.get("codigo_municipio"))
@@ -69,6 +106,9 @@ def normalizar(c: dict) -> dict:
         **{k: c[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "observacao", "servico_id") if k in c},
         # código do cliente no sistema anterior (Nitrus): importações seguintes o reconhecem por ele
         **({"codigo_externo": str(c["codigo_externo"]).strip()} if str(c.get("codigo_externo") or "").strip() else {}),
+        # outros e-mails e WhatsApp do mesmo cliente que também recebem as mensagens (o principal fica acima)
+        **({"emails_extras": _lista_emails(c["emails_extras"])} if "emails_extras" in c else {}),
+        **({"whatsapps_extras": _lista_fones(c["whatsapps_extras"])} if "whatsapps_extras" in c else {}),
         # cobrança por WhatsApp só para quem o escritório escolher (clientes que já conversam pelo WhatsApp)
         **({"whatsapp_cobranca": bool(c["whatsapp_cobranca"])} if "whatsapp_cobranca" in c else {}),
         **({"fiscal": _fiscal(c["fiscal"])} if "fiscal" in c else {}),
@@ -162,7 +202,8 @@ def salvar(c: dict) -> dict:
     antigo = obter(c["cpf_cnpj"]) or {}
     # regra fiscal e serviço habitual do tomador só mudam quando vierem no cadastro (importações não apagam)
     lista.append({**{k: antigo[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "fiscal",
-                                            "servico_id", "estrangeiro", "whatsapp_cobranca", "codigo_externo", "padroes_nota")
+                                            "servico_id", "estrangeiro", "whatsapp_cobranca", "codigo_externo", "padroes_nota",
+                                            "emails_extras", "whatsapps_extras")
                     if k in antigo}, **c})
     _gravar(lista)
     return c
