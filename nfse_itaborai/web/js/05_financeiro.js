@@ -362,6 +362,50 @@ function enviarSequencia(fila, i = 0) {
 }
 async function feito(id) { await api("whatsapp/feito", { id }); if (PAG == "cobranca") ir("cobranca"); }
 
+// ---------------------------------------------------------------- mensagens enviadas (e-mail e WhatsApp)
+let FILTRO_MSG = { per: "7", canal: "", status: "" };
+PAGINAS.mensagens = async el => {
+  const dias = +FILTRO_MSG.per, de = dias ? new Date(Date.now() - (dias - 1) * 864e5).toISOString().slice(0, 10) : "";
+  const [lst, r] = await Promise.all([api("mensagens", { de, canal: FILTRO_MSG.canal, status: FILTRO_MSG.status }), api("mensagens/resumo")]);
+  const hora = q => `${dt(q.slice(0, 10))}${q.slice(11, 16) != "00:00" ? " " + q.slice(11, 16) : ""}`;
+  const sel = (id, ops, v) => `<select id="${id}">${ops.map(([k, t]) => `<option value="${k}" ${k == v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+  el.innerHTML = `<h1>Mensagens <span class="acoes"><button class="btn sec" id="msg_cob">${ic("cobranca")}Régua e fila do WhatsApp</button></span></h1>
+  <div class="kpis"><div class="kpi"><div class="r">${ic("email")}E-mails enviados hoje</div><div class="v">${r.email_hoje}</div></div>
+    <div class="kpi"><div class="r">${ic("fone")}WhatsApp enviados hoje</div><div class="v">${r.whatsapp_hoje}</div></div>
+    <div class="kpi ${r.fila_whatsapp ? "destaque" : ""}"><div class="r">${ic("relogio")}Na fila do WhatsApp</div><div class="v">${r.fila_whatsapp}</div><div class="s">${r.fila_whatsapp ? '<a href="#" onclick="ir(\'cobranca\');return false">ver a fila</a>' : "nada aguardando"}</div></div>
+    <div class="kpi ${r.erros_7d ? "critico" : ""}"><div class="r">${ic("alerta")}Falhas nos últimos 7 dias</div><div class="v">${r.erros_7d}</div>${r.erros_7d ? '<div class="s"><a href="#" id="msg_ver_erros">ver as falhas</a></div>' : ""}</div></div>
+  <div class="card"><div class="barra"><label>Período${sel("msg_per", [["1", "Hoje"], ["7", "Últimos 7 dias"], ["30", "Últimos 30 dias"], ["90", "Últimos 90 dias"], ["0", "Tudo"]], FILTRO_MSG.per)}</label>
+    <label>Canal${sel("msg_canal", [["", "E-mail e WhatsApp"], ["email", "E-mail"], ["whatsapp", "WhatsApp"]], FILTRO_MSG.canal)}</label>
+    <label>Situação${sel("msg_status", [["", "Todas"], ["enviado", "Enviadas"], ["erro", "Com falha"]], FILTRO_MSG.status)}</label></div>
+  <p class="sub">${lst.length} mensage${lst.length == 1 ? "m" : "ns"}${lst.length >= 1000 ? " (as 1.000 mais recentes)" : ""} · e-mails de cobrança, notas fiscais, agradecimentos, resumos e testes, e tudo o que saiu pelo WhatsApp. Clique em “Ver” para o texto completo.</p>
+  ${tabela([{ t: "Data", f: m => `<span style="white-space:nowrap">${hora(m.quando)}</span>` },
+    { t: "Canal", fsel: 1, fv: m => m.canal == "email" ? "E-mail" : "WhatsApp", f: m => `${ic(m.canal == "email" ? "email" : "fone")} ${m.canal == "email" ? "E-mail" : "WhatsApp"}` },
+    { t: "Cliente / destinatário", f: m => celNome(m.cliente || m.para || "—", m.cliente ? esc(m.para) : "") },
+    { t: "Tipo", fsel: 1, fv: m => m.tipo, f: m => esc(m.tipo) },
+    { t: "Assunto", f: m => { const n = m.anexos ? m.anexos.split(", ").length : 0;
+      return `<span class="sub">${esc(m.assunto || "")}${n ? `<br><span title="${esc(m.anexos)}">📎 ${n == 1 ? esc(m.anexos) : n + " anexos"}</span>` : ""}</span>`; } },
+    { t: "Situação", fsel: 1, fv: m => m.status == "erro" ? "Falha" : "Enviada", f: m => m.status == "erro" ? `<span class="selo critico" title="${esc(m.detalhe)}">Falha</span><div class="sub">${esc(m.detalhe.slice(0, 90))}</div>` : `<span class="selo bom">Enviada</span>` },
+    { t: "", filtro: false, f: m => `<div class="acoes-linha"><button class="btn min sec" onclick="verMensagem(${m.id})">Ver</button> <button class="btn min ${m.status == "erro" ? "" : "sec"}" onclick="reenviarMensagem(${m.id})">Reenviar</button></div>` }],
+    lst, "Nenhuma mensagem neste período.", { filtros: "msgs" })}</div>`;
+  ["per", "canal", "status"].forEach(k => $("#msg_" + k).onchange = e => { FILTRO_MSG[k] = e.target.value; ir("mensagens"); });
+  $("#msg_cob").onclick = () => ir("cobranca");
+  if ($("#msg_ver_erros")) $("#msg_ver_erros").onclick = e => { e.preventDefault(); FILTRO_MSG = { per: "7", canal: "", status: "erro" }; ir("mensagens"); };
+};
+async function verMensagem(id) {
+  const m = await api("mensagem", { id });
+  modal(`<h2>${m.canal == "email" ? "E-mail" : "WhatsApp"} — ${esc(m.tipo)}</h2>
+    <p><b>Data:</b> ${dt(m.quando.slice(0, 10))} ${m.quando.slice(11, 16)} · <b>Para:</b> ${esc(m.para || "—")}${m.cliente ? ` · <b>Cliente:</b> ${esc(m.cliente)}` : ""}</p>
+    ${m.assunto ? `<p><b>Assunto:</b> ${esc(m.assunto)}</p>` : ""}${m.anexos ? `<p><b>Anexos:</b> ${esc(m.anexos)}</p>` : ""}
+    <p><b>Situação:</b> ${m.status == "erro" ? `<span class="selo critico">Falha</span> ${esc(m.detalhe)}` : `<span class="selo bom">Enviada</span> <span class="sub">${esc(m.detalhe)}</span>`}</p>
+    <pre style="white-space:pre-wrap;background:var(--superficie2);padding:12px;border-radius:8px;max-height:50vh;overflow:auto">${esc(m.texto || "(texto não guardado — mensagem anterior à aba Mensagens)")}</pre>
+    <p><button class="btn" onclick="reenviarMensagem(${m.id})">Reenviar</button> <button class="btn sec" onclick="fechar()">Fechar</button></p>`, true);
+}
+async function reenviarMensagem(id) {
+  if (!confirm("Reenviar esta mensagem ao cliente agora?")) return;
+  const r = await api("mensagem/reenviar", { id }); if (r.erro) return;
+  fechar(); aviso(r.mensagem || "Reenviada ✔", 8000); if (PAG == "mensagens") ir("mensagens");
+}
+
 // ---------------------------------------------------------------- contas a pagar
 let FILTRO_PAG = "a_pagar";
 PAGINAS.pagar = async el => {

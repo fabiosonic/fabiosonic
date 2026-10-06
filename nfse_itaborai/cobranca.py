@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, horario, inter, pix, whatsapp, whatsapp_web
+from . import clientes, config, db, emissor, financeiro, horario, inter, mensagens, pix, whatsapp, whatsapp_web
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -439,9 +439,10 @@ def link_whatsapp(telefone: str, texto: str) -> str:
 
 
 def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, anexos: list[str] | None = None,
-                 html: str = "", teste: bool = False) -> None:
+                 html: str = "", teste: bool = False, ref: dict | None = None) -> None:
     """Todo e-mail do sistema passa por aqui. Fora do horário comercial (fim de semana, noite) nada sai —
-    exceto os testes que o próprio escritório dispara na tela (teste=True)."""
+    exceto os testes que o próprio escritório dispara na tela (teste=True).
+    Cada envio (ou falha do servidor) fica na aba Mensagens; ref = {tipo, titulo_id, cliente}."""
     cfg = cfg or config.carregar()
     if not teste and not horario.comercial(cfg=cfg):
         raise RuntimeError(horario.motivo(cfg=cfg))
@@ -466,6 +467,18 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
         if Path(caminho).suffix.lower() == ".xml":
             tipo = ["application", "xml"]
         msg.add_attachment(Path(caminho).read_bytes(), maintype=tipo[0], subtype=tipo[1], filename=Path(caminho).name)
+    ref = ref or {}
+    reg = {"tipo": ref.get("tipo") or ("Teste" if teste else "E-mail"), "titulo_id": ref.get("titulo_id"),
+           "cliente": ref.get("cliente", ""), "anexos": [str(a) for a in anexos or []]}
+    try:
+        _smtp_enviar(s, usuario, msg)
+    except Exception as ex:
+        mensagens.registrar("email", para, assunto, texto, "erro", str(ex)[:500], **reg)
+        raise
+    mensagens.registrar("email", para, assunto, texto, "enviado", **reg)
+
+
+def _smtp_enviar(s: dict, usuario: str, msg: EmailMessage) -> None:
     porta = int(s.get("porta") or 587)
     host = str(s["host"]).strip()
     if s.get("ssl") or porta == 465:
@@ -604,7 +617,9 @@ def _email_cobranca(cli: dict, itens: list[tuple[dict, int]], em: date, cfg: dic
             else:
                 assunto, texto = mensagem_grupo(todos, cfg, em)
                 html = mensagem_grupo_html(todos, cfg, em)
-            enviar_email(cli["email"], assunto, texto, cfg, pdfs, html=html)
+            enviar_email(cli["email"], assunto, texto, cfg, pdfs, html=html,
+                         ref={"tipo": mensagens.tipo_da_etapa(itens[0][1]), "titulo_id": itens[0][0]["id"],
+                              "cliente": itens[0][0]["cliente_nome"]})
             status, det = "enviado", cli["email"] + (f" (e-mail com {len(todos)} títulos)" if len(todos) > 1 else "")
             res["email"] += 1
         except Exception as ex:  # noqa: BLE001 — registra qualquer falha de envio
@@ -830,7 +845,8 @@ def enviar_nfse_titulo(tid: int, cfg: dict | None = None) -> dict:
     with db.conexao() as con:
         con.execute("DELETE FROM eventos_cobranca WHERE titulo_id=? AND etapa=?", (tid, ETAPA_NFSE))
     if cli.get("email") and cfg["smtp"].get("host"):
-        enviar_email(cli["email"], assunto, texto, cfg, anexos_nfse(t))
+        enviar_email(cli["email"], assunto, texto, cfg, anexos_nfse(t),
+                     ref={"tipo": "Nota fiscal", "titulo_id": tid, "cliente": t["cliente_nome"]})
         out["email"] = cli["email"]
         _evento(tid, ETAPA_NFSE, "email", "enviado", cli["email"])
     if cli.get("telefone") and cli.get("whatsapp_cobranca"):
@@ -891,7 +907,9 @@ def _pos_pagamento(em: date, cfg: dict, res: dict) -> None:
             for etapa, assunto, texto, anexos in fila:   # primeiro o agradecimento, depois a nota
                 if canal == "email":
                     try:
-                        enviar_email(cli["email"], assunto, texto, cfg, anexos)
+                        enviar_email(cli["email"], assunto, texto, cfg, anexos,
+                                     ref={"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"],
+                                          "cliente": t["cliente_nome"]})
                         status, det = "enviado", cli["email"]
                         res["email"] += 1
                     except Exception as ex:  # noqa: BLE001
@@ -958,12 +976,15 @@ def cobrar_agora(tid: int, cfg: dict | None = None) -> dict:
     elif cli.get("telefone") and cli.get("whatsapp_cobranca") and whatsapp_web.ativo(cfg):
         try:                                   # WhatsApp Web do escritório: envia na hora, sozinho
             out["whatsapp_enviado"] = whatsapp_web.enviar_um(cli["telefone"], mensagem(t, etapa, cfg, canal="whatsapp")[1], cfg,
-                                                             pdf=whatsapp_web._pdf_do_titulo(t["id"], cfg))
+                                                             pdf=whatsapp_web._pdf_do_titulo(t["id"], cfg),
+                                                             ref={"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"],
+                                                                  "cliente": t["cliente_nome"]})
         except Exception as ex:  # noqa: BLE001
             out["whatsapp_erro"] = str(ex)
     if cli.get("email") and cfg["smtp"].get("host"):
         pdf_ = _pdf_boleto(t, cfg)
-        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [], html=mensagem_html(t, etapa, cfg))
+        enviar_email(cli["email"], assunto, texto, cfg, [pdf_] if pdf_ else [], html=mensagem_html(t, etapa, cfg),
+                     ref={"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"], "cliente": t["cliente_nome"]})
         out["email"] = cli["email"]
     out["pdf"] = t.get("boleto_pdf") or (_pdf_boleto(t, cfg) if t.get("banco_id") else "")
     return out

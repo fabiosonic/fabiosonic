@@ -277,6 +277,13 @@ def enviar(itens: list[dict], cfg: dict | None = None, so_horario_comercial: boo
     finally:
         _situacao.update(enviando=False)
         _trava.release()
+    from . import mensagens
+    for s in saida:                                   # aba Mensagens (desconectado: continua na fila, sem registro)
+        if not s.get("desconectado"):
+            mensagens.registrar("whatsapp", s.get("numero", ""), "", s.get("texto", ""),
+                                "enviado" if "resultado" in s else "erro", s.get("erro", "") or "WhatsApp Web",
+                                tipo=s.get("tipo") or ("Teste" if not so_horario_comercial else "WhatsApp"),
+                                titulo_id=s.get("titulo_id"), cliente=s.get("cliente", ""), anexos=[s.get("pdf", "")])
     if any("resultado" in s for s in saida):
         _gravar_marca(verificado=datetime.now().isoformat(timespec="seconds"))
     return saida
@@ -299,7 +306,7 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
     """Envia sozinho as mensagens de WhatsApp que a régua deixou na fila (status 'pendente').
     Cobrança: UMA mensagem por cliente com TODOS os títulos em aberto dele (soma e valor atualizado), montada na hora
     do envio, e um PDF de boleto por título logo em seguida. Agradecimento e nota fiscal continuam por título."""
-    from . import cobranca, financeiro, horario
+    from . import cobranca, financeiro, horario, mensagens
     cfg = cfg or config.carregar()
     if not horario.comercial(cfg=cfg):
         return {"enviados": 0, "erros": 0, "pendentes": len(cobranca.fila_whatsapp()), "aviso": horario.motivo(cfg=cfg)}
@@ -323,7 +330,8 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
                     pdf = cobranca.pdf_nfse(t)               # a nota em PDF vai como documento, logo após o texto
                 except Exception:  # noqa: BLE001
                     pdf = ""
-            itens.append({"eventos": [e["id"]], "numero": numero, "texto": texto, "cliente": e["cliente_nome"], "pdf": pdf})
+            itens.append({"eventos": [e["id"]], "numero": numero, "texto": texto, "cliente": e["cliente_nome"], "pdf": pdf,
+                          "tipo": mensagens.tipo_da_etapa(e["etapa"]), "titulo_id": e["titulo_id"]})
     for cpf, evs in grupos.items():
         numero, texto_antigo = _do_link(evs[0]["detalhe"])
         devidos = cobranca.todos_do_cliente(cpf, [(e["_t"], e["etapa"]) for e in evs])
@@ -334,9 +342,11 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
             texto = cobranca.mensagem_grupo(devidos, cfg, canal="whatsapp")[1]
         pdfs = [(t, p) for t, _ in devidos for p in [_pdf_do_titulo(t["id"], cfg)] if p]
         itens.append({"eventos": [e["id"] for e in evs], "numero": numero, "texto": texto, "cliente": evs[0]["cliente_nome"],
-                      "pdf": pdfs[0][1] if pdfs else ""})
+                      "pdf": pdfs[0][1] if pdfs else "", "tipo": mensagens.tipo_da_etapa(devidos[0][1]),
+                      "titulo_id": devidos[0][0]["id"]})
         for t, p in pdfs[1:]:                                  # os demais boletos, um documento por título
             itens.append({"eventos": [], "numero": numero, "cliente": evs[0]["cliente_nome"], "pdf": p,
+                          "tipo": "Boleto (PDF)", "titulo_id": t["id"],
                           "texto": f"Boleto com vencimento em {t['vencimento'][8:]}/{t['vencimento'][5:7]}/{t['vencimento'][:4]}"})
     itens = itens[:maximo]
     try:
@@ -381,7 +391,8 @@ def _pdf_do_titulo(tid: int, cfg: dict) -> str:
         return ""
 
 
-def enviar_um(telefone: str, texto: str, cfg: dict | None = None, so_horario_comercial: bool = True, pdf: str = "") -> str:
+def enviar_um(telefone: str, texto: str, cfg: dict | None = None, so_horario_comercial: bool = True, pdf: str = "",
+              ref: dict | None = None) -> str:
     """Envio imediato (botão "Cobrar" e mensagem de teste). Devolve o número usado."""
     from . import horario
     if so_horario_comercial and not horario.comercial(cfg=cfg):
@@ -389,7 +400,7 @@ def enviar_um(telefone: str, texto: str, cfg: dict | None = None, so_horario_com
     numero = numero_de(telefone)
     if not numero:
         raise ErroWhatsAppWeb("Telefone do cliente inválido para WhatsApp (DDD + número).")
-    s = enviar([{"numero": numero, "texto": texto, "pdf": pdf}], cfg, so_horario_comercial=so_horario_comercial)[0]
+    s = enviar([{"numero": numero, "texto": texto, "pdf": pdf, **(ref or {})}], cfg, so_horario_comercial=so_horario_comercial)[0]
     if "erro" in s:
         raise ErroWhatsAppWeb(s["erro"])
     db.registrar("whatsapp", f"WhatsApp Web: mensagem enviada para {numero}")

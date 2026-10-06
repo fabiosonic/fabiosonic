@@ -706,6 +706,16 @@ O boleto já registrado no banco **não é cancelado**: se o cliente pagar, a ba
 pagamento" sai pelo valor pago). A baixa manual também funciona. **Voltar do jurídico** (menu Mais da aba Jurídico)
 retoma a cobrança normal.
 
+### Mensagens (e-mails e WhatsApp enviados)
+
+A aba **Mensagens** mostra tudo o que o sistema mandou: cobranças, boletos, lembretes, notas fiscais, agradecimentos,
+resumos, fechamentos e testes, por e-mail e pelo WhatsApp (WhatsApp Web ou API oficial). Para cada mensagem: data e
+hora, canal, cliente e destinatário, tipo, assunto, anexos e situação (**Enviada** ou **Falha**, com o motivo dado
+pelo servidor). Os cartões do topo trazem os envios de hoje, a fila do WhatsApp e as falhas dos últimos 7 dias.
+Filtros por período, canal e situação (e por coluna). **Ver** abre o texto completo; **Reenviar** remonta a nota
+fiscal (PDF/XML) ou a cobrança (valor atualizado) e, nos demais casos, repete o texto. Ao atualizar, o histórico da
+régua já enviado entra na aba (sem o texto, que antes não era guardado). Cada empresa vê só as suas mensagens.
+
 ### Conciliação: extrato completo
 
 A Conciliação mostra **todo o extrato** importado (entradas e saídas), com o que cada lançamento virou: recebimento

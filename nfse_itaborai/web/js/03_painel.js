@@ -21,6 +21,7 @@ const SUBT = {
   receber: "Honorários a receber, com valor atualizado por multa e juros, situação da NFS-e e ações de cobrança.",
   contratos: "Clientes cobrados todo mês: o robô gera o título, a NFS-e e o boleto/PIX no dia configurado.",
   cobranca: "Régua automática de lembretes e cobranças por e-mail e WhatsApp, com o histórico de envios.",
+  mensagens: "Todos os e-mails e mensagens de WhatsApp enviados aos clientes: o que saiu, o que falhou, o texto de cada um e o reenvio.",
   pagar: "Despesas do escritório: vencimentos, pagamentos e despesas recorrentes.",
   conciliacao: "Extrato do banco conferido com os títulos e despesas: baixas automáticas e vínculos manuais.",
   relatorios: "Indicadores, DRE, fluxo de caixa, livro caixa, inadimplência e análise por cliente.",

@@ -109,6 +109,21 @@ CREATE TABLE IF NOT EXISTS arquivos_processados (
     mtime REAL NOT NULL,
     quando TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mensagens (     -- todo e-mail/WhatsApp enviado (aba Mensagens)
+    id INTEGER PRIMARY KEY,
+    quando TEXT NOT NULL,
+    canal TEXT NOT NULL,                 -- email | whatsapp
+    para TEXT DEFAULT '',
+    cliente TEXT DEFAULT '',
+    titulo_id INTEGER,
+    tipo TEXT DEFAULT '',
+    assunto TEXT DEFAULT '',
+    texto TEXT DEFAULT '',
+    anexos TEXT DEFAULT '',
+    status TEXT NOT NULL,                -- enviado | erro
+    detalhe TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS mensagens_quando ON mensagens (quando);
 CREATE TABLE IF NOT EXISTS log (
     id INTEGER PRIMARY KEY,
     quando TEXT NOT NULL,
@@ -203,6 +218,11 @@ def _migrar(con: sqlite3.Connection) -> None:
             con.execute("UPDATE titulos SET boleto_situacao='dispensado' WHERE status='aberto' AND cobrar=1 AND banco_id=''"
                         " AND contrato_id IS NULL AND descricao='HONORÁRIOS CONTABEIS MENSAIS.'")
         con.execute("PRAGMA user_version=4")
+        con.commit()
+    if con.execute("PRAGMA user_version").fetchone()[0] < 5:
+        from . import mensagens          # aba Mensagens: começa com o histórico de envios da régua
+        mensagens.importar_historico(con)
+        con.execute("PRAGMA user_version=5")
         con.commit()
 
 

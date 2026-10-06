@@ -185,7 +185,7 @@ def fechamento_mensal(em: date | None = None, forcar: bool = False) -> str:
         cobranca.enviar_email(para, f"Fechamento financeiro de {ref[5:]}/{ref[:4]}",
                               f"O relatório de fechamento de {ref[5:]}/{ref[:4]} está no corpo deste e-mail e foi salvo "
                               f"também em {arq}.",
-                              cfg, html=doc, teste=forcar)
+                              cfg, html=doc, teste=forcar, ref={"tipo": "Fechamento do mês"})
         enviado = f" e enviado para {para}"
     config.salvar({"resumo": {"ultimo_fechamento": ref}})
     db.registrar("fechamento", f"Fechamento de {ref} salvo em {arq}{enviado}")

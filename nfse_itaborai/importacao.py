@@ -308,6 +308,6 @@ def resumo_diario(resultado_robo: dict, em: date | None = None, forcar: bool = F
                + "<br>".join(f"{e(k)}: {e(str(v))}" for k, v in robo.items()) + "</p>" if robo else "")
             + '</td></tr></table></td></tr></table></body></html>')
     cobranca.enviar_email(para, f"Resumo financeiro {em:%d/%m} — a receber {b(p['a_receber'])}", "\n".join(linhas), cfg,
-                          html=html, teste=forcar)
+                          html=html, teste=forcar, ref={"tipo": "Resumo financeiro"})
     config.salvar({"resumo": {"ultimo_envio": em.isoformat()}})
     return f"enviado para {para}"

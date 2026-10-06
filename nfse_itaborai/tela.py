@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, contatos, licenca, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, contatos, mensagens, licenca, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -341,6 +341,11 @@ ROTAS = {
     "conciliacao/vincular": lambda c: _e_envia(conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo"))),
     "conciliacao/agenda": lambda c: {"intervalo": automacao._intervalo(config.carregar()), **automacao.AGENDA},
     "titulo/enviar_nfse": lambda c: cobranca.enviar_nfse_titulo(_id(c)),
+    "mensagens": lambda c: mensagens.listar(str(c.get("de") or ""), str(c.get("ate") or ""), str(c.get("canal") or ""),
+                                            str(c.get("status") or "")),
+    "mensagens/resumo": lambda c: mensagens.resumo(),
+    "mensagem": lambda c: mensagens.obter(_id(c)),
+    "mensagem/reenviar": lambda c: mensagens.reenviar(_id(c)),
     "conciliacao/titulos": lambda c: conciliacao.titulos_para_vincular(str(c.get("busca") or "")),
     # atualização do sistema pelo ZIP da versão nova
     "atualizacao/analisar": lambda c: atualizacao.analisar(_b64(c)),

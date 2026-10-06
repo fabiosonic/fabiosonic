@@ -130,7 +130,15 @@ def enviar_cobranca(t: dict, etapa: int, telefone: str, cfg: dict | None = None,
              "template": {"name": nome_modelo, "language": {"code": c.get("whatsapp_idioma") or "pt_BR"},
                           "components": [{"type": "body", "parameters": [{"type": "text", "text": p}
                                                                           for p in parametros(t, etapa, cfg, em)]}]}}
-    r = _api("POST", f"{c['whatsapp_phone_id']}/messages", corpo, cfg)
+    from . import mensagens
+    reg = {"tipo": mensagens.tipo_da_etapa(etapa), "titulo_id": t["id"], "cliente": t["cliente_nome"]}
+    texto = f"Modelo {nome_modelo}: " + " | ".join(parametros(t, etapa, cfg, em))
+    try:
+        r = _api("POST", f"{c['whatsapp_phone_id']}/messages", corpo, cfg)
+    except Exception as ex:
+        mensagens.registrar("whatsapp", para, "", texto, "erro", str(ex)[:500], **reg)
+        raise
     mid = ((r.get("messages") or [{}])[0]).get("id", "")
+    mensagens.registrar("whatsapp", para, "", texto, "enviado", f"API oficial (Meta) {mid}", **reg)
     db.registrar("whatsapp", f"Título {t['id']} ({t['cliente_nome']}): modelo {nome_modelo} enviado para {para}")
     return mid
