@@ -56,3 +56,15 @@ def test_painel_aponta_pago_sem_nota_e_nota_recusada(base):  # noqa: F811
     i = item()
     assert not i["ok"] and "1 título(s) pago(s)" in i["detalhe"] and "recusada" in i["detalhe"]
     assert tid in [t["id"] for t in financeiro.listar_titulos("sem_nfse")]
+
+
+def test_painel_separa_a_receber_do_mes_e_de_meses_anteriores(base):  # noqa: F811
+    from datetime import date
+
+    from nfse_itaborai import relatorios
+    for venc, comp in (("2026-10-10", "2026-10"), ("2026-08-10", "2026-08")):
+        tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento=venc, competencia=comp, emitir_nfse=False)
+        financeiro.atualizar_titulo(tid, pix_copia_cola="PIX")          # em cobrança
+    p = relatorios.painel(date(2026, 10, 7))
+    assert p["a_receber_mes"] == 50000 and p["a_receber_anteriores"] == 50000
+    assert p["a_receber"] == p["a_receber_mes"] + p["a_receber_anteriores"]

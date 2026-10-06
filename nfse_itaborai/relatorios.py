@@ -104,6 +104,9 @@ def painel(em: date | None = None) -> dict:
         "hoje": em.isoformat(), "competencia": comp,
         "faturado_mes": faturado_mes, "recebido_mes": recebido_mes,
         "a_receber": sum(t["valor_cent"] for t in abertos), "atrasado": vencido_aberto,
+        # o "a receber" soma tudo em aberto: o faturado do mês ainda não pago + o que ficou de meses anteriores
+        "a_receber_mes": sum(t["valor_cent"] for t in abertos if t["competencia"] >= comp),
+        "a_receber_anteriores": sum(t["valor_cent"] for t in abertos if t["competencia"] < comp),
         "atrasado_qtd": len(atrasados), "clientes_atrasados": len({t["cpf_cnpj"] for t in atrasados}),
         "juridico": sum(t["total_cent"] for t in juridicos), "juridico_qtd": len(juridicos),
         "clientes_juridico": len({t["cpf_cnpj"] for t in juridicos}),

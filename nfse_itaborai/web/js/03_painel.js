@@ -258,7 +258,7 @@ PAGINAS.painel = async el => {
       rotTend: "Recebido menos despesas pagas, mês a mês", estado: estadoSelo(caixa < 0 ? "critico" : "bom", caixa < 0 ? "prejuízo no caixa" : "caixa positivo"),
       sub: `${brl(atu.recebido || 0)} recebidos − ${brl(atu.despesas || 0)} de despesas pagas` })}
     ${statTile({ rot: "Faturado no mês", icone: "nota", valor: brl(p.faturado_mes), delta: variacao(p.faturado_mes, ant.faturado, true, "mês anterior", mesCurto(ant.mes)), tendencia: col("faturado"), sub: "por competência · 12 meses no gráfico" })}
-    ${statTile({ rot: "A receber", icone: "receber", valor: brl(p.a_receber), tendencia: col("a_receber"), rotTend: "Saldo a receber no fim de cada mês", sub: `${brl(p.recebido_mes)} já recebidos no mês` })}
+    ${statTile({ rot: "A receber", icone: "receber", valor: brl(p.a_receber), tendencia: col("a_receber"), rotTend: "Saldo a receber no fim de cada mês", sub: `${brl(p.recebido_mes)} já recebidos no mês${p.a_receber_anteriores ? ` · ${brl(p.a_receber_mes)} do mês + ${brl(p.a_receber_anteriores)} de meses anteriores` : ""}` })}
     ${statTile({ rot: "Em atraso", icone: "alerta", valor: brl(p.atrasado), delta: variacao(atu.atrasado, ant.atrasado, false, "fim do mês anterior", mesCurto(ant.mes)), tendencia: col("atrasado"), rotTend: "Valor em atraso no fim de cada mês",
       estado: estadoSelo(inadCls, `${pct(inad)} inadimplência`), sub: `${p.atrasado_qtd} título(s) de ${p.clientes_atrasados} cliente(s)` })}
     ${statTile({ rot: "Recorrência (MRR)", icone: "contratos", valor: brl(p.mrr), sub: `${p.contratos_ativos} cliente(s) na recorrência · ticket médio ${brl(p.ticket_medio)}` })}
