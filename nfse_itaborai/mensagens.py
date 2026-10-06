@@ -12,7 +12,7 @@ from pathlib import Path
 from . import db
 
 # etapa da régua (eventos_cobranca.etapa) -> tipo mostrado na aba
-ETAPA_TIPO = {-100: "Cobrança (boleto)", 1001: "Agradecimento", 1002: "Nota fiscal"}
+ETAPA_TIPO = {-100: "Cobrança (boleto)", 1001: "Agradecimento", 1002: "Nota fiscal", -900: "Aviso de suspensão"}
 
 
 def tipo_da_etapa(etapa: int) -> str:
@@ -76,7 +76,7 @@ def importar_historico(con) -> None:
         "INSERT INTO mensagens (quando, canal, para, cliente, titulo_id, tipo, assunto, texto, anexos, status, detalhe) "
         "SELECT e.data || ' 00:00:00', e.canal, CASE WHEN e.canal='email' AND e.status='enviado' THEN e.detalhe ELSE '' END,"
         " t.cliente_nome, e.titulo_id, CASE e.etapa WHEN -100 THEN 'Cobrança (boleto)' WHEN 1001 THEN 'Agradecimento'"
-        " WHEN 1002 THEN 'Nota fiscal' ELSE CASE WHEN e.etapa<0 THEN 'Lembrete' WHEN e.etapa=0 THEN 'Vence hoje'"
+        " WHEN 1002 THEN 'Nota fiscal' WHEN -900 THEN 'Aviso de suspensão' ELSE CASE WHEN e.etapa<0 THEN 'Lembrete' WHEN e.etapa=0 THEN 'Vence hoje'"
         " ELSE 'Cobrança em atraso' END END, '', '', '', CASE e.status WHEN 'feito' THEN 'enviado' ELSE e.status END,"
         " CASE WHEN e.status='erro' THEN e.detalhe WHEN e.status='feito' THEN 'marcado como enviado na tela' ELSE 'anterior à aba Mensagens' END "
         "FROM eventos_cobranca e LEFT JOIN titulos t ON t.id=e.titulo_id WHERE e.status IN ('enviado','erro','feito')"

@@ -184,7 +184,7 @@ async function cobrar(id) {
 }
 async function historicoTitulo(id) {
   const h = await api("titulo/historico", { id });
-  modal(`<h2>Histórico de cobrança</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Etapa", f: e => e.etapa < 0 ? `${-e.etapa} dia(s) antes` : e.etapa == 0 ? "no vencimento" : `${e.etapa} dia(s) após` }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }], h, "Nenhuma cobrança enviada ainda.")}<p><button class="btn sec" onclick="fechar()">Fechar</button></p>`);
+  modal(`<h2>Histórico de cobrança</h2>${tabela([{ t: "Data", f: e => dt(e.data) }, { t: "Etapa", f: e => e.etapa == -900 || e.etapa == -100 || e.etapa > 1000 ? nomeEtapa(e.etapa) : e.etapa < 0 ? `${-e.etapa} dia(s) antes` : e.etapa == 0 ? "no vencimento" : `${e.etapa} dia(s) após` }, { t: "Canal", f: e => e.canal }, { t: "Status", f: e => selo(e.status) }], h, "Nenhuma cobrança enviada ainda.")}<p><button class="btn sec" onclick="fechar()">Fechar</button></p>`);
 }
 async function aplicarRecorrencia(cid) {
   const ab = await api("contrato/abertos", { id: cid }); if (!ab.titulos.length) return aviso("Nada a ajustar.");
@@ -347,7 +347,7 @@ PAGINAS.cobranca = async el => {
   $("#rr").onclick = async () => { const r = await api("regua/rodar"); if (r.fora_do_horario) return aviso(r.fora_do_horario, 9000);
     aviso(`Régua: ${r.email} e-mail(s), ${r.whatsapp} WhatsApp${r.whatsapp_automatico ? " (saindo sozinhos agora)" : ""}, ${r.sem_contato} sem contato, ${r.erros} erro(s)`, 6000); ir("cobranca"); };
 };
-const nomeEtapa = e => e == -100 ? "envio do boleto" : e == 1001 ? "agradecimento (pago)" : e == 1002 ? "nota fiscal (pago)"
+const nomeEtapa = e => e == -100 ? "envio do boleto" : e == -900 ? "aviso de suspensão" : e > 1000000 ? `+${e - 1000000} dias` : e == 1001 ? "agradecimento (pago)" : e == 1002 ? "nota fiscal (pago)"
   : e < 0 ? "lembrete" : e == 0 ? "vence hoje" : `+${e} dias`;
 function enviarSequencia(fila, i = 0) {
   if (i >= fila.length) { fechar(); aviso("WhatsApp: todas as mensagens da fila foram abertas ✔", 6000); return ir("cobranca"); }
@@ -363,13 +363,16 @@ function enviarSequencia(fila, i = 0) {
 async function feito(id) { await api("whatsapp/feito", { id }); if (PAG == "cobranca") ir("cobranca"); }
 
 // ---------------------------------------------------------------- mensagens enviadas (e-mail e WhatsApp)
-let FILTRO_MSG = { per: "7", canal: "", status: "" };
+let FILTRO_MSG = { per: "7", canal: "", status: "" }, ABA_MSG = "enviadas";
+const abasMsg = () => `<div class="abas" style="margin-bottom:14px">${[["enviadas", "Enviadas"], ["modelos", "Modelos das mensagens"]].map(([k, t]) => `<button data-am="${k}" class="${k == ABA_MSG ? "on" : ""}">${t}</button>`).join("")}</div>`;
+function ligarAbasMsg(el) { $$("[data-am]", el).forEach(b => b.onclick = () => { ABA_MSG = b.dataset.am; ir("mensagens"); }); }
 PAGINAS.mensagens = async el => {
+  if (ABA_MSG == "modelos") return modelosMsg(el);
   const dias = +FILTRO_MSG.per, de = dias ? new Date(Date.now() - (dias - 1) * 864e5).toISOString().slice(0, 10) : "";
   const [lst, r] = await Promise.all([api("mensagens", { de, canal: FILTRO_MSG.canal, status: FILTRO_MSG.status }), api("mensagens/resumo")]);
   const hora = q => `${dt(q.slice(0, 10))}${q.slice(11, 16) != "00:00" ? " " + q.slice(11, 16) : ""}`;
   const sel = (id, ops, v) => `<select id="${id}">${ops.map(([k, t]) => `<option value="${k}" ${k == v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
-  el.innerHTML = `<h1>Mensagens <span class="acoes"><button class="btn sec" id="msg_cob">${ic("cobranca")}Régua e fila do WhatsApp</button></span></h1>
+  el.innerHTML = `<h1>Mensagens <span class="acoes"><button class="btn sec" id="msg_cob">${ic("cobranca")}Régua e fila do WhatsApp</button></span></h1>${abasMsg()}
   <div class="kpis"><div class="kpi"><div class="r">${ic("email")}E-mails enviados hoje</div><div class="v">${r.email_hoje}</div></div>
     <div class="kpi"><div class="r">${ic("fone")}WhatsApp enviados hoje</div><div class="v">${r.whatsapp_hoje}</div></div>
     <div class="kpi ${r.fila_whatsapp ? "destaque" : ""}"><div class="r">${ic("relogio")}Na fila do WhatsApp</div><div class="v">${r.fila_whatsapp}</div><div class="s">${r.fila_whatsapp ? '<a href="#" onclick="ir(\'cobranca\');return false">ver a fila</a>' : "nada aguardando"}</div></div>
@@ -389,8 +392,36 @@ PAGINAS.mensagens = async el => {
     lst, "Nenhuma mensagem neste período.", { filtros: "msgs" })}</div>`;
   ["per", "canal", "status"].forEach(k => $("#msg_" + k).onchange = e => { FILTRO_MSG[k] = e.target.value; ir("mensagens"); });
   $("#msg_cob").onclick = () => ir("cobranca");
+  ligarAbasMsg(el);
   if ($("#msg_ver_erros")) $("#msg_ver_erros").onclick = e => { e.preventDefault(); FILTRO_MSG = { per: "7", canal: "", status: "erro" }; ir("mensagens"); };
 };
+async function modelosMsg(el) {
+  const lst = await api("modelos_msg");
+  el.innerHTML = `<h1>Mensagens</h1>${abasMsg()}
+  <div class="card"><p class="sub">Edite o <b>assunto</b> (e-mail) e o <b>texto</b> de cada mensagem enviada aos clientes, por e-mail e pelo WhatsApp do escritório.
+    O sistema completa sozinho a saudação (“Olá, cliente!”), a lista de títulos, linha digitável, PIX, link do cartão, NFS-e e a assinatura — assim os dados de pagamento nunca saem errados.
+    Clique num campo (ex.: <code>{valor}</code>) para inseri-lo no texto. Deixe como está para usar o texto padrão.
+    ${ST.config.cobranca.whatsapp_api ? "<br><b>WhatsApp pela API oficial:</b> os textos lá são os modelos aprovados na Meta e não mudam aqui." : ""}</p></div>
+  ${lst.map(m => `<div class="card modelo-msg" data-ch="${m.chave}"><div class="card-cab"><h2>${esc(m.nome)}</h2>${m.assunto || m.texto ? '<span class="selo alerta">editado</span>' : '<span class="selo neutro">padrão</span>'}</div>
+    <div class="campos"><label class="inteiro">Assunto do e-mail<input class="m_ass" value="${esc(m.assunto || m.assunto_padrao)}"></label>
+    <label class="inteiro">Texto<textarea class="m_txt" rows="${Math.max(3, Math.ceil(m.texto_padrao.length / 110) + (m.texto_padrao.match(/\n/g) || []).length)}">${esc(m.texto || m.texto_padrao)}</textarea></label></div>
+    <p class="sub">Campos: ${m.campos.map(c => `<button type="button" class="btn min sec m_campo" data-c="{${c.campo}}" title="${esc(c.desc)}">{${c.campo}}</button>`).join(" ")}</p>
+    <p><button class="btn m_salvar">Salvar</button> <button class="btn sec m_prev">Pré-visualizar</button> <button class="btn sec m_rest">Restaurar padrão</button></p>
+    <div class="m_res"></div></div>`).join("")}`;
+  ligarAbasMsg(el);
+  $$(".modelo-msg", el).forEach(card => {
+    const ch = card.dataset.ch, m = lst.find(x => x.chave == ch), ass = $(".m_ass", card), txt = $(".m_txt", card);
+    let alvo = txt;
+    [ass, txt].forEach(i => i.onfocus = () => alvo = i);
+    $$(".m_campo", card).forEach(b => b.onclick = () => { const p = alvo.selectionStart ?? alvo.value.length;
+      alvo.value = alvo.value.slice(0, p) + b.dataset.c + alvo.value.slice(alvo.selectionEnd ?? p); alvo.focus(); alvo.selectionStart = alvo.selectionEnd = p + b.dataset.c.length; });
+    $(".m_prev", card).onclick = async () => { const r = await api("modelos_msg/previa", { chave: ch, assunto: ass.value, texto: txt.value });
+      $(".m_res", card).innerHTML = `<div class="card" style="background:var(--superficie2)"><p><b>Assunto:</b> ${esc(r.assunto)}</p><pre style="white-space:pre-wrap;margin:0;font-family:inherit">Olá, Exemplo Comércio Ltda!\n\n${esc(r.texto)}\n\n<span class="sub">(dados de pagamento e assinatura entram aqui automaticamente)</span></pre></div>`; };
+    $(".m_salvar", card).onclick = async () => { await api("modelos_msg/salvar", { chave: ch, assunto: ass.value, texto: txt.value }); aviso("Modelo salvo ✔ — vale para as próximas mensagens", 6000); ir("mensagens"); };
+    $(".m_rest", card).onclick = async () => { if (!confirm("Voltar este modelo ao texto padrão do sistema?")) return;
+      await api("modelos_msg/salvar", { chave: ch, assunto: m.assunto_padrao, texto: m.texto_padrao }); aviso("Texto padrão restaurado ✔"); ir("mensagens"); };
+  });
+}
 async function verMensagem(id) {
   const m = await api("mensagem", { id });
   modal(`<h2>${m.canal == "email" ? "E-mail" : "WhatsApp"} — ${esc(m.tipo)}</h2>

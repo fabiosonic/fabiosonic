@@ -177,3 +177,57 @@ def test_rotina_rapida_envia_a_nota_sem_esperar_o_robo(base, monkeypatch):  # no
     assert any(v.get("envio_notas", {}).get("email") == 1 for v in r.values() if isinstance(v, dict))
     assert [e[1] for e in env] == ["Nota fiscal de serviço nº 55"] and automacao.AGENDA["ultima"]
     assert config.carregar()["automacao"]["intervalo_extrato_min"] == 15
+
+
+def test_atraso_cobrado_3_dias_apos_o_vencimento_e_depois_a_cada_7(base, monkeypatch):  # noqa: F811
+    """Venceu e o pagamento não foi reconhecido: 1ª cobrança 3 dias depois, e depois a cada 7 dias."""
+    env = _cap(monkeypatch)
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento="2026-10-05", emitir_nfse=False)
+    cobranca.preparar_pagamento(tid)
+    dias = [d for d in range(1, 31) if cobranca.rodar_regua(date(2026, 10, d))["email"]]
+    assert dias == [1, 2, 5, 8, 15, 22, 29]          # boleto, lembrete (-3), vence hoje, +3, +10, +17, +24
+    assert "em aberto há 3 dia(s)" in env[3][1]
+
+
+def test_mesmo_cliente_atrasado_so_e_cobrado_a_cada_7_dias(base, monkeypatch):  # noqa: F811
+    """Caso real: título atrasado (venc. 10/09) e título novo (venc. 10/10). Os avisos do título no prazo (boleto,
+    lembrete, vence hoje) não cobram o atrasado; o atrasado é cobrado uma vez por semana."""
+    env = _cap(monkeypatch)
+    velho = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento="2026-09-10", emitir_nfse=False)
+    cobranca.preparar_pagamento(velho)
+    cobranca.rodar_regua(date(2026, 9, 28))                     # cobrança do atrasado em 28/09
+    novo = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento="2026-10-10", emitir_nfse=False)
+    cobranca.preparar_pagamento(novo)
+    env.clear()
+    por_dia = {}
+    for d in range(5, 27):
+        n = len(env)
+        cobranca.rodar_regua(date(2026, 10, d))
+        if len(env) > n:
+            por_dia[d] = env[-1]
+    assert sorted(por_dia) == [5, 7, 10, 12, 19, 26]
+    assert "2 títulos" in por_dia[5][1]                          # 05/10: boleto novo + a cobrança semanal do atrasado
+    for d in (7, 10):                                           # lembrete e vence hoje: só o título no prazo
+        assert "10/09/2026" not in por_dia[d][2] and "10/10/2026" in por_dia[d][1] + por_dia[d][2]
+    datas_wa = sorted({e["data"] for e in db.linhas(
+        "SELECT data FROM eventos_cobranca WHERE canal='whatsapp' AND data>='2026-10-05'")})
+    assert datas_wa == ["2026-10-05", "2026-10-07", "2026-10-10", "2026-10-12", "2026-10-19", "2026-10-26"]
+
+
+def test_aviso_de_suspensao_aos_90_dias(base, monkeypatch):  # noqa: F811
+    env = _cap(monkeypatch)
+    t1 = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento="2026-07-10", emitir_nfse=False)
+    t2 = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "300", vencimento="2026-08-10", emitir_nfse=False)
+    for t in (t1, t2):
+        cobranca.preparar_pagamento(t)
+    cobranca.rodar_regua(date(2026, 10, 7))                     # 89 dias: só a cobrança de atraso
+    assert not [e for e in env if "suspensão" in e[1].lower()]
+    env.clear()
+    cobranca.rodar_regua(date(2026, 10, 8))                     # 90 dias: aviso de suspensão, uma vez
+    avisos = [e for e in env if "suspensão" in e[1].lower()]
+    assert len(avisos) == 1 and len(env) == 1                   # conta como a cobrança da semana
+    assert "2 título(s)" in avisos[0][2] and "18/10/2026" in avisos[0][2]   # prazo de 10 dias
+    for d in range(9, 31):
+        cobranca.rodar_regua(date(2026, 10, d))
+    assert len([e for e in env if "suspensão" in e[1].lower()]) == 1
+    assert [e["etapa"] for e in cobranca.fila_whatsapp() if e["etapa"] == cobranca.ETAPA_SUSPENSAO]

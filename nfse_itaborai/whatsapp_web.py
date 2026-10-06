@@ -320,7 +320,7 @@ def enviar_fila(cfg: dict | None = None, limite: int | None = None) -> dict:
     for e in fila:                                             # cobranças: agrupa por cliente, na ordem da fila
         t = financeiro.obter_titulo(e["titulo_id"])
         e["_t"] = t
-        if e["etapa"] < cobranca.ETAPA_PAGO:
+        if e["etapa"] not in (cobranca.ETAPA_PAGO, cobranca.ETAPA_NFSE, cobranca.ETAPA_SUSPENSAO):
             grupos.setdefault(t["cpf_cnpj"], []).append(e)
         else:
             numero, texto = _do_link(e["detalhe"])

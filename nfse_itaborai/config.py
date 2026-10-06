@@ -21,6 +21,8 @@ PADRAO = {
     },
     "smtp": {"host": "", "porta": 587, "usuario": "", "senha": "", "remetente": "", "ssl": False,
              "copia_para": ""},
+    # textos das mensagens editados em Mensagens › Modelos ({"lembrete": {"assunto": "...", "texto": "..."}}; vazio = padrão)
+    "modelos": {},
     "cobranca": {
         "provedor": "inter",        # inter (boleto + PIX registrados na API do Banco Inter) | pix (copia e cola próprio) | nenhum
         "inter_client_id": "",
@@ -33,10 +35,16 @@ PADRAO = {
         "inter_dias_agenda": 60,    # dias após o vencimento em que o banco ainda aceita o pagamento (máx. 60)
         "multa_pct": 2.0,
         "juros_mes_pct": 1.0,
-        "regua_dias": [-3, 0, 1, 5, 15, 30],
-        "recorrente_ativa": True,   # cobrança recorrente dos atrasados (além das etapas fixas da régua)
-        "recorrente_apos_dias": 5,  # começa N dias após o vencimento original
-        "recorrente_a_cada_dias": 7,  # e repete a cada X dias enquanto não pagar
+        "regua_dias": [-3, 0],      # avisos ANTES do vencimento (dias negativos) e no dia (0)
+        # atrasados: 1ª cobrança N dias após o vencimento sem pagamento e depois a cada X dias (por cliente: cada
+        # mensagem cobra todos os títulos em atraso dele)
+        "recorrente_ativa": True,
+        "recorrente_apos_dias": 3,
+        "recorrente_a_cada_dias": 7,
+        # aviso de suspensão dos serviços quando o débito mais antigo chega a N dias de atraso
+        "suspensao_ativa": True,
+        "suspensao_dias": 90,
+        "suspensao_prazo_dias": 10,     # prazo dado no aviso para regularizar antes da suspensão
         "regua_email": True,
         "regua_whatsapp": True,
         # envios (e-mail e WhatsApp) só em horário comercial: segunda a sexta, entre as horas abaixo
@@ -222,6 +230,16 @@ def carregar() -> dict:
             if _cnpj_da_pasta(arq) in CNPJ_REGRA_BAIXA:
                 emi.update(nfse_quando="baixa", nfse_apos_pagamento=True)
             emi["migrado_regra_baixa"] = True
+            arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
+        # v3.13: atrasados cobrados 3 dias após o vencimento e depois a cada 7 dias (substitui as etapas fixas +1, +5…)
+        if cob and not cob.get("migrado_regua_atraso"):
+            cob["regua_dias"] = [d for d in cob.get("regua_dias", [-3, 0]) if int(d) <= 0] or [-3, 0]
+            cob.update(recorrente_ativa=True, recorrente_apos_dias=3, recorrente_a_cada_dias=7, migrado_regua_atraso=True)
+            # quem já usa o sistema pode ter débitos antigos acima de 90 dias: o aviso de suspensão começa desligado
+            # para o escritório conferir quem vai receber antes de ligar (Configurações › Cobrança)
+            cob.setdefault("suspensao_ativa", False)
+            cob.pop("intervalo_minimo_dias", None)
+            salvo["cobranca"] = cob
             arq.write_text(json.dumps(salvo, indent=2, ensure_ascii=False), encoding="utf-8")
         # XML das notas: passa a ser lido da pasta do sistema (IMPORTAR XML), não mais de Downloads
         if "downloads" in str(salvo.get("pastas", {}).get("xml_nfse", "")).lower():

@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, horario, inter, mensagens, pix, whatsapp, whatsapp_web
+from . import clientes, config, db, emissor, financeiro, horario, inter, mensagens, pix, textos, whatsapp, whatsapp_web
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -259,12 +259,15 @@ def nome_cliente(nome: str) -> str:
 ETAPA_BOLETO = -100          # envio do boleto assim que a cobrança é gerada (antes de qualquer etapa da régua)
 ETAPA_PAGO = 1001            # agradecimento pelo pagamento
 ETAPA_NFSE = 1002            # envio da nota fiscal depois do pagamento
+ETAPA_SUSPENSAO = -900       # aviso de suspensão dos serviços (débito com 90 dias de atraso)
 
 
 def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
     """Partes da mensagem de cobrança (usadas no texto, no HTML e no WhatsApp)."""
     t = financeiro.enriquecer(t, em)
     nome = nome_cliente(t["cliente_nome"])
+    chave = ("boleto" if t["dias_atraso"] <= 0 else "atraso") if etapa == ETAPA_BOLETO else \
+        "lembrete" if etapa < 0 else "vence_hoje" if etapa == 0 else "atraso"
     if etapa == ETAPA_BOLETO:                   # primeiro envio: o boleto do título (em dia ou já vencido)
         etapa = 1 if t["dias_atraso"] > 0 else -1
         if etapa < 0:
@@ -287,8 +290,12 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
         assunto = f"Pagamento em aberto há {t['dias_atraso']} dia(s)"
         abertura = (f"Não identificamos o pagamento de {_brl(t['valor_cent'])}, vencido em {_data(t['vencimento'])}. "
                     f"Valor atualizado com multa e juros: {_brl(t['total_cent'])}.")
-        if t.get("boleto_vencimento") and t["boleto_vencimento"] >= (em or financeiro.hoje()).isoformat():
-            abertura += f" O boleto já está com esse valor e vence em {_data(t['boleto_vencimento'])}."
+    dados = _dados_modelo(t, cfg) | {"cliente": nome}
+    assunto = textos.texto(cfg, chave, "assunto", dados, assunto)
+    abertura = textos.texto(cfg, chave, "texto", dados, abertura)
+    if etapa > 0 and t.get("boleto_vencimento") and t["boleto_vencimento"] >= (em or financeiro.hoje()).isoformat() \
+            and "O boleto já está com esse valor" not in abertura:
+        abertura += f" O boleto já está com esse valor e vence em {_data(t['boleto_vencimento'])}."
     cartao = None
     if t.get("cartao_link") and t.get("cartao_status") == "aberto":
         base = t["total_cent"] if etapa > 0 else t["valor_cent"]
@@ -314,6 +321,18 @@ def _conteudo(t: dict, etapa: int, cfg: dict, em: date | None = None) -> dict:
             "boleto_link": t["cobranca_link"], "boleto_pdf": boleto_pdf,
             "linha": linha, "pix": pix_, "cartao": cartao,
             "assinatura": emp.get("assinatura") or emp["nome"], "whatsapp": emp.get("whatsapp", "")}
+
+
+def _dados_modelo(t: dict, cfg: dict) -> dict:
+    """Campos dos modelos editáveis (Mensagens › Modelos) para um título."""
+    link = t.get("nfse_link") if str(t.get("nfse_link") or "").startswith("http") else ""
+    return {"cliente": nome_cliente(t["cliente_nome"]), "valor": _brl(t["valor_cent"]),
+            "vencimento": _data(t["vencimento"]), "atualizado": _brl(t.get("total_cent") or t["valor_cent"]),
+            "dias": t.get("dias_atraso", 0), "competencia": f"{t['competencia'][5:]}/{t['competencia'][:4]}",
+            "referente": t["descricao"], "nfse": t.get("nfse_numero") or "", "link_nota": link or "",
+            "valor_pago": _brl(t.get("valor_pago_cent") or t["valor_cent"]),
+            "data_pagamento": _data(t["data_pagamento"]) if t.get("data_pagamento") else "",
+            "empresa": cfg["empresa"].get("nome", "")}
 
 
 def _pdf_vai(c: dict, cfg: dict, canal: str = "email") -> bool:
@@ -516,19 +535,140 @@ def _autenticar(srv, usuario: str, senha: str, host: str, porta: int) -> None:
 # ---------------------------------------------------------------- régua
 
 def etapas_da_regua(dias: int, cob: dict) -> list[int]:
-    """Etapas fixas da régua + cobrança recorrente dos atrasados: a partir de N dias do vencimento original,
-    repete a cada X dias enquanto o título estiver em aberto."""
-    etapas = set(int(e) for e in cob["regua_dias"])
-    inicio, intervalo = int(cob.get("recorrente_apos_dias") or 0), int(cob.get("recorrente_a_cada_dias") or 0)
-    if cob.get("recorrente_ativa", True) and intervalo > 0 and inicio > 0:
-        etapas.update(range(inicio, max(dias, inicio) + 1, intervalo))
-    return sorted(etapas)
+    """Etapas ANTES do vencimento e no dia (regua_dias <= 0). Os atrasados seguem o ciclo próprio (rodar_regua):
+    1ª cobrança N dias após o vencimento sem pagamento e depois a cada X dias."""
+    return sorted({int(e) for e in cob["regua_dias"] if int(e) <= 0})
 
 
 def etapa_devida(dias: int, etapas: list[int], enviadas: set[int]) -> int | None:
     """Etapa mais recente já alcançada e ainda não enviada (tolerância de 2 dias, sem disparar etapas velhas)."""
     candidatas = [e for e in sorted(etapas) if e <= dias and dias - e <= 2 and e not in enviadas]
     return candidatas[-1] if candidatas else None
+
+
+def etapa_atraso(dias: int) -> int:
+    """Etapa de uma cobrança de atraso (= dias de atraso; acima de 999 desloca para não colidir com 1001/1002)."""
+    return dias if dias < 1000 else 1_000_000 + dias
+
+
+# eventos que contam como "cobrança de atraso" já mandada ao cliente (ciclo de 7 dias)
+_SQL_ATRASO = (f"((e.etapa>0 AND e.etapa NOT IN ({ETAPA_PAGO},{ETAPA_NFSE})) OR e.etapa={ETAPA_SUSPENSAO}"
+               f" OR (e.etapa={ETAPA_BOLETO} AND e.data>t.vencimento))")
+
+
+def ultima_cobranca_atraso(cpf_cnpj: str, canal: str) -> date | None:
+    """Data da última cobrança de valores em atraso mandada ao cliente no canal."""
+    r = db.linhas("SELECT MAX(e.data) d FROM eventos_cobranca e JOIN titulos t ON t.id=e.titulo_id WHERE t.cpf_cnpj=?"
+                  " AND e.canal=? AND e.status IN ('enviado','pendente','feito') AND " + _SQL_ATRASO, (cpf_cnpj, canal))
+    return date.fromisoformat(r[0]["d"][:10]) if r and r[0]["d"] else None
+
+
+def _registrar_whatsapp(t: dict, etapa: int, cli: dict, cfg: dict, em: date, res: dict, texto: str = "") -> None:
+    """Evento de WhatsApp da régua: API oficial envia já; senão vai para a fila (WhatsApp Web ou envio manual)."""
+    if not cli.get("whatsapp_cobranca"):
+        return                                   # cliente não marcado para receber cobrança por WhatsApp
+    if not cli.get("telefone"):
+        status, det = "sem_contato", "cliente sem telefone"
+        res["sem_contato"] += 1
+    elif whatsapp.configurado(cfg) and not texto:  # API oficial (modelos aprovados na Meta): envia sozinho
+        try:
+            whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg, em)
+            status, det = "enviado", whatsapp.numero(cli["telefone"])
+            res["whatsapp"] += 1
+        except Exception as ex:  # noqa: BLE001 — registra a falha; o e-mail segue normalmente
+            status, det = "erro", str(ex)[:300]
+            res["erros"] += 1
+    else:
+        status, det = "pendente", link_whatsapp(cli["telefone"], texto or mensagem(t, etapa, cfg, em, "whatsapp")[1])
+        res["whatsapp"] += 1
+    with db.conexao() as con:
+        con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
+                    " VALUES (?,?,?,?,?,?)", (t["id"], etapa, "whatsapp", em.isoformat(), status, det))
+
+
+def mensagem_suspensao(titulos: list[dict], cfg: dict, em: date) -> tuple[str, str]:
+    """Aviso de suspensão dos serviços: todos os títulos em atraso do cliente, total atualizado e prazo."""
+    cob = cfg["cobranca"]
+    ts = sorted((financeiro.enriquecer(t, em) for t in titulos), key=lambda t: t["vencimento"])
+    total = sum(t["total_cent"] for t in ts)
+    dados = {"cliente": nome_cliente(ts[0]["cliente_nome"]), "dias": max(t["dias_atraso"] for t in ts), "qtd": len(ts),
+             "total": _brl(total), "empresa": cfg["empresa"].get("nome", ""),
+             "data_suspensao": _data((em + timedelta(days=int(cob.get("suspensao_prazo_dias") or 10))).isoformat())}
+    emp = cfg["empresa"]
+    linhas = [f"Olá, {dados['cliente']}!", "", textos.texto(cfg, "suspensao", "texto", dados), ""]
+    for i, t in enumerate(ts, 1):
+        linhas.append(f"{i}) {t['descricao']} — competência {t['competencia'][5:]}/{t['competencia'][:4]} · vencimento "
+                      f"{_data(t['vencimento'])} · {t['dias_atraso']} dia(s) em atraso · atualizado {_brl(t['total_cent'])}")
+    linhas += ["", f"Total atualizado: {_brl(total)}", "",
+               "Se já pagou, por favor desconsidere este aviso e nos envie o comprovante.", "",
+               "Atenciosamente,", emp.get("assinatura") or emp["nome"]]
+    if emp.get("whatsapp"):
+        linhas.append(f"WhatsApp: {emp['whatsapp']}")
+    return textos.texto(cfg, "suspensao", "assunto", dados), "\n".join(linhas)
+
+
+def _avisos_suspensao(abertos: list[dict], em: date, cfg: dict, res: dict) -> None:
+    """Débito com N dias (padrão 90) de atraso: aviso de suspensão dos serviços, uma vez por título que chega lá
+    (no máximo um aviso a cada 30 dias por cliente). Conta como a cobrança de atraso da semana."""
+    cob = cfg["cobranca"]
+    if not cob.get("suspensao_ativa", True):
+        return
+    limite = int(cob.get("suspensao_dias") or 90)
+    por_cli: dict[str, list[dict]] = {}
+    for t in abertos:
+        if (em - date.fromisoformat(t["vencimento"])).days > 0:
+            por_cli.setdefault(t["cpf_cnpj"], []).append(t)
+    for cpf, ts in por_cli.items():
+        velhos = [t for t in ts if (em - date.fromisoformat(t["vencimento"])).days >= limite]
+        if not velhos:
+            continue
+        cli = clientes.obter(cpf) or {}
+        assunto, texto = mensagem_suspensao(ts, cfg, em)
+        for canal, ligado in (("email", cob["regua_email"]), ("whatsapp", cob["regua_whatsapp"])):
+            if not ligado:
+                continue
+            avisados = {r["titulo_id"] for r in db.linhas(
+                "SELECT titulo_id FROM eventos_cobranca WHERE etapa=? AND canal=? AND titulo_id IN (%s)"
+                % ",".join("?" * len(velhos)), (ETAPA_SUSPENSAO, canal, *[t["id"] for t in velhos]))}
+            recente = db.linhas("SELECT MAX(e.data) d FROM eventos_cobranca e JOIN titulos t ON t.id=e.titulo_id "
+                                "WHERE t.cpf_cnpj=? AND e.canal=? AND e.etapa=?", (cpf, canal, ETAPA_SUSPENSAO))[0]["d"]
+            if all(t["id"] in avisados for t in velhos) or (recente and (em - date.fromisoformat(recente)).days < 30):
+                continue
+            if canal == "email":
+                if not cli.get("email"):
+                    status, det = "sem_contato", "cliente sem e-mail"
+                    res["sem_contato"] += 1
+                else:
+                    try:
+                        enviar_email(cli["email"], assunto, texto, cfg,
+                                     ref={"tipo": "Aviso de suspensão", "titulo_id": velhos[0]["id"],
+                                          "cliente": velhos[0]["cliente_nome"]})
+                        status, det = "enviado", cli["email"]
+                        res["email"] += 1
+                    except Exception as ex:  # noqa: BLE001
+                        status, det = "erro", str(ex)[:300]
+                        res["erros"] += 1
+                with db.conexao() as con:
+                    for t in velhos:
+                        con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
+                                    " VALUES (?,?,?,?,?,?)", (t["id"], ETAPA_SUSPENSAO, canal, em.isoformat(), status, det))
+            else:
+                _registrar_whatsapp(velhos[0], ETAPA_SUSPENSAO, cli, cfg, em, res, texto)
+                with db.conexao() as con:          # os demais títulos ficam marcados como avisados
+                    for t in velhos[1:]:
+                        con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
+                                    " VALUES (?,?,?,?,?,?)", (t["id"], ETAPA_SUSPENSAO, canal, em.isoformat(), "feito",
+                                                              "aviso de suspensão junto com o título " + str(velhos[0]["id"])))
+
+
+def previa_suspensao(em: date | None = None, cfg: dict | None = None) -> list[dict]:
+    """Clientes que hoje têm débito com N dias (padrão 90) ou mais — quem receberia o aviso de suspensão."""
+    em = em or financeiro.hoje()
+    limite = int((cfg or config.carregar())["cobranca"].get("suspensao_dias") or 90)
+    r = db.linhas("SELECT cliente_nome, cpf_cnpj, COUNT(*) n, MIN(vencimento) v FROM titulos WHERE status='aberto' AND "
+                  + financeiro.SQL_COBRADO + " AND nfse_status IN ('emitida','nao_emitir','apos_pagamento') AND vencimento<=?"
+                  " GROUP BY cpf_cnpj ORDER BY v", ((em - timedelta(days=limite)).isoformat(),))
+    return [{"cliente": x["cliente_nome"], "titulos": x["n"], "dias": (em - date.fromisoformat(x["v"])).days} for x in r]
 
 
 def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
@@ -540,9 +680,16 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
         return res | {"fora_do_horario": horario.motivo(cfg=cfg)}
     # Só cobra títulos com NFS-e válida, sem nota ou com nota após o pagamento: nunca dispara por nota de teste.
     # Títulos lançados sem cobrança (cobrar=0) ficam fora da régua.
+    abertos = db.linhas("SELECT * FROM titulos WHERE status='aberto' AND " + financeiro.SQL_COBRADO +
+                        " AND nfse_status IN ('emitida','nao_emitir','apos_pagamento')")
+    _avisos_suspensao(abertos, em, cfg, res)
     por_cliente: dict[str, tuple[dict, list]] = {}
-    for t in db.linhas("SELECT * FROM titulos WHERE status='aberto' AND " + financeiro.SQL_COBRADO +
-                       " AND nfse_status IN ('emitida','nao_emitir','apos_pagamento')"):
+    # Atrasados: por cliente e canal, a 1ª cobrança sai N dias (padrão 3) após o vencimento sem pagamento e as
+    # seguintes a cada X dias (padrão 7) contados da última cobrança de atraso — cada mensagem já cobra todos os
+    # títulos em atraso dele. Boleto, lembrete e "vence hoje" (antes do vencimento) não entram nessa conta.
+    inicio, cada = int(cob.get("recorrente_apos_dias") or 3), max(1, int(cob.get("recorrente_a_cada_dias") or 7))
+    ultimas: dict[tuple[str, str], date | None] = {}       # foto do início da rodada (não muda com os envios dela)
+    for t in abertos:
         dias = (em - date.fromisoformat(t["vencimento"])).days
         cli = clientes.obter(t["cpf_cnpj"]) or {}
         for canal, ligado in (("email", cob["regua_email"]), ("whatsapp", cob["regua_whatsapp"])):
@@ -550,9 +697,18 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                 continue
             enviadas = {e["etapa"] for e in db.linhas(
                 "SELECT etapa FROM eventos_cobranca WHERE titulo_id=? AND canal=?", (t["id"], canal))}
-            etapa = etapa_devida(dias, etapas_da_regua(dias, cob), enviadas)
-            if etapa is None and not enviadas and cob.get("enviar_ao_gerar", True):
-                etapa = ETAPA_BOLETO                 # cobrança gerada e ainda sem nenhuma mensagem: manda o boleto já
+            if dias <= 0:
+                etapa = etapa_devida(dias, etapas_da_regua(dias, cob), enviadas)
+                if etapa is None and not enviadas and cob.get("enviar_ao_gerar", True):
+                    etapa = ETAPA_BOLETO             # cobrança gerada e ainda sem nenhuma mensagem: manda o boleto já
+            else:
+                etapa = None
+                if cob.get("recorrente_ativa", True) and dias >= inicio and etapa_atraso(dias) not in enviadas:
+                    chave = (t["cpf_cnpj"], canal)
+                    if chave not in ultimas:
+                        ultimas[chave] = ultima_cobranca_atraso(*chave)
+                    if ultimas[chave] is None or (em - ultimas[chave]).days >= cada:
+                        etapa = etapa_atraso(dias)
             if etapa is None:
                 continue
             if (etapa > 0 or (etapa == ETAPA_BOLETO and dias > 0)) and canal == "email":
@@ -560,25 +716,7 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
             if canal == "email":                     # junta os títulos do mesmo cliente num único e-mail
                 por_cliente.setdefault(t["cpf_cnpj"], (cli, []))[1].append((t, etapa))
                 continue
-            if not cli.get("whatsapp_cobranca"):
-                continue                             # cliente não marcado para receber cobrança por WhatsApp
-            elif not cli.get("telefone"):
-                status, det = "sem_contato", "cliente sem telefone"
-                res["sem_contato"] += 1
-            elif whatsapp.configurado(cfg):          # API oficial: envia sozinho
-                try:
-                    whatsapp.enviar_cobranca(t, etapa, cli["telefone"], cfg, em)
-                    status, det = "enviado", whatsapp.numero(cli["telefone"])
-                    res["whatsapp"] += 1
-                except Exception as ex:  # noqa: BLE001 — registra a falha; o e-mail segue normalmente
-                    status, det = "erro", str(ex)[:300]
-                    res["erros"] += 1
-            else:
-                status, det = "pendente", link_whatsapp(cli["telefone"], mensagem(t, etapa, cfg, em, "whatsapp")[1])
-                res["whatsapp"] += 1
-            with db.conexao() as con:
-                con.execute("INSERT OR IGNORE INTO eventos_cobranca (titulo_id, etapa, canal, data, status, detalhe)"
-                            " VALUES (?,?,?,?,?,?)", (t["id"], etapa, canal, em.isoformat(), status, det))
+            _registrar_whatsapp(t, etapa, cli, cfg, em, res)
     for cli, itens in por_cliente.values():
         _email_cobranca(cli, itens, em, cfg, res)
     _pos_pagamento(em, cfg, res)
@@ -595,9 +733,14 @@ def titulos_em_cobranca(cpf_cnpj: str) -> list[dict]:
 
 def todos_do_cliente(cpf_cnpj: str, itens: list[tuple[dict, int]]) -> list[tuple[dict, int]]:
     """A mensagem ao cliente sempre cobra TUDO que ele tem em aberto (não só o título cuja etapa venceu hoje):
-    os títulos da vez entram com a etapa deles; os demais, como 'boleto' (em dia ou vencido, conforme a data)."""
+    os títulos da vez entram com a etapa deles; os demais, como 'boleto' (em dia ou vencido, conforme a data).
+    Mensagem só de títulos ainda no prazo (boleto, lembrete, vence hoje) não cobra os atrasados: esses têm o ciclo
+    próprio (3 dias após o vencimento e depois a cada 7 dias)."""
     etapas = {t["id"]: etapa for t, etapa in itens}
-    return [(t, etapas.get(t["id"], ETAPA_BOLETO)) for t in titulos_em_cobranca(cpf_cnpj)] or itens
+    hoje = financeiro.hoje().isoformat()
+    so_no_prazo = all(t["vencimento"] >= hoje for t, _ in itens)
+    return [(t, etapas.get(t["id"], ETAPA_BOLETO)) for t in titulos_em_cobranca(cpf_cnpj)
+            if t["id"] in etapas or not so_no_prazo or t["vencimento"] >= hoje] or itens
 
 
 def _email_cobranca(cli: dict, itens: list[tuple[dict, int]], em: date, cfg: dict, res: dict) -> None:
@@ -644,6 +787,10 @@ def _grupo(itens: list[tuple[dict, int]], cfg: dict, em: date | None, canal: str
     else:
         assunto = f"Boletos dos honorários — {n} títulos (total {_brl(total)})"
         abertura = f"Seguem os {n} títulos de honorários em seu nome, no total de {_brl(total)}."
+    chave = "grupo_atraso" if atraso else "grupo"
+    dados = {"cliente": cs[0]["nome"], "qtd": n, "total": _brl(total), "empresa": cfg["empresa"].get("nome", "")}
+    assunto = textos.texto(cfg, chave, "assunto", dados, assunto)
+    abertura = textos.texto(cfg, chave, "texto", dados, abertura)
     return cs, {"assunto": assunto, "abertura": abertura, "atraso": atraso, "total": _brl(total),
                 "nome": cs[0]["nome"], "assinatura": cs[0]["assinatura"], "whatsapp": cs[0]["whatsapp"],
                 "pdf": any(_pdf_vai(c, cfg, canal) for c in cs)}
@@ -751,6 +898,12 @@ def _saldo_parcial(t: dict) -> list[str]:
 def mensagem_pagamento(t: dict, cfg: dict) -> tuple[str, str]:
     emp = cfg["empresa"]
     ref = f"{t['descricao']} — competência {t['competencia'][5:]}/{t['competencia'][:4]}"
+    dados = _dados_modelo(t, cfg)
+    if textos.personalizado(cfg, "agradecimento", "texto") or textos.personalizado(cfg, "agradecimento", "assunto"):
+        corpo = textos.texto(cfg, "agradecimento", "texto", dados)
+        texto = "\n".join([f"Olá, {dados['cliente']}!", "", corpo, "", *_saldo_parcial(t),
+                            "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
+        return textos.texto(cfg, "agradecimento", "assunto", dados), texto
     texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
                         f"Recebemos o seu pagamento de {_brl(t['valor_pago_cent'] or t['valor_cent'])} em "
                         f"{_data(t['data_pagamento'])}, referente a: {ref}.", "",
@@ -764,6 +917,13 @@ def mensagem_pagamento(t: dict, cfg: dict) -> tuple[str, str]:
 def mensagem_nfse(t: dict, cfg: dict) -> tuple[str, str]:
     emp = cfg["empresa"]
     link = t["nfse_link"] if str(t.get("nfse_link") or "").startswith("http") else ""
+    if textos.personalizado(cfg, "nota_fiscal", "texto") or textos.personalizado(cfg, "nota_fiscal", "assunto"):
+        dados = _dados_modelo(t, cfg)
+        corpo = textos.texto(cfg, "nota_fiscal", "texto", dados)
+        texto = "\n".join([f"Olá, {dados['cliente']}!", "", corpo,
+                            *([f"Consulta da nota: {link}"] if link and link not in corpo else []),
+                            "", "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
+        return textos.texto(cfg, "nota_fiscal", "assunto", dados), texto
     texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
                         (f"Segue a nota fiscal de serviço (NFS-e nº {t['nfse_numero']}) referente ao pagamento de "
                          f"{_brl(t['valor_pago_cent'] or t['valor_cent'])} — competência {t['competencia'][5:]}/{t['competencia'][:4]}."
@@ -937,7 +1097,7 @@ def enviar_pos_pagamento(em: date | None = None, cfg: dict | None = None) -> dic
 def fila_whatsapp() -> list[dict]:
     lst = db.linhas("SELECT e.*, t.cliente_nome, t.valor_cent, t.vencimento FROM eventos_cobranca e "
                     "JOIN titulos t ON t.id=e.titulo_id WHERE e.canal='whatsapp' AND e.status='pendente' "
-                    f"AND COALESCE(t.juridico_em,'')='' AND (t.status='aberto' OR e.etapa>={ETAPA_PAGO}) ORDER BY e.data, e.etapa")
+                    f"AND COALESCE(t.juridico_em,'')='' AND (t.status='aberto' OR e.etapa IN ({ETAPA_PAGO},{ETAPA_NFSE})) ORDER BY e.data, e.etapa")
     return lst
 
 

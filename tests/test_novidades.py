@@ -52,15 +52,15 @@ def test_decimo_terceiro_desligado_e_parcela_vencida(base):  # noqa: F811
 # ---------------------------------------------------------------- cobrança recorrente
 
 def test_etapas_recorrentes():
-    cob = {"regua_dias": [-3, 0, 1], "recorrente_ativa": True, "recorrente_apos_dias": 5, "recorrente_a_cada_dias": 7}
-    assert cobranca.etapas_da_regua(40, cob) == [-3, 0, 1, 5, 12, 19, 26, 33, 40]
-    assert cobranca.etapas_da_regua(3, cob) == [-3, 0, 1, 5]
-    assert cobranca.etapas_da_regua(40, cob | {"recorrente_ativa": False}) == [-3, 0, 1]
+    """A régua fixa vale só até o vencimento; os atrasados têm o ciclo próprio (rodar_regua)."""
+    cob = {"regua_dias": [-3, 0, 1, 5], "recorrente_ativa": True, "recorrente_apos_dias": 3, "recorrente_a_cada_dias": 7}
+    assert cobranca.etapas_da_regua(40, cob) == [-3, 0]
+    assert cobranca.etapa_atraso(40) == 40 and cobranca.etapa_atraso(1200) == 1_001_200
 
 
 def test_regua_cobra_atrasado_a_cada_periodo(base, monkeypatch):  # noqa: F811
     enviados = []
-    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, html="":
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, html="", **k:
                         enviados.append(assunto))
     config.salvar({"cobranca": {"regua_dias": [0], "regua_whatsapp": False, "recorrente_apos_dias": 3,
                                 "recorrente_a_cada_dias": 10}})

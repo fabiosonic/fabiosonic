@@ -81,3 +81,25 @@ def test_historico_da_regua_entra_na_aba(base):  # noqa: F811
         mensagens.importar_historico(con)
     m = mensagens.listar()
     assert len(m) == 1 and m[0]["tipo"] == "Cobrança em atraso" and m[0]["quando"].startswith("2026-09-15")
+
+
+def test_modelo_editado_vale_nas_mensagens_e_pode_voltar_ao_padrao(base, monkeypatch):  # noqa: F811
+    env = []
+    monkeypatch.setattr(cobranca, "enviar_email", lambda para, assunto, texto, cfg=None, anexos=None, **k:
+                        env.append((assunto, texto)))
+    tratar("modelos_msg/salvar", {"chave": "lembrete", "assunto": "Seu boleto de {competencia} vence dia {vencimento}",
+                                  "texto": "Oi! Passando para lembrar: {valor} vencem em {vencimento}."})
+    assert "{valr}" in tratar("modelos_msg/salvar", {"chave": "lembrete", "assunto": "x", "texto": "{valr}"})["erro"]
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "500", vencimento="2026-10-20", emitir_nfse=False,
+                                  competencia="2026-10")
+    cobranca.preparar_pagamento(tid)
+    cobranca.rodar_regua(date(2026, 10, 1))                      # boleto: padrão
+    cobranca.rodar_regua(date(2026, 10, 17))                     # lembrete: editado
+    assert env[0][0].startswith("Boleto dos honorários")
+    assert env[1][0] == "Seu boleto de 10/2026 vence dia 20/10/2026"
+    assert "Passando para lembrar: R$ 500,00 vencem em 20/10/2026." in env[1][1] and "PIX copia e cola" in env[1][1]
+    m = [x for x in tratar("modelos_msg", {}) if x["chave"] == "lembrete"][0]
+    assert m["assunto"] and "{competencia}" in m["assunto"]
+    tratar("modelos_msg/salvar", {"chave": "lembrete", "assunto": m["assunto_padrao"], "texto": m["texto_padrao"]})
+    assert not [x for x in tratar("modelos_msg", {}) if x["chave"] == "lembrete"][0]["assunto"]
+    assert "R$ 500,00" in tratar("modelos_msg/previa", {"chave": "lembrete", "assunto": "", "texto": ""})["texto"]

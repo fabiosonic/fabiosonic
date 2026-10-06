@@ -549,6 +549,30 @@ Tudo segue as opções de Configurações › Cobrança (ligadas por padrão) e 
 Notas e pagamentos anteriores à atualização não recebem mensagem (nada de envio em massa do histórico); para essas,
 use o botão **Enviar ao cliente**.
 
+### Régua: antes do vencimento, atrasados e aviso de suspensão
+
+- **Antes do vencimento** (Configurações › Cobrança › "Avisos antes do vencimento", padrão `-3, 0`): boleto assim que
+  a cobrança é gerada, lembrete 3 dias antes e "vence hoje". Essas mensagens levam só os títulos no prazo — não cobram
+  os atrasados.
+- **Atrasados**: se o pagamento não for reconhecido, a **1ª cobrança sai 3 dias após o vencimento** e as seguintes
+  **a cada 7 dias**, contadas da última cobrança de atraso do cliente. Cada cobrança leva todos os títulos em atraso
+  dele, com multa e juros, numa única mensagem — o cliente nunca recebe duas cobranças de atraso na mesma semana.
+- **Aviso de suspensão dos serviços**: quando o débito mais antigo chega a **90 dias** de atraso, o cliente recebe o
+  aviso com todos os títulos em aberto, o total atualizado e a data da suspensão (prazo padrão de 10 dias). Sai uma
+  vez por débito (no máximo um aviso a cada 30 dias) e substitui a cobrança daquela semana. Pode ser desligado e os
+  prazos mudados em Configurações › Cobrança.
+- Ao atualizar, a régua antiga (+1, +5, +15, +30 dias) é trocada por esse ciclo automaticamente.
+
+### Modelos das mensagens (editáveis)
+
+Em **Mensagens › Modelos das mensagens** dá para editar o assunto e o texto de cada mensagem: boleto, lembrete, vence
+hoje, cobrança de atraso (um ou vários títulos), aviso de suspensão, agradecimento e nota fiscal. Campos como
+`{cliente}`, `{valor}`, `{vencimento}`, `{atualizado}`, `{dias}`, `{total}` e `{data_suspensao}` são trocados pelos
+dados de cada cliente (clique no campo para inserir). A saudação, a lista de títulos, linha digitável, PIX, cartão,
+NFS-e e a assinatura continuam automáticos. "Pré-visualizar" mostra o resultado com dados de exemplo; "Restaurar
+padrão" volta ao texto do sistema. Campo inexistente (ex.: `{valr}`) é recusado ao salvar. Os modelos são de cada
+empresa. Pela API oficial do WhatsApp valem os modelos aprovados na Meta.
+
 ### Recorrência: início, fim, acréscimos e descontos
 
 Cada recorrência tem **mês de início** e **mês final** (opcional): depois do mês final não são gerados novos títulos.
