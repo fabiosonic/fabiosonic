@@ -343,3 +343,25 @@ def test_contato_nas_observacoes_no_webservice_de_itaborai(sefin):
     assert "Contato do prestador: (21) 99876-5432 · contato@empresa.com.br" in obs
     config.salvar({"empresa": {"contato_na_nota": False}})
     assert "Contato" not in (lote.montar_rps("32396063000103", "100")["observacoes"] or "")
+
+
+def test_pessoa_fisica_so_com_cpf_e_nome_no_nacional(sefin):
+    """Como no portal nfse.gov.br: tomador pessoa física só com CPF e nome (o grupo toma/end é opcional na DPS).
+    O webservice de Itaboraí continua exigindo o endereço (manual: campos de endereço OBRIGATÓRIOS)."""
+    url, pasta, _ = sefin
+    clientes.salvar({"cpf_cnpj": "52998224725", "razao_social": "FULANO DE TAL", "endereco": {}})
+    r = lote.emitir_um("52998224725", "350,00", producao=False, url=url)
+    assert r["sucesso"], r
+    xml = Sefin.recebidos[-1][2]
+    nacional.validar_xsd(xml)
+    raiz = etree.fromstring(xml.encode() if isinstance(xml, str) else xml)
+    assert raiz.findtext(".//n:toma/n:CPF", namespaces=NS) == "52998224725"
+    assert raiz.find(".//n:toma/n:end", NS) is None
+    from nfse_itaborai.validacao import ErroValidacao, validar
+    pf = _rps(numero="1", tomador=Tomador("52998224725", "FULANO DE TAL", Endereco("", "", "", "", "", "")))
+    with pytest.raises(ErroValidacao, match="CEP do tomador"):
+        validar(pf)                                          # regra do webservice de Itaboraí
+    assert validar(pf, exigir_endereco_tomador=False) is not None
+    meio = _rps(numero="1", tomador=Tomador("52998224725", "FULANO", Endereco("", "", "", "33019", "", "")))
+    with pytest.raises(ErroValidacao, match="opcional"):
+        validar(meio, exigir_endereco_tomador=False)         # preenchido pela metade: avisa em vez de omitir

@@ -216,11 +216,26 @@ def test_robo_registra_boletos_e_cadastro_incompleto_nao_trava(banco):
     clientes.salvar(CLI_B | {"endereco": {**CLI_A["endereco"], "codigo_municipio": "", "cidade": ""}})
     financeiro.criar_titulo(CLI_B["cpf_cnpj"], "200", vencimento="2026-12-10", emitir_nfse=False)
     tid = _titulo()
+    sem_pix = config.carregar()["empresa"]["pix_chave"]
+    config.salvar({"empresa": {"pix_chave": ""}})           # sem PIX do escritório: o cadastro incompleto é apontado
     res = automacao.rodar(forcar=True)
     assert res["cobrancas_criadas"]["criadas"] == 1, res
     assert "cidade" in res["cobrancas_criadas"]["erros"][0]
     assert Path(financeiro.obter_titulo(tid)["boleto_pdf"]).exists()
     assert tratar("inter/testar", {})["ok"]
+    config.salvar({"empresa": {"pix_chave": sem_pix}})
+
+
+def test_cliente_sem_endereco_e_cobrado_pelo_pix_ate_completar_o_cadastro(banco):
+    """Pessoa física cadastrada só com CPF e nome (Emissor Nacional): o banco exige o endereço no boleto, então a
+    cobrança sai pelo PIX do escritório; preenchido o endereço, o boleto é registrado (um só por título)."""
+    clientes.salvar({"cpf_cnpj": "52998224725", "razao_social": "FULANO DE TAL", "email": "f@x.com", "endereco": {}})
+    tid = financeiro.criar_titulo("52998224725", "350", vencimento="2026-12-10", emitir_nfse=False)
+    t = cobranca.preparar_pagamento(tid)
+    assert t["banco_id"] == "" and t["pix_copia_cola"] and not t["cobranca_erro"]
+    clientes.salvar({"cpf_cnpj": "52998224725", "razao_social": "FULANO DE TAL", "endereco": CLI_A["endereco"]})
+    t = cobranca.preparar_pagamento(tid)
+    assert t["banco_id"]
 
 
 def test_sem_inter_configurado_usa_pix_proprio(base):  # noqa: F811

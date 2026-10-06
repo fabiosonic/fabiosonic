@@ -22,11 +22,15 @@ class ErroValidacao(Exception):
         self.erros = erros
 
 
-def validar(rps: Rps, hoje: date | None = None, exigir_ibscbs: bool | None = None) -> list[str]:
+def validar(rps: Rps, hoje: date | None = None, exigir_ibscbs: bool | None = None,
+            exigir_endereco_tomador: bool = True) -> list[str]:
     """Levanta ErroValidacao com os impeditivos; devolve a lista de alertas.
 
     exigir_ibscbs: None = regra do webservice de Itaboraí (Nota Técnica 003: obrigatório para todos desde
-    01/06/2026). O Emissor Nacional passa a regra dele (regime regular em 2026; Simples/MEI a partir de 2027)."""
+    01/06/2026). O Emissor Nacional passa a regra dele (regime regular em 2026; Simples/MEI a partir de 2027).
+    exigir_endereco_tomador: o manual do webservice de Itaboraí torna o endereço do tomador OBRIGATÓRIO (com CEP e
+    código do município); na DPS do Emissor Nacional o grupo toma/end é opcional (minOccurs=0) — basta CPF/CNPJ e
+    nome, como no portal nfse.gov.br."""
     hoje = hoje or (rps.data_emissao.date() if isinstance(rps.data_emissao, datetime) else date.today())
     erros: list[str] = []
     alertas: list[str] = []
@@ -112,7 +116,12 @@ def validar(rps: Rps, hoje: date | None = None, exigir_ibscbs: bool | None = Non
     for campo, limite in LIMITES_ENDERECO.items():
         if len(str(getattr(e, campo)).strip()) > limite:
             erros.append(f"Endereço do tomador: '{campo}' com mais de {limite} caracteres.")
-    if doc:
+    if doc and not exigir_endereco_tomador:
+        cep, mun = so_digitos(e.cep), so_digitos(e.codigo_municipio)
+        if (cep or mun) and (cep and len(cep) != 8 or mun and len(mun) != 7):
+            erros.append("Endereço do tomador incompleto ou inválido (CEP com 8 dígitos e código IBGE com 7). "
+                         "No Emissor Nacional o endereço é opcional: corrija ou deixe CEP e município em branco.")
+    elif doc:
         if len(so_digitos(e.codigo_municipio)) != 7:
             erros.append("Código IBGE do município do tomador (7 dígitos) não informado.")
         if len(so_digitos(e.cep)) != 8:

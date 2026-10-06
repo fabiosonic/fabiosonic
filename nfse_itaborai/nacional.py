@@ -709,7 +709,8 @@ def preparar(rps: Rps, producao: bool, cert: Certificado | None = None, cfg: dic
     # todas as críticas de uma vez: o usuário vê tudo o que falta, não um erro por tentativa
     from .validacao import ErroValidacao
     alertas, erros = [], []
-    for critica in (lambda: validar(rps, exigir_ibscbs=fiscal.informar_ibscbs(fiscal.geral(cfg), compet)),
+    for critica in (lambda: validar(rps, exigir_ibscbs=fiscal.informar_ibscbs(fiscal.geral(cfg), compet),
+                                   exigir_endereco_tomador=False),
                     lambda: _regras_raras(rps), lambda: _obrigatorios(rps, fiscal.geral(cfg)["regime"])):
         try:
             alertas += critica()

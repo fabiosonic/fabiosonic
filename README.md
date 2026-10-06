@@ -730,6 +730,16 @@ O boleto já registrado no banco **não é cancelado**: se o cliente pagar, a ba
 pagamento" sai pelo valor pago). A baixa manual também funciona. **Voltar do jurídico** (menu Mais da aba Jurídico)
 retoma a cobrança normal.
 
+### Tomador pessoa física só com CPF e nome (Emissor Nacional)
+
+Na DPS do Emissor Nacional o endereço do tomador é **opcional** (grupo `toma/end` com `minOccurs="0"` no XSD v1.01):
+basta CPF/CNPJ e nome, como no portal nfse.gov.br. O sistema só exige endereço completo (CEP, código IBGE, UF) no
+**webservice de Itaboraí**, cujo manual torna os campos de endereço obrigatórios. No Nacional, endereço preenchido
+pela metade (ex.: CEP com 5 dígitos) é apontado para corrigir ou deixar em branco. O nome precisa estar no cadastro
+(o portal busca o nome na Receita pelo CPF; o sistema não consulta serviços de terceiros). Se essa nota tiver
+cobrança, o boleto do Inter continua exigindo endereço (regra do banco): sem ele a cobrança sai pelo PIX do
+escritório e o boleto é registrado quando o endereço for preenchido.
+
 ### Vários e-mails e WhatsApp por cliente
 
 No cadastro do cliente (Clientes › Editar), além do **e-mail e telefone principais** (os que vão na NFS-e e no

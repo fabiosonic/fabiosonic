@@ -161,8 +161,7 @@ def pagador(cpf_cnpj: str) -> dict:
                         "receba por transferência internacional/câmbio e dê baixa manual.")
     e = cli.get("endereco", {})
     nome_cidade = cidade(cli)
-    faltando = [r for r, v in (("endereço", e.get("logradouro")), ("CEP", clientes._digitos(e.get("cep"))),
-                               ("UF", e.get("uf")), ("cidade", nome_cidade)) if not v]
+    faltando = endereco_faltando(cli)
     if not cli or faltando:
         raise ErroInter(f"Cadastro do cliente {cli.get('razao_social', doc)} incompleto para boleto: "
                         + ", ".join(faltando or ["cliente não cadastrado"]) + ".")
@@ -181,6 +180,14 @@ def pagador(cpf_cnpj: str) -> dict:
     if len(fone) in (10, 11):
         p["ddd"], p["telefone"] = fone[:2], fone[2:]
     return {k: v for k, v in p.items() if v != ""}
+
+
+def endereco_faltando(cli: dict | None) -> list[str]:
+    """O que falta no cadastro para o Inter registrar o boleto (o banco exige o endereço do pagador)."""
+    cli = cli or {}
+    e = cli.get("endereco") or {}
+    return [r for r, v in (("endereço", e.get("logradouro")), ("CEP", clientes._digitos(e.get("cep"))),
+                           ("UF", e.get("uf")), ("cidade", cidade(cli) if cli else "")) if not v]
 
 
 # ---------------------------------------------------------------- operações

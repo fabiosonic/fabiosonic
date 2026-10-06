@@ -32,7 +32,14 @@ def preparar_pagamento(tid: int, cfg: dict | None = None) -> dict:
     prov = cfg["cobranca"]["provedor"]
     if t.get("boleto_situacao"):
         return t                         # cobrança sem boleto (dispensado/expirado): nenhum boleto é registrado
-    if prov == "inter" and not t["banco_id"] and inter.configurado(cfg):
+    sem_endereco = prov == "inter" and not t["banco_id"] and inter.configurado(cfg) \
+        and inter.endereco_faltando(clientes.obter(t["cpf_cnpj"])) and cfg["empresa"].get("pix_chave")
+    if sem_endereco and not t["pix_copia_cola"]:
+        # pessoa física cadastrada só com CPF e nome (o Emissor Nacional não exige endereço), mas o banco exige o
+        # endereço do pagador no boleto: cobra pelo PIX do escritório; com o endereço preenchido, o boleto sai depois
+        db.registrar("boleto", f"Título {tid} ({t['cliente_nome']}): cliente sem endereço — cobrança pelo PIX do "
+                               "escritório até o cadastro ser completado")
+    if prov == "inter" and not t["banco_id"] and inter.configurado(cfg) and not sem_endereco:
         # um único boleto por título; se já venceu, ele sai com o valor atualizado (multa e juros até hoje)
         hoje = financeiro.hoje()
         atualizado, extra = None, {}
