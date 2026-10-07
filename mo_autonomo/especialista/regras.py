@@ -166,7 +166,7 @@ def r_retencoes_federais(doc, ctx):
     retidos = [ret.get("csll")]
     if doc.get("padrao") == "NACIONAL":
         # no padrão nacional PIS/COFINS só contam como retidos se o código de retenção disser
-        cod_ret = ctx.catalogo.parametro("LEIAUTE_NFSE_NACIONAL", "codigos_pis_cofins_retidos")
+        cod_ret = ctx.catalogo.parametro("LEIAUTE_NFSE_NACIONAL", "codigos_pis_cofins_retidos", doc.get("emissao"))
         if cod_ret is None:
             if not ret.get("csll"):
                 return []  # sem o código conferido não dá para afirmar ausência de PIS/COFINS retidos
@@ -285,7 +285,7 @@ REGRAS: list[Regra] = [
           normas=("LC_116_2003", "LEIAUTE_NFSE_ABRASF"),
           parametros=(("LEIAUTE_NFSE_ABRASF", "codigos_iss_retido"),), tipos=("NFSE",), papel=DESTINATARIO),
     Regra("NFSE_RETENCOES_FEDERAIS", "Retenção de CSLL/COFINS/PIS esperada e ausente", r_retencoes_federais,
-          normas=("LEI_10833_ART30",),
+          normas=("LEI_10833_ART30", "LEIAUTE_NFSE_NACIONAL"),  # o leiaute nacional diz o que conta como retido
           parametros=(("LEI_10833_ART30", "codigos_servico_sujeitos"), ("LEI_10833_ART30", "regimes_tomador_obrigados")),
           tipos=("NFSE",), papel=DESTINATARIO),
     Regra("DOC_COMPETENCIA_ROTINA", "Competência fora da janela da rotina automática", r_competencia_rotina,

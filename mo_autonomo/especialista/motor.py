@@ -82,7 +82,7 @@ def avaliar_competencia(docs: list[dict], perfil, competencia: str, catalogo, da
             continue
         if regra.precondicao and not regra.precondicao(perfil):
             continue
-        est = estado_regra(regra, catalogo)
+        est = estado_regra(regra, catalogo, date.fromisoformat(competencia + "-01"))
         if not est.ativa:
             continue
         ctx = Contexto(perfil, None, est.params, catalogo, data_processamento, docs, trilha)
@@ -90,11 +90,11 @@ def avaliar_competencia(docs: list[dict], perfil, competencia: str, catalogo, da
     return out
 
 
-def cobertura(catalogo, regras=None) -> list[dict]:
-    """Relatório: cada regra, se está ativa e qual natureza produziria."""
+def cobertura(catalogo, regras=None, em: date | None = None) -> list[dict]:
+    """Relatório: cada regra, se está ativa (na data `em`, padrão hoje) e qual natureza produziria."""
     linhas = []
     for regra in regras or REGRAS:
-        est = estado_regra(regra, catalogo)
+        est = estado_regra(regra, catalogo, em or date.today())
         linhas.append({"regra": regra.id, "titulo": regra.titulo, "ativa": est.ativa, "motivo": est.motivo,
                        "natureza": natureza_por_normas(regra.normas, catalogo), "normas": list(regra.normas)})
     return linhas

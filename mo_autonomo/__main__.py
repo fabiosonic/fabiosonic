@@ -228,7 +228,7 @@ def cmd_contabil(args):
     from .contabil.plano_dominio import escrever_plano, importar_pasta, ler
     ctx = _ctx(args, fonte=object())
     if args.acao == "importar-planos":
-        r = importar_pasta(Path(args.pasta), ctx.carteira, ctx.dados / "dominio")
+        r = importar_pasta(Path(args.pasta), ctx.carteira, ctx.dados / "dominio", args.sobrescrever)
         for linha in r["importados"]:
             print("OK:", linha)
         for linha in r["erros"]:
@@ -244,7 +244,10 @@ def cmd_contabil(args):
         sys.exit(f"empresa de código {args.empresa} não está no cadastro")
     contas = ler(Path(args.arquivo))
     destino = ctx.dados / "dominio" / emp.codigo_dominio / "plano_contas.csv"
-    escrever_plano(contas, destino)
+    try:
+        escrever_plano(contas, destino, args.sobrescrever)
+    except FileExistsError as exc:
+        sys.exit(str(exc))
     analiticas = sum(1 for c in contas if c["analitica"])
     print(f"{len(contas)} conta(s) ({analiticas} analíticas) -> {destino}")
 
@@ -305,6 +308,7 @@ def main(argv=None):
     s.add_argument("--arquivo", help="PLANO DE CONTAS.csv (Impressão de campos da consulta)")
     s.add_argument("--empresa", help="código da empresa no Domínio")
     s.add_argument("--pasta", help="pasta com um CSV por empresa, nome começando pelo código (ex.: '12 - LMG.csv')")
+    s.add_argument("--sobrescrever", action="store_true", help="troca o plano já importado (o anterior vira .bak)")
     s = sub.add_parser("grafo")
     s.add_argument("acao", choices=["desenhar"])
     s.set_defaults(f=cmd_grafo)

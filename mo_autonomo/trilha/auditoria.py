@@ -158,9 +158,10 @@ class Trilha:
                 (self.id_acao(a), lote, a.get("sha256"), a["cnpj"], a.get("competencia"), a["tipo"], dumps(a), agora()))
         self.con.commit()
 
-    def estado_acao(self, a: dict) -> str | None:
-        r = self.con.execute("SELECT estado FROM acoes WHERE id=?", (self.id_acao(a),)).fetchone()
-        return r[0] if r else None
+    def estado_acao(self, a: dict) -> tuple[str | None, str | None]:
+        """(estado, lote dono da ação) — (None, None) se a ação nunca foi registrada."""
+        r = self.con.execute("SELECT estado, lote FROM acoes WHERE id=?", (self.id_acao(a),)).fetchone()
+        return (r[0], r[1]) if r else (None, None)
 
     def marcar_acao(self, a: dict, estado: str, detalhe: str | None = None) -> None:
         self.con.execute("UPDATE acoes SET estado=?, detalhe=?, em=? WHERE id=?",

@@ -31,7 +31,7 @@ def _planilha(tmp_path, linhas) -> Path:
 def test_codigo_repetido_vira_pendencia(tmp_path):
     emp, pend = converter(ler_planilha(_planilha(tmp_path, [
         [11, "Beta", CNPJ_A, "SIMPLES NACIONAL", "ATIVO"], [11, "Gama", CNPJ_B, "SIMPLES NACIONAL", "ATIVO"]])))
-    assert [e["apelido"] for e in emp] == ["BETA"] and any("CÓD. 11 repetido" in p for p in pend)
+    assert emp == [] and sum("CÓD. 11 repetido" in p for p in pend) == 2
 
 
 def test_carteira_recusa_codigo_dividido():
@@ -69,7 +69,8 @@ def _aprovado_executado(tmp_path):
 def test_reexecutar_lote_nao_gera_txt_em_dobro(tmp_path):
     ctx, aprovado, txt = _aprovado_executado(tmp_path)
     txt.unlink()  # escritório importou e tirou o arquivo da pasta
-    assert not [r for r in executar_lote(aprovado, ctx) if r["acao"] == "lancamento_contabil"]
+    r = [x for x in executar_lote(aprovado, ctx) if x["acao"] == "lancamento_contabil"]
+    assert [x["status"] for x in r] == ["IGNORADO: lançamento já EXECUTADA (não exporta em dobro)"]
     assert not list(txt.parent.glob("*.txt"))
 
 

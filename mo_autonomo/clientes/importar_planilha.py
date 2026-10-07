@@ -95,6 +95,12 @@ def converter(linhas: list[dict]) -> tuple[list[dict], list[str]]:
                 return v
         return ""
 
+    # 1ª passada: código ou CNPJ que aparece em mais de uma linha (aceita ou não) vira pendência em
+    # TODAS elas — não dá para saber qual linha é a certa, então nenhuma fica com o código.
+    from collections import Counter
+    cont_cod = Counter(c for c in (_codigo(campo(l, "COD")) for l in linhas) if c)
+    cont_doc = Counter(d for d in (_documento(campo(l, "CNPJ")) for l in linhas) if d)
+
     for n, l in enumerate(linhas, start=1):
         razao = campo(l, "RAZAO")
         doc = _documento(campo(l, "CNPJ"))
@@ -108,8 +114,8 @@ def converter(linhas: list[dict]) -> tuple[list[dict], list[str]]:
         if not cnpj_valido(doc):
             pendencias.append(f"{ref}: CNPJ ausente ou inválido")
             continue
-        if doc in vistos:
-            pendencias.append(f"{ref}: CNPJ repetido na planilha")
+        if cont_doc[doc] > 1 or doc in vistos:
+            pendencias.append(f"{ref}: CNPJ repetido na planilha ({cont_doc[doc]} linhas) — nenhuma entra até corrigir")
             continue
         regime = REGIMES.get(regime_txt)
         if regime is None:
@@ -118,8 +124,8 @@ def converter(linhas: list[dict]) -> tuple[list[dict], list[str]]:
         if not cod:
             pendencias.append(f"{ref}: CÓD. vazio — código do Domínio desconhecido")
             continue
-        if cod in codigos:  # cada código tem plano, razão e histórico próprios: não pode ser dividido
-            pendencias.append(f"{ref}: CÓD. {cod} repetido (também na {codigos[cod]}) — confira no Domínio")
+        if cont_cod[cod] > 1 or cod in codigos:  # plano, razão e histórico são por código: não pode dividir
+            pendencias.append(f"{ref}: CÓD. {cod} repetido ({cont_cod[cod]} linhas) — confira no Domínio; nenhuma entra")
             continue
         if not apelido_de(razao):
             pendencias.append(f"{ref}: razão social vazia")

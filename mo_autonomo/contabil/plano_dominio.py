@@ -12,7 +12,11 @@ from __future__ import annotations
 import csv
 import io
 import re
+from collections import Counter
+from datetime import datetime
 from pathlib import Path
+
+from ..util.arquivos import escrever_atomico
 
 _CLASSIF = re.compile(r"^\d+(\.\d+)*$")
 
@@ -45,42 +49,56 @@ def ler(caminho: Path) -> list[dict]:
         i += 1
     if not contas:
         raise ValueError("nenhuma conta reconhecida: confira se é a 'Impressão de campos da consulta' do plano")
-    # analítica = sem conta filha na classificação (estrutura, não o significado da letra do tipo)
+    # analítica = sem conta filha na classificação E sem tipo "T" (que marca contas de grupo no
+    # Domínio). Se as duas pistas divergem, a conta NÃO é aceita para lançamento: vira pendência
+    # (conta inválida) até alguém conferir — nunca lançar em conta de grupo por suposição.
     classes = [c["classificacao"] for c in contas]
     for c in contas:
         pref = c["classificacao"] + "."
-        c["analitica"] = not any(x.startswith(pref) for x in classes)
+        sem_filha = not any(x.startswith(pref) for x in classes)
+        c["analitica"] = sem_filha and c["tipo"].upper() != "T"
+        c["divergente"] = sem_filha and c["tipo"].upper() == "T"
     repetidos = {c["codigo"] for c in contas if sum(1 for x in contas if x["codigo"] == c["codigo"]) > 1}
     if repetidos:
         raise ValueError(f"código reduzido repetido no plano: {sorted(repetidos)[:5]}")
     return contas
 
 
-def escrever_plano(contas: list[dict], destino: Path) -> None:
+def escrever_plano(contas: list[dict], destino: Path, sobrescrever: bool = False) -> None:
+    """Grava de forma atômica. Plano já existente só é trocado com `sobrescrever`, e o anterior
+    fica guardado como plano_contas.AAAAMMDDHHMMSS.bak (nada é apagado)."""
+    if destino.exists():
+        if not sobrescrever:
+            raise FileExistsError(f"{destino} já existe (use --sobrescrever para trocar; o anterior vira .bak)")
+        bak = destino.with_name(f"{destino.stem}.{datetime.now():%Y%m%d%H%M%S}.bak")
+        escrever_atomico(bak, destino.read_bytes())
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
     w.writerow(["codigo", "descricao", "analitica", "classificacao", "grupo"])
     for c in contas:
         w.writerow([c["codigo"], c["descricao"], "S" if c["analitica"] else "N", c["classificacao"], c["grupo"]])
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(buf.getvalue(), encoding="utf-8")
+    escrever_atomico(destino, buf.getvalue().encode("utf-8"))
 
 
-def importar_pasta(pasta: Path, carteira, destino_dados: Path) -> dict:
-    """Importa vários planos: cada arquivo começa com o código da empresa no Domínio (ex.: '12 - LMG.csv')."""
+def importar_pasta(pasta: Path, carteira, destino_dados: Path, sobrescrever: bool = False) -> dict:
+    """Importa vários planos: cada arquivo começa com o código da empresa no Domínio (ex.: '12 - LMG.csv').
+    Dois arquivos para o mesmo código: nenhum é importado (não escolhe lado)."""
     codigos = {e.codigo_dominio: e for e in carteira}
     importados, erros, feitos = [], [], set()
+    arquivos = []
     for arq in sorted(Path(pasta).glob("*.csv")):
         m = re.match(r"^\s*(\d+)", arq.name)
         if not m:
             erros.append(f"{arq.name}: nome não começa com o código da empresa")
             continue
-        cod = str(int(m.group(1)))
+        arquivos.append((arq, str(int(m.group(1)))))
+    repetidos = {c for c, n in Counter(c for _, c in arquivos).items() if n > 1}
+    for arq, cod in arquivos:
+        if cod in repetidos:
+            erros.append(f"{arq.name}: mais de um arquivo para a empresa {cod} — nenhum foi importado")
+            continue
         if cod not in codigos:
             erros.append(f"{arq.name}: código {cod} não está no cadastro de empresas")
-            continue
-        if cod in feitos:
-            erros.append(f"{arq.name}: segundo arquivo para a empresa {cod} (ignorado)")
             continue
         try:
             contas = ler(arq)
@@ -88,9 +106,15 @@ def importar_pasta(pasta: Path, carteira, destino_dados: Path) -> dict:
             erros.append(f"{arq.name}: {exc}")
             continue
         destino = Path(destino_dados) / cod / "plano_contas.csv"
-        escrever_plano(contas, destino)
+        try:
+            escrever_plano(contas, destino, sobrescrever)
+        except FileExistsError as exc:
+            erros.append(f"{arq.name}: {exc}")
+            continue
         feitos.add(cod)
-        importados.append(f"{codigos[cod].pasta}: {len(contas)} contas ({sum(c['analitica'] for c in contas)} analíticas)")
+        div = [c["codigo"] for c in contas if c.get("divergente")]
+        importados.append(f"{codigos[cod].pasta}: {len(contas)} contas ({sum(c['analitica'] for c in contas)} analíticas)"
+                          + (f"; {len(div)} sem filha mas com tipo T, bloqueadas para lançamento até conferir: {div[:10]}" if div else ""))
     sem_plano = sorted(e.pasta for c, e in codigos.items() if c not in feitos
                        and not (Path(destino_dados) / c / "plano_contas.csv").exists())
     return {"importados": importados, "erros": erros, "sem_plano": sem_plano}

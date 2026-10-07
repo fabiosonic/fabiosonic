@@ -486,18 +486,29 @@ def _destino_importacao(ctx, a: dict, sufixo: str) -> Path:
 def _exportar_lancamentos(lote: dict, ctx) -> list[dict]:
     """Um TXT por lote e conta bancária, no leiaute do escritório; tudo ou nada.
 
-    Só exporta lançamento ainda PROPOSTA: o que já foi EXECUTADO (TXT entregue) não sai de novo,
-    porque a importação de TXT do Domínio não deduplica — reexecutar o lote não pode duplicar a
-    escrituração. O TXT exportado NÃO alimenta o de-para: o sistema só aprende com o razão e com os
+    Só exporta lançamento que pertence a ESTE lote e está PROPOSTA (ou BLOQUEADA neste mesmo lote:
+    a pessoa resolveu o conflito e mandou executar de novo). O que já foi EXECUTADO não sai de novo,
+    porque a importação de TXT do Domínio não deduplica; o que passou para outro lote só sai com a
+    aprovação daquele lote. Cada lançamento pulado aparece no resultado com o motivo. O TXT exportado NÃO alimenta o de-para: o sistema só aprende com o razão e com os
     TXT que o escritório coloca em historico/ (senão aprenderia com a própria saída, inclusive com
     lançamento corrigido ou nunca importado no Domínio).
     """
     from ..dominio.exportador import gerar as gerar_txt
     grupos: dict = {}
+    pulados: dict = {}
     for a in lote["acoes"]:
-        if a["tipo"] == "lancamento_contabil" and ctx.trilha.estado_acao(a) == "PROPOSTA":
+        if a["tipo"] != "lancamento_contabil":
+            continue
+        estado, dono = ctx.trilha.estado_acao(a)
+        if estado in ("PROPOSTA", "BLOQUEADA") and dono == lote["id"]:
             grupos.setdefault((a.get("banco"), a.get("conta")), []).append(a)
-    out = []
+        elif estado is None:
+            pulados.setdefault("IGNORADO: lançamento não registrado na trilha — monte o lote de novo", []).append(a)
+        elif dono != lote["id"]:
+            pulados.setdefault(f"IGNORADO: lançamento agora pertence ao lote {dono} (precisa da aprovação dele)", []).append(a)
+        else:
+            pulados.setdefault(f"IGNORADO: lançamento já {estado} (não exporta em dobro)", []).append(a)
+    out = [{"acao": "lancamento_contabil", "destino": None, "lancamentos": len(v), "status": k} for k, v in pulados.items()]
     for grupo in grupos.values():
         destino = None
         try:

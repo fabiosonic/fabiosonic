@@ -37,7 +37,7 @@ class PlanoContas:
     @classmethod
     def carregar(cls, caminho: Path) -> "PlanoContas":
         return cls({l["codigo"].strip(): {"descricao": l.get("descricao", "").strip(),
-                                          "analitica": (l.get("analitica") or "S").strip().upper() == "S"}
+                                          "analitica": (l.get("analitica") or "").strip().upper() == "S"}
                     for l in _ler_csv(caminho)})
 
     def valida(self, codigo: str | None) -> bool:

@@ -31,14 +31,15 @@ def planilha(tmp_path) -> Path:
 
 def test_converte_planilha_do_escritorio(tmp_path):
     empresas, pend = converter(ler_planilha(planilha(tmp_path)))
+    # CNPJ_A aparece em duas linhas: nenhuma das duas entra (não dá para saber qual é a certa)
     assert [(e["codigo_dominio"], e["apelido"], e["regime"]) for e in empresas] == [
-        ("1", "MERCADINHO GIRASSOL LTDA", "SIMPLES"), ("12", "ENGENHARIA ACAO OBRAS LTDA", "REAL"), ("7", "FULANO MEI", "MEI")]
-    assert len(pend) == 4 and any("CPF" in p for p in pend) and any("repetido" in p for p in pend)
+        ("12", "ENGENHARIA ACAO OBRAS LTDA", "REAL"), ("7", "FULANO MEI", "MEI")]
+    assert len(pend) == 5 and any("CPF" in p for p in pend) and sum("repetido" in p for p in pend) == 2
     assert any("regime" in p for p in pend) and any("CÓD." in p for p in pend)
     destino = tmp_path / "empresas.csv"
     escrever(empresas, destino)
     carteira = Carteira.carregar(destino)  # o arquivo gerado passa na validação do cadastro
-    assert len(carteira) == 3 and carteira.get(CNPJ_B).pasta == "12-ENGENHARIA ACAO OBRAS LTDA"
+    assert len(carteira) == 2 and carteira.get(CNPJ_B).pasta == "12-ENGENHARIA ACAO OBRAS LTDA"
 
 
 def test_conferir_pastas_aponta_apelido_diferente(tmp_path):

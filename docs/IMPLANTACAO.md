@@ -94,6 +94,9 @@ do plano que está no Drive como "PLANO DE CONTAS.csv" (*Impressão de campos da
 todos numa pasta com o **código da empresa no início do nome** (ex.: `12 - LMG.csv`) e rode:
 `python -m mo_autonomo contabil importar-planos --pasta "D:\PLANOS DOMINIO"`. O comando lista quem
 ainda está sem plano. O código **reduzido** de cada conta é o que vai no TXT de importação.
+Dois arquivos com o mesmo código: nenhum é importado. Plano já importado só é trocado com
+`--sobrescrever` (o anterior fica como `.bak`). Conta sem filhas mas com tipo **T** no Domínio fica
+bloqueada para lançamento e é listada para você conferir.
 
 **Histórico para o de-para (como o sistema escolhe a contrapartida):** copie os TXT de lançamentos
 que o escritório já importou no Domínio (ex.: `Dominio-EMPRESA-Banco-000000.txt`) para
