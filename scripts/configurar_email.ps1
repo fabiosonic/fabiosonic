@@ -32,7 +32,8 @@ if (Test-Path -LiteralPath $Origem) {
     Write-Host "Pasta não encontrada: $Origem" -ForegroundColor Yellow
 }
 
-do { $imapHost = (Read-Host "Servidor IMAP (ex.: imap.dominio.com.br)").Trim() } until ($imapHost -match '^[A-Za-z0-9][A-Za-z0-9.-]{1,252}$')
+# padrão deduzido do SMTP do escritório (smtp.emailemnuvem.com.br:587); o teste no fim confirma
+do { $imapHost = (Read-Host "Servidor IMAP (Enter = imap.emailemnuvem.com.br)").Trim(); if (-not $imapHost) { $imapHost = "imap.emailemnuvem.com.br" } } until ($imapHost -match '^[A-Za-z0-9][A-Za-z0-9.-]{1,252}$')
 do { $porta = (Read-Host "Porta IMAP (Enter = 993)").Trim(); if (-not $porta) { $porta = "993" } } until ($porta -match '^\d{1,5}$')
 
 # valores vão por variável de ambiente (nada é interpolado dentro do código Python)

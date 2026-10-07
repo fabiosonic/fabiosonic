@@ -17,8 +17,8 @@ receita:
 email:
   tipo: pasta                            # pasta (testes) | imap
   pasta_eml: dados/entrada_eml
-  host:                                  # servidor IMAP do Email em Nuvem (pendente)
-  porta: 993
+  host: imap.emailemnuvem.com.br         # deduzido do SMTP do escritório (smtp.emailemnuvem.com.br:587);
+  porta: 993                             # confirmar com: python -m mo_autonomo imap testar
   ssl: true
   usuario: fiscal@moraeseoliveiracontabil.com.br
   pasta: INBOX
