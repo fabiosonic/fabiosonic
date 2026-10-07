@@ -161,6 +161,23 @@ def gerar_calendario(ctx, competencia):
     return gerar(competencia, perfis, ctx.catalogo, feriados)
 
 
+def cmd_amostra(args):
+    from .qualidade.amostra import gerar, medir
+    ctx = _ctx(args, fonte=object())
+    if args.acao == "gerar":
+        destino = ctx.dados / "relatorios" / f"amostra_{date.today():%Y%m%d}.csv"
+        r = gerar(ctx.trilha, destino, args.n)
+        print(f"amostra de {r['amostra']} de {r['universo']} documentos -> {destino}")
+        print("Preencha a coluna 'conferencia' com CERTO ou ERRADO e rode: amostra medir --arquivo <csv>")
+    else:
+        if not args.arquivo:
+            sys.exit("informe --arquivo")
+        r = medir(Path(args.arquivo))
+        for k, v in r["por_classe"].items():
+            print(f"{k:<20} certo {v['certo']:>3}  errado {v['errado']:>3}  taxa {v['taxa']}")
+        print(f"GERAL: {r['taxa_geral']} ({r['conferidos']} conferidos, {r['sem_conferencia']} sem conferência)")
+
+
 def cmd_grafo(args):
     from .fluxos.ciclo import grafo_ciclo
     from .fluxos.documento import grafo_documento
@@ -200,6 +217,10 @@ def main(argv=None):
     s.add_argument("--folha", required=True)
     s.add_argument("--cnpj", required=True)
     com_config("calendario", cmd_calendario).add_argument("--competencia", required=True, help="AAAA-MM")
+    s = com_config("amostra", cmd_amostra)
+    s.add_argument("acao", choices=["gerar", "medir"])
+    s.add_argument("--n", type=int, default=20, help="documentos por classe")
+    s.add_argument("--arquivo")
     s = sub.add_parser("grafo")
     s.add_argument("acao", choices=["desenhar"])
     s.set_defaults(f=cmd_grafo)
