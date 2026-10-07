@@ -14,6 +14,7 @@ from pathlib import Path
 import traceback
 
 from ..aprovacao import lote as L
+from ..clientes.perfil import data_da_competencia
 from ..contabil.lancamentos import DePara, PlanoContas, historico_empresa, propor
 from ..dominio.pastas import ConflitoArquivo, DestinoInvalido, caminho_destino, gravar
 from ..entrada.anexos import anexos_do_email
@@ -196,7 +197,7 @@ def n_analisar_competencias(e, ctx):
         try:
             if comp is None:
                 continue
-            perfil = ctx.perfis.em(cnpj, date.fromisoformat(comp + "-01"))  # perfil NA competência
+            perfil = ctx.perfis.em(cnpj, data_da_competencia(comp))  # perfil NA competência
             if perfil is None:
                 continue
             registros = [r for r in ctx.trilha.documentos(comp) if cnpj in (r["cnpjs"] or [])
@@ -581,7 +582,7 @@ def n_pareceres(e, ctx):
         try:
             lote = L.carregar(Path(l["arquivo"]))
             emp = ctx.carteira.get(l["cnpj"])
-            perfil = ctx.perfis.em(l["cnpj"], date.fromisoformat(l["competencia"] + "-01"))
+            perfil = ctx.perfis.em(l["cnpj"], data_da_competencia(l["competencia"]))
             md = parecer.markdown(emp, l["competencia"], perfil, lote["achados"] + lote.get("achados_informativos", []),
                                   lote["pendencias"] + lote.get("informativas", []),
                                   len(lote["acoes"]), inativas,
@@ -643,7 +644,7 @@ def _alertas_vencimento(ctx) -> list[str]:
     dias = tuple(cal.get("dias_alerta", [3, 0]))
     linhas = []
     for comp in competencias_para_alerta(ctx.hoje, ctx.catalogo):
-        d = _date.fromisoformat(comp + "-01")
+        d = data_da_competencia(comp)
         perfis = {e.cnpj: ctx.perfis.em(e.cnpj, d) for e in ctx.carteira if e.ativa}
         for a in alertas(gerar(comp, perfis, ctx.catalogo, feriados), ctx.hoje, dias):
             v = a["vencimento"]

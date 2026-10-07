@@ -76,6 +76,14 @@ def _optante(simples: dict | None, d: date, sim: str | None, prefixo: str) -> bo
     return None
 
 
+def data_da_competencia(comp: str) -> date:
+    """Data em que se olha o perfil de uma competência: o ÚLTIMO dia do mês. No dia 1º, empresa aberta
+    (ou que optou pelo Simples) no meio do mês apareceria inexistente/divergente o mês inteiro."""
+    import calendar
+    a, m = (int(x) for x in comp[:7].split("-"))
+    return date(a, m, calendar.monthrange(a, m)[1])
+
+
 def montar_perfil(empresa: Empresa, receita: dict | None, catalogo: Catalogo, data_ref: date) -> PerfilFiscal:
     pend: list[Pendencia] = []
     fontes: dict = {"dominio": True, "receita": receita is not None}

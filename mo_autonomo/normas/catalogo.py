@@ -24,20 +24,30 @@ class NormaInvalida(ValueError):
 
 
 def url_oficial(url: str | None) -> bool:
-    if not url or not url.startswith("https://"):
-        return False
-    if any(c in url for c in "\\@ \t\r\n"):  # "\" vira "/" no navegador; "@" é usuário; espaço quebra a URL
+    if not url or any(c in url for c in "\\ \t\r\n"):  # "\" vira "/" no navegador; espaço quebra a URL
         return False
     u = urlparse(url)
-    host = (u.hostname or "").lower()
-    if u.netloc.lower() != host or not re.fullmatch(r"[a-z0-9.-]+", host):  # sem porta, usuário ou lixo
+    if u.scheme.lower() != "https":
+        return False
+    try:
+        porta = u.port
+    except ValueError:
+        return False
+    netloc = u.netloc.lower()
+    if "@" in netloc or porta not in (None, 443):  # usuário na URL ou porta estranha
+        return False
+    host = (u.hostname or "").lower().rstrip(".")
+    if netloc.rstrip(".").removesuffix(":443").rstrip(".") != host or not re.fullmatch(r"[a-z0-9.-]+", host):
         return False
     return any(host == d or host.endswith("." + d) for d in DOMINIOS_OFICIAIS)
 
 
-# quem confere é gente: nome de ferramenta/IA não vale como conferente (regra 1)
-_NAO_PESSOA = re.compile(r"\b(?:claude|ia|ai|gpt|chatgpt|ollama|gemini|llm|modelo|sistema|auto|automatico|"
-                         r"automático|bot|robo|robô|script|mo_autonomo)\b", re.IGNORECASE)
+# quem confere é gente: nome de ferramenta/IA não vale como conferente (regra 1). Palavras que também
+# são nomes/sobrenomes reais ("Ai Ling", "Roberto Sistema") só são recusadas quando são o valor inteiro.
+_FERRAMENTA = re.compile(r"\b(?:claude|gpt|chatgpt|ollama|llm|bot|chatbot|script|mo_autonomo|openai|anthropic|"
+                         r"copilot|ia\s+local|intelig[eê]ncia\s+artificial)\b|\bgpt-?\d", re.IGNORECASE)
+_SO_FERRAMENTA = {"ia", "ai", "auto", "automatico", "automático", "modelo", "sistema", "gemini", "robo", "robô",
+                  "maquina", "máquina", "computador"}
 
 
 @dataclass
@@ -84,7 +94,8 @@ class Norma:
             if not url_oficial(self.fonte_url):
                 raise NormaInvalida(f"{self.id}: fonte não oficial {self.fonte_url}")
             quem = str(self.conferido_por).strip()
-            if len(re.sub(r"[^A-Za-zÀ-ÿ]", "", quem)) < 3 or _NAO_PESSOA.search(quem):
+            if (len(re.sub(r"[^A-Za-zÀ-ÿ]", "", quem)) < 2 or _FERRAMENTA.search(quem)
+                    or quem.lower() in _SO_FERRAMENTA):
                 raise NormaInvalida(f"{self.id}: conferido_por precisa ser o nome de uma pessoa ({quem!r})")
             if isinstance(self.conferido_em, date) and self.conferido_em > date.today():
                 raise NormaInvalida(f"{self.id}: conferido_em no futuro ({self.conferido_em})")
