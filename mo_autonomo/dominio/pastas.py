@@ -27,8 +27,24 @@ class Rota:
     pendencia: str | None = None
 
 
-def _cnpj_da_chave(chave: str | None) -> str | None:
-    return chave[6:20] if chave and len(chave) == 44 else None
+def _cnpj_da_chave(chave: str | None, catalogo) -> str | None:
+    pos = catalogo.parametro("MOC_NFE", "chave_pos_cnpj_emitente")
+    if not chave or len(chave) != 44 or pos is None:
+        return None
+    return chave[int(pos[0]):int(pos[1])]
+
+
+def _tomador_cte(doc: dict, catalogo) -> tuple[str | None, str | None]:
+    """(cnpj do tomador, motivo se não der para afirmar)."""
+    if doc.get("tomador_cnpj"):
+        return doc["tomador_cnpj"], None
+    mapa = catalogo.parametro("MOC_CTE", "tomador_por_codigo")
+    if mapa is None:
+        return None, "tomador do CT-e não verificável: MOC_CTE.tomador_por_codigo não conferido"
+    papel = mapa.get(str(doc.get("tomador_codigo")))
+    if not papel:
+        return None, f"código de tomador {doc.get('tomador_codigo')!r} sem correspondência no MOC_CTE"
+    return (doc.get("papeis") or {}).get(papel), None
 
 
 def rotas(doc: dict, carteira, catalogo) -> list[Rota]:
@@ -63,14 +79,20 @@ def rotas(doc: dict, carteira, catalogo) -> list[Rota]:
             if c == doc.get("tomador_cnpj"):
                 out.append(Rota(c, "NFSE_TOMADA"))
     elif t == "CTE":
+        tomador, motivo = _tomador_cte(doc, catalogo)
         for c in nossos:
             if c == doc.get("emitente_cnpj"):
                 out.append(Rota(c, None, "CT-e emitido pela empresa: não há pasta de CT-e de saída configurada."))
-            else:
+            elif motivo:
+                out.append(Rota(c, None, motivo))
+            elif c == tomador:
                 out.append(Rota(c, "CTE_ENTRADA"))
+        if not out and nossos:
+            out.append(Rota(None, None, "CT-e em que o cliente participa mas não é o tomador: só arquivar."))
     elif t.startswith("EVENTO_"):
         tipo = {"EVENTO_NFE": "NFE_EVENTOS", "EVENTO_NFCE": "NFCE_EVENTOS"}.get(t, "OUTROS_EVENTOS")
-        donos = [c for c in (_cnpj_da_chave(doc.get("chave_ref")), doc.get("emitente_cnpj")) if c and carteira.get(c)]
+        donos = [c for c in (_cnpj_da_chave(doc.get("chave_ref"), catalogo), doc.get("emitente_cnpj"))
+                 if c and carteira.get(c)]
         out.extend(Rota(c, tipo) for c in dict.fromkeys(donos))
     if not out:
         out.append(Rota(None, None, "Nenhuma empresa da carteira identificada no documento (cruzamento por CNPJ)."))

@@ -62,7 +62,8 @@ def r_soma_itens(doc, ctx):
     total = doc["totais"].get("vProd")
     if total is None or not doc["itens"]:
         return []
-    itens = [i["v_prod"] for i in doc["itens"] if i["v_prod"] is not None]
+    compoe = [str(x) for x in ctx.params["ind_tot_compoe"]]
+    itens = [i["v_prod"] for i in doc["itens"] if i["v_prod"] is not None and str(i.get("ind_tot")) in compoe]
     s = soma(itens)
     if s != total:
         return [Resultado(f"Soma dos itens (vProd) {s} difere do total vProd {total}.",
@@ -162,9 +163,27 @@ def r_retencoes_federais(doc, ctx):
     if getattr(ctx.perfil, "regime", None) not in regimes or not any(cod.startswith(s) for s in servicos):
         return []
     ret = doc.get("retencoes_federais") or {}
-    if not any(v for v in ret.values() if v):
+    retidos = [ret.get("csll")]
+    if doc.get("padrao") == "NACIONAL":
+        # no padrão nacional PIS/COFINS só contam como retidos se o código de retenção disser
+        cod_ret = ctx.catalogo.parametro("LEIAUTE_NFSE_NACIONAL", "codigos_pis_cofins_retidos")
+        if cod_ret is None:
+            if not ret.get("csll"):
+                return []  # sem o código conferido não dá para afirmar ausência de PIS/COFINS retidos
+        elif str(doc.get("pis_cofins_retencao_codigo")) in [str(x) for x in cod_ret]:
+            retidos += [ret.get("pis"), ret.get("cofins")]
+    else:
+        retidos += [ret.get("pis"), ret.get("cofins")]
+    if not any(v for v in retidos if v):
         return [Resultado(f"Serviço {cod} sujeito a retenção de CSLL/COFINS/PIS sem retenção destacada na NFS-e.",
                           "Conferir enquadramento e efetuar/recolher a retenção (DARF) ou documentar a dispensa.")]
+    return []
+
+
+def r_nfse_cancelada(doc, ctx):
+    if doc.get("cancelada"):
+        return [Resultado("NFS-e veio com registro de cancelamento (NfseCancelamento).",
+                          "Escriturar como cancelada no Domínio; não considerar como receita/serviço tomado.")]
     return []
 
 
@@ -216,7 +235,9 @@ def r_duplicidade(docs, ctx):
 
 def r_cancelamento(docs, ctx):
     codigos = [str(x) for x in ctx.params["tp_evento_cancelamento"]]
-    canceladas = {d["chave_ref"] for d in docs if d["tipo"].startswith("EVENTO_") and str(d.get("tp_evento")) in codigos}
+    homologado = [str(x) for x in ctx.params["cstat_evento_homologado"]]
+    canceladas = {d["chave_ref"] for d in docs if d["tipo"].startswith("EVENTO_") and str(d.get("tp_evento")) in codigos
+                  and str(d.get("autorizacao_cstat")) in homologado}
     return [Resultado(f"Evento de cancelamento recebido para a chave {ch}.",
                       "Garantir que a nota esteja como cancelada no Domínio (não escriturar como válida).",
                       bloqueia=False, documento=ch) for ch in sorted(canceladas)]
@@ -239,7 +260,9 @@ def r_sequencia(docs, ctx):
 
 
 REGRAS: list[Regra] = [
-    Regra("NFE_SOMA_ITENS", "Soma dos itens × total da NF-e", r_soma_itens, tipos=("NFE", "NFCE")),
+    Regra("NFE_SOMA_ITENS", "Soma dos itens × total da NF-e", r_soma_itens, normas=("MOC_NFE",),
+          parametros=(("MOC_NFE", "ind_tot_compoe"),), tipos=("NFE", "NFCE")),
+    Regra("NFSE_CANCELADA", "NFS-e cancelada", r_nfse_cancelada, tipos=("NFSE",)),
     Regra("DFE_SEM_PROTOCOLO", "Documento sem protocolo de autorização", r_sem_protocolo, tipos=("NFE", "NFCE", "CTE")),
     Regra("DFE_CSTAT", "Situação do protocolo", r_cstat, normas=("MOC_NFE",),
           parametros=(("MOC_NFE", "cstat_autorizado"),), tipos=("NFE", "NFCE")),
@@ -272,6 +295,7 @@ REGRAS: list[Regra] = [
     Regra("DOC_CNPJ_INVALIDO", "CNPJ com dígito inválido", r_cnpj_invalido, tipos=("NFE", "NFCE", "CTE", "NFSE")),
     Regra("COMP_DUPLICIDADE", "Mesma chave com conteúdos diferentes", r_duplicidade, escopo="competencia"),
     Regra("COMP_CANCELAMENTO", "Cancelamento recebido", r_cancelamento, normas=("MOC_NFE",),
-          parametros=(("MOC_NFE", "tp_evento_cancelamento"),), escopo="competencia"),
+          parametros=(("MOC_NFE", "tp_evento_cancelamento"), ("MOC_NFE", "cstat_evento_homologado")),
+          escopo="competencia"),
     Regra("COMP_SEQUENCIA", "Completude por sequência de numeração", r_sequencia, escopo="competencia"),
 ]

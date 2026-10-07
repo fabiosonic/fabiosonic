@@ -11,7 +11,7 @@ FISCAIS = ("NFE", "NFCE", "CTE", "NFSE", "EVENTO_NFE", "EVENTO_NFCE", "EVENTO_CT
 
 def n_classificar(e, ctx):
     """Classifica pelo conteúdo."""
-    r = classificar(e["dados"])
+    r = classificar(e["dados"], ctx.catalogo)
     doc = r["doc"]
     if doc is not None:
         doc["_sha256"] = e["sha256"]

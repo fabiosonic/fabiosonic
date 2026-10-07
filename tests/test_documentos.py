@@ -3,11 +3,14 @@ from decimal import Decimal
 
 import pytest
 
+from tests.conftest import catalogo_teste as _cat
 from mo_autonomo.documentos.classificador import classificar, tipo_bruto
 from mo_autonomo.documentos.ofx import ler_ofx
 from mo_autonomo.entrada.anexos import ZipSuspeito, anexos_do_email, expandir
 from tests.conftest import (CNPJ_A, CNPJ_B, CNPJ_X, chave_nfe, cte_xml, eml_bytes, evento_xml, nfe_xml,
                             nfse_abrasf_xml, nfse_nacional_xml, ofx_bytes, zip_bytes)
+
+CAT = _cat()
 
 
 def test_nfe():
@@ -22,38 +25,39 @@ def test_nfe():
 
 
 def test_nfce_e_evento():
-    assert classificar(nfe_xml(modelo="65"))["classe"] == "NFCE"
+    assert classificar(nfe_xml(modelo="65"), CAT)["classe"] == "NFCE"
+    assert classificar(nfe_xml(modelo="65"))["classe"] == "NFE"  # sem MOC conferido não decide NFC-e
     ch = chave_nfe(CNPJ_A, 1)
-    e = classificar(evento_xml(ch))["doc"]
+    e = classificar(evento_xml(ch), CAT)["doc"]
     assert e["tipo"] == "EVENTO_NFE" and e["chave_ref"] == ch and e["tp_evento"] == "110111"
     ch65 = chave_nfe(CNPJ_A, 1, "65")
-    assert classificar(evento_xml(ch65))["classe"] == "EVENTO_NFCE"
+    assert classificar(evento_xml(ch65), CAT)["classe"] == "EVENTO_NFCE"
 
 
 def test_cte():
-    d = classificar(cte_xml())["doc"]
+    d = classificar(cte_xml(), CAT)["doc"]
     assert d["tipo"] == "CTE" and CNPJ_A in d["participantes"] and d["totais"]["vTPrest"] == Decimal("250.00")
 
 
 def test_nfse_nacional():
-    d = classificar(nfse_nacional_xml(fed={"vRetCSLL": "10.00"}))["doc"]
+    d = classificar(nfse_nacional_xml(fed={"vRetCSLL": "10.00"}), CAT)["doc"]
     assert d["tipo"] == "NFSE" and d["padrao"] == "NACIONAL"
     assert d["prestador_cnpj"] == CNPJ_X and d["tomador_cnpj"] == CNPJ_A
     assert d["totais"]["vServ"] == Decimal("1000.00") and d["iss_retencao_codigo"] == "2"
-    assert d["retencoes_federais"]["vRetCSLL"] == Decimal("10.00") and d["competencia"] == "2026-10"
+    assert d["retencoes_federais"]["csll"] == Decimal("10.00") and d["competencia"] == "2026-10"
 
 
 def test_nfse_abrasf():
-    d = classificar(nfse_abrasf_xml())["doc"]
+    d = classificar(nfse_abrasf_xml(), CAT)["doc"]
     assert d["padrao"] == "ABRASF" and d["prestador_cnpj"] == CNPJ_A and d["tomador_cnpj"] == CNPJ_B
     assert d["chave"].startswith("ABRASF-") and d["c_trib_nac"] == "17.01"
 
 
 def test_desconhecidos():
-    assert classificar(b"<?xml version='1.0'?><foo/>")["classe"] == "XML_DESCONHECIDO"
-    assert classificar(b"<?xml version='1.0'?><foo>")["classe"] == "XML_INVALIDO"
-    assert classificar(b"%PDF-1.4 ...")["classe"] == "PDF"
-    assert classificar(b"\x89PNG....")["classe"] == "IMAGEM"
+    assert classificar(b"<?xml version='1.0'?><foo/>", CAT)["classe"] == "XML_DESCONHECIDO"
+    assert classificar(b"<?xml version='1.0'?><foo>", CAT)["classe"] == "XML_INVALIDO"
+    assert classificar(b"%PDF-1.4 ...", CAT)["classe"] == "PDF"
+    assert classificar(b"\x89PNG....", CAT)["classe"] == "IMAGEM"
     assert tipo_bruto(b"texto qualquer") == "DESCONHECIDO"
 
 
@@ -73,8 +77,8 @@ def test_ofx_formato_br_e_varias_contas():
     ex = ler_ofx(dois)["extratos"]
     assert [(e["conta"]["banco"], e["conta"]["conta"], len(e["transacoes"])) for e in ex] == [("341", "12345", 2), ("001", "999", 1)]
     nan = ofx_bytes(trans=(("20261005", "NaN", "X", "1"),))
-    assert classificar(nan)["classe"] == "OFX_INVALIDO"
-    assert classificar(ofx_bytes())["classe"] == "OFX"
+    assert classificar(nan, CAT)["classe"] == "OFX_INVALIDO"
+    assert classificar(ofx_bytes(), CAT)["classe"] == "OFX"
 
 
 def test_email_com_zip_aninhado():

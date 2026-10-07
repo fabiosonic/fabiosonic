@@ -2,6 +2,7 @@ import sqlite3
 from decimal import Decimal
 from pathlib import Path
 
+from tests.conftest import catalogo_teste as _cat
 from mo_autonomo.documentos.classificador import classificar
 from mo_autonomo.especialista.faturamento import cruzar, faturamento, ler_receitas_declaradas
 from mo_autonomo.fluxos.documento import resumo_documento
@@ -9,9 +10,11 @@ from mo_autonomo.trilha.auditoria import Trilha
 from tests.conftest import (CNPJ_A, CNPJ_B, CNPJ_X, catalogo_teste, chave_nfe, evento_xml, nfe_xml,
                             nfse_abrasf_xml, nfse_nacional_xml)
 
+CAT = _cat()
+
 
 def reg(xml, cnpjs=(CNPJ_A,)):
-    d = classificar(xml)["doc"]
+    d = classificar(xml, CAT)["doc"]
     return {"chave": d.get("chave"), "cnpjs": list(cnpjs), "resumo": resumo_documento(d)}
 
 

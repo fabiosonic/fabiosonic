@@ -56,7 +56,7 @@ def _nfe(raiz) -> dict:
     inf = primeiro(raiz, "infNFe")
     ide = filho(inf, "ide")
     modelo = texto(ide, "mod")
-    d = _base("NFCE" if modelo == "65" else "NFE")
+    d = _base("NFE")  # NFC-e é decidida depois, com o parâmetro de leiaute conferido (aplicar_leiaute)
     d["chave"] = so_digitos(inf.get("Id")) or None
     d["modelo"], d["serie"], d["numero"] = modelo, texto(ide, "serie"), texto(ide, "nNF")
     d["emissao"] = _data(texto(ide, "dhEmi") or texto(ide, "dEmi"))
@@ -74,6 +74,7 @@ def _nfe(raiz) -> dict:
         d["itens"].append({
             "n": det.get("nItem"), "codigo": texto(prod, "cProd"), "descricao": texto(prod, "xProd"),
             "ncm": texto(prod, "NCM"), "cfop": texto(prod, "CFOP"), "v_prod": _valor(texto(prod, "vProd")),
+            "ind_tot": texto(prod, "indTot"),
             "cst_icms": texto(grupo, "CST") if grupo is not None else None,
             "csosn": texto(grupo, "CSOSN") if grupo is not None else None,
         })
@@ -94,14 +95,19 @@ def _cte(raiz) -> dict:
     d["emissao"] = _data(texto(ide, "dhEmi"))
     d["competencia"] = competencia(d["emissao"])
     d["emitente_cnpj"] = _doc_id(filho(inf, "emit"))
-    outros = []
+    outros, papeis = [], {}
     for papel in ("rem", "exped", "receb", "dest"):
         x = _doc_id(filho(inf, papel))
+        papeis[papel] = x
         if x:
             outros.append(x)
+    toma3 = _um(primeiro(ide, "toma3"), primeiro(ide, "toma03"))
+    d["tomador_codigo"] = texto(toma3, "toma") if toma3 is not None else None
     toma4 = primeiro(ide, "toma4")
-    if toma4 is not None and _doc_id(toma4):
-        outros.append(_doc_id(toma4))
+    d["tomador_cnpj"] = _doc_id(toma4) if toma4 is not None else None
+    if d["tomador_cnpj"]:
+        outros.append(d["tomador_cnpj"])
+    d["papeis"] = papeis
     d["destinatario_cnpj"] = _doc_id(filho(inf, "dest"))
     d["participantes"] = list(dict.fromkeys([x for x in [d["emitente_cnpj"], *outros] if x]))
     vprest = filho(inf, "vPrest")
@@ -120,10 +126,6 @@ def _evento(raiz, familia: str) -> dict:
     d["competencia"] = competencia(d["emissao"])
     d["emitente_cnpj"] = so_digitos(texto(inf, "CNPJ")) or None
     d["participantes"] = [d["emitente_cnpj"]] if d["emitente_cnpj"] else []
-    ch = d["chave_ref"] or ""
-    d["modelo_ref"] = ch[20:22] if len(ch) == 44 else None
-    if familia == "NFE" and d["modelo_ref"] == "65":
-        d["tipo"] = "EVENTO_NFCE"
     ret = primeiro(raiz, "retEvento")
     d["autorizacao_cstat"] = texto(primeiro(ret, "infEvento"), "cStat") if ret is not None else None
     return d
@@ -150,7 +152,15 @@ def _nfse_nacional(raiz) -> dict:
     trib = primeiro(dps, "tribMun")
     d["iss_retencao_codigo"] = texto(trib, "tpRetISSQN")
     fed = primeiro(dps, "tribFed")
-    d["retencoes_federais"] = {k: _valor(texto(fed, k)) for k in ("vRetCP", "vRetIRRF", "vRetCSLL")} if fed is not None else {}
+    pc = primeiro(fed, "piscofins") if fed is not None else None
+    d["retencoes_federais"] = {
+        "csll": _valor(texto(fed, "vRetCSLL")) if fed is not None else None,
+        "irrf": _valor(texto(fed, "vRetIRRF")) if fed is not None else None,
+        "inss": _valor(texto(fed, "vRetCP")) if fed is not None else None,
+        "pis": _valor(texto(pc, "vPis")) if pc is not None else None,
+        "cofins": _valor(texto(pc, "vCofins")) if pc is not None else None,
+    }
+    d["pis_cofins_retencao_codigo"] = texto(pc, "tpRetPisCofins") if pc is not None else None
     d["participantes"] = [x for x in (d["prestador_cnpj"], d["tomador_cnpj"]) if x]
     return d
 
@@ -175,6 +185,10 @@ def _nfse_abrasf(raiz) -> dict:
         d["chave"] = nome_seguro(f"ABRASF-{d['prestador_cnpj']}-{d['numero']}-{cod_ver or ''}")
     valores = primeiro(inf, "Valores")
     d["totais"] = {"vServ": _valor(texto(valores, "ValorServicos"))}
+    d["retencoes_federais"] = {k: _valor(texto(valores, campo)) for k, campo in
+                               (("pis", "ValorPis"), ("cofins", "ValorCofins"), ("csll", "ValorCsll"),
+                                ("irrf", "ValorIr"), ("inss", "ValorInss"))}
+    d["cancelada"] = primeiro(raiz, "NfseCancelamento") is not None
     d["iss_retencao_codigo"] = texto(primeiro(inf, "Servico"), "IssRetido") or texto(valores, "IssRetido")
     d["c_trib_nac"] = texto(primeiro(inf, "Servico"), "ItemListaServico")
     d["participantes"] = [x for x in (d["prestador_cnpj"], d["tomador_cnpj"]) if x]
@@ -208,3 +222,25 @@ def ler_xml(dados: bytes) -> dict:
         d = _base("EVENTO_OUTRO")
         return d
     raise DocumentoNaoReconhecido(f"XML não reconhecido (raiz {nome})")
+
+
+def aplicar_leiaute(doc: dict, catalogo) -> dict:
+    """Ajustes que dependem de códigos de leiaute (regra 3): só com parâmetros conferidos do MOC_NFE.
+
+    - NF-e com `mod` igual a `modelo_nfce` vira NFCE;
+    - evento cuja chave tem esse modelo (posição `chave_pos_modelo`) vira EVENTO_NFCE.
+    Sem os parâmetros, o documento fica como NFE/EVENTO_NFE (e a rota depende do mesmo MOC).
+    """
+    if catalogo is None or doc is None:
+        return doc
+    mod = catalogo.parametro("MOC_NFE", "modelo_nfce")
+    pos = catalogo.parametro("MOC_NFE", "chave_pos_modelo")
+    if mod is None:
+        return doc
+    if doc["tipo"] == "NFE" and str(doc.get("modelo")) == str(mod):
+        doc["tipo"] = "NFCE"
+    elif doc["tipo"] == "EVENTO_NFE" and pos is not None:
+        ch = doc.get("chave_ref") or ""
+        if len(ch) == 44 and ch[int(pos[0]):int(pos[1])] == str(mod):
+            doc["tipo"] = "EVENTO_NFCE"
+    return doc

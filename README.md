@@ -50,7 +50,7 @@ flowchart TD
 |---|---|
 | capturar | IMAP com `EXAMINE` + `BODY.PEEK` (não marca como lido, não move, não apaga); extrai anexos e ZIP aninhado (com trava contra zip-bomba); guarda o bruto em `_BRUTO_EMAIL` e registra sha256 (dedupe). |
 | classificar | Pelo conteúdo: NF-e, NFC-e, CT-e, NFS-e Nacional e ABRASF, eventos, OFX, PDF, imagem. XML com DTD/ENTITY é recusado. |
-| identificar_empresas | Cruza participantes com a carteira **por CNPJ** e define a pasta `XML NOTAS\<TIPO>\<Código-Apelido>\MMAAAA`. |
+| identificar_empresas | Cruza participantes com a carteira **por CNPJ** e define a pasta `XML NOTAS\<TIPO>\<Código-Apelido>\MMAAAA`. CT-e só vai para o **tomador** (toma3/toma4). NFC-e, sentido da NF-e e posições da chave dependem do MOC conferido. |
 | analisar | Monta o **perfil fiscal** da empresa na data do documento e roda as regras do especialista. |
 | extrato | Identifica a empresa dona da conta do OFX (`contas_bancarias.csv`). |
 | leitura_ia | PDF: extrai texto e lê com a **cascata de IAs**; saída validada contra o texto (CNPJ/valor inventado = pendência). |
@@ -85,7 +85,8 @@ não conferida (não vira ação); **CONTROLE** = fato objetivo. Regra com parâ
 
 | Regra | O que verifica | Normas / parâmetro |
 |---|---|---|
-| NFE_SOMA_ITENS | Soma dos itens × total vProd | — (CONTROLE) |
+| NFE_SOMA_ITENS | Soma dos itens que compõem o total (indTot) × vProd | MOC_NFE.ind_tot_compoe |
+| NFSE_CANCELADA | NFS-e ABRASF com registro de cancelamento | — (CONTROLE) |
 | DFE_SEM_PROTOCOLO | XML sem protocolo de autorização | — (CONTROLE) |
 | DFE_CSTAT | cStat fora da lista de autorização | MOC_NFE.cstat_autorizado |
 | NFE_CRT_REGIME | CRT do emitente × regime do perfil | MOC_NFE.crt_por_regime |
@@ -94,12 +95,12 @@ não conferida (não vira ação); **CONTROLE** = fato objetivo. Regra com parâ
 | NFE_DEVOLUCAO_SEM_REF | Devolução sem NFref | MOC_NFE.fin_nfe_devolucao |
 | SIMPLES_MONOFASICO | NCM monofásico em saída de empresa do Simples → segregar no PGDAS-D | TABELA_NCM_MONOFASICO + LC 123 + CGSN 140 |
 | NFSE_ISS_RETIDO_NACIONAL / _ABRASF | ISS retido a recolher pelo tomador | LC 116 + leiaute (código de retenção) |
-| NFSE_RETENCOES_FEDERAIS | CSLL/COFINS/PIS esperada e ausente (tomador) | LEI_10833_ART30 |
+| NFSE_RETENCOES_FEDERAIS | CSLL/COFINS/PIS esperada e ausente (tomador); IRRF/INSS não contam | LEI_10833_ART30 (+ código de retenção PIS/COFINS do leiaute nacional) |
 | DOC_COMPETENCIA_ROTINA | Competência que a rotina automática não importa | — (CONTROLE) |
 | DOC_EMISSAO_FUTURA | Emissão após o processamento | — (CONTROLE) |
 | DOC_CNPJ_INVALIDO | DV de CNPJ inválido | — (CONTROLE) |
 | COMP_DUPLICIDADE | Mesma chave com conteúdos diferentes (no mês e no histórico) | — (CONTROLE) |
-| COMP_CANCELAMENTO | Evento de cancelamento recebido | MOC_NFE.tp_evento_cancelamento |
+| COMP_CANCELAMENTO | Evento de cancelamento homologado recebido | MOC_NFE.tp_evento_cancelamento + cstat_evento_homologado |
 | COMP_SEQUENCIA | Buracos na numeração das notas emitidas | — (CONTROLE) |
 | COMP_RECEITA_X_DECLARADA | Faturamento dos XML emitidos (acumulado no mês) × receita declarada em `dados/apuracao/receitas.csv` | — (CONTROLE; NF-e/canceladas dependem de MOC_NFE) |
 | DP_INSS_DIVERGENTE | INSS do empregado × tabela progressiva | TABELA_INSS_SEGURADO.faixas |
@@ -170,7 +171,7 @@ python -m pytest -q
 ## O que depende do escritório (sem isso o sistema fica em pendência, de propósito)
 
 1. **Conferir as normas** em `config/normas/` (todas PENDENTES hoje). Prioridade, pelo que
-   destrava: `MOC_NFE` (sentido da NF-e, CRT, cancelamento) → `TABELA_CFOP` →
+   destrava: `MOC_NFE` (sentido da NF-e, NFC-e, indTot, CRT, cancelamento) → `MOC_CTE` (tomador) → `TABELA_CFOP` →
    `DICIONARIO_DADOS_ABERTOS_CNPJ` → leiautes de NFS-e → `LEI_10833_ART30` →
    `TABELA_NCM_MONOFASICO` → tabelas de INSS/IRRF.
 2. **`config/empresas.csv`** a partir da exportação do cadastro do Domínio (código, apelido, CNPJ, regime, UF, município IBGE).

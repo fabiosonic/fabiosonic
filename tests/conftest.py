@@ -40,7 +40,7 @@ def nfe_xml(emit=CNPJ_A, dest=CNPJ_X, numero=1, modelo="55", crt="1", tp_nf="1",
     ch = chave_nfe(emit, numero, modelo, serie)
     dets = "".join(
         f'<det nItem="{i + 1}"><prod><cProd>P{i}</cProd><xProd>Produto {i}</xProd><NCM>{ncm}</NCM>'
-        f'<CFOP>{cfop}</CFOP><vProd>{v}</vProd></prod><imposto><ICMS><ICMSSN102><CSOSN>102</CSOSN>'
+        f'<CFOP>{cfop}</CFOP><vProd>{v}</vProd><indTot>1</indTot></prod><imposto><ICMS><ICMSSN102><CSOSN>102</CSOSN>'
         f'</ICMSSN102></ICMS></imposto></det>' for i, (ncm, cfop, v) in enumerate(itens))
     from decimal import Decimal
     vprod = total if total is not None else str(sum(Decimal(v) for _, _, v in itens))
@@ -61,10 +61,12 @@ def evento_xml(chave: str, tp="110111", autor=CNPJ_A, data="2026-10-02T09:00:00-
             f'</infEvento></evento><retEvento><infEvento><cStat>135</cStat></infEvento></retEvento></procEventoNFe>').encode()
 
 
-def cte_xml(emit=CNPJ_X, dest=CNPJ_A, numero=10) -> bytes:
+def cte_xml(emit=CNPJ_X, dest=CNPJ_A, numero=10, rem=CNPJ_X, toma="3", toma4=None) -> bytes:
+    tomador = (f"<toma4><toma>4</toma><CNPJ>{toma4}</CNPJ></toma4>" if toma4 else
+               f"<toma3><toma>{toma}</toma></toma3>" if toma is not None else "")
     return (f'<?xml version="1.0"?><cteProc xmlns="{NS_CTE}"><CTe><infCte Id="CTe{"3" * 44}">'
-            f'<ide><mod>57</mod><serie>1</serie><nCT>{numero}</nCT><dhEmi>2026-10-03T08:00:00-03:00</dhEmi></ide>'
-            f'<emit><CNPJ>{emit}</CNPJ></emit><rem><CNPJ>{CNPJ_X}</CNPJ></rem><dest><CNPJ>{dest}</CNPJ></dest>'
+            f'<ide><mod>57</mod><serie>1</serie><nCT>{numero}</nCT><dhEmi>2026-10-03T08:00:00-03:00</dhEmi>{tomador}</ide>'
+            f'<emit><CNPJ>{emit}</CNPJ></emit><rem><CNPJ>{rem}</CNPJ></rem><dest><CNPJ>{dest}</CNPJ></dest>'
             f'<vPrest><vTPrest>250.00</vTPrest></vPrest></infCte></CTe>'
             f'<protCTe><infProt><cStat>100</cStat></infProt></protCTe></cteProc>').encode()
 
@@ -131,10 +133,12 @@ CONFERIDA = {"status": "CONFERIDO", "fonte_url": "https://www.gov.br/teste-ficti
 PARAMS_TESTE = {  # valores fictícios só para exercitar o código
     "MOC_NFE": {"crt_por_regime": {"1": ["SIMPLES"], "2": ["SIMPLES"], "3": ["PRESUMIDO", "REAL"], "4": ["MEI"]},
                 "tp_evento_cancelamento": ["110111"], "fin_nfe_devolucao": ["4"], "cstat_autorizado": ["100"],
-                "tp_nf_saida": "1"},
+                "tp_nf_saida": "1", "cstat_evento_homologado": ["135"], "ind_tot_compoe": ["1"],
+                "modelo_nfce": "65", "chave_pos_modelo": [20, 22], "chave_pos_cnpj_emitente": [6, 20]},
+    "MOC_CTE": {"tomador_por_codigo": {"0": "rem", "1": "exped", "2": "receb", "3": "dest"}},
     "TABELA_CFOP": {"cfop_digitos_por_tpnf": {"0": ["1", "2", "3"], "1": ["5", "6", "7"]},
                     "cfop_digito_por_iddest": {"1": ["1", "5"], "2": ["2", "6"], "3": ["3", "7"]}},
-    "LEIAUTE_NFSE_NACIONAL": {"codigos_iss_retido": ["2"]},
+    "LEIAUTE_NFSE_NACIONAL": {"codigos_iss_retido": ["2"], "codigos_pis_cofins_retidos": ["1"]},
     "LEIAUTE_NFSE_ABRASF": {"codigos_iss_retido": ["1"]},
     "TABELA_NCM_MONOFASICO": {"ncm_prefixos_monofasicos": ["3303"]},
     "LEI_10833_ART30": {"codigos_servico_sujeitos": ["17"], "regimes_tomador_obrigados": ["PRESUMIDO", "REAL"]},
@@ -149,7 +153,7 @@ PARAMS_TESTE = {  # valores fictícios só para exercitar o código
 
 PARAMS_TESTE["LEI_8036_FGTS"] = {"aliquota_deposito": "0.05"}  # fictício
 
-TODAS = ["LEI_8036_FGTS", "MOC_NFE", "TABELA_CFOP", "LEIAUTE_NFSE_NACIONAL", "LEIAUTE_NFSE_ABRASF", "LC_116_2003",
+TODAS = ["LEI_8036_FGTS", "MOC_CTE", "MOC_NFE", "TABELA_CFOP", "LEIAUTE_NFSE_NACIONAL", "LEIAUTE_NFSE_ABRASF", "LC_116_2003",
          "LEI_10833_ART30", "LC_123_2006", "RES_CGSN_140_2018", "TABELA_NCM_MONOFASICO",
          "DICIONARIO_DADOS_ABERTOS_CNPJ", "TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL"]
 

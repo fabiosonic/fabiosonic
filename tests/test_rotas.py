@@ -1,13 +1,16 @@
 import pytest
 
+from tests.conftest import catalogo_teste as _cat
 from mo_autonomo.documentos.classificador import classificar
 from mo_autonomo.dominio.pastas import TIPOS_PADRAO, ConflitoArquivo, caminho_destino, gravar, rotas
 from tests.conftest import (CNPJ_A, CNPJ_B, CNPJ_X, carteira_teste, catalogo_teste, chave_nfe, cte_xml,
                             evento_xml, nfe_xml, nfse_abrasf_xml, nfse_nacional_xml)
 
+CAT = _cat()
+
 
 def r(xml, cat=None):
-    return [(x.cnpj, x.tipo, bool(x.pendencia)) for x in rotas(classificar(xml)["doc"], carteira_teste(), cat or catalogo_teste())]
+    return [(x.cnpj, x.tipo, bool(x.pendencia)) for x in rotas(classificar(xml, CAT)["doc"], carteira_teste(), cat or catalogo_teste())]
 
 
 def test_nfe_saida_e_entrada_entre_clientes():
@@ -44,3 +47,12 @@ def test_gravar_nao_sobrescreve(tmp_path):
     with pytest.raises(ConflitoArquivo):
         gravar(destino, b"b")
     assert destino.read_bytes() == b"a"
+
+
+def test_cte_so_para_o_tomador():
+    # cliente é remetente, tomador é o destinatário (terceiro): não escritura frete que não contratou
+    assert r(cte_xml(rem=CNPJ_A, dest=CNPJ_X, toma="3")) == [(None, None, True)]
+    assert r(cte_xml(rem=CNPJ_A, dest=CNPJ_X, toma="0")) == [(CNPJ_A, "CTE_ENTRADA", False)]
+    assert r(cte_xml(rem=CNPJ_X, dest=CNPJ_X, toma=None, toma4=CNPJ_B)) == [(CNPJ_B, "CTE_ENTRADA", False)]
+    sem_moc = catalogo_teste(conferidas=[n for n in catalogo_teste().normas if n != "MOC_CTE"])
+    assert r(cte_xml(), sem_moc) == [(CNPJ_A, None, True)]

@@ -118,7 +118,7 @@ def cmd_auditar(args):
         if args.cnpj in d["cnpjs"]:
             row = ctx.trilha.con.execute("SELECT caminho_bruto FROM anexos WHERE sha256=?", (d["sha256"],)).fetchone()
             if row:
-                r = classificar(Path(row[0]).read_bytes())
+                r = classificar(Path(row[0]).read_bytes(), ctx.catalogo)
                 if r["doc"]:
                     docs.append(r["doc"])
     achados = auditar(docs, rel, args.cnpj, args.competencia)

@@ -21,11 +21,14 @@ from .modelo import CONTROLE, Achado
 def faturamento(registros: list[dict], cnpj: str, catalogo) -> dict:
     saida = catalogo.parametro("MOC_NFE", "tp_nf_saida")
     canc = catalogo.parametro("MOC_NFE", "tp_evento_cancelamento")
-    canc = [str(x) for x in canc] if canc is not None else None
+    homol = catalogo.parametro("MOC_NFE", "cstat_evento_homologado")
+    canc = [str(x) for x in canc] if canc is not None and homol is not None else None
     canceladas = set()
     if canc is not None:
+        homol = [str(x) for x in homol]
         canceladas = {r["resumo"].get("chave_ref") for r in registros
-                      if (r["resumo"].get("tipo") or "").startswith("EVENTO_") and str(r["resumo"].get("tp_evento")) in canc}
+                      if (r["resumo"].get("tipo") or "").startswith("EVENTO_") and str(r["resumo"].get("tp_evento")) in canc
+                      and str(r["resumo"].get("cstat")) in homol}
     por_tipo = {"NFE": Decimal("0.00"), "NFCE": Decimal("0.00"), "NFSE": Decimal("0.00")}
     obs = []
     nfe_ignoradas = 0
@@ -35,7 +38,7 @@ def faturamento(registros: list[dict], cnpj: str, catalogo) -> dict:
         tipo, valor = res.get("tipo"), res.get("valor")
         if valor is None or r.get("chave") in vistos:
             continue
-        if r.get("chave") in canceladas:
+        if r.get("chave") in canceladas or res.get("cancelada"):
             continue
         if tipo == "NFE" and res.get("emitente") == cnpj:
             if saida is None:
@@ -54,7 +57,7 @@ def faturamento(registros: list[dict], cnpj: str, catalogo) -> dict:
     if nfe_ignoradas:
         obs.append(f"{nfe_ignoradas} NF-e emitida(s) fora da soma: sentido não verificável (MOC_NFE.tp_nf_saida não conferido).")
     if canc is None:
-        obs.append("Canceladas não excluídas: MOC_NFE.tp_evento_cancelamento não conferido.")
+        obs.append("NF-e canceladas não excluídas: MOC_NFE.tp_evento_cancelamento/cstat_evento_homologado não conferidos.")
     total = sum(por_tipo.values(), Decimal("0.00"))
     return {"total": total, "por_tipo": por_tipo, "observacoes": obs, "completo": not obs}
 

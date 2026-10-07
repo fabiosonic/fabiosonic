@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .ofx import ler_ofx
-from .xml_fiscal import DocumentoNaoReconhecido, ler_xml
+from .xml_fiscal import DocumentoNaoReconhecido, aplicar_leiaute, ler_xml
 from ..util.arquivos import XMLInseguro
 
 ASSINATURAS = (
@@ -25,12 +25,12 @@ def tipo_bruto(dados: bytes) -> str:
     return "DESCONHECIDO"
 
 
-def classificar(dados: bytes) -> dict:
+def classificar(dados: bytes, catalogo=None) -> dict:
     """Devolve {'classe': ..., 'doc': dict|None, 'erro': str|None}."""
     bruto = tipo_bruto(dados)
     if bruto == "XML":
         try:
-            doc = ler_xml(dados)
+            doc = aplicar_leiaute(ler_xml(dados), catalogo)
             return {"classe": doc["tipo"], "doc": doc, "erro": None}
         except (DocumentoNaoReconhecido, XMLInseguro) as exc:
             return {"classe": "XML_DESCONHECIDO", "doc": None, "erro": str(exc)}

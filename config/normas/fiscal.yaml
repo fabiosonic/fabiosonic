@@ -7,8 +7,18 @@
   parametros: {}
   # parametros esperados após conferência:
   #   crt_por_regime: {"1": [SIMPLES], "2": [SIMPLES], "3": [PRESUMIDO, REAL, IMUNE, ISENTA], "4": [MEI]}
-  #   tp_evento_cancelamento: "<código>"
+  #   tp_evento_cancelamento: ["<código>"]; cstat_evento_homologado: ["<código>"]
+  #   tp_nf_saida: "<código>"; fin_nfe_devolucao: ["<código>"]; cstat_autorizado: ["<código>"]
+  #   ind_tot_compoe: ["<valor de indTot que compõe o total>"]
+  #   modelo_nfce: "<modelo>"; chave_pos_modelo: [ini, fim]; chave_pos_cnpj_emitente: [ini, fim]
   observacao: Localizar a versão vigente do MOC no Portal Nacional da NF-e.
+
+- id: MOC_CTE
+  titulo: Manual de Orientação do Contribuinte CT-e (leiaute — tomador do serviço)
+  area: fiscal
+  status: PENDENTE
+  parametros: {}
+  # esperados: tomador_por_codigo: {"<código toma3>": rem|exped|receb|dest, ...}
 
 - id: TABELA_CFOP
   titulo: Tabela de Códigos Fiscais de Operações e Prestações (CFOP)
@@ -24,6 +34,7 @@
   status: PENDENTE
   parametros: {}
   # esperados: codigos_iss_retido: ["<código tpRetISSQN de retenção>"]
+  #            codigos_pis_cofins_retidos: ["<código tpRetPisCofins que indica retenção>"]
 
 - id: LC_116_2003
   titulo: Lei Complementar 116/2003 — ISS (lista de serviços, local de incidência, retenção)

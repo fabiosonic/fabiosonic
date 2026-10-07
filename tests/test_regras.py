@@ -1,15 +1,18 @@
 from datetime import date
 
 from mo_autonomo.clientes.perfil import Perfis
+from tests.conftest import catalogo_teste as _cat
 from mo_autonomo.documentos.classificador import classificar
 from mo_autonomo.especialista.modelo import APONTAMENTO, CONTROLE, INDICIO
 from mo_autonomo.especialista.motor import avaliar_competencia, avaliar_documento, cobertura
 from tests.conftest import (CNPJ_A, CNPJ_B, CNPJ_X, HOJE, carteira_teste, catalogo_teste, chave_nfe, evento_xml,
                             nfe_xml, nfse_abrasf_xml, nfse_nacional_xml)
 
+CAT = _cat()
+
 
 def doc(xml, sha="s"):
-    d = classificar(xml)["doc"]
+    d = classificar(xml, CAT)["doc"]
     d["_sha256"] = sha
     return d
 
@@ -30,7 +33,7 @@ def test_nota_limpa_sem_achados():
 
 def test_soma_itens_divergente_e_controle():
     a = regras_de(nfe_xml(itens=(("12345678", "5102", "60.00"),), total="70.00"))
-    assert ids(a) == ["NFE_SOMA_ITENS"] and a[0].natureza == CONTROLE and a[0].bloqueia
+    assert ids(a) == ["NFE_SOMA_ITENS"] and a[0].natureza == APONTAMENTO and a[0].bloqueia
 
 
 def test_sem_protocolo():
@@ -46,7 +49,7 @@ def test_crt_regra_inativa_sem_parametro():
     cat = catalogo_teste(conferidas=[], pendentes_com_param=True)  # parâmetro proposto, não conferido
     assert "NFE_CRT_REGIME" not in ids(regras_de(nfe_xml(crt="3"), catalogo=cat))
     inativas = {c["regra"] for c in cobertura(cat) if not c["ativa"]}
-    assert "NFE_CRT_REGIME" in inativas and "NFE_SOMA_ITENS" not in inativas
+    assert "NFE_CRT_REGIME" in inativas and "DOC_EMISSAO_FUTURA" not in inativas
 
 
 def test_crt_so_para_emitente():
@@ -116,3 +119,30 @@ def test_regras_de_competencia():
     assert regras == ["COMP_CANCELAMENTO", "COMP_DUPLICIDADE", "COMP_SEQUENCIA"]
     seq = [x for x in a if x.regra == "COMP_SEQUENCIA"][0]
     assert "3, 4" in seq.mensagem
+
+
+def test_soma_itens_respeita_indtot():
+    xml = nfe_xml(itens=(("12345678", "5102", "100.00"), ("12345678", "5102", "50.00")), total="100.00")
+    xml = xml.replace(b"<vProd>50.00</vProd><indTot>1</indTot>", b"<vProd>50.00</vProd><indTot>0</indTot>")
+    assert "NFE_SOMA_ITENS" not in ids(regras_de(xml))
+
+
+def test_retencoes_abrasf_lidas_e_irrf_nao_conta():
+    com_pis = nfse_abrasf_xml(prest=CNPJ_X, toma=CNPJ_B).replace(
+        b"<ValorServicos>500.00</ValorServicos>", b"<ValorServicos>500.00</ValorServicos><ValorPis>3.25</ValorPis>")
+    assert "NFSE_RETENCOES_FEDERAIS" not in ids(regras_de(com_pis, cnpj=CNPJ_B))
+    so_irrf = nfse_nacional_xml(toma=CNPJ_B, ctrib="170101", fed={"vRetIRRF": "7.50"})
+    assert "NFSE_RETENCOES_FEDERAIS" in ids(regras_de(so_irrf, cnpj=CNPJ_B))
+
+
+def test_nfse_cancelada_abrasf():
+    xml = nfse_abrasf_xml().replace(b"</Nfse>", b"</Nfse><NfseCancelamento><Confirmacao/></NfseCancelamento>")
+    a = regras_de(xml)
+    assert "NFSE_CANCELADA" in ids(a)
+
+
+def test_evento_de_cancelamento_rejeitado_nao_conta():
+    cat = catalogo_teste()
+    perfil = Perfis(carteira_teste(), {}, cat).em(CNPJ_A, date(2026, 10, 1))
+    rej = doc(evento_xml(chave_nfe(CNPJ_A, 2)).replace(b"<cStat>135</cStat>", b"<cStat>573</cStat>"), "ev")
+    assert "COMP_CANCELAMENTO" not in ids(avaliar_competencia([rej], perfil, "2026-10", cat, HOJE))

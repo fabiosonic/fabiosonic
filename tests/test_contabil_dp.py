@@ -115,3 +115,18 @@ def test_auditoria_dominio(tmp_path):
         ler_relatorio(rel, {})
     with pytest.raises(RelatorioInvalido, match="ausentes"):
         ler_relatorio(rel, {**cols, "chave": "Inexistente"})
+
+
+def test_auditoria_nfse_nacional_e_abrasf(tmp_path):
+    from tests.conftest import CNPJ_X
+    ch50 = "3" * 50
+    rel = tmp_path / "r.csv"
+    rel.write_text("Chave;Valor;CNPJ;Numero;Prestador\n"
+                   f"{ch50[:25]}.{ch50[25:]};10,00;{CNPJ_A};;\n"
+                   f";500,00;{CNPJ_A};0077;{CNPJ_X}\n", encoding="utf-8")
+    linhas = ler_relatorio(rel, {"chave": "Chave", "valor": "Valor", "cnpj": "CNPJ", "numero": "Numero",
+                                 "cnpj_prestador": "Prestador"})
+    docs = [{"chave": ch50, "totais": {"vServ": Decimal("10.00")}},
+            {"chave": "ABRASF-x", "padrao": "ABRASF", "prestador_cnpj": CNPJ_X, "numero": "77",
+             "totais": {"vServ": Decimal("500.00")}}]
+    assert auditar(docs, linhas, CNPJ_A, "2026-10") == []

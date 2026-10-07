@@ -2,7 +2,8 @@
 
 Entrada: relatório exportado do Domínio em CSV (separador `;`), com as colunas informadas no
 config (`dominio.relatorio_colunas`), p.ex. {chave: "Chave", valor: "Valor Contábil",
-cnpj: "CNPJ Empresa", competencia: "Competência"}. Sem o mapeamento de colunas, nada é
+cnpj: "CNPJ Empresa", competencia: "Competência"}. Para NFS-e ABRASF (sem chave nacional),
+informe também `numero` e `cnpj_prestador`: o casamento é por prestador + número. Sem o mapeamento de colunas, nada é
 inferido: a auditoria recusa o arquivo.
 """
 from __future__ import annotations
@@ -22,9 +23,15 @@ class RelatorioInvalido(ValueError):
 
 
 def _chave(bruta: str) -> str:
-    """Chave de 44 dígitos (pode vir com espaços/pontos); outras chaves (ABRASF) ficam como estão."""
+    """Chave de 44 (NF-e/CT-e) ou 50 dígitos (NFS-e Nacional), mesmo com pontuação; o resto fica como está."""
     d = so_digitos(bruta)
-    return d if len(d) == 44 else (bruta or "").strip()
+    return d if len(d) in (44, 50) else (bruta or "").strip()
+
+
+def _chave_abrasf(prestador: str | None, numero: str | None) -> str | None:
+    """NFS-e ABRASF não tem chave nacional: casa por (prestador, número sem zeros à esquerda)."""
+    p, n = so_digitos(prestador), so_digitos(numero).lstrip("0")
+    return f"ABRASF|{p}|{n}" if p and n else None
 
 
 def ler_relatorio(caminho: Path, colunas: dict) -> list[dict]:
@@ -45,7 +52,10 @@ def ler_relatorio(caminho: Path, colunas: dict) -> list[dict]:
                         valor = dinheiro(l[colunas["valor"]])
                     except ValorInvalido as exc:
                         raise RelatorioInvalido(f"linha {n}: {exc}") from exc
-                    linhas.append({"chave": _chave(l[colunas["chave"]]),
+                    ch = _chave(l[colunas["chave"]])
+                    if colunas.get("numero") and colunas.get("cnpj_prestador") and len(ch) not in (44, 50):
+                        ch = _chave_abrasf(l.get(colunas["cnpj_prestador"]), l.get(colunas["numero"])) or ch
+                    linhas.append({"chave": ch,
                                    "valor": valor, "cnpj": so_digitos(l[colunas["cnpj"]]),
                                    "competencia": (l.get(colunas.get("competencia") or "", "") or "").strip() or None})
             return linhas
@@ -65,7 +75,14 @@ def _valor_doc(doc: dict):
 
 def auditar(capturados: list[dict], relatorio: list[dict], cnpj: str, competencia: str) -> list[Achado]:
     """`capturados`: docs normalizados roteados para a empresa/competência (com chave)."""
-    nossos = {d["chave"]: d for d in capturados if d.get("chave")}
+    nossos = {}
+    for d in capturados:
+        if d.get("padrao") == "ABRASF":
+            k = _chave_abrasf(d.get("prestador_cnpj"), d.get("numero"))
+        else:
+            k = d.get("chave")
+        if k:
+            nossos[k] = d
     dom = {l["chave"]: l for l in relatorio if l["cnpj"] == cnpj}
     achados = []
 
