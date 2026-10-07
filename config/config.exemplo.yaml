@@ -43,13 +43,17 @@ ia:
   ativa: false
   confianca_minima: 0.8
   espera_padrao_s: 3600                  # pausa do provedor que estourou cota sem Retry-After
-  provedores:                            # ordem = prioridade. Limites gratuitos mudam: conferir no site de cada um.
+  # Ordem = prioridade. Nomes de modelo são EXEMPLOS: confira no site de cada provedor (mudam muito),
+  # assim como os limites dos planos gratuitos. As APIs na nuvem vêm DESLIGADAS: o mascaramento cobre
+  # CPF/CNPJ/chaves/e-mail/telefone/razão social, mas não reconhece nome de pessoa física solto num PDF.
+  # Ligue (ativo: true) só depois de avaliar o risco LGPD e os termos de uso de dados de cada provedor.
+  provedores:
     - {nome: ollama_local, base_url: 'http://localhost:11434/v1', modelo: 'qwen2.5:7b', local: true}
-    - {nome: gemini, base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', modelo: 'gemini-2.0-flash', chave_env: GEMINI_API_KEY}
-    - {nome: groq, base_url: 'https://api.groq.com/openai/v1', modelo: 'llama-3.3-70b-versatile', chave_env: GROQ_API_KEY}
-    - {nome: openrouter, base_url: 'https://openrouter.ai/api/v1', modelo: 'meta-llama/llama-3.3-70b-instruct:free', chave_env: OPENROUTER_API_KEY}
-    - {nome: mistral, base_url: 'https://api.mistral.ai/v1', modelo: 'mistral-small-latest', chave_env: MISTRAL_API_KEY}
-    - {nome: cerebras, base_url: 'https://api.cerebras.ai/v1', modelo: 'llama-3.3-70b', chave_env: CEREBRAS_API_KEY}
+    - {nome: gemini, ativo: false, base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', modelo: 'gemini-2.0-flash', chave_env: GEMINI_API_KEY}
+    - {nome: groq, ativo: false, base_url: 'https://api.groq.com/openai/v1', modelo: 'llama-3.3-70b-versatile', chave_env: GROQ_API_KEY}
+    - {nome: openrouter, ativo: false, base_url: 'https://openrouter.ai/api/v1', modelo: 'meta-llama/llama-3.3-70b-instruct:free', chave_env: OPENROUTER_API_KEY}
+    - {nome: mistral, ativo: false, base_url: 'https://api.mistral.ai/v1', modelo: 'mistral-small-latest', chave_env: MISTRAL_API_KEY}
+    - {nome: cerebras, ativo: false, base_url: 'https://api.cerebras.ai/v1', modelo: 'llama-3.3-70b', chave_env: CEREBRAS_API_KEY}
 
 calendario:
   dias_alerta: [3, 0]                    # alerta 3 dias antes e no dia

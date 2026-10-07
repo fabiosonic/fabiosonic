@@ -30,9 +30,10 @@ def test_path_traversal_no_codigo_de_verificacao_abrasf(tmp_path):
 def test_caminho_destino_recusa_fuga():
     emp = carteira_teste().get(CNPJ_A)
     with pytest.raises(DestinoInvalido):
-        caminho_destino(Path("/base"), TIPOS_PADRAO, emp, "NFE_SAIDA", "../..-10", "x.xml")
-    d = caminho_destino(Path("/base"), TIPOS_PADRAO, emp, "NFE_SAIDA", "2026-10", "../../x.xml")
-    assert d.name == "x.xml" and str(d).startswith("/base/")
+        caminho_destino(Path("base_teste").resolve(), TIPOS_PADRAO, emp, "NFE_SAIDA", "../..-10", "x.xml")
+    base = Path("base_teste").resolve()
+    d = caminho_destino(base, TIPOS_PADRAO, emp, "NFE_SAIDA", "2026-10", "../../x.xml")
+    assert d.name == "x.xml" and d.resolve().is_relative_to(base)
 
 
 def test_cadastro_recusa_apelido_com_caminho(tmp_path):

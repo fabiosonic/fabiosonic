@@ -41,7 +41,7 @@ def test_fora_da_carteira():
 def test_gravar_nao_sobrescreve(tmp_path):
     emp = carteira_teste().get(CNPJ_A)
     destino = caminho_destino(tmp_path, TIPOS_PADRAO, emp, "NFE_SAIDA", "2026-10", "x.xml")
-    assert str(destino).endswith("NFE SAIDA/101-ALFA COMERCIO/102026/x.xml")
+    assert destino.parts[-4:] == ("NFE SAIDA", "101-ALFA COMERCIO", "102026", "x.xml")
     assert gravar(destino, b"a") == "GRAVADO"
     assert gravar(destino, b"a") == "JA_EXISTIA"
     with pytest.raises(ConflitoArquivo):
