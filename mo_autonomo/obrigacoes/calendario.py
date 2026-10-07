@@ -70,8 +70,8 @@ def gerar(competencia: str, perfis_por_cnpj: dict, catalogo, feriados: set[date]
         if not n.vigente_em(legal):
             continue
         for cnpj, perfil in perfis_por_cnpj.items():
-            if perfil.regime is None:
-                continue  # regime indefinido = pendência no perfil, não chuta obrigação
+            if perfil is None or perfil.regime is None:
+                continue  # regime indefinido: não chuta obrigação (sem_regime() avisa no resumo)
             if ob.get("regimes") and perfil.regime not in ob["regimes"]:
                 continue
             if not n.aplica_ao_perfil(perfil):
@@ -79,6 +79,18 @@ def gerar(competencia: str, perfis_por_cnpj: dict, catalogo, feriados: set[date]
             venc.append(Vencimento(cnpj, perfil.apelido, ob["codigo"], ob.get("descricao", ob["codigo"]),
                                    competencia, legal, dia_util_anterior(legal, feriados), n.id))
     return sorted(venc, key=lambda v: (v.vencimento, v.apelido, v.codigo))
+
+
+def sem_regime(perfis_por_cnpj: dict, catalogo) -> list[str]:
+    """Empresas cujo vencimento NÃO foi calculado por regime indefinido (só se há obrigação conferida)."""
+    if not obrigacoes_conferidas(catalogo):
+        return []
+    out = []
+    for cnpj, p in perfis_por_cnpj.items():
+        if p is None or p.regime is None:
+            motivos = ", ".join(x.codigo for x in (getattr(p, "pendencias", None) or [])) if p else "sem perfil"
+            out.append(f"{getattr(p, 'apelido', None) or cnpj}: regime indefinido ({motivos or 'sem motivo'})")
+    return out
 
 
 def alertas(vencimentos: list[Vencimento], hoje: date, dias: tuple[int, ...] = (3, 0)) -> list[dict]:

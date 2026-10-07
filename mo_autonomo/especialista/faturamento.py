@@ -37,7 +37,8 @@ def faturamento(registros: list[dict], cnpj: str, catalogo) -> dict:
     for r in registros:
         res = r.get("resumo") or {}
         tipo, valor = res.get("tipo"), res.get("valor")
-        if valor is None or r.get("chave") in vistos:
+        ident = r.get("chave") or r.get("sha256")  # sem chave: deduplica pelo arquivo, nunca por None
+        if valor is None or ident is None or ident in vistos:
             continue
         if r.get("chave") in canceladas or res.get("cancelada"):
             continue
@@ -53,7 +54,7 @@ def faturamento(registros: list[dict], cnpj: str, catalogo) -> dict:
             pass
         else:
             continue
-        vistos.add(r.get("chave"))
+        vistos.add(ident)
         por_tipo[tipo] += dinheiro(valor)
     if nfe_ignoradas:
         obs.append(f"{nfe_ignoradas} NF-e emitida(s) fora da soma: sentido não verificável (MOC_NFE.tp_nf_saida não conferido).")

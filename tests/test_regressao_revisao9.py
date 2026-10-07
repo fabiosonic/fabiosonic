@@ -43,7 +43,7 @@ def _cat_inss_2026():
     itens = []
     for n in base.normas.values():
         d = {"id": n.id, "titulo": n.titulo, "area": "teste", "parametros": dict(n.parametros), "status": n.status,
-             "fonte_url": n.fonte_url, "conferido_por": n.conferido_por, "conferido_em": str(n.conferido_em)}
+             "fonte_url": n.fonte_url, "conferido_por": n.conferido_por, "conferido_em": str(n.conferido_em), "hash_texto": n.hash_texto}
         if n.id == "TABELA_INSS_SEGURADO":
             d["vigencia"] = {"inicio": "2026-01-01"}
         itens.append(d)

@@ -11,7 +11,7 @@ Cada arquivo `*.yaml` desta pasta (e subpastas, ex.: `icms/RJ.yaml`) contém uma
   fonte_url_sugerida:            # sugestão a conferir — NÃO vale como fonte
   conferido_por:                 # nome da PESSOA que conferiu (nunca "Claude"/"IA")
   conferido_em:                  # AAAA-MM-DD
-  hash_texto:                    # sha256 do texto oficial salvo (monitor de mudança)
+  hash_texto:                    # OBRIGATÓRIO no CONFERIDO: sha256 do texto oficial (o `normas conferir` mostra)
   dispositivos: []               # artigos/itens que sustentam os parâmetros
   aplica_se:                     # filtros de perfil (todos opcionais)
     regimes: [SIMPLES, MEI]      # SIMPLES | MEI | PRESUMIDO | REAL | IMUNE | ISENTA

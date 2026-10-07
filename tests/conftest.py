@@ -128,7 +128,7 @@ def eml_bytes(anexos: dict[str, bytes], assunto="Notas do mês", remetente="clie
 
 
 CONFERIDA = {"status": "CONFERIDO", "fonte_url": "https://www.gov.br/teste-ficticio",
-             "conferido_por": "Pessoa de Teste", "conferido_em": "2026-10-01"}
+             "conferido_por": "Pessoa de Teste", "conferido_em": "2026-10-01", "hash_texto": "0" * 64}
 
 PARAMS_TESTE = {  # valores fictícios só para exercitar o código
     "MOC_NFE": {"crt_por_regime": {"1": ["SIMPLES"], "2": ["SIMPLES"], "3": ["PRESUMIDO", "REAL"], "4": ["MEI"]},

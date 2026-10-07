@@ -24,7 +24,7 @@ def test_conferido_exige_campos():
 def test_conferido_exige_fonte_oficial():
     with pytest.raises(NormaInvalida, match="não oficial"):
         Catalogo.de_lista([base(status="CONFERIDO", fonte_url="https://blog.exemplo.com/x",
-                                conferido_por="Fulano", conferido_em="2026-01-01")])
+                                conferido_por="Fulano", conferido_em="2026-01-01", hash_texto="a" * 64)])
     assert url_oficial("https://www.planalto.gov.br/x")
     assert url_oficial("https://www.cfc.org.br/x")
     assert not url_oficial("http://www.planalto.gov.br/x")
@@ -40,14 +40,14 @@ def test_conferido_por_ia_recusado():
 def test_decisao_judicial_sem_transito():
     with pytest.raises(NormaInvalida, match="regra 4"):
         Catalogo.de_lista([base(status="CONFERIDO", fonte_url="https://portal.stf.jus.br/x",
-                                conferido_por="Fulano", conferido_em="2026-01-01",
+                                conferido_por="Fulano", conferido_em="2026-01-01", hash_texto="a" * 64,
                                 decisao_judicial={"transito_em_julgado": None})])
 
 
 def test_parametro_so_de_norma_conferida_e_vigente():
     c = Catalogo.de_lista([
         base(id="P", parametros={"x": 1}),
-        base(id="C", status="CONFERIDO", fonte_url="https://www.gov.br/x", conferido_por="Fulano",
+        base(id="C", status="CONFERIDO", fonte_url="https://www.gov.br/x", conferido_por="Fulano", hash_texto="a" * 64,
              conferido_em="2026-01-01", parametros={"x": 2}, vigencia={"inicio": "2026-01-01", "fim": "2026-12-31"}),
     ])
     assert c.parametro("P", "x") is None

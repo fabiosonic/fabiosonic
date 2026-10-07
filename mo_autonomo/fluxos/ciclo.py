@@ -8,6 +8,7 @@ Cada passo é checkpoint na trilha: um ciclo interrompido é retomado com `retom
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 
 import traceback
@@ -193,8 +194,10 @@ def n_analisar_competencias(e, ctx):
     tol = Decimal(str((ctx.config.get("cruzamentos") or {}).get("tolerancia_receita", "1.00")))
     for (cnpj, comp), _docs in _grupos(e).items():
         try:
-            perfil = ctx.perfis.em(cnpj, ctx.hoje)
-            if perfil is None or comp is None:
+            if comp is None:
+                continue
+            perfil = ctx.perfis.em(cnpj, date.fromisoformat(comp + "-01"))  # perfil NA competência
+            if perfil is None:
                 continue
             registros = [r for r in ctx.trilha.documentos(comp) if cnpj in (r["cnpjs"] or [])
                          or (r["resumo"] or {}).get("emitente") == cnpj]
@@ -578,7 +581,7 @@ def n_pareceres(e, ctx):
         try:
             lote = L.carregar(Path(l["arquivo"]))
             emp = ctx.carteira.get(l["cnpj"])
-            perfil = ctx.perfis.em(l["cnpj"], ctx.hoje)
+            perfil = ctx.perfis.em(l["cnpj"], date.fromisoformat(l["competencia"] + "-01"))
             md = parecer.markdown(emp, l["competencia"], perfil, lote["achados"] + lote.get("achados_informativos", []),
                                   lote["pendencias"] + lote.get("informativas", []),
                                   len(lote["acoes"]), inativas,
@@ -634,7 +637,7 @@ def n_pareceres(e, ctx):
 def _alertas_vencimento(ctx) -> list[str]:
     from datetime import date as _date
 
-    from ..obrigacoes.calendario import alertas, competencias_para_alerta, gerar
+    from ..obrigacoes.calendario import alertas, competencias_para_alerta, gerar, sem_regime
     cal = ctx.config.get("calendario") or {}
     feriados = {_date.fromisoformat(str(f)) for f in cal.get("feriados") or []}
     dias = tuple(cal.get("dias_alerta", [3, 0]))
@@ -646,6 +649,7 @@ def _alertas_vencimento(ctx) -> list[str]:
             v = a["vencimento"]
             linhas.append(f"- **{a['quando']}** — {v.codigo} ({v.descricao}) {v.apelido}: "
                           f"{v.vencimento:%d/%m/%Y} [{v.norma}]")
+        linhas += [f"- **VENCIMENTO NÃO CALCULADO** ({comp}) — {s}" for s in sem_regime(perfis, ctx.catalogo)]
     return linhas
 
 

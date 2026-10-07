@@ -80,7 +80,7 @@ def test_conta_tipo_t_sem_filha_nao_aceita_lancamento(tmp_path):
 def _catalogo_vencido():
     return Catalogo.de_lista([{
         "id": "MOC_NFE", "titulo": "MOC", "status": "CONFERIDO", "fonte_url": "https://www.nfe.fazenda.gov.br/x",
-        "conferido_por": "Fulano", "conferido_em": "2026-01-01", "vigencia": {"inicio": "2010-01-01", "fim": "2020-12-31"},
+        "conferido_por": "Fulano", "conferido_em": "2026-01-01", "hash_texto": "a" * 64, "vigencia": {"inicio": "2010-01-01", "fim": "2020-12-31"},
         "parametros": {"tp_evento_cancelamento": ["X"], "cstat_evento_homologado": ["Y"], "cstat_autorizado": ["Z"]}}])
 
 

@@ -83,8 +83,8 @@ def montar_perfil(empresa: Empresa, receita: dict | None, catalogo: Catalogo, da
     emp = (receita or {}).get("empresa") or {}
     simp = (receita or {}).get("simples")
 
-    sim = catalogo.parametro(NORMA_DICIONARIO, "valor_opcao_sim")
-    cod_ativa = catalogo.parametro(NORMA_DICIONARIO, "codigo_situacao_ativa")
+    sim = catalogo.parametro(NORMA_DICIONARIO, "valor_opcao_sim", data_ref)
+    cod_ativa = catalogo.parametro(NORMA_DICIONARIO, "codigo_situacao_ativa", data_ref)
     if receita is not None and (sim is None or cod_ativa is None):
         pend.append(Pendencia("DICIONARIO_RFB_NAO_CONFERIDO",
                               f"Norma {NORMA_DICIONARIO} não conferida: códigos de situação/Simples da RFB não usados.",
@@ -123,7 +123,16 @@ def montar_perfil(empresa: Empresa, receita: dict | None, catalogo: Catalogo, da
         fonte = "RFB"
 
     situacao = None
-    if cod_ativa is not None and est.get("situacao_cadastral"):
+    if est.get("data_inicio") and data_ref < est["data_inicio"]:
+        pend.append(Pendencia("ANTERIOR_A_ABERTURA",
+                              f"Data {data_ref:%d/%m/%Y} anterior ao início de atividade na RFB "
+                              f"({est['data_inicio']:%d/%m/%Y}).", empresa.cnpj))
+    elif est.get("data_situacao") and data_ref < est["data_situacao"]:
+        # a RFB só informa a situação ATUAL (desde data_situacao): antes disso ela é desconhecida
+        pend.append(Pendencia("SITUACAO_NA_DATA_DESCONHECIDA",
+                              f"Situação cadastral atual vale desde {est['data_situacao']:%d/%m/%Y}; "
+                              f"em {data_ref:%d/%m/%Y} não é conhecida pelos dados abertos.", empresa.cnpj, bloqueia=False))
+    elif cod_ativa is not None and est.get("situacao_cadastral"):
         situacao = est["situacao_cadastral"] == str(cod_ativa)
         if not situacao:
             pend.append(Pendencia("SITUACAO_CADASTRAL",

@@ -14,7 +14,7 @@ def cat_com_hash(h, status="CONFERIDO", **kw):
     item = {"id": "LEI_X", "titulo": "Lei X", "area": "fiscal", "hash_texto": h, "parametros": {"p": 1},
             "dispositivos": ["Art. 1º"], **kw}
     if status == "CONFERIDO":
-        item.update(CONFERIDA)
+        item.update({**CONFERIDA, "hash_texto": h})
     return Catalogo.de_lista([item])
 
 

@@ -6,6 +6,8 @@ CONFERIDO; caso contrário a regra fica INATIVA.
 """
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -22,10 +24,20 @@ class NormaInvalida(ValueError):
 
 
 def url_oficial(url: str | None) -> bool:
-    if not url:
+    if not url or not url.startswith("https://"):
         return False
-    host = (urlparse(url).hostname or "").lower()
-    return url.startswith("https://") and any(host == d or host.endswith("." + d) for d in DOMINIOS_OFICIAIS)
+    if any(c in url for c in "\\@ \t\r\n"):  # "\" vira "/" no navegador; "@" é usuário; espaço quebra a URL
+        return False
+    u = urlparse(url)
+    host = (u.hostname or "").lower()
+    if u.netloc.lower() != host or not re.fullmatch(r"[a-z0-9.-]+", host):  # sem porta, usuário ou lixo
+        return False
+    return any(host == d or host.endswith("." + d) for d in DOMINIOS_OFICIAIS)
+
+
+# quem confere é gente: nome de ferramenta/IA não vale como conferente (regra 1)
+_NAO_PESSOA = re.compile(r"\b(?:claude|ia|ai|gpt|chatgpt|ollama|gemini|llm|modelo|sistema|auto|automatico|"
+                         r"automático|bot|robo|robô|script|mo_autonomo)\b", re.IGNORECASE)
 
 
 @dataclass
@@ -53,8 +65,8 @@ class Norma:
         return self.status == "CONFERIDO" and not self.alterada
 
     def vigente_em(self, d: date | None) -> bool:
-        if d is None:
-            return True
+        if d is None:  # sem data informada vale a vigência de HOJE (nunca "qualquer época")
+            d = date.today()
         if self.vigencia_inicio and d < self.vigencia_inicio:
             return False
         if self.vigencia_fim and d > self.vigencia_fim:
@@ -71,12 +83,22 @@ class Norma:
                 raise NormaInvalida(f"{self.id}: CONFERIDO sem {', '.join(faltas)}")
             if not url_oficial(self.fonte_url):
                 raise NormaInvalida(f"{self.id}: fonte não oficial {self.fonte_url}")
-            if str(self.conferido_por).strip().lower() in {"claude", "ia", "modelo", "sistema", "auto"}:
-                raise NormaInvalida(f"{self.id}: conferido_por precisa ser uma pessoa")
+            quem = str(self.conferido_por).strip()
+            if len(re.sub(r"[^A-Za-zÀ-ÿ]", "", quem)) < 3 or _NAO_PESSOA.search(quem):
+                raise NormaInvalida(f"{self.id}: conferido_por precisa ser o nome de uma pessoa ({quem!r})")
+            if isinstance(self.conferido_em, date) and self.conferido_em > date.today():
+                raise NormaInvalida(f"{self.id}: conferido_em no futuro ({self.conferido_em})")
+            if not self.hash_texto:  # sem hash o monitor nunca percebe mudança no texto oficial
+                raise NormaInvalida(f"{self.id}: CONFERIDO sem hash_texto (sha256 do texto conferido)")
             if self.decisao_judicial is not None:
                 dj = self.decisao_judicial
-                if not dj.get("transito_em_julgado") or not dj.get("modulacao"):
-                    raise NormaInvalida(f"{self.id}: decisão judicial sem trânsito/modulação (regra 4)")
+                try:
+                    date.fromisoformat(str(dj.get("transito_em_julgado")))
+                except ValueError:
+                    raise NormaInvalida(f"{self.id}: decisão judicial sem data de trânsito em julgado (regra 4)") from None
+                mod = str(dj.get("modulacao") or "").strip().lower()
+                if not mod or mod in {"pendente", "não", "nao", "?", "-", "a definir"}:
+                    raise NormaInvalida(f"{self.id}: decisão judicial sem modulação registrada (regra 4)")
         elif self.parametros:
             # parâmetros podem ser PROPOSTOS numa norma não conferida, mas nunca usados
             pass

@@ -62,6 +62,8 @@ def monitorar(catalogo: Catalogo, pasta_textos: Path, buscar=baixar, trilha=None
         arquivo = _salvar_texto(pasta_textos, n.id, texto, h)
         if not n.hash_texto:
             sit = "SEM_HASH_REGISTRADO"
+            if n.status == "CONFERIDO":  # não dá para saber se mudou: reconferir
+                alteradas.add(n.id)
         elif n.hash_texto == h:
             sit = "IGUAL"
             alteradas.discard(n.id)
