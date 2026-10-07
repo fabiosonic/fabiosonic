@@ -97,13 +97,44 @@ def _capturar_email(msg, ctx, novos: list, pend: list) -> int:
     return 1
 
 
+def _reabrir_zip(a: dict, dados: bytes, ctx) -> list[dict] | None:
+    """ZIP guardado inteiro (recusado antes por limite): tenta abrir de novo com os limites atuais.
+
+    Sucesso -> os arquivos de dentro viram anexos novos e o ZIP fica como EXPANDIDO na trilha.
+    """
+    from ..entrada.anexos import _e_zip_para_abrir, expandir
+    if not _e_zip_para_abrir(a["nome"], dados):
+        return None
+    try:
+        internos = expandir(a["nome"], dados, a.get("origem") or "reprocesso", ctx.config.get("entrada"))
+    except Exception:  # noqa: BLE001 — continua recusado: segue para pendência
+        return None
+    novos = []
+    for x in internos:
+        sha = sha256_bytes(x.dados)
+        caminho = _bruto(ctx, sha, x.nome)
+        if not caminho.exists():
+            escrever_atomico(caminho, x.dados)
+        if ctx.trilha.registrar_anexo(sha, x.nome, x.origem, str(caminho)):
+            novos.append({"sha256": sha, "nome": x.nome, "origem": x.origem, "caminho": str(caminho)})
+    ctx.trilha.registrar_documento(a["sha256"], "ZIP", None, [], None, [], "EXPANDIDO",
+                                   {"_versao_base": ctx.versao_base, "arquivos": len(internos)})
+    return novos
+
+
 def n_processar(e, ctx):
     """Roda o subgrafo de documento para cada anexo; falha de um documento não para os outros."""
     g = grafo_documento()
     resultados = []
-    for a in e["anexos"]:
+    fila = list(e["anexos"])
+    while fila:
+        a = fila.pop(0)
         try:
             dados = Path(a["caminho"]).read_bytes()
+            internos = _reabrir_zip(a, dados, ctx)
+            if internos is not None:
+                fila.extend(internos)
+                continue
             r = g.executar({"sha256": a["sha256"], "nome": a["nome"], "dados": dados, "pendencias": []}, ctx)
             r.pop("dados", None)
             r.pop("_ultimo_traceback", None)

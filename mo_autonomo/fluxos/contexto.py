@@ -50,7 +50,7 @@ class Contexto:
             normas = {n.id: [n.status, n.alterada, n.parametros] for n in self.catalogo.normas.values()}
             cad = sorted((e.cnpj, e.codigo_dominio, e.apelido, e.regime_dominio, e.uf, e.ativa) for e in self.carteira)
             contas = sorted(map(str, (self.extras.get("contas_bancarias") or {}).items()))
-            relevantes = {k: self.config.get(k) for k in ("ia", "contabil", "dominio", "cruzamentos")}
+            relevantes = {k: self.config.get(k) for k in ("ia", "contabil", "dominio", "cruzamentos", "entrada")}
             arquivos = []
             for pasta in (self.dados / "dominio", self.dados / "apuracao"):
                 if pasta.exists():

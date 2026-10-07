@@ -95,3 +95,38 @@ def test_acao_bloqueada_reproposta_volta_a_proposta(tmp_path):
     assert t.acoes_ja_propostas([a]) == set()
     t.registrar_acoes("L2", [a])
     assert t.con.execute("SELECT lote, estado FROM acoes").fetchall() == [("L2", "PROPOSTA")]
+
+
+def test_dinheiro_br_formatos_americano_e_negativo_excel():
+    for v in ("12,345.67", "1,500.00", "1,500"):
+        with pytest.raises(ValorInvalido):
+            dinheiro_br(v)
+    assert dinheiro_br("-R$ 1.234,56") == Decimal("-1234.56")
+    assert dinheiro_br("R$\xa01.234,56") == Decimal("1234.56")
+    assert dinheiro_br("0,50") == Decimal("0.50") and dinheiro_br("100") == Decimal("100.00")
+
+
+def test_zip_recusado_volta_quando_limite_aumenta(tmp_path):
+    import yaml
+    from mo_autonomo.aprovacao import lote as L
+    from mo_autonomo.fluxos.ciclo import rodar_ciclo
+    from tests.test_ponta_a_ponta import ctx_de, projeto
+    base = projeto(tmp_path)
+    cfgp = base / "config" / "config.yaml"
+    cfg = yaml.safe_load(cfgp.read_text(encoding="utf-8"))
+    cfg["entrada"] = {"zip_max_arquivos": 2}
+    cfgp.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    z = zip_bytes({f"{n}.xml": nfe_xml(numero=n) for n in (1, 2, 3)})
+    (base / "entrada" / "1.eml").write_bytes(eml_bytes({"lote.zip": z}))
+    e1 = rodar_ciclo(ctx_de(base))
+    assert any(p["codigo"] == "ANEXO_ILEGIVEL" for p in e1["pendencias_gerais"])
+    cfg["entrada"] = {"zip_max_arquivos": 100}
+    cfgp.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    e2 = rodar_ciclo(ctx_de(base))
+    acoes = [a for l in e2["lotes"] if not l.get("reapresentado") for a in L.carregar(Path(l["arquivo"]))["acoes"]]
+    assert len(acoes) == 3
+
+
+def test_limite_padrao_de_bytes_conservador():
+    from mo_autonomo.entrada.anexos import LIMITES_PADRAO
+    assert LIMITES_PADRAO["zip_max_bytes"] <= 512 * 1024 * 1024

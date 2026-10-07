@@ -10,7 +10,7 @@ from pathlib import PurePosixPath
 LIMITES_PADRAO = {
     "zip_max_profundidade": 5,
     "zip_max_arquivos": 50000,           # lote mensal de NFC-e de varejo passa fácil de 2000
-    "zip_max_bytes": 2 * 1024 * 1024 * 1024,
+    "zip_max_bytes": 512 * 1024 * 1024,  # tudo é lido em memória: o PC também roda o GO-Global
     "zip_max_razao": 200,                # descompactado / compactado (zip-bomba)
 }
 LIMITE_PROFUNDIDADE = LIMITES_PADRAO["zip_max_profundidade"]

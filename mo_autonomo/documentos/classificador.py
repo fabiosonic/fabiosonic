@@ -47,5 +47,6 @@ def classificar(dados: bytes, catalogo=None) -> dict:
             return {"classe": "DOCUMENTO_OFFICE", "doc": None,
                     "erro": "planilha/documento de escritório (xlsx/docx/ods): conferir e arquivar"}
         return {"classe": "ZIP_ILEGIVEL", "doc": None,
-                "erro": "ZIP corrompido ou suspeito (limites de tamanho/aninhamento): abrir manualmente"}
+                "erro": "ZIP corrompido ou acima dos limites (entrada.zip_max_* no config): se for legítimo, "
+                         "aumente o limite no config (ele volta sozinho no próximo ciclo) ou descompacte e reenvie"}
     return {"classe": bruto, "doc": None, "erro": None}

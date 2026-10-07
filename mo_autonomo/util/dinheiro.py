@@ -40,6 +40,7 @@ def dinheiro(valor) -> Decimal:
 
 
 _MILHAR_SEM_CENTAVOS = __import__("re").compile(r"^-?\d{1,3}(\.\d{3})+$")
+_MILHAR_VIRGULA = __import__("re").compile(r"^-?\d{1,3}(,\d{3})+$")
 
 
 def dinheiro_br(valor) -> Decimal:
@@ -49,9 +50,13 @@ def dinheiro_br(valor) -> Decimal:
     Para XML/OFX (ponto decimal por leiaute) use `dinheiro`.
     """
     if isinstance(valor, str):
-        t = valor.replace("R$", "").strip()
+        t = valor.replace("\xa0", " ").replace("-R$", "-").replace("R$", "").replace(" ", "").strip()
         if "," not in t and _MILHAR_SEM_CENTAVOS.match(t):
             raise ValorInvalido(f"valor ambíguo {valor!r}: use vírgula para os centavos (ex.: 1.500,00)")
+        if "." in t and "," in t and t.rfind(".") > t.rfind(","):
+            raise ValorInvalido(f"valor em formato americano {valor!r}: use 1.234,56")
+        if "." not in t and _MILHAR_VIRGULA.match(t):
+            raise ValorInvalido(f"valor ambíguo {valor!r}: vírgula como milhar (1,500?) não é aceita")
         valor = t
     return dinheiro(valor)
 
