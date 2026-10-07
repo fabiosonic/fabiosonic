@@ -1,4 +1,4 @@
-# Instalação no PC do escritório (rodar no PowerShell, dentro da pasta do projeto).
+﻿# Instalação no PC do escritório (rodar no PowerShell, dentro da pasta do projeto).
 # Não toca na caixa de e-mail nem no D: — só prepara o ambiente em modo SIMULAÇÃO.
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $PSScriptRoot

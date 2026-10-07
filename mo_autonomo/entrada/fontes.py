@@ -25,7 +25,7 @@ class EmailBruto:
 
 
 class FonteEmail(Protocol):
-    def mensagens(self) -> Iterator[EmailBruto]: ...
+    def mensagens(self, ja_lido=None) -> Iterator[EmailBruto]: ...
 
 
 class FontePastaEml:
@@ -34,7 +34,7 @@ class FontePastaEml:
     def __init__(self, pasta: Path | str):
         self.pasta = Path(pasta)
 
-    def mensagens(self) -> Iterator[EmailBruto]:
+    def mensagens(self, ja_lido=None) -> Iterator[EmailBruto]:
         for arq in sorted(self.pasta.glob("*.eml")):
             dados = arq.read_bytes()
             yield EmailBruto(uid=f"eml:{sha256_bytes(dados)[:24]}", dados=dados)
@@ -115,7 +115,8 @@ class FonteImap:
         finally:
             con.logout()
 
-    def mensagens(self) -> Iterator[EmailBruto]:
+    def mensagens(self, ja_lido=None) -> Iterator[EmailBruto]:
+        """`ja_lido(chave)`: pula o FETCH de e-mails já registrados na trilha (não baixa o mês toda hora)."""
         con = self._conectar()
         try:
             criterio = f'SINCE {self.desde.strftime("%d-%b-%Y")}' if self.desde else "ALL"
@@ -123,12 +124,15 @@ class FonteImap:
             if tipo != "OK":
                 raise RuntimeError("falha na busca IMAP")
             for uid in (dados[0].split() if dados and dados[0] else []):
+                chave = f"imap:{self.pasta}:{self.uidvalidity}:{uid.decode()}"
+                if ja_lido is not None and ja_lido(chave):
+                    continue
                 tipo, partes = con.uid("fetch", uid, "(BODY.PEEK[])")
                 if tipo != "OK":
                     continue
                 for p in partes:
                     if isinstance(p, tuple):
-                        yield EmailBruto(uid=f"imap:{self.pasta}:{self.uidvalidity}:{uid.decode()}", dados=p[1])
+                        yield EmailBruto(uid=chave, dados=p[1])
         finally:
             try:
                 con.logout()

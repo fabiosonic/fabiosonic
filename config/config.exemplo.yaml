@@ -61,3 +61,12 @@ calendario:
 
 cruzamentos:
   tolerancia_receita: "1.00"             # diferença aceita entre XML emitidos e receita declarada
+
+entrada:
+  zip_max_arquivos: 50000                # lote mensal de NFC-e de varejo pode ter milhares de XML
+  zip_max_bytes: 2147483648              # 2 GB descompactado
+  zip_max_razao: 200                     # trava contra zip-bomba
+  zip_max_profundidade: 5
+
+execucao:
+  max_tentativas: 24                     # falha comum (ex.: D: fora do ar) vira BLOQUEADA depois disso

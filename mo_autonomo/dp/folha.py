@@ -12,7 +12,7 @@ from pathlib import Path
 
 from ..especialista.modelo import Achado, natureza_por_normas
 from ..util.arquivos import ler_csv
-from ..util.dinheiro import CENTAVO, dinheiro
+from ..util.dinheiro import CENTAVO, dinheiro, dinheiro_br
 
 INSS, IRRF, FGTS = "TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL", "LEI_8036_FGTS"
 
@@ -66,11 +66,11 @@ def ler_folha(caminho: Path) -> list[dict]:
     out = []
     for l in linhas:
         out.append({"cpf": l["cpf"], "nome": l.get("nome", ""), "competencia": l["competencia"],
-                    "salario_contribuicao": dinheiro(l["salario_contribuicao"]),
-                    "inss_descontado": dinheiro(l["inss_descontado"]), "base_irrf": dinheiro(l["base_irrf"]),
-                    "dependentes": int(l.get("dependentes") or 0), "irrf_descontado": dinheiro(l["irrf_descontado"]),
-                    "remuneracao_fgts": dinheiro(l["remuneracao_fgts"]) if l.get("remuneracao_fgts") else None,
-                    "fgts_depositado": dinheiro(l["fgts_depositado"]) if l.get("fgts_depositado") else None})
+                    "salario_contribuicao": dinheiro_br(l["salario_contribuicao"]),
+                    "inss_descontado": dinheiro_br(l["inss_descontado"]), "base_irrf": dinheiro_br(l["base_irrf"]),
+                    "dependentes": int(l.get("dependentes") or 0), "irrf_descontado": dinheiro_br(l["irrf_descontado"]),
+                    "remuneracao_fgts": dinheiro_br(l["remuneracao_fgts"]) if l.get("remuneracao_fgts") else None,
+                    "fgts_depositado": dinheiro_br(l["fgts_depositado"]) if l.get("fgts_depositado") else None})
     return out
 
 

@@ -36,7 +36,7 @@ def test_caixa_fora_do_ar_nao_para_o_ciclo(tmp_path):
     ctx = ctx_de(base)
 
     class Fora:
-        def mensagens(self):
+        def mensagens(self, ja_lido=None):
             raise OSError("Email em Nuvem indisponível")
             yield  # noqa
     ctx.fonte = Fora()

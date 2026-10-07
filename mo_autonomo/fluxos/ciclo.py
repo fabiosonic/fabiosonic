@@ -40,7 +40,7 @@ def n_capturar(e, ctx):
     """
     novos, pend, emails = [], [], 0
     try:
-        for msg in ctx.fonte.mensagens():
+        for msg in ctx.fonte.mensagens(ja_lido=ctx.trilha.email_lido):
             emails += _capturar_email(msg, ctx, novos, pend)
     except Exception as exc:  # noqa: BLE001 — caixa fora do ar: o resto do ciclo roda mesmo assim
         pend.append(_falha("FONTE_EMAIL_INDISPONIVEL", f"Leitura da caixa interrompida: {type(exc).__name__}: {exc}"))
@@ -68,7 +68,7 @@ def _capturar_email(msg, ctx, novos: list, pend: list) -> int:
         cab = {"message_id": "", "remetente": "?", "assunto": "?", "data": ""}
     erros: list = []
     try:
-        anexos = anexos_do_email(msg.dados, msg.uid, erros)
+        anexos = anexos_do_email(msg.dados, msg.uid, erros, ctx.config.get("entrada"))
     except Exception as exc:  # noqa: BLE001 — e-mail inteiro ilegível
         erros.append(f"{type(exc).__name__}: {exc}")
         anexos = []

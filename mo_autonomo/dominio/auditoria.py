@@ -12,7 +12,7 @@ import csv
 from pathlib import Path
 
 from ..especialista.modelo import CONTROLE, Achado
-from ..util.dinheiro import ValorInvalido, dinheiro
+from ..util.dinheiro import ValorInvalido, dinheiro, dinheiro_br
 from ..util.documentos_id import so_digitos
 
 OBRIGATORIAS = ("chave", "valor", "cnpj")
@@ -49,7 +49,7 @@ def ler_relatorio(caminho: Path, colunas: dict) -> list[dict]:
                     raise RelatorioInvalido(f"colunas ausentes no relatório: {ausentes}")
                 for n, l in enumerate(leitor, start=2):
                     try:
-                        valor = dinheiro(l[colunas["valor"]])
+                        valor = dinheiro_br(l[colunas["valor"]])
                     except ValorInvalido as exc:
                         raise RelatorioInvalido(f"linha {n}: {exc}") from exc
                     ch = _chave(l[colunas["chave"]])

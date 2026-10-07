@@ -14,7 +14,7 @@ import io
 from decimal import Decimal
 from pathlib import Path
 
-from ..util.dinheiro import dinheiro
+from ..util.dinheiro import dinheiro, dinheiro_br
 from ..util.documentos_id import so_digitos
 from .modelo import CONTROLE, Achado
 
@@ -78,7 +78,7 @@ def ler_receitas_declaradas(caminho: Path, erros: list | None = None) -> dict[tu
     for n, l in enumerate(csv.DictReader(io.StringIO(texto, newline=""), delimiter=";"), start=2):
         try:
             out[(so_digitos(l["cnpj"]), l["competencia"].strip())] = {
-                "valor": dinheiro(l["receita_declarada"]), "fonte": (l.get("fonte") or "").strip() or "declaração"}
+                "valor": dinheiro_br(l["receita_declarada"]), "fonte": (l.get("fonte") or "").strip() or "declaração"}
         except Exception as exc:  # noqa: BLE001
             if erros is not None:
                 erros.append(f"{Path(caminho).name} linha {n}: {type(exc).__name__}: {exc}")

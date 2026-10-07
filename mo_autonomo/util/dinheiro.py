@@ -39,6 +39,23 @@ def dinheiro(valor) -> Decimal:
         raise ValorInvalido(f"valor fora da faixa: {valor!r}") from exc
 
 
+_MILHAR_SEM_CENTAVOS = __import__("re").compile(r"^-?\d{1,3}(\.\d{3})+$")
+
+
+def dinheiro_br(valor) -> Decimal:
+    """Para valores digitados/exportados no Brasil (CSV, Excel, IA lendo PDF).
+
+    "1.500" sem vírgula é ambíguo (mil e quinhentos ou um e cinquenta?): recusa em vez de chutar.
+    Para XML/OFX (ponto decimal por leiaute) use `dinheiro`.
+    """
+    if isinstance(valor, str):
+        t = valor.replace("R$", "").strip()
+        if "," not in t and _MILHAR_SEM_CENTAVOS.match(t):
+            raise ValorInvalido(f"valor ambíguo {valor!r}: use vírgula para os centavos (ex.: 1.500,00)")
+        valor = t
+    return dinheiro(valor)
+
+
 def soma(valores) -> Decimal:
     total = Decimal("0.00")
     for v in valores:

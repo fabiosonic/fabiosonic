@@ -149,6 +149,9 @@ class Trilha:
 
     def registrar_acoes(self, lote: str, acoes: list[dict]) -> None:
         for a in acoes:
+            # ação BLOQUEADA proposta de novo (ex.: pessoa resolveu o conflito): volta a PROPOSTA no lote novo
+            self.con.execute("UPDATE acoes SET lote=?, estado='PROPOSTA', tentativas=0, dados=?, detalhe=NULL, em=?"
+                             " WHERE id=? AND estado='BLOQUEADA'", (lote, dumps(a), agora(), self.id_acao(a)))
             self.con.execute(
                 "INSERT OR IGNORE INTO acoes (id, lote, sha256, cnpj, competencia, tipo, estado, dados, detalhe, em)"
                 " VALUES (?,?,?,?,?,?,'PROPOSTA',?,NULL,?)",

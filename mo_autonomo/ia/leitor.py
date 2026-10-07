@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 
-from ..util.dinheiro import ValorInvalido, dinheiro
+from ..util.dinheiro import ValorInvalido, dinheiro, dinheiro_br
 from ..util.documentos_id import cnpj_valido, so_digitos
 from .cascata import Cascata, SemProvedorDisponivel, VazamentoBloqueado
 
@@ -77,7 +77,7 @@ def ler_nao_estruturado(texto: str, cascata: Cascata, confianca_minima: float = 
             motivos.append("valor devolvido não aparece no texto")
         else:
             try:
-                valor = dinheiro(bruto.replace("R$", "").strip())
+                valor = dinheiro_br(bruto)
             except ValorInvalido:
                 motivos.append("valor ilegível")
     comp = dados.get("competencia")
