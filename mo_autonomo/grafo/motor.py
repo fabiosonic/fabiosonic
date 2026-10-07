@@ -156,7 +156,8 @@ class Grafo:
             ms = int((time.monotonic() - t0) * 1000)
             if erro:
                 estado.setdefault("_erros", []).append({"no": atual, "erro": erro})
-                if self.no_excecao and atual != self.no_excecao:
+                if self.no_excecao and not estado.get("_em_excecao"):
+                    estado["_em_excecao"] = True
                     proximo = self.no_excecao
                 else:
                     if trilha:

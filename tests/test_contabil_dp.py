@@ -28,7 +28,7 @@ def test_normalizacao():
 def test_propoe_lancamentos_com_historico_do_cliente():
     dp = DePara.do_razao(razao((BANCO, "1.1.2.01", "PIX RECEBIDO CLIENTE BETA"), (BANCO, "1.1.2.01", "PIX RECEBIDO CLIENTE X"),
                                ("3.1.9.01", BANCO, "TARIFA BANCARIA PACOTE SET"), ("3.1.9.01", BANCO, "TARIFA BANCARIA PACOTE AGO")), BANCO)
-    r = propor(ler_ofx(ofx_bytes()), BANCO, dp, PLANO)
+    r = propor(ler_ofx(ofx_bytes())["extratos"][0], BANCO, dp, PLANO)
     assert r["pendencias"] == []
     l1, l2 = r["lancamentos"]
     assert (l1["debito"], l1["credito"], l1["valor"]) == (BANCO, "1.1.2.01", Decimal("1500.00"))
@@ -38,13 +38,13 @@ def test_propoe_lancamentos_com_historico_do_cliente():
 def test_sem_historico_ambiguo_ou_conta_invalida_vira_pendencia():
     dp = DePara.do_razao(razao((BANCO, "1.1.2.01", "PIX RECEBIDO CLIENTE"), (BANCO, "9.9.9", "PIX RECEBIDO CLIENTE"),
                                ("3.1", BANCO, "TARIFA BANCARIA PACOTE"), ("3.1", BANCO, "TARIFA BANCARIA PACOTE")), BANCO)
-    r = propor(ler_ofx(ofx_bytes()), BANCO, dp, PLANO)
+    r = propor(ler_ofx(ofx_bytes())["extratos"][0], BANCO, dp, PLANO)
     assert r["lancamentos"] == []
     cods = sorted(p["codigo"] for p in r["pendencias"])
     assert cods == ["CONTA_FORA_DO_PLANO", "SEM_CONTRAPARTIDA"]
-    r = propor(ler_ofx(ofx_bytes()), BANCO, DePara.do_razao(razao((BANCO, "1.1.2.01", "PIX RECEBIDO CLIENTE")), BANCO), PLANO)
+    r = propor(ler_ofx(ofx_bytes())["extratos"][0], BANCO, DePara.do_razao(razao((BANCO, "1.1.2.01", "PIX RECEBIDO CLIENTE")), BANCO), PLANO)
     assert all(p["codigo"] == "SEM_CONTRAPARTIDA" for p in r["pendencias"])  # 1 ocorrência < mínimo
-    assert propor(ler_ofx(ofx_bytes()), "3.1", dp, PLANO)["pendencias"][0]["codigo"] == "CONTA_BANCO_INVALIDA"
+    assert propor(ler_ofx(ofx_bytes())["extratos"][0], "3.1", dp, PLANO)["pendencias"][0]["codigo"] == "CONTA_BANCO_INVALIDA"
 
 
 def test_conciliacao():

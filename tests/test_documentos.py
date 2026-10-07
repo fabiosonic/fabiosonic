@@ -58,9 +58,22 @@ def test_desconhecidos():
 
 
 def test_ofx():
-    o = ler_ofx(ofx_bytes())
+    o = ler_ofx(ofx_bytes())["extratos"][0]
     assert o["conta"]["banco"] == "341" and len(o["transacoes"]) == 2
     assert o["transacoes"][1]["valor"] == Decimal("-320.50") and o["transacoes"][0]["data"] == date(2026, 10, 5)
+
+
+def test_ofx_formato_br_e_varias_contas():
+    br = ofx_bytes(trans=(("20261005", "1.234,56", "PIX", "9"),))
+    assert ler_ofx(br)["extratos"][0]["transacoes"][0]["valor"] == Decimal("1234.56")
+    dois = ofx_bytes().decode("latin-1").replace(
+        "</STMTRS>", "</STMTRS><STMTRS><BANKACCTFROM><BANKID>001<ACCTID>999</BANKACCTFROM>"
+        "<BANKTRANLIST><STMTTRN><TRNTYPE>OTHER<DTPOSTED>20261007<TRNAMT>-5.00<FITID>Z<MEMO>X</STMTTRN>"
+        "</BANKTRANLIST></STMTRS>").encode("latin-1")
+    ex = ler_ofx(dois)["extratos"]
+    assert [(e["conta"]["banco"], e["conta"]["conta"], len(e["transacoes"])) for e in ex] == [("341", "12345", 2), ("001", "999", 1)]
+    nan = ofx_bytes(trans=(("20261005", "NaN", "X", "1"),))
+    assert classificar(nan)["classe"] == "OFX_INVALIDO"
     assert classificar(ofx_bytes())["classe"] == "OFX"
 
 

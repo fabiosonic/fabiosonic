@@ -4,11 +4,26 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+
+
+_INSEGURO = re.compile(r"[^0-9A-Za-z_.-]+")
+
+
+def nome_seguro(texto: str, limite: int = 120) -> str:
+    """Componente de caminho sem barras, '..', dois-pontos, NUL ou caracteres proibidos no Windows."""
+    n = _INSEGURO.sub("_", texto or "").strip("._") or "sem_nome"
+    return n[:limite]
+
+
+def extensao_segura(nome: str) -> str:
+    suf = Path(nome.replace("\\", "/").split("/")[-1]).suffix.lower()
+    return suf if re.fullmatch(r"\.[a-z0-9]{1,8}", suf or "") else ""
 
 
 def sha256_bytes(dados: bytes) -> str:

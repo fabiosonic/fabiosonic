@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from ..util.arquivos import filho, nome_local, parse_xml_seguro, primeiro, texto, todos
+from ..util.arquivos import filho, nome_local, nome_seguro, parse_xml_seguro, primeiro, texto, todos
 from ..util.dinheiro import ValorInvalido, dinheiro
 from ..util.documentos_id import so_digitos
 
@@ -172,7 +172,7 @@ def _nfse_abrasf(raiz) -> dict:
                                    texto(primeiro(toma, "CpfCnpj"), "Cpf") or "") or None
     d["emitente_cnpj"], d["destinatario_cnpj"] = d["prestador_cnpj"], d["tomador_cnpj"]
     if d["prestador_cnpj"] and d["numero"]:
-        d["chave"] = f"ABRASF-{d['prestador_cnpj']}-{d['numero']}-{cod_ver or ''}"
+        d["chave"] = nome_seguro(f"ABRASF-{d['prestador_cnpj']}-{d['numero']}-{cod_ver or ''}")
     valores = primeiro(inf, "Valores")
     d["totais"] = {"vServ": _valor(texto(valores, "ValorServicos"))}
     d["iss_retencao_codigo"] = texto(primeiro(inf, "Servico"), "IssRetido") or texto(valores, "IssRetido")

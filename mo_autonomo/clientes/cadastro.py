@@ -7,12 +7,14 @@ Regime aceito: SIMPLES | MEI | PRESUMIDO | REAL | IMUNE | ISENTA | (vazio = desc
 from __future__ import annotations
 
 import csv
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..util.documentos_id import cnpj_valido, so_digitos
 
 REGIMES = ("SIMPLES", "MEI", "PRESUMIDO", "REAL", "IMUNE", "ISENTA")
+_PROIBIDO_PASTA = re.compile(r'[\\/:*?"<>|\x00-\x1f]|\.\.')
 
 
 class CadastroInvalido(ValueError):
@@ -71,6 +73,9 @@ class Carteira:
                 apelido = (linha.get("apelido") or "").strip()
                 if not codigo or not apelido:
                     erros.append(f"linha {n}: código/apelido do Domínio vazio")
+                    continue
+                if _PROIBIDO_PASTA.search(codigo) or _PROIBIDO_PASTA.search(apelido) or apelido.endswith((".", " ")):
+                    erros.append(f"linha {n}: código/apelido com caractere inválido para nome de pasta: {apelido!r}")
                     continue
                 empresas.append(Empresa(
                     codigo_dominio=codigo, apelido=apelido, cnpj=cnpj, regime_dominio=regime,

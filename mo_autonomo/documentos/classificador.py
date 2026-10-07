@@ -1,7 +1,7 @@
 """Classificação determinística por conteúdo (não pelo nome do arquivo)."""
 from __future__ import annotations
 
-from .ofx import OFXInvalido, ler_ofx
+from .ofx import ler_ofx
 from .xml_fiscal import DocumentoNaoReconhecido, ler_xml
 from ..util.arquivos import XMLInseguro
 
@@ -39,6 +39,6 @@ def classificar(dados: bytes) -> dict:
     if bruto == "OFX":
         try:
             return {"classe": "OFX", "doc": ler_ofx(dados), "erro": None}
-        except (OFXInvalido, ValueError) as exc:
-            return {"classe": "OFX_INVALIDO", "doc": None, "erro": str(exc)}
+        except Exception as exc:  # noqa: BLE001 — OFX ruim vira pendência, não derruba
+            return {"classe": "OFX_INVALIDO", "doc": None, "erro": f"{type(exc).__name__}: {exc}"}
     return {"classe": bruto, "doc": None, "erro": None}

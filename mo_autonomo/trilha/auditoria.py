@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS documentos (
     destinos TEXT, situacao TEXT, em TEXT, resumo TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_doc_chave ON documentos(chave);
+CREATE TABLE IF NOT EXISTS ofx_transacoes (
+    banco TEXT, conta TEXT, fitid TEXT, sha256 TEXT, em TEXT, PRIMARY KEY (banco, conta, fitid)
+);
 CREATE TABLE IF NOT EXISTS aprovacoes (
     id INTEGER PRIMARY KEY AUTOINCREMENT, lote TEXT, hash TEXT, modo TEXT, motivo TEXT,
     usuario TEXT, em TEXT
@@ -99,6 +102,36 @@ class Trilha:
             "SELECT d.sha256, a.nome, a.origem, a.caminho_bruto FROM documentos d JOIN anexos a USING (sha256)"
             " WHERE d.situacao='FILA' ORDER BY d.em").fetchall()
         return [{"sha256": r[0], "nome": r[1], "origem": r[2], "caminho": r[3], "reprocesso": True} for r in rows]
+
+    def anexos_sem_documento(self) -> list[dict]:
+        """Anexos capturados que nunca chegaram a ser processados (ex.: queda no meio do ciclo)."""
+        rows = self.con.execute(
+            "SELECT a.sha256, a.nome, a.origem, a.caminho_bruto FROM anexos a"
+            " LEFT JOIN documentos d USING (sha256) WHERE d.sha256 IS NULL ORDER BY a.recebido_em").fetchall()
+        return [{"sha256": r[0], "nome": r[1], "origem": r[2], "caminho": r[3], "reprocesso": True} for r in rows]
+
+    def pendentes_para_reprocessar(self, versao_base: str | None) -> list[dict]:
+        """Documentos PENDENTE/ERRO analisados com outra versão da base (normas/cadastro mudaram)."""
+        out = []
+        rows = self.con.execute(
+            "SELECT d.sha256, a.nome, a.origem, a.caminho_bruto, d.resumo FROM documentos d JOIN anexos a USING (sha256)"
+            " WHERE d.situacao IN ('PENDENTE','ERRO')").fetchall()
+        for sha, nome, origem, caminho, resumo in rows:
+            versao = (loads(resumo) if resumo else {}).get("_versao_base")
+            if versao != versao_base:
+                out.append({"sha256": sha, "nome": nome, "origem": origem, "caminho": caminho, "reprocesso": True})
+        return out
+
+    def registrar_fitid(self, banco: str, conta: str, fitid: str, sha: str) -> bool:
+        """True se a transação é nova (dedupe de extratos sobrepostos)."""
+        cur = self.con.execute("INSERT OR IGNORE INTO ofx_transacoes VALUES (?,?,?,?,?)",
+                               (banco or "", conta or "", fitid, sha, agora()))
+        self.con.commit()
+        return cur.rowcount == 1
+
+    def aprovacao_registrada(self, lote: str, hash_lote: str, modo: str) -> bool:
+        return self.con.execute("SELECT 1 FROM aprovacoes WHERE lote=? AND hash=? AND modo=?",
+                                (lote, hash_lote, modo)).fetchone() is not None
 
     def documentos(self, competencia: str | None = None):
         sql = "SELECT sha256, tipo, chave, cnpjs, competencia, destinos, situacao, resumo FROM documentos"

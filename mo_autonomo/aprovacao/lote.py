@@ -57,7 +57,7 @@ class Avaliacao:
 
 def avaliar_auto(lote: dict, politica: dict) -> Avaliacao:
     motivos = []
-    if not politica.get("ativa", False):
+    if politica.get("ativa") is not True:
         motivos.append("aprovação por exceção desligada no config")
     if lote["pendencias"]:
         motivos.append(f"{len(lote['pendencias'])} pendência(s)")
@@ -120,8 +120,14 @@ def aprovar_auto(caminho_lote: Path, politica: dict, trilha=None) -> Path | None
     return destino
 
 
-def exigir_aprovado(caminho_aprovado: Path) -> dict:
-    """Executores chamam isto: só aceitam arquivo APROVADO_* íntegro."""
+def exigir_aprovado(caminho_aprovado: Path, trilha) -> dict:
+    """Executores chamam isto: só aceitam APROVADO_* íntegro E registrado na trilha.
+
+    O registro em `aprovacoes` (feito por aprovar_humano/aprovar_auto) impede que um arquivo
+    APROVADO_* montado à mão em dados/lotes seja executado.
+    """
+    if trilha is None:
+        raise AprovacaoRecusada("executor precisa da trilha para conferir a aprovação")
     p = Path(caminho_aprovado)
     if not p.name.startswith("APROVADO_"):
         raise AprovacaoRecusada("executor só aceita arquivo APROVADO_*")
@@ -132,4 +138,6 @@ def exigir_aprovado(caminho_aprovado: Path) -> dict:
     for a in dados["acoes"]:
         if a["tipo"] in SEMPRE_HUMANO and aprov["modo"] != "HUMANO":
             raise AprovacaoRecusada(f"ação {a['tipo']} exige aprovação humana")
+    if not trilha.aprovacao_registrada(dados["id"], dados["hash"], aprov["modo"]):
+        raise AprovacaoRecusada("aprovação não consta na trilha: arquivo APROVADO_* não reconhecido")
     return dados

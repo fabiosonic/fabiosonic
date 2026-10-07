@@ -42,6 +42,17 @@ class Contexto:
     fonte: object = None
     extras: dict = field(default_factory=dict)
 
+    @property
+    def versao_base(self) -> str:
+        """Muda quando normas (status/parâmetros/alteradas) ou o cadastro mudam: dispara reprocesso de pendências."""
+        if "_versao_base" not in self.extras:
+            from ..util.arquivos import dumps, sha256_bytes
+            normas = {n.id: [n.status, n.alterada, n.parametros] for n in self.catalogo.normas.values()}
+            cad = sorted((e.cnpj, e.codigo_dominio, e.apelido, e.regime_dominio, e.uf, e.ativa) for e in self.carteira)
+            contas = sorted(map(str, (self.extras.get("contas_bancarias") or {}).items()))
+            self.extras["_versao_base"] = sha256_bytes(dumps([normas, cad, contas, len(self.perfis.receita)]).encode())[:16]
+        return self.extras["_versao_base"]
+
     def caminho(self, chave: str, padrao: str) -> Path:
         p = Path((self.config.get("pastas") or {}).get(chave) or padrao)
         return p if p.is_absolute() else Path(self.config["_base"]) / p
@@ -79,12 +90,13 @@ def montar_contexto(config: dict, hoje: date | None = None, fonte=None, cascata=
     if cache.exists():
         receita = loads(cache.read_text(encoding="utf-8"))
     perfis = Perfis(carteira, receita, catalogo)
+    razoes = [((v or {}).get("empresa") or {}).get("razao_social") for v in receita.values()]
     if cascata is None and (config.get("ia") or {}).get("ativa"):
         from ..ia.cascata import montar_cascata
         cascata = montar_cascata(config["ia"], str(dados / "ia_esperas.json"))
     if fonte is None:
         fonte = montar_fonte(config, rel, hoje or date.today())
-    extras = {}
+    extras = {"razoes_sociais": [r for r in razoes if r]}
     contas_csv = (config.get("cadastro") or {}).get("contas_bancarias")
     if contas_csv and rel(contas_csv).exists():
         from ..contabil.lancamentos import contas_bancarias

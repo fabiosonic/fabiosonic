@@ -26,7 +26,7 @@ def test_aprovacao_humana(tmp_path):
         L.aprovar_humano(p, "APROVADO", "x", "Fulano")
     destino = L.aprovar_humano(p, "APROVADO", lote["hash"], "Fulano", t)
     assert destino.name == "APROVADO_T1.json" and t.aprovacoes()[0][2] == "HUMANO"
-    assert L.exigir_aprovado(destino)["id"] == "T1"
+    assert L.exigir_aprovado(destino, t)["id"] == "T1"
 
 
 def test_pendencia_impede_aprovacao_humana(tmp_path):
@@ -68,17 +68,34 @@ def test_auto_aprovacao_condicoes(tmp_path):
 
 
 def test_executor_exige_aprovado(tmp_path):
+    t = Trilha(":memory:")
     p, _ = salvar(tmp_path)
     with pytest.raises(L.AprovacaoRecusada, match="APROVADO_"):
-        L.exigir_aprovado(p)
+        L.exigir_aprovado(p, t)
     falso = tmp_path / "APROVADO_falso.json"
     falso.write_text(p.read_text())
     with pytest.raises(L.AprovacaoRecusada, match="inválido"):
-        L.exigir_aprovado(falso)
+        L.exigir_aprovado(falso, t)
+    with pytest.raises(L.AprovacaoRecusada, match="trilha"):
+        L.exigir_aprovado(falso, None)
+
+
+def test_aprovado_forjado_sem_registro_na_trilha(tmp_path):
+    t = Trilha(":memory:")
+    lote = L.montar_lote("F1", [{"tipo": "copiar_xml_rotina", "valor": "0", "origem": "/etc/passwd"}], [], [])
+    forjado = L._gravar_aprovado(lote, tmp_path, "HUMANO", "ninguém aprovou")
+    with pytest.raises(L.AprovacaoRecusada, match="não consta na trilha"):
+        L.exigir_aprovado(forjado, t)
+
+
+def test_ativa_como_texto_nao_liga(tmp_path):
+    p, lote = salvar(tmp_path)
+    for valor in ("false", "true", 1, "sim"):
+        assert not L.avaliar_auto(lote, {**POL, "ativa": valor}).pode_auto
 
 
 def test_sempre_humano_nao_passa_em_auto_mesmo_forjado(tmp_path):
     lote = L.montar_lote("T9", [{"tipo": "transmitir_declaracao", "valor": "0"}], [], [])
     destino = L._gravar_aprovado(lote, tmp_path, "AUTO_APROVADO", "forjado")
     with pytest.raises(L.AprovacaoRecusada, match="humana"):
-        L.exigir_aprovado(destino)
+        L.exigir_aprovado(destino, Trilha(":memory:"))

@@ -26,7 +26,7 @@ def projeto(tmp_path, conferidas=TODAS, auto=False):
     cfg = {"modo": "simulacao", "pastas": {"dados": "dados", "normas": "config/normas"},
            "cadastro": {"empresas": "config/empresas.csv", "contas_bancarias": "config/contas_bancarias.csv"},
            "email": {"tipo": "pasta", "pasta_eml": "entrada"},
-           "aprovacao_por_excecao": {"ativa": auto, "valor_limite": "0", "acoes_auto_permitidas": ["copiar_xml_rotina"]}}
+           "aprovacao_por_excecao": {"ativa": auto, "valor_limite": "1000", "acoes_auto_permitidas": ["copiar_xml_rotina"]}}
     (tmp_path / "config" / "config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
     dom = tmp_path / "dados" / "dominio" / "101"
     dom.mkdir(parents=True)

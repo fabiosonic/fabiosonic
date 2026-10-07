@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..util.arquivos import escrever_atomico, sha256_arquivo, sha256_bytes
+from ..util.arquivos import escrever_atomico, nome_seguro, sha256_arquivo, sha256_bytes
 
 TIPOS_PADRAO = {
     "NFSE_EMITIDA": "NFSE EMITIDA", "NFSE_TOMADA": "NFSE TOMADA", "NFE_ENTRADA": "NFE ENTRADA",
@@ -81,9 +81,19 @@ class ConflitoArquivo(RuntimeError):
     pass
 
 
+class DestinoInvalido(ValueError):
+    pass
+
+
 def caminho_destino(base: Path, tipos: dict, empresa, tipo: str, competencia: str, nome: str) -> Path:
     ano, mes = competencia.split("-")
-    return Path(base) / tipos[tipo] / empresa.pasta / f"{mes}{ano}" / nome
+    if not (ano.isdigit() and mes.isdigit()):
+        raise DestinoInvalido(f"competência inválida: {competencia!r}")
+    destino = Path(base) / tipos[tipo] / empresa.pasta / f"{mes}{ano}" / nome_seguro(nome)
+    base_r = Path(base).resolve()
+    if not destino.resolve().is_relative_to(base_r):
+        raise DestinoInvalido(f"destino fora da pasta base: {destino}")
+    return destino
 
 
 def gravar(destino: Path, dados: bytes) -> str:
