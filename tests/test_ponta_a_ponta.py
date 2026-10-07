@@ -89,6 +89,8 @@ def test_ciclo_completo_simulacao(tmp_path):
     assert Path(e["resumo"]).exists() and len(e["pareceres"]) == 2
     md = Path(e["pareceres"][0]["md"]).read_text(encoding="utf-8")
     assert "Parecer técnico" in md
+    painel = Path(e["painel"]).read_text(encoding="utf-8")
+    assert "aguarda APROVADO" in painel and "NFE_SOMA_ITENS" in painel and "<script" not in painel
 
     # aprovação humana do lote da ALFA e execução: grava no _STAGING
     p = Path(lotes[f"FISCAL_{CNPJ_A}_2026-10"]["arquivo"])

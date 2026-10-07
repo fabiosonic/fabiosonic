@@ -81,7 +81,7 @@ def montar_contexto(config: dict, hoje: date | None = None, fonte=None, cascata=
     perfis = Perfis(carteira, receita, catalogo)
     if cascata is None and (config.get("ia") or {}).get("ativa"):
         from ..ia.cascata import montar_cascata
-        cascata = montar_cascata(config["ia"])
+        cascata = montar_cascata(config["ia"], str(dados / "ia_esperas.json"))
     if fonte is None:
         fonte = montar_fonte(config, rel, hoje or date.today())
     extras = {}

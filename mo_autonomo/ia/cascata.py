@@ -100,6 +100,26 @@ class Cascata:
     relogio: Callable[[], float] = time.time
     _bloqueado_ate: dict = field(default_factory=dict)
     registro: list = field(default_factory=list)
+    arquivo_estado: str | None = None  # persiste as esperas de cota entre execuções do Agendador
+
+    def __post_init__(self):
+        if self.arquivo_estado and os.path.exists(self.arquivo_estado):
+            try:
+                with open(self.arquivo_estado, encoding="utf-8") as f:
+                    self._bloqueado_ate.update({k: float(v) for k, v in json.load(f).items()})
+            except (OSError, ValueError):
+                pass  # estado corrompido: começa sem esperas (pior caso: uma tentativa a mais)
+
+    def _persistir(self):
+        if not self.arquivo_estado:
+            return
+        agora = self.relogio()
+        vivos = {k: v for k, v in self._bloqueado_ate.items() if v > agora}
+        os.makedirs(os.path.dirname(self.arquivo_estado) or ".", exist_ok=True)
+        tmp = self.arquivo_estado + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(vivos, f)
+        os.replace(tmp, self.arquivo_estado)
 
     def disponiveis(self):
         agora = self.relogio()
@@ -125,6 +145,7 @@ class Cascata:
             except ErroCota as exc:
                 espera = exc.espera_s if exc.espera_s is not None else self.espera_padrao_s
                 self._bloqueado_ate[p.nome] = self.relogio() + espera
+                self._persistir()
                 erros.append(f"{p.nome}: cota ({exc})")
                 self.registro.append({"provedor": p.nome, "resultado": "COTA"})
                 continue
@@ -138,7 +159,7 @@ class Cascata:
         raise SemProvedorDisponivel("; ".join(erros) or "todos os provedores em espera de cota")
 
 
-def montar_cascata(config_ia: dict) -> Cascata:
+def montar_cascata(config_ia: dict, arquivo_estado: str | None = None) -> Cascata:
     provs = []
     for p in config_ia.get("provedores", []):
         if not p.get("ativo", True):
@@ -147,4 +168,5 @@ def montar_cascata(config_ia: dict) -> Cascata:
             nome=p["nome"], base_url=p["base_url"], modelo=p["modelo"], chave_env=p.get("chave_env"),
             local=bool(p.get("local", False)), timeout=float(p.get("timeout", 120)),
         ))
-    return Cascata(provs, espera_padrao_s=float(config_ia.get("espera_padrao_s", 3600)))
+    return Cascata(provs, espera_padrao_s=float(config_ia.get("espera_padrao_s", 3600)),
+                   arquivo_estado=arquivo_estado)

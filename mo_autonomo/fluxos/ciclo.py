@@ -230,7 +230,10 @@ def n_pareceres(e, ctx):
     resumo += [f"- {p['codigo']}: {p['mensagem']}" for p in e.get("pendencias_gerais", [])] or ["- Nenhuma."]
     caminho = pasta / f"resumo_{e['_run_id'][:8]}.md"
     escrever_atomico(caminho, "\n".join(resumo).encode("utf-8"))
-    return {"pareceres": gerados, "resumo": str(caminho)}
+    from ..especialista.painel import gerar as gerar_painel
+    painel = ctx.dados / "painel.html"
+    escrever_atomico(painel, gerar_painel(e, ctx, cobertura(ctx.catalogo)).encode("utf-8"))
+    return {"pareceres": gerados, "resumo": str(caminho), "painel": str(painel)}
 
 
 def _alertas_vencimento(ctx) -> list[str]:

@@ -91,3 +91,74 @@ def test_leitor_fila_quando_sem_ia():
     c = Cascata([Falso("a", erro=ErroCota("q"))])
     assert ler_nao_estruturado(TEXTO, c)["status"] == "FILA"
     assert ler_nao_estruturado("   ", c)["status"] == "PENDENTE"
+
+
+def test_espera_de_cota_persiste_entre_execucoes(tmp_path):
+    arq = str(tmp_path / "esperas.json")
+    rel = {"t": 100.0}
+    c1 = Cascata([Falso("a", erro=ErroCota("429", espera_s=600)), Falso("b", respostas=["ok"])],
+                 relogio=lambda: rel["t"], arquivo_estado=arq)
+    assert c1.completar("s", "t")["provedor"] == "b"
+    # novo processo (próximo ciclo do Agendador): "a" continua em espera
+    c2 = Cascata([Falso("a", respostas=["x"]), Falso("b", respostas=["ok2"])], relogio=lambda: rel["t"] + 60,
+                 arquivo_estado=arq)
+    assert [p.nome for p in c2.disponiveis()] == ["b"]
+    c3 = Cascata([Falso("a", respostas=["x"])], relogio=lambda: rel["t"] + 601, arquivo_estado=arq)
+    assert c3.completar("s", "t")["provedor"] == "a"
+
+
+def test_montar_cascata_do_config(monkeypatch):
+    from mo_autonomo.ia.cascata import montar_cascata
+    c = montar_cascata({"provedores": [
+        {"nome": "local", "base_url": "http://localhost:11434/v1", "modelo": "m", "local": True},
+        {"nome": "off", "base_url": "https://x", "modelo": "m", "ativo": False},
+        {"nome": "g", "base_url": "https://y", "modelo": "m", "chave_env": "CHAVE_TESTE_INEXISTENTE"}]})
+    assert [p.nome for p in c.provedores] == ["local", "g"] and c.provedores[0].local
+    monkeypatch.delenv("CHAVE_TESTE_INEXISTENTE", raising=False)
+    with pytest.raises(ErroProvedor, match="não definida"):
+        c.provedores[1].completar("s", "u")
+
+
+def test_provedor_http_real_429_500_200():
+    import json as _json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from mo_autonomo.ia.cascata import ProvedorOpenAICompat
+
+    respostas = [(429, {"Retry-After": "42"}, b'{"error":"rate limit"}'), (500, {}, b"boom"),
+                 (200, {}, _json.dumps({"choices": [{"message": {"content": "oi"}}]}).encode())]
+    recebidos = []
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            recebidos.append((self.path, self.headers.get("Authorization"),
+                              _json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+            cod, cab, corpo = respostas.pop(0)
+            self.send_response(cod)
+            for k, v in cab.items():
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(corpo)
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    import os
+    os.environ["CHAVE_TESTE_HTTP"] = "segredo"
+    try:
+        p = ProvedorOpenAICompat("t", f"http://127.0.0.1:{srv.server_port}/v1", "modelo-x", "CHAVE_TESTE_HTTP", timeout=5)
+        with pytest.raises(ErroCota) as exc:
+            p.completar("s", "u")
+        assert exc.value.espera_s == 42.0
+        with pytest.raises(ErroProvedor, match="500"):
+            p.completar("s", "u")
+        assert p.completar("s", "u") == "oi"
+        caminho, auth, corpo = recebidos[-1]
+        assert caminho == "/v1/chat/completions" and auth == "Bearer segredo" and corpo["model"] == "modelo-x"
+        assert corpo["temperature"] == 0.0
+    finally:
+        srv.shutdown()
+        del os.environ["CHAVE_TESTE_HTTP"]
