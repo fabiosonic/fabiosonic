@@ -71,3 +71,9 @@ def test_norma_duplicada(tmp_path):
     (tmp_path / "b.yaml").write_text("- {id: X, titulo: t, area: a}\n", encoding="utf-8")
     with pytest.raises(NormaInvalida, match="duplicada"):
         Catalogo.carregar(tmp_path)
+
+
+def test_dominio_parecido_nao_e_oficial():
+    for u in ("https://fakecfc.org.br/x", "https://notcpc.org.br/x", "https://xgov.br/x", "https://gov.br.evil.com/x"):
+        assert not url_oficial(u), u
+    assert url_oficial("https://gov.br/x") and url_oficial("https://www.in.gov.br/x")

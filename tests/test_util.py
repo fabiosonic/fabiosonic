@@ -44,3 +44,16 @@ def test_json_roundtrip_decimal_data():
     volta = loads(dumps(obj))
     assert volta["v"] == Decimal("1.10") and volta["d"] == date(2026, 1, 2)
     assert volta["b"]["tamanho"] == 3
+
+
+def test_dinheiro_recusa_nan_infinito():
+    for v in ("NaN", "Infinity", "-inf", "1E+999999"):
+        with pytest.raises(ValorInvalido):
+            dinheiro(v)
+
+
+def test_xml_utf16_com_entidade_recusado():
+    xml = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE x [<!ENTITY e "boom">]><x>&e;</x>'.encode("utf-16")
+    with pytest.raises(XMLInseguro):
+        parse_xml_seguro(xml)
+    assert parse_xml_seguro('<?xml version="1.0" encoding="UTF-16"?><x>ok</x>'.encode("utf-16")).text == "ok"

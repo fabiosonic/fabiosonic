@@ -24,7 +24,7 @@ TEXTO = f"Guia DAS da empresa ALFA COMERCIO CNPJ {CNPJ_A[:2]}.{CNPJ_A[2:5]}.{CNP
 def test_mascara_reversivel():
     m = Mascara()
     out = m.mascarar(TEXTO, ["ALFA COMERCIO"])
-    assert "[CNPJ_1]" in out and "[CPF_" in out and "[EMAIL_" in out
+    assert "[CNPJ_1]" in out and "[DOC_NUM_1]" in out and "[EMAIL_1]" in out
     assert not contem_dado_pessoal(out) and "ALFA" not in out
     assert m.desmascarar(out) == TEXTO
 
@@ -162,3 +162,16 @@ def test_provedor_http_real_429_500_200():
     finally:
         srv.shutdown()
         del os.environ["CHAVE_TESTE_HTTP"]
+
+
+def test_mascara_formatos_de_pdf_e_alfanumerico():
+    casos = ["CNPJ 12 345 678/0001-95", "CPF 123 456 789 09", "CPF 123.456.789-09",
+             "chave 3326 1012 3456 7800 0195 5500 1000 0000 0110 0000 0016",
+             "CNPJ 12.ABC.345/01DE-35", "fone (21) 99999-8888", "PIS 123.45678.90-1"]
+    for t in casos:
+        m = Mascara().mascarar(t)
+        assert not contem_dado_pessoal(m), (t, m)
+        assert not any(c.isdigit() for c in m.split(" ", 1)[1].replace("_1", "")), (t, m)
+    # valores e datas não são confundidos com documento
+    texto = "valor R$ 1.234.567,89 vencimento 20/11/2026 competência 10/2026"
+    assert Mascara().mascarar(texto) == texto and not contem_dado_pessoal(texto)

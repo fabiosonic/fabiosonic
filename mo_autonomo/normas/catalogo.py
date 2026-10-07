@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 import yaml
 
 STATUS = ("PENDENTE", "FONTE_LOCALIZADA", "CONFERIDO", "REVOGADA")
-DOMINIOS_OFICIAIS = (".gov.br", ".jus.br", ".leg.br", "cfc.org.br", "cpc.org.br")
+DOMINIOS_OFICIAIS = ("gov.br", "jus.br", "leg.br", "cfc.org.br", "cpc.org.br")
 
 
 class NormaInvalida(ValueError):
@@ -25,7 +25,7 @@ def url_oficial(url: str | None) -> bool:
     if not url:
         return False
     host = (urlparse(url).hostname or "").lower()
-    return any(host == d.lstrip(".") or host.endswith(d) for d in DOMINIOS_OFICIAIS) and url.startswith("https://")
+    return url.startswith("https://") and any(host == d or host.endswith("." + d) for d in DOMINIOS_OFICIAIS)
 
 
 @dataclass

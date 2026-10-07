@@ -31,7 +31,12 @@ def dinheiro(valor) -> Decimal:
             raise ValorInvalido(f"valor inválido: {valor!r}") from exc
     else:
         raise ValorInvalido(f"tipo não suportado: {type(valor).__name__}")
-    return d.quantize(CENTAVO, rounding=ROUND_HALF_UP)
+    if not d.is_finite():
+        raise ValorInvalido(f"valor não finito: {valor!r}")
+    try:
+        return d.quantize(CENTAVO, rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ValorInvalido(f"valor fora da faixa: {valor!r}") from exc
 
 
 def soma(valores) -> Decimal:

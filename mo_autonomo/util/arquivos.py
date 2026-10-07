@@ -41,10 +41,21 @@ class XMLInseguro(ValueError):
 
 
 def parse_xml_seguro(dados: bytes) -> ET.Element:
-    """Recusa DTD/entidades (XML vem de e-mail de terceiros)."""
-    cabeca = dados[:4096].lower()
-    if b"<!doctype" in cabeca or b"<!entity" in dados.lower():
+    """Recusa DTD/entidades (XML vem de e-mail de terceiros), em qualquer codificação.
+
+    Pré-varredura com o expat (handlers de DOCTYPE/ENTITY), não busca de bytes.
+    """
+    import xml.parsers.expat as expat
+
+    def recusar(*_):
         raise XMLInseguro("XML com DTD/ENTITY recusado")
+
+    p = expat.ParserCreate()
+    p.StartDoctypeDeclHandler = recusar
+    p.EntityDeclHandler = recusar
+    p.UnparsedEntityDeclHandler = recusar
+    p.ExternalEntityRefHandler = recusar
+    p.Parse(dados, True)  # erro de sintaxe sobe como ExpatError (XML inválido)
     return ET.fromstring(dados)
 
 
