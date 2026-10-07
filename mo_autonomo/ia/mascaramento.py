@@ -16,16 +16,24 @@ PADROES = {
                        re.IGNORECASE),
     "EMAIL": re.compile(r"[\w.+-]+\s*(?:@|\\u0040|&#64;|\(at\)|\[at\])\s*[\w-]+(?:\s*\.\s*[\w-]+)+", re.IGNORECASE),
     "TELEFONE": re.compile(r"(?<!\d)(?:\(?\d{2}\)?\s?)?9?\d{4}[\s.-]?\d{4}(?!\d)"),
-    # CPF/CNPJ separado por vírgula (OCR): só no desenho exato, para não engolir valores "1.500,00"
-    # só logo após o rótulo CPF/CNPJ, para não engolir quantidade/preço com 3 casas ("10,000 150,000")
-    "DOC_VIRGULA": re.compile(r"(?<=CPF|PJ:|PF:|NPJ)[\s:]{0,3}\d{2,3}(?:[,_ ]\d{3}){2}[,_ /]\d{2,4}(?:[,_ -]\d{2})?(?!\d)",
-                              re.IGNORECASE),
+    # CPF/CNPJ separado por vírgula (OCR), com qualquer rótulo ou nenhum. Só vale quando os dígitos
+    # juntados passam no dígito verificador (ver _VALIDA): quantidade/preço com 3 casas não passa.
+    "DOC_VIRGULA": re.compile(r"(?<!\d)\d{2,3}(?:[,_\s]{1,2}\d{3}){2}[,_\s/]{1,2}\d{2,4}(?:[,_\s-]{1,2}\d{2})?(?!\d)"),
     # qualquer sequência de 11+ dígitos, mesmo com espaço/ponto/barra/hífen entre eles:
     # cobre CPF, CNPJ, chave de acesso impressa em grupos, PIS, contas.
     "DOC_NUM": re.compile(r"(?<!\d)\d(?:" + _SEP + r"\d){10,}(?!\d)"),
 }
 ORDEM = ("EMAIL", "CNPJ", "DOC_NUM", "DOC_VIRGULA", "TELEFONE")
-_BASE64 = re.compile(r"[A-Za-z0-9+/]{60,}={0,2}")
+_BASE64 = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+
+
+def _cpf_ou_cnpj(trecho: str) -> bool:
+    from ..util.documentos_id import cnpj_valido, cpf_valido
+    d = re.sub(r"\D", "", trecho)
+    return (len(d) == 11 and cpf_valido(d)) or (len(d) == 14 and cnpj_valido(d))
+
+
+_VALIDA = {"DOC_VIRGULA": _cpf_ou_cnpj}  # padrões que só contam se o achado for documento de verdade
 
 
 def _parece_base64(texto: str) -> bool:
@@ -61,7 +69,8 @@ class Mascara:
             return f"\x00DATA{_letras(len(datas) - 1)}\x00"
         out = _DATA.sub(guardar, texto)
         for tipo in ORDEM:
-            out = PADROES[tipo].sub(lambda m, t=tipo: self._token(t, m.group(0)), out)
+            ok = _VALIDA.get(tipo, lambda s: True)
+            out = PADROES[tipo].sub(lambda m, t=tipo, ok=ok: self._token(t, m.group(0)) if ok(m.group(0)) else m.group(0), out)
         for i, d in enumerate(datas):
             out = out.replace(f"\x00DATA{_letras(i)}\x00", d)
         for nome in sorted(set(n for n in (nomes or []) if n and len(n) >= 3), key=len, reverse=True):
@@ -99,17 +108,24 @@ def _cnpj_alfa_escondido(texto: str) -> bool:
     janela de 14 caracteres com letra cujos dígitos verificadores batem."""
     # só logo depois do rótulo CNPJ/CPF e com pedaços inteiros: juntar palavras quaisquer ("RECEBIDO" +
     # número) acerta o dígito verificador por acaso ~1 vez em 100 e travaria a nuvem em todo extrato
-    pedacos = re.findall(r"[A-Z0-9]+", texto.upper())
-    inicios = {j for k, p in enumerate(pedacos) if re.fullmatch(r"(?:CPF|CNPJ|CPFCNPJ)", p)
-               for j in range(k + 1, k + 3)}
-    for i in sorted(x for x in inicios if x < len(pedacos)):
-        s = ""
+    # Aceita a junção só com (a) o desenho do CNPJ em pedaços (2/3/3/4/2, 8/4/2, 12/2) ou (b) rótulo
+    # (CNPJ, C.N.P.J., CPF, Inscrição) até 4 pedaços antes.
+    t = re.sub(r"C\.?\s?N\.?\s?P\.?\s?J", "CNPJ", texto.upper())
+    t = re.sub(r"C\.?\s?P\.?\s?F", "CPF", t)
+    pedacos = re.findall(r"[A-Z0-9]+", t)
+    rotulo = {j for k, p in enumerate(pedacos) if re.match(r"(?:CPF|CNPJ|INSCRI)", p) for j in range(k + 1, k + 5)}
+    # sem rótulo, só o desenho oficial em pedaços curtos; "RECEBIDO 001280" (palavra + número) não conta
+    desenhos = {(2, 3, 3, 4, 2), (12, 2)}
+    for i in range(len(pedacos)):
+        s, tam = "", []
         for p in pedacos[i:i + 6]:
             s += p
+            tam.append(len(p))
             if len(s) > 14:
                 break
-            if (len(s) == 14 and s[12:].isdigit() and not s[:12].isdigit() and any(c.isdigit() for c in s[:12])
-                    and _dv_alfa(s[:12]) == s[12:]):
+            forma = tuple(tam) in desenhos and not any(len(x) >= 4 and x.isalpha() for x in pedacos[i:i + len(tam)])
+            if (len(s) == 14 and (forma or i in rotulo) and s[12:].isdigit()
+                    and not s[:12].isdigit() and any(c.isdigit() for c in s[:12]) and _dv_alfa(s[:12]) == s[12:]):
                 return True
     return False
 
@@ -117,7 +133,8 @@ def _cnpj_alfa_escondido(texto: str) -> bool:
 def contem_dado_pessoal(texto: str) -> list[str]:
     """Guarda final antes da nuvem: checa o texto e também a versão sem espaços/pontuação."""
     sem_datas = _DATA.sub(" ", texto)
-    achados = [tipo for tipo in ORDEM if PADROES[tipo].search(sem_datas)]
+    achados = [tipo for tipo in ORDEM
+               if any(_VALIDA.get(tipo, lambda s: True)(m.group(0)) for m in PADROES[tipo].finditer(sem_datas))]
     compacto = re.sub(r"(?<=[0-9A-Za-z])[\s./_\-\u2013\u2014]+(?=[0-9])", "", sem_datas)
     if "DOC_NUM" not in achados and re.search(r"\d{11,}", compacto):
         achados.append("DOC_NUM")

@@ -49,11 +49,16 @@ class Provedor(Protocol):
     def completar(self, sistema: str, usuario: str) -> str: ...
 
 
-def _post_json(url: str, corpo: dict, cabecalhos: dict, timeout: float) -> dict:
+_SEM_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def _post_json(url: str, corpo: dict, cabecalhos: dict, timeout: float, direto: bool = False) -> dict:
+    """`direto`: ignora proxy do sistema (provedor local — documento bruto não passa por terceiro)."""
     req = urllib.request.Request(url, data=json.dumps(corpo).encode(), method="POST",
                                  headers={"Content-Type": "application/json", **cabecalhos})
+    abrir = _SEM_PROXY.open if direto else urllib.request.urlopen
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with abrir(req, timeout=timeout) as r:
             corpo = r.read()
         try:
             return json.loads(corpo.decode("utf-8"))
@@ -91,7 +96,7 @@ class ProvedorOpenAICompat:
         r = _post_json(self.base_url.rstrip("/") + "/chat/completions",
                        {"model": self.modelo, "temperature": self.temperatura,
                         "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]},
-                       cab, self.timeout)
+                       cab, self.timeout, direto=self.local)
         try:
             return r["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -166,23 +171,35 @@ class Cascata:
         raise SemProvedorDisponivel("; ".join(erros) or "todos os provedores em espera de cota")
 
 
-def _host_local(url: str) -> bool:
-    """`local: true` só vale para endereço da própria máquina ou da rede interna: um erro de config
-    não pode mandar documento bruto para a internet (regra 11)."""
+def _ip_local(url: str) -> str | None:
+    """IP local (máquina ou rede interna) para onde o provedor `local: true` será FIXADO, ou None.
+    Nome é resolvido uma vez e trocado pelo IP na URL: o envio não resolve de novo (DNS rebinding /
+    DNS sequestrado não desviam documento bruto para a internet — regra 11)."""
     import ipaddress
+    import socket
     from urllib.parse import urlparse
     host = (urlparse(url).hostname or "").lower()
-    if host == "localhost":
-        return True
     try:
         ips = [ipaddress.ip_address(host)]
-    except ValueError:  # nome (ex.: "ollama-pc"): vale se TODOS os endereços resolvidos forem locais
-        import socket
+    except ValueError:
         try:
             ips = [ipaddress.ip_address(i[4][0].split("%")[0]) for i in socket.getaddrinfo(host, None)]
         except (OSError, ValueError):
-            return False
-    return bool(ips) and all(ip.is_loopback or ip.is_private for ip in ips)
+            return None
+    if not ips or not all(ip.is_loopback or ip.is_private for ip in ips):
+        return None
+    return str(ips[0])
+
+
+def _host_local(url: str) -> bool:
+    return _ip_local(url) is not None
+
+
+def _fixar_ip(url: str, ip: str) -> str:
+    from urllib.parse import urlparse, urlunparse
+    u = urlparse(url)
+    h = f"[{ip}]" if ":" in ip else ip
+    return urlunparse(u._replace(netloc=h + (f":{u.port}" if u.port else "")))
 
 
 def montar_cascata(config_ia: dict, arquivo_estado: str | None = None) -> Cascata:
@@ -190,14 +207,15 @@ def montar_cascata(config_ia: dict, arquivo_estado: str | None = None) -> Cascat
     for p in config_ia.get("provedores", []):
         if not p.get("ativo", True):
             continue
-        if p.get("local") and not _host_local(p["base_url"]):
+        ip = _ip_local(p["base_url"]) if p.get("local") else None
+        if p.get("local") and ip is None:
             import logging
             logging.getLogger(__name__).warning(
                 "provedor %s marcado local, mas %s não é da máquina/rede interna: tratado como NUVEM "
                 "(só recebe texto mascarado)", p["nome"], p["base_url"])
         provs.append(ProvedorOpenAICompat(
-            nome=p["nome"], base_url=p["base_url"], modelo=p["modelo"], chave_env=p.get("chave_env"),
-            local=bool(p.get("local", False)) and _host_local(p["base_url"]), timeout=float(p.get("timeout", 120)),
+            nome=p["nome"], base_url=_fixar_ip(p["base_url"], ip) if ip else p["base_url"], modelo=p["modelo"],
+            chave_env=p.get("chave_env"), local=ip is not None, timeout=float(p.get("timeout", 120)),
         ))
     return Cascata(provs, espera_padrao_s=float(config_ia.get("espera_padrao_s", 3600)),
                    arquivo_estado=arquivo_estado)
