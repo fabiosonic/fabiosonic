@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS eventos (
 );
 CREATE TABLE IF NOT EXISTS documentos (
     sha256 TEXT PRIMARY KEY, tipo TEXT, chave TEXT, cnpjs TEXT, competencia TEXT,
-    destinos TEXT, situacao TEXT, em TEXT
+    destinos TEXT, situacao TEXT, em TEXT, resumo TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_doc_chave ON documentos(chave);
 CREATE TABLE IF NOT EXISTS aprovacoes (
@@ -50,6 +50,9 @@ class Trilha:
             Path(self.caminho).parent.mkdir(parents=True, exist_ok=True)
         self.con = sqlite3.connect(self.caminho)
         self.con.executescript(ESQUEMA)
+        colunas = {r[1] for r in self.con.execute("PRAGMA table_info(documentos)")}
+        if "resumo" not in colunas:  # migração de trilhas criadas antes desta versão
+            self.con.execute("ALTER TABLE documentos ADD COLUMN resumo TEXT")
         self.con.commit()
 
     def fechar(self):
@@ -82,10 +85,11 @@ class Trilha:
             "SELECT sha256, situacao FROM documentos WHERE chave=?", (chave,)
         ).fetchall()
 
-    def registrar_documento(self, sha, tipo, chave, cnpjs, competencia, destinos, situacao):
+    def registrar_documento(self, sha, tipo, chave, cnpjs, competencia, destinos, situacao, resumo=None):
         self.con.execute(
-            "INSERT OR REPLACE INTO documentos VALUES (?,?,?,?,?,?,?,?)",
-            (sha, tipo, chave, dumps(cnpjs), competencia, dumps(destinos), situacao, agora()),
+            "INSERT OR REPLACE INTO documentos (sha256, tipo, chave, cnpjs, competencia, destinos, situacao, em, resumo)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (sha, tipo, chave, dumps(cnpjs), competencia, dumps(destinos), situacao, agora(), dumps(resumo or {})),
         )
         self.con.commit()
 
@@ -97,7 +101,7 @@ class Trilha:
         return [{"sha256": r[0], "nome": r[1], "origem": r[2], "caminho": r[3], "reprocesso": True} for r in rows]
 
     def documentos(self, competencia: str | None = None):
-        sql = "SELECT sha256, tipo, chave, cnpjs, competencia, destinos, situacao FROM documentos"
+        sql = "SELECT sha256, tipo, chave, cnpjs, competencia, destinos, situacao, resumo FROM documentos"
         args: tuple = ()
         if competencia:
             sql += " WHERE competencia=?"
@@ -106,7 +110,8 @@ class Trilha:
         for r in self.con.execute(sql, args):
             out.append(
                 {"sha256": r[0], "tipo": r[1], "chave": r[2], "cnpjs": loads(r[3]),
-                 "competencia": r[4], "destinos": loads(r[5]), "situacao": r[6]}
+                 "competencia": r[4], "destinos": loads(r[5]), "situacao": r[6],
+                 "resumo": loads(r[7]) if r[7] else {}}
             )
         return out
 

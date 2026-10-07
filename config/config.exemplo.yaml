@@ -54,3 +54,6 @@ ia:
 calendario:
   dias_alerta: [3, 0]                    # alerta 3 dias antes e no dia
   feriados: []                           # AAAA-MM-DD (nacionais, RJ e municipais) — o escritório mantém
+
+cruzamentos:
+  tolerancia_receita: "1.00"             # diferença aceita entre XML emitidos e receita declarada

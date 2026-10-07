@@ -77,8 +77,13 @@ def _grupos(e):
 
 
 def n_analisar_competencias(e, ctx):
-    """Regras de escopo competência (duplicidade, sequência, cancelamento)."""
-    extra = defaultdict(list)
+    """Regras do mês (duplicidade, sequência, cancelamento) e faturamento × receita declarada."""
+    from decimal import Decimal
+
+    from ..especialista.faturamento import cruzar, faturamento, ler_receitas_declaradas
+    extra, fat_out = defaultdict(list), {}
+    declaradas = ler_receitas_declaradas(ctx.dados / "apuracao" / "receitas.csv")
+    tol = Decimal(str((ctx.config.get("cruzamentos") or {}).get("tolerancia_receita", "1.00")))
     for (cnpj, comp), docs in _grupos(e).items():
         perfil = ctx.perfis.em(cnpj, ctx.hoje)
         if perfil is None or comp is None:
@@ -86,7 +91,13 @@ def n_analisar_competencias(e, ctx):
         normais = [d["doc"] for d in docs if d.get("doc")]
         for a in avaliar_competencia(normais, perfil, comp, ctx.catalogo, ctx.hoje, ctx.trilha):
             extra[f"{cnpj}|{comp}"].append(a.como_dict())
-    return {"achados_competencia": dict(extra)}
+        registros = [r for r in ctx.trilha.documentos(comp) if cnpj in (r["cnpjs"] or [])
+                     or (r["resumo"] or {}).get("emitente") == cnpj]
+        fat = faturamento(registros, cnpj, ctx.catalogo)
+        fat_out[f"{cnpj}|{comp}"] = fat
+        for a in cruzar(fat, declaradas.get((cnpj, comp)), cnpj, comp, tol):
+            extra[f"{cnpj}|{comp}"].append(a.como_dict())
+    return {"achados_competencia": dict(extra), "faturamento": fat_out}
 
 
 def n_contabil(e, ctx):
@@ -215,7 +226,8 @@ def n_pareceres(e, ctx):
         emp = ctx.carteira.get(l["cnpj"])
         perfil = ctx.perfis.em(l["cnpj"], ctx.hoje)
         md = parecer.markdown(emp, l["competencia"], perfil, lote["achados"], lote["pendencias"],
-                              len(lote["acoes"]), inativas)
+                              len(lote["acoes"]), inativas,
+                              (e.get("faturamento") or {}).get(f"{l['cnpj']}|{l['competencia']}"))
         gerados.append(parecer.salvar(pasta / l["competencia"], f"{emp.pasta}_{l['id'][-8:]}", md, lote["achados"]))
     resumo = [f"# Resumo do ciclo {e['_run_id'][:8]} — {ctx.hoje:%d/%m/%Y} ({ctx.config['modo']})", "",
               f"- E-mails novos: {e.get('emails_lidos', 0)}", f"- Anexos novos: {len(e.get('anexos', []))}",

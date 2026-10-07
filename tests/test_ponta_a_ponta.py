@@ -111,6 +111,24 @@ def test_ciclo_completo_simulacao(tmp_path):
     assert e3["emails_lidos"] == 1 and e3["anexos"] == []
 
 
+def test_cruzamento_receita_no_ciclo(tmp_path):
+    base = projeto(tmp_path)
+    (base / "dados" / "apuracao").mkdir(parents=True)
+    (base / "dados" / "apuracao" / "receitas.csv").write_text(
+        f"cnpj;competencia;receita_declarada;fonte\n{CNPJ_A};2026-10;50,00;PGDAS-D\n", encoding="utf-8")
+    (base / "entrada" / "1.eml").write_bytes(eml_bytes({"n1.xml": nfe_xml(numero=1)}))
+    ctx = ctx_de(base)
+    e = rodar_ciclo(ctx)
+    lote = L.carregar(Path(e["lotes"][0]["arquivo"]))
+    assert [a["regra"] for a in lote["achados"]] == ["COMP_RECEITA_X_DECLARADA"]
+    md = Path(e["pareceres"][0]["md"]).read_text(encoding="utf-8")
+    assert "Total: 100.00" in md
+    # segundo e-mail no mês: faturamento acumula pelos ciclos (trilha), não só o ciclo atual
+    (base / "entrada" / "2.eml").write_bytes(eml_bytes({"n2.xml": nfe_xml(numero=2)}, assunto="outro"))
+    e2 = rodar_ciclo(ctx)
+    assert e2["faturamento"][f"{CNPJ_A}|2026-10"]["total"] == 200
+
+
 def test_auto_aprovacao_por_excecao(tmp_path):
     base = projeto(tmp_path, auto=True)
     (base / "entrada" / "1.eml").write_bytes(eml_bytes({"n1.xml": nfe_xml(numero=1)}))

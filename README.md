@@ -101,6 +101,7 @@ não conferida (não vira ação); **CONTROLE** = fato objetivo. Regra com parâ
 | COMP_DUPLICIDADE | Mesma chave com conteúdos diferentes (no mês e no histórico) | — (CONTROLE) |
 | COMP_CANCELAMENTO | Evento de cancelamento recebido | MOC_NFE.tp_evento_cancelamento |
 | COMP_SEQUENCIA | Buracos na numeração das notas emitidas | — (CONTROLE) |
+| COMP_RECEITA_X_DECLARADA | Faturamento dos XML emitidos (acumulado no mês) × receita declarada em `dados/apuracao/receitas.csv` | — (CONTROLE; NF-e/canceladas dependem de MOC_NFE) |
 | DP_INSS_DIVERGENTE | INSS do empregado × tabela progressiva | TABELA_INSS_SEGURADO.faixas |
 | DP_IRRF_DIVERGENTE | IRRF × tabela, dependentes e redutor | TABELA_IRRF_MENSAL |
 | DOMINIO_NAO_IMPORTADO / _VALOR_DIVERGENTE / _SEM_DOCUMENTO | Auditoria do Domínio × documentos capturados | — (CONTROLE) |

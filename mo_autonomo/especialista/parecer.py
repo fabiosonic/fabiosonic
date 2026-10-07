@@ -22,11 +22,17 @@ def _citacao(normas: list[dict]) -> str:
 
 
 def markdown(empresa, competencia: str, perfil, achados: list[dict], pendencias: list[dict],
-             documentos: int, regras_inativas: list[dict]) -> str:
+             documentos: int, regras_inativas: list[dict], fat: dict | None = None) -> str:
     l = [f"# Parecer técnico — {empresa.apelido} ({formatar_cnpj(empresa.cnpj)})", "",
          f"- Competência: **{competencia}**", f"- Código Domínio: {empresa.codigo_dominio}",
          f"- Regime: **{perfil.regime or 'INDEFINIDO'}** (fonte: {perfil.regime_fonte})",
          f"- CNAE: {', '.join(perfil.cnaes) or 'não disponível'}", f"- Documentos analisados: {documentos}", ""]
+    if fat is not None:
+        l += ["## Faturamento pelos XML emitidos (acumulado da competência)", "",
+              f"- NF-e: {fat['por_tipo']['NFE']} · NFC-e: {fat['por_tipo']['NFCE']} · NFS-e: {fat['por_tipo']['NFSE']}",
+              f"- **Total: {fat['total']}**"]
+        l += [f"- Ressalva: {o}" for o in fat["observacoes"]]
+        l.append("")
     l += ["## Pendências (impedem aprovação)", ""]
     l += [f"- **{p['codigo']}** — {p['mensagem']}" + (f" (`{p['referencia']}`)" if p.get("referencia") else "")
           for p in pendencias] or ["- Nenhuma."]

@@ -114,8 +114,19 @@ def n_registrar(e, ctx):
     situacao = "FILA" if any(p["codigo"] == "FILA_IA" for p in pend) else ("PENDENTE" if pend else "OK")
     ctx.trilha.registrar_documento(
         e["sha256"], e["classe"], doc.get("chave"), [r["cnpj"] for r in e.get("rotas", [])],
-        doc.get("competencia"), e.get("rotas", []), situacao)
+        doc.get("competencia"), e.get("rotas", []), situacao, resumo_documento(doc))
     return {}
+
+
+def resumo_documento(doc: dict) -> dict:
+    """O mínimo para cruzamentos do mês sem reler o XML (faturamento, cancelamentos)."""
+    if not doc:
+        return {}
+    t = doc.get("totais") or {}
+    valor = next((t[k] for k in ("vNF", "vServ", "vTPrest") if t.get(k) is not None), None)
+    return {"tipo": doc.get("tipo"), "emitente": doc.get("emitente_cnpj"), "prestador": doc.get("prestador_cnpj"),
+            "tp_nf": doc.get("tp_nf"), "valor": valor, "chave_ref": doc.get("chave_ref"),
+            "tp_evento": doc.get("tp_evento"), "cstat": doc.get("autorizacao_cstat"), "emissao": doc.get("emissao")}
 
 
 def grafo_documento() -> Grafo:
