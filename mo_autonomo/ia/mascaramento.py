@@ -18,13 +18,26 @@ PADROES = {
     "TELEFONE": re.compile(r"(?<!\d)(?:\(?\d{2}\)?\s?)?9?\d{4}[\s.-]?\d{4}(?!\d)"),
     # CPF/CNPJ separado por vírgula (OCR), com qualquer rótulo ou nenhum. Só vale quando os dígitos
     # juntados passam no dígito verificador (ver _VALIDA): quantidade/preço com 3 casas não passa.
-    "DOC_VIRGULA": re.compile(r"(?<!\d)\d{2,3}(?:[,_\s]{1,2}\d{3}){2}[,_\s/]{1,2}\d{2,4}(?:[,_\s-]{1,2}\d{2})?(?!\d)"),
+    "DOC_VIRGULA": re.compile(r"(?<!\d)\d{2,3}(?:[,_\s]{1,3}\d{3}){2}[,_\s/-]{1,3}\d{2,4}(?:[,_\s-]{1,3}\d{2})?(?!\d)"),
     # qualquer sequência de 11+ dígitos, mesmo com espaço/ponto/barra/hífen entre eles:
     # cobre CPF, CNPJ, chave de acesso impressa em grupos, PIS, contas.
     "DOC_NUM": re.compile(r"(?<!\d)\d(?:" + _SEP + r"\d){10,}(?!\d)"),
+    # OCR trocando dígito por letra parecida (O/I/l/Z/S/B): "529.982.247-2O" — conta se 9+ forem dígitos
+    "DOC_OCR": re.compile(r"(?<![A-Za-z0-9])[0-9OIlZSB](?:" + _SEP + r"[0-9OIlZSB]){10,}(?![A-Za-z0-9])"),
 }
-ORDEM = ("EMAIL", "CNPJ", "DOC_NUM", "DOC_VIRGULA", "TELEFONE")
+ORDEM = ("EMAIL", "CNPJ", "DOC_NUM", "DOC_VIRGULA", "DOC_OCR", "TELEFONE")
 _BASE64 = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+
+
+# hífens/traços tipográficos que o PDF produz (‐ ‑ ‒ – — − － ﹣, hífen invisível) e dígitos de
+# largura total viram ASCII, caractere por caractere, antes de mascarar e antes da guarda
+_TRACOS = "\u00ad\u2010\u2011\u2012\u2013\u2014\u2015\u2212\ufe58\ufe63\uff0d"
+_NORMAL = str.maketrans({**{c: "-" for c in _TRACOS}, **{chr(0xFF10 + i): str(i) for i in range(10)},
+                         "\u00a0": " ", "\u2007": " ", "\u202f": " "})
+
+
+def normalizar(texto: str) -> str:
+    return texto.translate(_NORMAL)
 
 
 def _cpf_ou_cnpj(trecho: str) -> bool:
@@ -33,7 +46,7 @@ def _cpf_ou_cnpj(trecho: str) -> bool:
     return (len(d) == 11 and cpf_valido(d)) or (len(d) == 14 and cnpj_valido(d))
 
 
-_VALIDA = {"DOC_VIRGULA": _cpf_ou_cnpj}  # padrões que só contam se o achado for documento de verdade
+_VALIDA = {"DOC_VIRGULA": _cpf_ou_cnpj, "DOC_OCR": lambda s: sum(c.isdigit() for c in s) >= 9}  # padrões que só contam se o achado for documento de verdade
 
 
 def _parece_base64(texto: str) -> bool:
@@ -61,6 +74,7 @@ class Mascara:
         return tok
 
     def mascarar(self, texto: str, nomes: list[str] | None = None) -> str:
+        texto = normalizar(texto)
         # datas são preservadas (a IA precisa da competência): troca por marcador sem dígitos e volta depois
         datas: list[str] = []
 
@@ -123,8 +137,9 @@ def _cnpj_alfa_escondido(texto: str) -> bool:
             tam.append(len(p))
             if len(s) > 14:
                 break
-            forma = tuple(tam) in desenhos and not any(len(x) >= 4 and x.isalpha() for x in pedacos[i:i + len(tam)])
-            if (len(s) == 14 and (forma or i in rotulo) and s[12:].isdigit()
+            # palavra (só letras, 4+) nunca entra na junção: "INSCRIÇÃO MUNICIPAL 4029..." não é CNPJ
+            palavra = any(len(x) >= 4 and x.isalpha() for x in pedacos[i:i + len(tam)])
+            if (len(s) == 14 and not palavra and (tuple(tam) in desenhos or i in rotulo) and s[12:].isdigit()
                     and not s[:12].isdigit() and any(c.isdigit() for c in s[:12]) and _dv_alfa(s[:12]) == s[12:]):
                 return True
     return False
@@ -132,7 +147,7 @@ def _cnpj_alfa_escondido(texto: str) -> bool:
 
 def contem_dado_pessoal(texto: str) -> list[str]:
     """Guarda final antes da nuvem: checa o texto e também a versão sem espaços/pontuação."""
-    sem_datas = _DATA.sub(" ", texto)
+    sem_datas = _DATA.sub(" ", normalizar(texto))
     achados = [tipo for tipo in ORDEM
                if any(_VALIDA.get(tipo, lambda s: True)(m.group(0)) for m in PADROES[tipo].finditer(sem_datas))]
     compacto = re.sub(r"(?<=[0-9A-Za-z])[\s./_\-\u2013\u2014]+(?=[0-9])", "", sem_datas)

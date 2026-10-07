@@ -188,7 +188,8 @@ def _ip_local(url: str) -> str | None:
             return None
     if not ips or not all(ip.is_loopback or ip.is_private for ip in ips):
         return None
-    return str(ips[0])
+    # IPv4 primeiro: no Windows "localhost" resolve ::1 antes, e o Ollama escuta só em 127.0.0.1
+    return str(sorted(ips, key=lambda i: i.version)[0])
 
 
 def _host_local(url: str) -> bool:
