@@ -176,7 +176,7 @@ class Trilha:
         return [{"lote": l, "acao": loads(d), "detalhe": det} for l, d, det in self.con.execute(
             "SELECT lote, dados, detalhe FROM acoes WHERE estado='BLOQUEADA' ORDER BY em")]
 
-    def lotes_aprovados_pendentes(self, tipos=("copiar_xml_rotina", "arquivar_documento")) -> list[str]:
+    def lotes_aprovados_pendentes(self, tipos=("copiar_xml_rotina", "arquivar_documento", "lancamento_contabil")) -> list[str]:
         """Lotes com aprovação registrada e ação executável ainda PROPOSTA (aprovados fora do ciclo)."""
         marcas = ",".join("?" * len(tipos))
         return [r[0] for r in self.con.execute(

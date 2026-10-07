@@ -195,7 +195,10 @@ python -m pytest -q
 2. **`config/empresas.csv`** a partir da exportação do cadastro do Domínio (código, apelido, CNPJ, regime, UF, município IBGE).
 3. **Servidor/porta IMAP** do Email em Nuvem e senha no keyring.
 4. **Exportações do Domínio** por empresa em `dados/dominio/<código>/`: `plano_contas.csv`, `razao.csv`.
-5. **Leiaute oficial de importação** do Domínio (lançamentos/folha) — o exportador só é escrito com ele.
+5. **Leiaute de importação** do Domínio: o de **lançamentos contábeis** já está ligado (TXT no formato
+   que o escritório já importa — `mo_autonomo/dominio/leiautes/LANCAMENTOS_TXT_ESCRITORIO.md`); o
+   arquivo sai em `pastas.importacao_dominio` depois do APROVADO e é importado em
+   *Utilitários > Importação*. Folha e outros leiautes ainda dependem de aprovação.
 6. **Colunas do relatório** do Domínio para a auditoria (`dominio.relatorio_colunas`).
 7. Zips dos **Dados Abertos do CNPJ** em `dados/rfb/`.
 

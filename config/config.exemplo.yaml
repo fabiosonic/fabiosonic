@@ -5,6 +5,8 @@ pastas:
   dados: dados             # trilha.sqlite, _BRUTO_EMAIL, _STAGING, lotes, pareceres
   normas: config/normas
   xml_notas_producao: 'D:\XML NOTAS'   # usado só em modo producao
+  importacao_dominio: 'D:\IMPORTACAO DOMINIO'   # TXT de lançamentos (produção); importar em Utilitários > Importação
+  documentos_organizados: 'D:\DOCUMENTOS ORGANIZADOS'
 
 cadastro:
   empresas: config/empresas.csv          # gerado da exportação do cadastro do Domínio

@@ -440,8 +440,16 @@ def executar_acao(a: dict, ctx) -> dict:
             if not destino.resolve().is_relative_to(base.resolve()):
                 raise DestinoInvalido(f"destino fora da pasta base: {destino}")
         elif a["tipo"] == "lancamento_contabil":
-            return {"acao": a["tipo"], "status": "AGUARDANDO_LEIAUTE_DOMINIO",
-                    "detalhe": "exportador só é escrito com o leiaute oficial de importação"}
+            from ..dominio.exportador import gerar as gerar_txt
+            destino = _destino_importacao(ctx, a, f"acao-{sha256_bytes(ctx.trilha.id_acao(a).encode())[:10]}")
+            try:
+                st = gravar(destino, gerar_txt([a]))
+            except ConflitoArquivo as exc:
+                st = f"CONFLITO: {exc}"
+            r = {"acao": a["tipo"], "destino": str(destino), "status": st}
+            ok = st in ("GRAVADO", "JA_EXISTIA")
+            ctx.trilha.marcar_acao(a, "EXECUTADA" if ok else "BLOQUEADA", None if ok else st)
+            return r
         else:
             r = {"acao": a["tipo"], "status": "SEM_EXECUTOR"}
             ctx.trilha.marcar_acao(a, "BLOQUEADA", r["status"])
@@ -464,10 +472,56 @@ def executar_acao(a: dict, ctx) -> dict:
     return r
 
 
+def _base_importacao(ctx) -> Path:
+    if ctx.config["modo"] == "producao":
+        p = (ctx.config.get("pastas") or {}).get("importacao_dominio")
+        if not p:
+            raise DestinoInvalido("modo produção sem pastas.importacao_dominio")
+        return Path(p)
+    return ctx.dados / "_STAGING" / "IMPORTACAO_DOMINIO"
+
+
+def _destino_importacao(ctx, a: dict, sufixo: str) -> Path:
+    emp = ctx.carteira.get(a["cnpj"])
+    base = _base_importacao(ctx)
+    nome = nome_seguro(f"Dominio-{emp.codigo_dominio}-{emp.apelido}-{a.get('banco')}-{a.get('conta')}-"
+                       f"{a.get('competencia')}-{sufixo}") + ".txt"
+    destino = base / nome
+    if not destino.resolve().is_relative_to(base.resolve()):
+        raise DestinoInvalido(f"destino fora da pasta base: {destino}")
+    return destino
+
+
+def _exportar_lancamentos(lote: dict, ctx) -> list[dict]:
+    """Um TXT por lote e conta bancária, no leiaute do escritório; tudo ou nada."""
+    from ..dominio.exportador import gerar as gerar_txt
+    grupos: dict = {}
+    for a in lote["acoes"]:
+        if a["tipo"] == "lancamento_contabil":
+            grupos.setdefault((a.get("banco"), a.get("conta")), []).append(a)
+    out = []
+    for grupo in grupos.values():
+        destino = None
+        try:
+            destino = _destino_importacao(ctx, grupo[0], lote["id"][-8:])
+            st = gravar(destino, gerar_txt(grupo))
+        except ConflitoArquivo as exc:
+            st = f"CONFLITO: {exc}"
+        except Exception as exc:  # noqa: BLE001 — lançamento inválido: nada de arquivo parcial
+            st = f"ERRO: {type(exc).__name__}: {exc}"
+        ok = st in ("GRAVADO", "JA_EXISTIA")
+        for a in grupo:
+            ctx.trilha.marcar_acao(a, "EXECUTADA" if ok else "BLOQUEADA", None if ok else st)
+        out.append({"acao": "lancamento_contabil", "destino": str(destino) if destino else None,
+                    "lancamentos": len(grupo), "status": st})
+    return out
+
+
 def executar_lote(caminho_aprovado: Path, ctx) -> list[dict]:
     """Executor: só roda com APROVADO_* íntegro e registrado na trilha."""
     lote = L.exigir_aprovado(caminho_aprovado, ctx.trilha)
-    resultado = [executar_acao(a, ctx) for a in lote["acoes"]]
+    resultado = [executar_acao(a, ctx) for a in lote["acoes"] if a["tipo"] != "lancamento_contabil"]
+    resultado += _exportar_lancamentos(lote, ctx)
     ctx.trilha.evento("LOTE_EXECUTADO", lote["id"], resultado)
     return resultado
 
@@ -544,7 +598,7 @@ def n_pareceres(e, ctx):
     resumo += ["", "## Pendências sem empresa identificada", ""]
     resumo += [f"- {p['codigo']}: {p['mensagem']}" for p in e.get("pendencias_gerais", [])] or ["- Nenhuma."]
     falhas_exec = [(x["lote"], r) for x in e.get("execucoes", []) for r in x["resultado"]
-                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA", "AGUARDANDO_LEIAUTE_DOMINIO")]
+                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA")]
     if falhas_exec:
         resumo += ["", "## Execuções com falha (serão refeitas no próximo ciclo)", ""]
         resumo += [f"- `{lid}` {r.get('acao', '')}: {r['status']}" for lid, r in falhas_exec]

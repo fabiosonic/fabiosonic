@@ -76,5 +76,7 @@ e o status dela. Quando não souber, dizer que não sabe e o que precisa ser con
 - `python -m pytest -q` verde antes de cada commit.
 - Nunca marcar CONFERIDO em `config/normas/*.yaml` por conta própria: é ato humano.
 - Nunca rodar contra a caixa real, o D: real ou o Domínio sem o usuário pedir na sessão.
-- Exportador para leiaute de importação do Domínio só depois de o usuário fornecer o leiaute
-  oficial (`dominio/leiautes/`).
+- Exportador para leiaute de importação do Domínio só com leiaute aprovado pelo usuário em
+  `mo_autonomo/dominio/leiautes/`. Aprovado em 07/10/2026: TXT de lançamentos contábeis no formato
+  que o escritório já importa (`LANCAMENTOS_TXT_ESCRITORIO.md`). Outros leiautes (folha, notas)
+  continuam dependendo de aprovação.
