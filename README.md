@@ -62,6 +62,16 @@ flowchart TD
 | executar | Só com `APROVADO_*` íntegro; nunca sobrescreve arquivo. Em simulação grava em `dados/_STAGING`. |
 | pareceres | Parecer MD + XLSX por empresa/competência e resumo do ciclo. |
 
+## Ciclo de vida (nada some)
+
+- **Documento**: `ANALISADO` → `OK` só quando o lote dele é gravado; `PENDENTE` volta sozinho
+  quando normas/cadastro/exportações mudam; `FILA` (sem IA disponível) volta todo ciclo;
+  `ERRO` vira pendência com o motivo. Anexo capturado e não processado volta no ciclo seguinte.
+- **Ação** (tabela `acoes` da trilha): `PROPOSTA` → `EXECUTADA` | `FALHOU`. Ação não é proposta
+  duas vezes; a que falhou (ex.: `D:` fora do ar) é refeita no ciclo seguinte.
+- **Lote**: só documentos limpos. Pendência de um documento vai como *informativa* e não trava
+  o APROVADO das notas boas da mesma empresa.
+
 ## Perfil fiscal do cliente
 
 O sistema decide a legislação aplicável pelo perfil **na data do documento**:
