@@ -202,6 +202,28 @@ def cmd_amostra(args):
         print(f"GERAL: {r['taxa_geral']} ({r['conferidos']} conferidos, {r['sem_conferencia']} sem conferência)")
 
 
+def cmd_cadastro(args):
+    from .clientes.importar_planilha import conferir_pastas, converter, escrever, ler_planilha
+    if args.acao == "importar":
+        empresas, pend = converter(ler_planilha(Path(args.planilha)))
+        saida = Path(args.saida)
+        if saida.exists() and not args.sobrescrever:
+            sys.exit(f"{saida} já existe: use --sobrescrever ou outra --saida")
+        escrever(empresas, saida)
+        print(f"{len(empresas)} empresa(s) -> {saida}")
+        print("ATENÇÃO: confira o código do Domínio (coluna CÓD.) e o apelido das pastas "
+              "(python -m mo_autonomo cadastro conferir-pastas).")
+        for p in pend:
+            print("PENDENTE:", p)
+    else:
+        ctx = _ctx(args, fonte=object())
+        base = Path(args.base) if args.base else ctx.base_xml
+        faltam = conferir_pastas(ctx.carteira, base, ctx.config["dominio"]["tipos_pasta"])
+        for f in faltam:
+            print("SEM PASTA:", f)
+        print(f"{len(ctx.carteira) - len(faltam)}/{len(ctx.carteira)} empresa(s) com pasta encontrada em {base}")
+
+
 def cmd_grafo(args):
     from .fluxos.ciclo import grafo_ciclo
     from .fluxos.documento import grafo_documento
@@ -247,6 +269,12 @@ def main(argv=None):
     s.add_argument("acao", choices=["gerar", "medir"])
     s.add_argument("--n", type=int, default=20, help="documentos por classe")
     s.add_argument("--arquivo")
+    s = com_config("cadastro", cmd_cadastro, help="gera empresas.csv da planilha do escritório / confere pastas")
+    s.add_argument("acao", choices=["importar", "conferir-pastas"])
+    s.add_argument("--planilha", help="xlsx 'CONTROLE EMPRESAS POR REGIME' baixado do Drive")
+    s.add_argument("--saida", default="config/empresas.csv")
+    s.add_argument("--sobrescrever", action="store_true")
+    s.add_argument("--base", help="pasta XML NOTAS a conferir (padrão: a do config)")
     s = sub.add_parser("grafo")
     s.add_argument("acao", choices=["desenhar"])
     s.set_defaults(f=cmd_grafo)

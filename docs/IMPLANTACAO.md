@@ -15,8 +15,11 @@ Nada aqui mexe na caixa real, no `D:` ou no Domínio sem você decidir.
 
 ## Degrau 1 — Cadastro e perfis (1 dia)
 
-1. Exporte do Domínio o cadastro de empresas e monte `config\empresas.csv`
-   (`codigo_dominio;apelido;cnpj;regime;codigo_apuracao;uf;municipio_ibge;ie;ativa`).
+1. Baixe do Drive a planilha **CONTROLE EMPRESAS POR REGIME** (xlsx) e rode
+   `python -m mo_autonomo cadastro importar --planilha "CONTROLE EMPRESAS POR REGIME.xlsx"`
+   → gera `config\empresas.csv` (o CÓD. da planilha vira código do Domínio — conferido para a LMG = 12).
+   Depois rode `python -m mo_autonomo cadastro conferir-pastas --base "D:\XML NOTAS"` e ajuste a
+   coluna `apelido` para bater com o nome das pastas `<Código-Apelido>` que já existem.
    O sistema recusa CNPJ inválido, regime fora da lista e apelido com `\ / : * ? " < > |`.
 2. Baixe os zips dos **Dados Abertos do CNPJ** (Empresas, Estabelecimentos, Simples) para
    `dados\rfb\` e rode `python -m mo_autonomo perfil atualizar`.
