@@ -145,3 +145,17 @@ def dumps(obj) -> str:
 
 def loads(texto_json: str):
     return json.loads(texto_json, object_hook=_decodificar)
+
+
+def ler_csv(caminho: Path, delimitador: str = ";") -> list[dict]:
+    """CSV do escritório: UTF-8 (com/sem BOM) ou ANSI/cp1252 do Excel/Domínio no Windows."""
+    import csv
+    import io
+    bruto = Path(caminho).read_bytes()
+    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            texto = bruto.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    return list(csv.DictReader(io.StringIO(texto, newline=""), delimiter=delimitador))

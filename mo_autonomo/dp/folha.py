@@ -7,11 +7,11 @@ cpf;nome;competencia;salario_contribuicao;inss_descontado;base_irrf;dependentes;
 """
 from __future__ import annotations
 
-import csv
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from ..especialista.modelo import Achado, natureza_por_normas
+from ..util.arquivos import ler_csv
 from ..util.dinheiro import CENTAVO, dinheiro
 
 INSS, IRRF, FGTS = "TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL", "LEI_8036_FGTS"
@@ -62,8 +62,7 @@ def irrf_mensal(base: Decimal, dependentes: int, params: dict) -> Decimal:
 
 
 def ler_folha(caminho: Path) -> list[dict]:
-    with open(caminho, encoding="utf-8-sig", newline="") as f:
-        linhas = list(csv.DictReader(f, delimiter=";"))
+    linhas = ler_csv(caminho)
     out = []
     for l in linhas:
         out.append({"cpf": l["cpf"], "nome": l.get("nome", ""), "competencia": l["competencia"],

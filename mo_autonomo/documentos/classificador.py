@@ -41,4 +41,7 @@ def classificar(dados: bytes, catalogo=None) -> dict:
             return {"classe": "OFX", "doc": ler_ofx(dados), "erro": None}
         except Exception as exc:  # noqa: BLE001 — OFX ruim vira pendência, não derruba
             return {"classe": "OFX_INVALIDO", "doc": None, "erro": f"{type(exc).__name__}: {exc}"}
+    if bruto == "ZIP":
+        return {"classe": "ZIP_ILEGIVEL", "doc": None,
+                "erro": "ZIP corrompido ou suspeito (limites de tamanho/aninhamento): abrir manualmente"}
     return {"classe": bruto, "doc": None, "erro": None}

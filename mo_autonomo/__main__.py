@@ -56,6 +56,13 @@ def cmd_normas(args):
     from .especialista.motor import cobertura
     from .normas.catalogo import Catalogo
     from .normas.monitor import carregar_alteradas, ficha_conferencia, monitorar
+    if args.config:  # usa as pastas do config (pastas.normas / pastas.dados)
+        from .fluxos.contexto import carregar_config
+        cfg = carregar_config(args.config)
+        base = Path(cfg["_base"])
+        pastas = cfg.get("pastas") or {}
+        args.pasta = str(base / (pastas.get("normas") or "config/normas"))
+        args.dados = str(base / (pastas.get("dados") or "dados"))
     cat = Catalogo.carregar(args.pasta)
     textos = Path(args.dados) / "normas_textos"
     cat.marcar_alteradas(carregar_alteradas(textos))
@@ -220,6 +227,7 @@ def main(argv=None):
     raiz = Path(__file__).resolve().parent.parent  # Agendador roda com diretório atual em System32
     s.add_argument("--pasta", default=str(raiz / "config" / "normas"))
     s.add_argument("--dados", default=str(raiz / "dados"))
+    s.add_argument("--config", help="usa pastas.normas/pastas.dados deste config")
     s.add_argument("--id")
     s.set_defaults(f=cmd_normas)
     com_config("perfil", cmd_perfil).add_argument("acao", choices=["atualizar", "relatorio"])

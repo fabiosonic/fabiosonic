@@ -57,18 +57,32 @@ def expandir(nome: str, dados: bytes, origem: str) -> list[Anexo]:
     return [Anexo(_nome_seguro(nome), dados, f"{origem}/{nome}")]
 
 
-def anexos_do_email(dados_email: bytes, uid: str) -> list[Anexo]:
+def anexos_do_email(dados_email: bytes, uid: str, erros: list | None = None) -> list[Anexo]:
+    """Cada parte é tratada sozinha: um ZIP corrompido/suspeito não derruba os anexos bons.
+
+    O ZIP ruim entra como anexo bruto (vira documento PENDENTE e aparece para uma pessoa);
+    a parte ilegível é registrada em `erros`.
+    """
     msg = message_from_bytes(dados_email, policy=policy.default)
     saida: list[Anexo] = []
     for parte in msg.walk():
-        if parte.is_multipart():
+        try:
+            if parte.is_multipart():
+                continue
+            nome = parte.get_filename()
+            tipo = parte.get_content_type()
+            if not nome and tipo not in ("application/xml", "text/xml", "application/zip", "application/pdf"):
+                continue
+            conteudo = parte.get_payload(decode=True)
+            if not conteudo:
+                continue
+            nome = nome or f"anexo.{tipo.split('/')[-1]}"
+        except Exception as exc:  # noqa: BLE001 — MIME quebrado nesta parte
+            if erros is not None:
+                erros.append(f"parte ilegível: {type(exc).__name__}: {exc}")
             continue
-        nome = parte.get_filename()
-        tipo = parte.get_content_type()
-        if not nome and tipo not in ("application/xml", "text/xml", "application/zip", "application/pdf"):
-            continue
-        conteudo = parte.get_payload(decode=True)
-        if not conteudo:
-            continue
-        saida.extend(expandir(nome or f"anexo.{tipo.split('/')[-1]}", conteudo, f"email:{uid}"))
+        try:
+            saida.extend(expandir(nome, conteudo, f"email:{uid}"))
+        except Exception as exc:  # noqa: BLE001 — ZIP corrompido/suspeito: guarda o próprio ZIP
+            saida.append(Anexo(_nome_seguro(nome), conteudo, f"email:{uid}/{nome}#ilegivel:{type(exc).__name__}"))
     return saida

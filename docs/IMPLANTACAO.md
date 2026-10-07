@@ -45,9 +45,11 @@ Critério: as regras fiscais aparecem `ATIVA` com natureza `APONTAMENTO`.
 
 ## Degrau 3 — Simulação com e-mail real (7 dias)
 
-1. Informe servidor/porta IMAP do Email em Nuvem no `config.yaml` (`email.tipo: imap`) e
-   grave a senha no Cofre do Windows (comando mostrado pelo instalador).
-2. `python -m mo_autonomo imap testar` — só lê (EXAMINE + BODY.PEEK).
+1. Rode `powershell -ExecutionPolicy Bypass -File scripts\configurar_email.ps1`. Ele procura
+   servidor/porta nos arquivos de `D:\AUTOMAÇÕES FUNCIONANDO\email_backup` (sem mostrar
+   linhas de senha), pede a confirmação, grava a senha no Cofre de Credenciais do Windows e
+   ajusta o `config.yaml` (`email.tipo: imap`).
+2. O próprio script roda `python -m mo_autonomo imap testar` — só lê (EXAMINE + BODY.PEEK).
 3. Ative a tarefa **"MO Autonomo - Ciclo"** no Agendador (7h–20h).
 4. Todo dia, abra `dados\painel.html` e os pareceres em `dados\pareceres\`.
 5. No 7º dia: `python -m mo_autonomo amostra gerar --n 20`, marque CERTO/ERRADO no CSV e

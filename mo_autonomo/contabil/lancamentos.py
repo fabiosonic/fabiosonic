@@ -8,13 +8,13 @@ Nada de conta "chutada": sem histórico suficiente ou conta fora do plano = pend
 """
 from __future__ import annotations
 
-import csv
 import re
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..util.arquivos import ler_csv
 from ..util.dinheiro import dinheiro
 from ..util.documentos_id import so_digitos
 
@@ -27,8 +27,7 @@ def normalizar_historico(texto: str, palavras: int = 3) -> str:
 
 
 def _ler_csv(caminho: Path) -> list[dict]:
-    with open(caminho, encoding="utf-8-sig", newline="") as f:
-        return list(csv.DictReader(f, delimiter=";"))
+    return ler_csv(caminho)
 
 
 @dataclass

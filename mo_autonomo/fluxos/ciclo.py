@@ -39,36 +39,11 @@ def n_capturar(e, ctx):
     pendências analisadas com outra versão da base (norma conferida/cadastro corrigido).
     """
     novos, pend, emails = [], [], 0
-    for msg in ctx.fonte.mensagens():
-        if ctx.trilha.email_lido(msg.uid):
-            continue
-        emails += 1
-        sha_email = sha256_bytes(msg.dados)
-        bruto_email = ctx.dados / "_BRUTO_EMAIL" / "emails" / f"{sha_email}.eml"
-        if not bruto_email.exists():
-            escrever_atomico(bruto_email, msg.dados)
-        try:
-            cab = msg.cabecalhos
-        except Exception:  # noqa: BLE001 — cabeçalho corrompido
-            cab = {"message_id": "", "remetente": "?", "assunto": "?", "data": ""}
-        try:
-            anexos = anexos_do_email(msg.dados, msg.uid)
-        except Exception as exc:  # noqa: BLE001 — zip ruim/MIME quebrado não derruba o ciclo
-            pend.append(_falha("ANEXO_ILEGIVEL", f"E-mail {cab['assunto']!r} de {cab['remetente']}: {exc} "
-                                                 f"(bruto em {bruto_email})", referencia=msg.uid))
-            anexos = []
-        for a in anexos:
-            try:
-                sha = sha256_bytes(a.dados)
-                caminho = _bruto(ctx, sha, a.nome)
-                if not caminho.exists():
-                    escrever_atomico(caminho, a.dados)
-                if ctx.trilha.registrar_anexo(sha, a.nome, a.origem, str(caminho)):
-                    novos.append({"sha256": sha, "nome": a.nome, "origem": a.origem, "caminho": str(caminho)})
-            except Exception as exc:  # noqa: BLE001
-                pend.append(_falha("ANEXO_NAO_GRAVADO", f"{a.nome!r}: {exc} (bruto do e-mail em {bruto_email})",
-                                   referencia=msg.uid))
-        ctx.trilha.registrar_email(msg.uid, cab["message_id"], cab["remetente"], cab["assunto"], cab["data"])
+    try:
+        for msg in ctx.fonte.mensagens():
+            emails += _capturar_email(msg, ctx, novos, pend)
+    except Exception as exc:  # noqa: BLE001 — caixa fora do ar: o resto do ciclo roda mesmo assim
+        pend.append(_falha("FONTE_EMAIL_INDISPONIVEL", f"Leitura da caixa interrompida: {type(exc).__name__}: {exc}"))
     ja = {a["sha256"] for a in novos}
     for extra in (ctx.trilha.anexos_sem_documento(), ctx.trilha.analisados_sem_lote(), ctx.trilha.na_fila(),
                   ctx.trilha.pendentes_para_reprocessar(ctx.versao_base)):
@@ -77,6 +52,49 @@ def n_capturar(e, ctx):
                 ja.add(a["sha256"])
                 novos.append(a)
     return {"anexos": novos, "emails_lidos": emails, "pendencias_gerais": e.get("pendencias_gerais", []) + pend}
+
+
+def _capturar_email(msg, ctx, novos: list, pend: list) -> int:
+    """Processa um e-mail. Só marca como lido se todos os anexos foram guardados."""
+    if ctx.trilha.email_lido(msg.uid):
+        return 0
+    sha_email = sha256_bytes(msg.dados)
+    bruto_email = ctx.dados / "_BRUTO_EMAIL" / "emails" / f"{sha_email}.eml"
+    if not bruto_email.exists():
+        escrever_atomico(bruto_email, msg.dados)
+    try:
+        cab = msg.cabecalhos
+    except Exception:  # noqa: BLE001 — cabeçalho corrompido
+        cab = {"message_id": "", "remetente": "?", "assunto": "?", "data": ""}
+    erros: list = []
+    try:
+        anexos = anexos_do_email(msg.dados, msg.uid, erros)
+    except Exception as exc:  # noqa: BLE001 — e-mail inteiro ilegível
+        erros.append(f"{type(exc).__name__}: {exc}")
+        anexos = []
+    for m in erros:
+        pend.append(_falha("ANEXO_ILEGIVEL", f"E-mail {cab['assunto']!r} de {cab['remetente']}: {m} "
+                                             f"(bruto em {bruto_email})", referencia=msg.uid))
+    falhou_gravar = False
+    for a in anexos:
+        try:
+            sha = sha256_bytes(a.dados)
+            caminho = _bruto(ctx, sha, a.nome)
+            if not caminho.exists():
+                escrever_atomico(caminho, a.dados)
+            if ctx.trilha.registrar_anexo(sha, a.nome, a.origem, str(caminho)):
+                novos.append({"sha256": sha, "nome": a.nome, "origem": a.origem, "caminho": str(caminho)})
+        except Exception as exc:  # noqa: BLE001
+            falhou_gravar = True
+            pend.append(_falha("ANEXO_NAO_GRAVADO", f"{a.nome!r}: {exc} (o e-mail será relido no próximo ciclo)",
+                               referencia=msg.uid))
+    if not falhou_gravar and not (erros and not anexos):
+        ctx.trilha.registrar_email(msg.uid, cab["message_id"], cab["remetente"], cab["assunto"], cab["data"])
+    elif erros and not anexos:
+        # e-mail sem nenhuma parte legível: registra como lido (repetir não resolve) e deixa evento durável
+        ctx.trilha.registrar_email(msg.uid, cab["message_id"], cab["remetente"], cab["assunto"], cab["data"])
+        ctx.trilha.evento("EMAIL_ILEGIVEL", msg.uid, {"bruto": str(bruto_email), "erros": erros})
+    return 1
 
 
 def n_processar(e, ctx):
@@ -431,6 +449,14 @@ def n_executar(e, ctx):
                 out.append({"lote": l["id"], "resultado": executar_lote(Path(l["aprovado"]), ctx)})
             except Exception as exc:  # noqa: BLE001
                 out.append({"lote": l["id"], "resultado": [{"status": f"ERRO: {type(exc).__name__}: {exc}"}]})
+    for lid in ctx.trilha.lotes_aprovados_pendentes():  # aprovados por pessoa entre um ciclo e outro
+        if lid in feitos:
+            continue
+        feitos.add(lid)
+        try:
+            out.append({"lote": lid, "resultado": executar_lote(ctx.dados / "lotes" / f"APROVADO_{lid}.json", ctx)})
+        except Exception as exc:  # noqa: BLE001
+            out.append({"lote": lid, "resultado": [{"status": f"ERRO: {type(exc).__name__}: {exc}"}]})
     for f in ctx.trilha.acoes_com_falha():
         if f["lote"] in feitos:
             continue

@@ -173,6 +173,13 @@ class Trilha:
         return [{"lote": l, "acao": loads(d), "detalhe": det} for l, d, det in self.con.execute(
             "SELECT lote, dados, detalhe FROM acoes WHERE estado='BLOQUEADA' ORDER BY em")]
 
+    def lotes_aprovados_pendentes(self, tipos=("copiar_xml_rotina", "arquivar_documento")) -> list[str]:
+        """Lotes com aprovação registrada e ação executável ainda PROPOSTA (aprovados fora do ciclo)."""
+        marcas = ",".join("?" * len(tipos))
+        return [r[0] for r in self.con.execute(
+            f"SELECT DISTINCT a.lote FROM acoes a JOIN aprovacoes p ON p.lote = a.lote"
+            f" WHERE a.estado='PROPOSTA' AND a.tipo IN ({marcas}) ORDER BY a.lote", tuple(tipos))]
+
     def lotes_aguardando(self) -> list[str]:
         """Lotes com ação PROPOSTA e nenhuma aprovação registrada."""
         return [r[0] for r in self.con.execute(
@@ -201,13 +208,6 @@ class Trilha:
             "SELECT d.sha256, a.nome, a.origem, a.caminho_bruto FROM documentos d JOIN anexos a USING (sha256)"
             " WHERE d.situacao='ANALISADO'").fetchall()
         return [{"sha256": r[0], "nome": r[1], "origem": r[2], "caminho": r[3], "reprocesso": True} for r in rows]
-
-    def registrar_fitid(self, banco: str, conta: str, fitid: str, sha: str) -> bool:
-        """True se a transação é nova (dedupe de extratos sobrepostos)."""
-        cur = self.con.execute("INSERT OR IGNORE INTO ofx_transacoes VALUES (?,?,?,?,?)",
-                               (banco or "", conta or "", fitid, sha, agora()))
-        self.con.commit()
-        return cur.rowcount == 1
 
     def aprovacao_registrada(self, lote: str, hash_lote: str, modo: str) -> bool:
         return self.con.execute("SELECT 1 FROM aprovacoes WHERE lote=? AND hash=? AND modo=?",

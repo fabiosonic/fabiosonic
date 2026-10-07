@@ -6,11 +6,11 @@ Regime aceito: SIMPLES | MEI | PRESUMIDO | REAL | IMUNE | ISENTA | (vazio = desc
 """
 from __future__ import annotations
 
-import csv
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..util.arquivos import ler_csv
 from ..util.documentos_id import cnpj_valido, so_digitos
 
 REGIMES = ("SIMPLES", "MEI", "PRESUMIDO", "REAL", "IMUNE", "ISENTA")
@@ -59,32 +59,31 @@ class Carteira:
     @classmethod
     def carregar(cls, caminho: Path | str) -> "Carteira":
         empresas, erros = [], []
-        with open(caminho, encoding="utf-8-sig", newline="") as f:
-            for n, linha in enumerate(csv.DictReader(f, delimiter=";"), start=2):
-                cnpj = so_digitos(linha.get("cnpj"))
-                if not cnpj_valido(cnpj):
-                    erros.append(f"linha {n}: CNPJ inválido {linha.get('cnpj')!r}")
-                    continue
-                regime = (linha.get("regime") or "").strip().upper() or None
-                if regime and regime not in REGIMES:
-                    erros.append(f"linha {n}: regime desconhecido {regime!r}")
-                    continue
-                codigo = (linha.get("codigo_dominio") or "").strip()
-                apelido = (linha.get("apelido") or "").strip()
-                if not codigo or not apelido:
-                    erros.append(f"linha {n}: código/apelido do Domínio vazio")
-                    continue
-                if _PROIBIDO_PASTA.search(codigo) or _PROIBIDO_PASTA.search(apelido) or apelido.endswith((".", " ")):
-                    erros.append(f"linha {n}: código/apelido com caractere inválido para nome de pasta: {apelido!r}")
-                    continue
-                empresas.append(Empresa(
-                    codigo_dominio=codigo, apelido=apelido, cnpj=cnpj, regime_dominio=regime,
-                    codigo_apuracao=(linha.get("codigo_apuracao") or "").strip() or None,
-                    uf=(linha.get("uf") or "").strip().upper() or None,
-                    municipio_ibge=so_digitos(linha.get("municipio_ibge")) or None,
-                    ie=(linha.get("ie") or "").strip() or None,
-                    ativa=(linha.get("ativa") or "S").strip().upper() not in ("N", "NAO", "NÃO", "0"),
-                ))
+        for n, linha in enumerate(ler_csv(caminho), start=2):
+            cnpj = so_digitos(linha.get("cnpj"))
+            if not cnpj_valido(cnpj):
+                erros.append(f"linha {n}: CNPJ inválido {linha.get('cnpj')!r}")
+                continue
+            regime = (linha.get("regime") or "").strip().upper() or None
+            if regime and regime not in REGIMES:
+                erros.append(f"linha {n}: regime desconhecido {regime!r}")
+                continue
+            codigo = (linha.get("codigo_dominio") or "").strip()
+            apelido = (linha.get("apelido") or "").strip()
+            if not codigo or not apelido:
+                erros.append(f"linha {n}: código/apelido do Domínio vazio")
+                continue
+            if _PROIBIDO_PASTA.search(codigo) or _PROIBIDO_PASTA.search(apelido) or apelido.endswith((".", " ")):
+                erros.append(f"linha {n}: código/apelido com caractere inválido para nome de pasta: {apelido!r}")
+                continue
+            empresas.append(Empresa(
+                codigo_dominio=codigo, apelido=apelido, cnpj=cnpj, regime_dominio=regime,
+                codigo_apuracao=(linha.get("codigo_apuracao") or "").strip() or None,
+                uf=(linha.get("uf") or "").strip().upper() or None,
+                municipio_ibge=so_digitos(linha.get("municipio_ibge")) or None,
+                ie=(linha.get("ie") or "").strip() or None,
+                ativa=(linha.get("ativa") or "S").strip().upper() not in ("N", "NAO", "NÃO", "0"),
+            ))
         if erros:
             raise CadastroInvalido("cadastro com erros:\n" + "\n".join(erros))
         return cls(empresas)
