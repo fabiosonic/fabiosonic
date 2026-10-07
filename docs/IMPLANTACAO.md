@@ -96,10 +96,13 @@ todos numa pasta com o **código da empresa no início do nome** (ex.: `12 - LMG
 ainda está sem plano. O código **reduzido** de cada conta é o que vai no TXT de importação.
 
 **Histórico para o de-para (como o sistema escolhe a contrapartida):** copie os TXT de lançamentos
-que o escritório já importou no Domínio (ex.: `Dominio-LMG-ENGENHARIA-Bradesco-771457.txt`) para
-`dados\dominio\<código>\historico\`. O sistema aprende "histórico → conta" com eles (e com o
-`razao.csv`, se houver). Cada TXT que o próprio sistema exporta depois do APROVADO também é copiado
-para lá — quanto mais aprovado, mais ele acerta. Histórico ambíguo ou visto uma vez só vira pendência.
+que o escritório já importou no Domínio (ex.: `Dominio-EMPRESA-Banco-000000.txt`) para
+`dados\dominio\<código>\historico\`. O sistema aprende "histórico → conta" com eles e com o
+`razao.csv` exportado do Domínio. O TXT que o próprio sistema gera **não** é reaproveitado sozinho
+(senão ele aprenderia com a própria saída e uma correção sua no Domínio perderia a votação): o
+aprendizado vem do razão reexportado depois que você importou e corrigiu. Histórico ambíguo ou visto
+uma vez só vira pendência. Reexecutar um lote não gera o TXT de novo (a importação do Domínio não
+deduplica).
 
 - Contábil: coloque `plano_contas.csv` e `razao.csv` (exportados do Domínio) em
   `dados\dominio\<código>\` e cadastre as contas em `contas_bancarias.csv`. Os OFX que

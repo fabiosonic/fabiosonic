@@ -441,17 +441,6 @@ def executar_acao(a: dict, ctx) -> dict:
             destino = base / emp.pasta / f"{mes}{ano}" / nome_seguro(a.get("tipo_documento") or "OUTRO") / nome_seguro(a["nome"])
             if not destino.resolve().is_relative_to(base.resolve()):
                 raise DestinoInvalido(f"destino fora da pasta base: {destino}")
-        elif a["tipo"] == "lancamento_contabil":
-            from ..dominio.exportador import gerar as gerar_txt
-            destino = _destino_importacao(ctx, a, f"acao-{sha256_bytes(ctx.trilha.id_acao(a).encode())[:10]}")
-            try:
-                st = gravar(destino, gerar_txt([a]))
-            except ConflitoArquivo as exc:
-                st = f"CONFLITO: {exc}"
-            r = {"acao": a["tipo"], "destino": str(destino), "status": st}
-            ok = st in ("GRAVADO", "JA_EXISTIA")
-            ctx.trilha.marcar_acao(a, "EXECUTADA" if ok else "BLOQUEADA", None if ok else st)
-            return r
         else:
             r = {"acao": a["tipo"], "status": "SEM_EXECUTOR"}
             ctx.trilha.marcar_acao(a, "BLOQUEADA", r["status"])
@@ -495,11 +484,18 @@ def _destino_importacao(ctx, a: dict, sufixo: str) -> Path:
 
 
 def _exportar_lancamentos(lote: dict, ctx) -> list[dict]:
-    """Um TXT por lote e conta bancária, no leiaute do escritório; tudo ou nada."""
+    """Um TXT por lote e conta bancária, no leiaute do escritório; tudo ou nada.
+
+    Só exporta lançamento ainda PROPOSTA: o que já foi EXECUTADO (TXT entregue) não sai de novo,
+    porque a importação de TXT do Domínio não deduplica — reexecutar o lote não pode duplicar a
+    escrituração. O TXT exportado NÃO alimenta o de-para: o sistema só aprende com o razão e com os
+    TXT que o escritório coloca em historico/ (senão aprenderia com a própria saída, inclusive com
+    lançamento corrigido ou nunca importado no Domínio).
+    """
     from ..dominio.exportador import gerar as gerar_txt
     grupos: dict = {}
     for a in lote["acoes"]:
-        if a["tipo"] == "lancamento_contabil":
+        if a["tipo"] == "lancamento_contabil" and ctx.trilha.estado_acao(a) == "PROPOSTA":
             grupos.setdefault((a.get("banco"), a.get("conta")), []).append(a)
     out = []
     for grupo in grupos.values():
@@ -514,13 +510,6 @@ def _exportar_lancamentos(lote: dict, ctx) -> list[dict]:
         ok = st in ("GRAVADO", "JA_EXISTIA")
         for a in grupo:
             ctx.trilha.marcar_acao(a, "EXECUTADA" if ok else "BLOQUEADA", None if ok else st)
-        if ok and destino is not None:  # aprovado e exportado: passa a ensinar o de-para da empresa
-            emp = ctx.carteira.get(grupo[0]["cnpj"])
-            copia = ctx.dados / "dominio" / emp.codigo_dominio / "historico" / destino.name
-            try:
-                gravar(copia, destino.read_bytes())
-            except ConflitoArquivo:
-                pass
         out.append({"acao": "lancamento_contabil", "destino": str(destino) if destino else None,
                     "lancamentos": len(grupo), "status": st})
     return out

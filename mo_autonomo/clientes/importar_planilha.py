@@ -40,6 +40,31 @@ def _codigo(v) -> str | None:
     return None
 
 
+def _celula(c) -> str:
+    if c is None:
+        return ""
+    if isinstance(c, bool):
+        return str(c)
+    if isinstance(c, int):
+        return str(c)
+    if isinstance(c, float):  # número com casa decimal: só vira inteiro se for exato (ex.: CÓD. 12.0)
+        return str(int(c)) if c.is_integer() else repr(c)
+    return str(c).strip()
+
+
+def _documento(v: str) -> str:
+    """CNPJ/CPF guardado como número no Excel perde o zero à esquerda: recompõe só quando o valor
+    é inteiramente numérico (sem máscara) e cabe em 14 dígitos; quem decide se é válido é o dígito."""
+    d = so_digitos(v)
+    if v.strip().isdigit() and 11 < len(d) < 14:
+        return d.zfill(14)
+    return d
+
+
+STATUS_ATIVO = ("ATIVO", "ATIVA")
+STATUS_INATIVO = ("INATIVO", "INATIVA", "BAIXADO", "BAIXADA", "ENCERRADO", "ENCERRADA", "SUSPENSO", "SUSPENSA")
+
+
 def ler_planilha(caminho: Path) -> list[dict]:
     import openpyxl
     wb = openpyxl.load_workbook(caminho, data_only=True, read_only=True)
@@ -48,7 +73,7 @@ def ler_planilha(caminho: Path) -> list[dict]:
         raise ValueError("aba 'Cadastro de Clientes' não encontrada")
     linhas, cab = [], None
     for r in aba.iter_rows(values_only=True):
-        celulas = [str(c).strip() if c is not None else "" for c in r]
+        celulas = [_celula(c) for c in r]
         if cab is None:
             if any(_norm(c).startswith("COD") for c in celulas) and any("RAZAO" in _norm(c) for c in celulas):
                 cab = [_norm(c) for c in celulas]
@@ -62,7 +87,7 @@ def ler_planilha(caminho: Path) -> list[dict]:
 
 
 def converter(linhas: list[dict]) -> tuple[list[dict], list[str]]:
-    empresas, pendencias, vistos = [], [], set()
+    empresas, pendencias, vistos, codigos = [], [], set(), {}
 
     def campo(l, *nomes):
         for k, v in l.items():
@@ -72,7 +97,7 @@ def converter(linhas: list[dict]) -> tuple[list[dict], list[str]]:
 
     for n, l in enumerate(linhas, start=1):
         razao = campo(l, "RAZAO")
-        doc = so_digitos(campo(l, "CNPJ"))
+        doc = _documento(campo(l, "CNPJ"))
         regime_txt = _norm(campo(l, "REGIME"))
         status = _norm(campo(l, "STATUS"))
         cod = _codigo(campo(l, "COD"))
@@ -93,10 +118,24 @@ def converter(linhas: list[dict]) -> tuple[list[dict], list[str]]:
         if not cod:
             pendencias.append(f"{ref}: CÓD. vazio — código do Domínio desconhecido")
             continue
+        if cod in codigos:  # cada código tem plano, razão e histórico próprios: não pode ser dividido
+            pendencias.append(f"{ref}: CÓD. {cod} repetido (também na {codigos[cod]}) — confira no Domínio")
+            continue
+        if not apelido_de(razao):
+            pendencias.append(f"{ref}: razão social vazia")
+            continue
+        if status in STATUS_ATIVO:
+            ativa = "S"
+        elif status in STATUS_INATIVO:
+            ativa = "N"
+        else:
+            pendencias.append(f"{ref}: STATUS {status or 'vazio'!r} não reconhecido (esperado ATIVO/INATIVO)")
+            continue
         vistos.add(doc)
+        codigos[cod] = ref
         empresas.append({"codigo_dominio": cod, "apelido": apelido_de(razao), "cnpj": doc, "regime": regime,
                          "codigo_apuracao": "", "uf": "", "municipio_ibge": "", "ie": "",
-                         "ativa": "S" if status in ("ATIVO", "") else "N"})
+                         "ativa": ativa})
     return empresas, pendencias
 
 

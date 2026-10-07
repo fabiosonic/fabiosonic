@@ -42,9 +42,13 @@ class Empresa:
 class Carteira:
     def __init__(self, empresas: list[Empresa]):
         self.por_cnpj: dict[str, Empresa] = {}
+        codigos: dict[str, str] = {}
         for e in empresas:
             if e.cnpj in self.por_cnpj:
                 raise CadastroInvalido(f"CNPJ duplicado no cadastro: {e.cnpj}")
+            if e.codigo_dominio in codigos:  # plano/razão/histórico ficam por código: não pode dividir
+                raise CadastroInvalido(f"código do Domínio {e.codigo_dominio} usado por dois CNPJs")
+            codigos[e.codigo_dominio] = e.cnpj
             self.por_cnpj[e.cnpj] = e
 
     def __len__(self):
