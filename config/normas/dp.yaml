@@ -1,26 +1,49 @@
+# Normas de DP. PENDENTES: os parâmetros abaixo são PROPOSTAS tiradas de fontes SECUNDÁRIAS (busca na web
+# em 07/10/2026, sites oficiais bloqueados na sessão). Não são usados pelo sistema até uma pessoa conferir
+# no texto oficial e marcar CONFERIDO (regra 1 e 3 do CLAUDE.md). Ficha: docs/FICHAS_NORMAS.md.
 - id: TABELA_INSS_SEGURADO
-  titulo: Tabela de contribuição do segurado empregado (INSS) — portaria interministerial do ano
+  titulo: Tabela de contribuição do segurado empregado (INSS) — Portaria Interministerial MPS/MF nº 13/2026
   area: dp
   status: PENDENTE
-  parametros: {}
+  fonte_url_sugerida: https://www.in.gov.br/  # buscar "Portaria Interministerial MPS/MF nº 13, de 9 de janeiro de 2026"
+  vigencia: {inicio: "2026-01-01", fim: "2026-12-31"}
+  parametros:
+    # PROPOSTA (fonte secundária: debit.com.br, pontotel.com.br, caltrab.com) — conferir no DOU
+    faixas:
+      - {ate: "1621.00", aliquota: "0.075"}
+      - {ate: "2902.84", aliquota: "0.09"}
+      - {ate: "4354.27", aliquota: "0.12"}
+      - {ate: "8475.55", aliquota: "0.14"}   # teto do salário de contribuição
   # esperados: faixas: [{ate: "<valor>", aliquota: "<fração>"}, ...] (cálculo progressivo)
 
 - id: TABELA_IRRF_MENSAL
   titulo: Tabela progressiva mensal do IRPF/IRRF e redutor (Lei 15.270/2025)
   area: dp
   status: PENDENTE
-  parametros: {}
-  # esperados: faixas: [{ate: <valor ou null>, aliquota: "<fração>", deduzir: "<valor>"}],
-  #            deducao_por_dependente: "<valor>",
-  #            redutor: {base: rendimento|base_calculo, zera_ate: "<valor>", faixa_ate: "<valor>",
-  #                      constante: "<valor>", coeficiente: "<fração>"}
-  #            (base: sobre qual valor a lei mede o redutor — conferir no texto legal; inclui o
-  #             tratamento do desconto simplificado, que este cálculo NÃO faz)
+  fonte_url_sugerida: https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/lei/l15270.htm
+  vigencia: {inicio: "2026-01-01"}
+  parametros:
+    # PROPOSTA (fonte secundária: valorfinal.com.br, portaltributario.com.br, caltrab.com) — conferir na lei
+    faixas:
+      - {ate: "2428.80", aliquota: "0", deduzir: "0"}
+      - {ate: "2826.65", aliquota: "0.075", deduzir: "182.16"}
+      - {ate: "3751.05", aliquota: "0.15", deduzir: "394.16"}
+      - {ate: "4664.68", aliquota: "0.225", deduzir: "675.49"}
+      - {ate: null, aliquota: "0.275", deduzir: "908.73"}
+    deducao_por_dependente: "189.59"
+    # redução: rendimentos tributáveis até 5.000,00 zeram o imposto (redução de até R$ 312,89);
+    # de 5.000,01 a 7.350,00: redução = 978,62 − 0,133145 × rendimentos tributáveis.
+    # "base: rendimento" = medido sobre os RENDIMENTOS TRIBUTÁVEIS (antes das deduções) — CONFERIR no texto da lei.
+    redutor: {base: rendimento, zera_ate: "5000.00", faixa_ate: "7350.00", constante: "978.62", coeficiente: "0.133145"}
+  # (o cálculo NÃO trata o desconto simplificado mensal)
 
 - id: LEI_8036_FGTS
   titulo: Lei 8.036/1990 — FGTS
   area: dp
   status: PENDENTE
   fonte_url_sugerida: https://www.planalto.gov.br/ccivil_03/leis/l8036consol.htm
-  parametros: {}
-  # esperados: aliquota_deposito: "<fração>"
+  dispositivos: ["art. 15, caput", "art. 15, § 7º (aprendiz: 2%)"]
+  parametros:
+    # PROPOSTA (fonte secundária: juruadocs.com, guiatrabalhista.com.br) — art. 15: "8% (oito por cento) da
+    # remuneração paga ou devida, no mês anterior"; aprendiz 2% (§ 7º, não tratado no cálculo atual)
+    aliquota_deposito: "0.08"
