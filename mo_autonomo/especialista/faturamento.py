@@ -10,6 +10,7 @@ Fato objetivo (CONTROLE): soma de documentos emitidos pela empresa na competênc
 from __future__ import annotations
 
 import csv
+import io
 from decimal import Decimal
 from pathlib import Path
 
@@ -62,14 +63,25 @@ def faturamento(registros: list[dict], cnpj: str, catalogo) -> dict:
     return {"total": total, "por_tipo": por_tipo, "observacoes": obs, "completo": not obs}
 
 
-def ler_receitas_declaradas(caminho: Path) -> dict[tuple[str, str], dict]:
+def ler_receitas_declaradas(caminho: Path, erros: list | None = None) -> dict[tuple[str, str], dict]:
+    """Aceita UTF-8 ou o cp1252 do Excel; linha ruim vira erro listado, nunca derruba o ciclo."""
     if not Path(caminho).exists():
         return {}
+    bruto = Path(caminho).read_bytes()
+    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            texto = bruto.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
     out = {}
-    with open(caminho, encoding="utf-8-sig", newline="") as f:
-        for l in csv.DictReader(f, delimiter=";"):
+    for n, l in enumerate(csv.DictReader(io.StringIO(texto, newline=""), delimiter=";"), start=2):
+        try:
             out[(so_digitos(l["cnpj"]), l["competencia"].strip())] = {
                 "valor": dinheiro(l["receita_declarada"]), "fonte": (l.get("fonte") or "").strip() or "declaração"}
+        except Exception as exc:  # noqa: BLE001
+            if erros is not None:
+                erros.append(f"{Path(caminho).name} linha {n}: {type(exc).__name__}: {exc}")
     return out
 
 

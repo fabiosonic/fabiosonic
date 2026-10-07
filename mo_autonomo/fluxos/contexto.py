@@ -50,7 +50,15 @@ class Contexto:
             normas = {n.id: [n.status, n.alterada, n.parametros] for n in self.catalogo.normas.values()}
             cad = sorted((e.cnpj, e.codigo_dominio, e.apelido, e.regime_dominio, e.uf, e.ativa) for e in self.carteira)
             contas = sorted(map(str, (self.extras.get("contas_bancarias") or {}).items()))
-            self.extras["_versao_base"] = sha256_bytes(dumps([normas, cad, contas, len(self.perfis.receita)]).encode())[:16]
+            relevantes = {k: self.config.get(k) for k in ("ia", "contabil", "dominio", "cruzamentos")}
+            arquivos = []
+            for pasta in (self.dados / "dominio", self.dados / "apuracao"):
+                if pasta.exists():
+                    arquivos += sorted((str(p.relative_to(self.dados)), p.stat().st_size, int(p.stat().st_mtime))
+                                       for p in pasta.rglob("*.csv"))
+            receita = sha256_bytes(dumps(self.perfis.receita).encode())
+            self.extras["_versao_base"] = sha256_bytes(
+                dumps([normas, cad, contas, relevantes, arquivos, receita]).encode())[:16]
         return self.extras["_versao_base"]
 
     def caminho(self, chave: str, padrao: str) -> Path:

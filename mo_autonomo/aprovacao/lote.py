@@ -6,7 +6,7 @@ APROVADO_<lote>.json, que é o que os executores aceitam.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from ..especialista.modelo import CONTROLE
@@ -30,15 +30,25 @@ def hash_lote(lote: dict) -> str:
     return sha256_bytes(dumps(corpo).encode())
 
 
-def montar_lote(id_lote: str, acoes: list[dict], achados: list[dict], pendencias: list[dict]) -> dict:
-    lote = {"id": id_lote, "acoes": acoes, "achados": achados, "pendencias": pendencias}
+def montar_lote(id_lote: str, acoes: list[dict], achados: list[dict], pendencias: list[dict],
+                informativas: list[dict] | None = None) -> dict:
+    """`pendencias` bloqueiam o lote; `informativas` são pendências de documentos que ficaram FORA
+    do lote (não têm ação aqui) — aparecem no parecer mas não travam as ações limpas."""
+    lote = {"id": id_lote, "acoes": acoes, "achados": achados, "pendencias": pendencias,
+            "informativas": informativas or []}
     lote["hash"] = hash_lote(lote)
     return lote
 
 
 def salvar(lote: dict, pasta: Path) -> Path:
+    """Nunca sobrescreve um lote diferente com o mesmo id (o hash aprovado precisa continuar válido)."""
     caminho = Path(pasta) / f"lote_{lote['id']}.json"
-    escrever_atomico(caminho, dumps(lote).encode())
+    dados = dumps(lote).encode()
+    if caminho.exists():
+        if caminho.read_bytes() == dados:
+            return caminho
+        raise AprovacaoRecusada(f"já existe outro lote com o id {lote['id']}")
+    escrever_atomico(caminho, dados)
     return caminho
 
 
@@ -61,6 +71,8 @@ def avaliar_auto(lote: dict, politica: dict) -> Avaliacao:
         motivos.append("aprovação por exceção desligada no config")
     if lote["pendencias"]:
         motivos.append(f"{len(lote['pendencias'])} pendência(s)")
+    if not lote["acoes"]:
+        motivos.append("lote sem ações (nada a executar)")
     bloqueantes = [a for a in lote["achados"] if a.get("bloqueia")]
     if bloqueantes:
         motivos.append(f"{len(bloqueantes)} achado(s) bloqueante(s)")
@@ -77,7 +89,16 @@ def avaliar_auto(lote: dict, politica: dict) -> Avaliacao:
     if limite is None:
         motivos.append("valor_limite não configurado")
     else:
-        total = sum((Decimal(str(a.get("valor") or 0)) for a in lote["acoes"]), Decimal("0"))
+        total = Decimal("0")
+        for a in lote["acoes"]:
+            try:
+                v = Decimal(str(a.get("valor")))
+            except (InvalidOperation, TypeError, ValueError):
+                v = None
+            if v is None or not v.is_finite():
+                motivos.append(f"ação {a['tipo']} com valor desconhecido")
+                continue
+            total += abs(v)
         if total > Decimal(str(limite)):
             motivos.append(f"valor total {total} acima do limite {limite}")
     return Avaliacao(not motivos, sorted(set(motivos)))

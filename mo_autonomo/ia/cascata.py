@@ -12,6 +12,7 @@ Limites dos planos gratuitos mudam: ficam no config, não no código.
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import time
@@ -53,7 +54,11 @@ def _post_json(url: str, corpo: dict, cabecalhos: dict, timeout: float) -> dict:
                                  headers={"Content-Type": "application/json", **cabecalhos})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode())
+            corpo = r.read()
+        try:
+            return json.loads(corpo.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ErroProvedor(f"resposta não-JSON: {corpo[:120]!r}") from exc
     except urllib.error.HTTPError as exc:
         corpo_erro = exc.read().decode(errors="replace")[:500]
         if exc.code in (402, 429) or "quota" in corpo_erro.lower() or "rate limit" in corpo_erro.lower():
@@ -61,7 +66,7 @@ def _post_json(url: str, corpo: dict, cabecalhos: dict, timeout: float) -> dict:
             espera = float(ra) if ra and ra.replace(".", "", 1).isdigit() else None
             raise ErroCota(f"HTTP {exc.code}: {corpo_erro}", espera) from exc
         raise ErroProvedor(f"HTTP {exc.code}: {corpo_erro}") from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
         raise ErroProvedor(f"falha de conexão: {exc}") from exc
 
 
@@ -142,6 +147,8 @@ class Cascata:
                 envio, mascarado = texto_mascarado, True
             try:
                 resposta = p.completar(sistema, envio)
+                if not isinstance(resposta, str):
+                    raise ErroProvedor(f"resposta inesperada ({type(resposta).__name__})")
             except ErroCota as exc:
                 espera = exc.espera_s if exc.espera_s is not None else self.espera_padrao_s
                 self._bloqueado_ate[p.nome] = self.relogio() + espera

@@ -70,7 +70,7 @@ def n_capturar(e, ctx):
                                    referencia=msg.uid))
         ctx.trilha.registrar_email(msg.uid, cab["message_id"], cab["remetente"], cab["assunto"], cab["data"])
     ja = {a["sha256"] for a in novos}
-    for extra in (ctx.trilha.anexos_sem_documento(), ctx.trilha.na_fila(),
+    for extra in (ctx.trilha.anexos_sem_documento(), ctx.trilha.analisados_sem_lote(), ctx.trilha.na_fila(),
                   ctx.trilha.pendentes_para_reprocessar(ctx.versao_base)):
         for a in extra:
             if a["sha256"] not in ja:
@@ -133,8 +133,12 @@ def n_analisar_competencias(e, ctx):
     from decimal import Decimal
 
     from ..especialista.faturamento import cruzar, faturamento, ler_receitas_declaradas
-    extra, fat_out, falhas = defaultdict(list), {}, []
-    declaradas = ler_receitas_declaradas(ctx.dados / "apuracao" / "receitas.csv")
+    extra, fat_out, falhas, erros_csv = defaultdict(list), {}, [], []
+    try:
+        declaradas = ler_receitas_declaradas(ctx.dados / "apuracao" / "receitas.csv", erros_csv)
+    except Exception as exc:  # noqa: BLE001
+        declaradas, erros_csv = {}, [f"receitas.csv ilegível: {type(exc).__name__}: {exc}"]
+    falhas += [_falha("RECEITAS_CSV_INVALIDO", m) for m in erros_csv]
     tol = Decimal(str((ctx.config.get("cruzamentos") or {}).get("tolerancia_receita", "1.00")))
     for (cnpj, comp), _docs in _grupos(e).items():
         try:
@@ -155,7 +159,12 @@ def n_analisar_competencias(e, ctx):
 
 
 def n_contabil(e, ctx):
-    """Extratos OFX -> lançamentos propostos (por empresa e mês) com de-para do razão do cliente."""
+    """Extratos OFX -> lançamentos propostos (por empresa e mês) com de-para do razão do cliente.
+
+    Transação só é "consumida" quando vira ação registrada num lote (tabela acoes); sem as
+    exportações do Domínio ou com transações sem contrapartida, o OFX fica PENDENTE e volta
+    quando a base mudar (ex.: razão atualizado).
+    """
     propostas = []
     pasta = ctx.dados / "dominio"
     cfg = ctx.config.get("contabil") or {}
@@ -164,29 +173,28 @@ def n_contabil(e, ctx):
             cnpj = ex["cnpj"]
             try:
                 emp = ctx.carteira.get(cnpj)
-                novas = [t for t in ex["transacoes"]
-                         if not t.get("fitid") or ctx.trilha.registrar_fitid(ex["banco"], ex["conta"], t["fitid"], d["sha256"])]
-                repetidas = len(ex["transacoes"]) - len(novas)
                 plano_csv, razao_csv = pasta / emp.codigo_dominio / "plano_contas.csv", pasta / emp.codigo_dominio / "razao.csv"
                 por_mes = defaultdict(list)
-                for t in novas:
+                for t in ex["transacoes"]:
                     por_mes[f"{t['data']:%Y-%m}"].append(t)
                 for comp, trans in sorted(por_mes.items()):
                     if not plano_csv.exists() or not razao_csv.exists():
-                        propostas.append({"cnpj": cnpj, "competencia": comp, "lancamentos": [], "pendencias": [_falha(
-                            "SEM_EXPORTACAO_DOMINIO", f"Faltam plano_contas.csv/razao.csv em {pasta / emp.codigo_dominio} "
-                            f"({len(trans)} transação(ões) aguardando).", cnpj, d["sha256"])]})
+                        propostas.append({"cnpj": cnpj, "competencia": comp, "sha256": d["sha256"], "lancamentos": [],
+                                          "pendencias": [_falha("SEM_EXPORTACAO_DOMINIO",
+                                                                f"Faltam plano_contas.csv/razao.csv em {pasta / emp.codigo_dominio} "
+                                                                f"({len(trans)} transação(ões) aguardando).", cnpj, d["sha256"])]})
                         continue
                     conta = ex["conta_contabil"]
                     r = propor({"transacoes": trans}, conta, DePara.do_razao(_ler_csv(razao_csv), conta),
                                PlanoContas.carregar(plano_csv), int(cfg.get("minimo_ocorrencias", 2)),
                                float(cfg.get("dominancia", 0.8)))
-                    propostas.append({"cnpj": cnpj, "competencia": comp, "lancamentos": r["lancamentos"],
-                                      "repetidas": repetidas,
+                    lanc = [{**l, "banco": ex["banco"], "conta": ex["conta"], "cnpj": cnpj, "competencia": comp,
+                             "sha256": d["sha256"]} for l in r["lancamentos"]]
+                    propostas.append({"cnpj": cnpj, "competencia": comp, "sha256": d["sha256"], "lancamentos": lanc,
                                       "pendencias": [{**p, "cnpj": cnpj, "referencia": p.get("fitid")} for p in r["pendencias"]]})
             except Exception as exc:  # noqa: BLE001
-                propostas.append({"cnpj": cnpj, "competencia": None, "lancamentos": [], "pendencias": [_falha(
-                    "ERRO_CONTABIL", f"{type(exc).__name__}: {exc}", cnpj, d["sha256"])]})
+                propostas.append({"cnpj": cnpj, "competencia": None, "sha256": d["sha256"], "lancamentos": [],
+                                  "pendencias": [_falha("ERRO_CONTABIL", f"{type(exc).__name__}: {exc}", cnpj, d["sha256"])]})
     return {"contabil": propostas}
 
 
@@ -194,7 +202,7 @@ def _acao_documento(d: dict, rota: dict, cnpj: str, comp: str) -> dict:
     doc = d.get("doc") or {}
     valor = valor_documento(doc)
     base = {"sha256": d["sha256"], "origem": d["caminho"], "cnpj": cnpj, "competencia": comp,
-            "valor": str(valor) if valor is not None else "0"}
+            "valor": str(valor) if valor is not None else None}  # desconhecido != zero (barra auto-aprovação)
     if rota["tipo"] == "ARQUIVO":
         return {"tipo": "arquivar_documento", **base, "tipo_documento": doc.get("tipo"),
                 "nome": f"{d['sha256'][:12]}_{nome_seguro(d.get('nome') or 'documento')}"}
@@ -202,44 +210,96 @@ def _acao_documento(d: dict, rota: dict, cnpj: str, comp: str) -> dict:
             "nome": f"{nome_seguro(doc.get('chave') or d['sha256'])}.xml"}
 
 
+def _bloqueia_doc(d: dict, cnpj: str) -> list[dict]:
+    """Pendências do documento que impedem propor as ações dele para esta empresa."""
+    return [p for p in d.get("pendencias", []) if p.get("cnpj") in (cnpj, None)]
+
+
+def _salvar_lote(ctx, lote_id, acoes, achados, pend, info, cnpj, comp, area) -> dict | None:
+    ja = ctx.trilha.acoes_ja_propostas(acoes)
+    acoes = [a for a in acoes if ctx.trilha.id_acao(a) not in ja]
+    if not (acoes or achados or pend or info):
+        return None
+    lote = L.montar_lote(lote_id, acoes, achados, _unicas(pend), _unicas(info))
+    arquivo = L.salvar(lote, ctx.dados / "lotes")
+    ctx.trilha.registrar_acoes(lote["id"], acoes)
+    return {"id": lote["id"], "cnpj": cnpj, "competencia": comp, "area": area, "arquivo": str(arquivo),
+            "hash": lote["hash"]}
+
+
 def n_montar_lotes(e, ctx):
-    """Um lote por empresa × competência × área, para um problema não travar os demais."""
+    """Um lote por empresa × competência × área. Pendência de um documento NÃO trava os outros:
+
+    - ações só de documentos sem pendência para a empresa;
+    - pendências de documentos vão como `informativas` (aparecem no parecer, não bloqueiam);
+    - `pendencias` do lote = só as do grupo inteiro (ex.: falha na análise do mês);
+    - ação já proposta/executada em outro lote não é proposta de novo.
+    """
     lotes = []
     run = e["_run_id"][:8]
-    pasta = ctx.dados / "lotes"
     comp_achados = e.get("achados_competencia", {})
     falhas_comp = defaultdict(list)
-    for f in e.get("falhas_competencia", []):
-        falhas_comp[(f["cnpj"], f["referencia"])].append(f)
     gerais = list(e.get("pendencias_gerais", []))
+    for f in e.get("falhas_competencia", []):
+        if f.get("cnpj"):
+            falhas_comp[(f["cnpj"], f["referencia"])].append(f)
+        else:
+            gerais.append(f)
     for (cnpj, comp), docs in sorted(_grupos(e).items(), key=lambda x: (x[0][0], x[0][1] or "")):
         try:
-            acoes, achados, pend = [], [], list(falhas_comp.get((cnpj, comp), []))
+            acoes, achados, info = [], [], []
+            pend = list(falhas_comp.get((cnpj, comp), []))
             for d in docs:
                 achados += [a for a in d.get("achados", []) if a.get("cnpj") == cnpj]
-                pend += [p for p in d.get("pendencias", []) if p.get("cnpj") in (cnpj, None)]
+                bloqueios = _bloqueia_doc(d, cnpj)
+                if bloqueios:
+                    info += bloqueios
+                    continue
                 for r in d.get("rotas", []):
                     if r["cnpj"] == cnpj and comp:
                         acoes.append(_acao_documento(d, r, cnpj, comp))
             if comp is None:
-                pend.append(_falha("SEM_COMPETENCIA", "documento sem data de competência", cnpj))
+                info.append(_falha("SEM_COMPETENCIA", "documento sem data de competência", cnpj))
             achados += comp_achados.get(f"{cnpj}|{comp}", [])
-            lote = L.montar_lote(f"FISCAL_{cnpj}_{comp or 'SEMCOMP'}_{run}", acoes, achados, _unicas(pend))
-            lotes.append({"id": lote["id"], "cnpj": cnpj, "competencia": comp, "area": "FISCAL",
-                          "arquivo": str(L.salvar(lote, pasta)), "hash": lote["hash"]})
+            l = _salvar_lote(ctx, f"FISCAL_{cnpj}_{comp or 'SEMCOMP'}_{run}", acoes, achados, pend, info, cnpj, comp,
+                             "FISCAL")
+            if l:
+                lotes.append(l)
         except Exception as exc:  # noqa: BLE001
             gerais.append(_falha("ERRO_LOTE", f"{cnpj} {comp}: {type(exc).__name__}: {exc}", None, cnpj))
-    for p in e.get("contabil", []):
+    pend_ofx = set()
+    por_chave = defaultdict(lambda: {"lancamentos": [], "pendencias": [], "shas": set()})
+    for p in e.get("contabil", []):  # vários extratos da mesma empresa/mês = um lote só
+        g = por_chave[(p["cnpj"], p["competencia"])]
+        g["lancamentos"] += p["lancamentos"]
+        g["pendencias"] += p["pendencias"]
+        g["shas"].add(p.get("sha256"))
+        if p["pendencias"]:
+            pend_ofx.add(p.get("sha256"))
+    for (cnpj, comp), g in sorted(por_chave.items(), key=lambda x: (x[0][0], x[0][1] or "")):
         try:
-            acoes = [{"tipo": "lancamento_contabil", **l, "valor": str(l["valor"])} for l in p["lancamentos"]]
-            lote = L.montar_lote(f"CONTABIL_{p['cnpj']}_{p['competencia'] or 'SEMCOMP'}_{run}", acoes, [], p["pendencias"])
-            lotes.append({"id": lote["id"], "cnpj": p["cnpj"], "competencia": p["competencia"], "area": "CONTABIL",
-                          "arquivo": str(L.salvar(lote, pasta)), "hash": lote["hash"]})
+            vistos, acoes = set(), []
+            for l in g["lancamentos"]:
+                a = {"tipo": "lancamento_contabil", **l, "valor": str(l["valor"])}
+                if ctx.trilha.id_acao(a) not in vistos:
+                    vistos.add(ctx.trilha.id_acao(a))
+                    acoes.append(a)
+            l = _salvar_lote(ctx, f"CONTABIL_{cnpj}_{comp or 'SEMCOMP'}_{run}", acoes, [], [], g["pendencias"],
+                             cnpj, comp, "CONTABIL")
+            if l:
+                lotes.append(l)
         except Exception as exc:  # noqa: BLE001
-            gerais.append(_falha("ERRO_LOTE", f"contábil {p.get('cnpj')}: {type(exc).__name__}: {exc}"))
+            gerais.append(_falha("ERRO_LOTE", f"contábil {cnpj}: {type(exc).__name__}: {exc}"))
+            pend_ofx |= g["shas"]
     for d in e["documentos"]:
-        if not d.get("rotas") and not any(p.get("cnpj") for p in d.get("pendencias", [])):
+        if not d.get("rotas") and not d.get("extratos_empresa") and not any(p.get("cnpj") for p in d.get("pendencias", [])):
             gerais += [p for p in d.get("pendencias", [])]
+    # lotes gravados: documentos analisados viram OK (ou PENDENTE, no caso de OFX com transação sem destino)
+    for d in e["documentos"]:
+        if d.get("sha256") in pend_ofx:
+            ctx.trilha.atualizar_situacao(d["sha256"], "PENDENTE")
+        elif not d.get("pendencias") and d.get("classe") != "ERRO":
+            ctx.trilha.atualizar_situacao(d["sha256"], "OK")
     return {"lotes": lotes, "pendencias_gerais": _unicas(gerais)}
 
 
@@ -276,50 +336,68 @@ def _base_documentos(ctx) -> Path:
     return ctx.dados / "_STAGING" / "DOCUMENTOS"
 
 
-def executar_lote(caminho_aprovado: Path, ctx) -> list[dict]:
-    """Executor: só roda com APROVADO_* íntegro e registrado na trilha. Nunca sobrescreve arquivo."""
-    lote = L.exigir_aprovado(caminho_aprovado, ctx.trilha)
+def executar_acao(a: dict, ctx) -> dict:
+    """Executa UMA ação já aprovada. Nunca sobrescreve; resultado vai para a tabela de ações."""
     tipos = ctx.config["dominio"]["tipos_pasta"]
-    resultado = []
-    for a in lote["acoes"]:
+    try:
+        if a["tipo"] == "copiar_xml_rotina":
+            emp = ctx.carteira.get(a["cnpj"])
+            destino = caminho_destino(ctx.base_xml, tipos, emp, a["pasta_tipo"], a["competencia"], a["nome"])
+        elif a["tipo"] == "arquivar_documento":
+            emp = ctx.carteira.get(a["cnpj"])
+            ano, mes = a["competencia"].split("-")
+            base = _base_documentos(ctx)
+            destino = base / emp.pasta / f"{mes}{ano}" / nome_seguro(a.get("tipo_documento") or "OUTRO") / nome_seguro(a["nome"])
+            if not destino.resolve().is_relative_to(base.resolve()):
+                raise DestinoInvalido(f"destino fora da pasta base: {destino}")
+        elif a["tipo"] == "lancamento_contabil":
+            return {"acao": a["tipo"], "status": "AGUARDANDO_LEIAUTE_DOMINIO",
+                    "detalhe": "exportador só é escrito com o leiaute oficial de importação"}
+        else:
+            r = {"acao": a["tipo"], "status": "SEM_EXECUTOR"}
+            ctx.trilha.marcar_acao(a, "FALHOU", r["status"])
+            return r
         try:
-            if a["tipo"] == "copiar_xml_rotina":
-                emp = ctx.carteira.get(a["cnpj"])
-                destino = caminho_destino(ctx.base_xml, tipos, emp, a["pasta_tipo"], a["competencia"], a["nome"])
-            elif a["tipo"] == "arquivar_documento":
-                emp = ctx.carteira.get(a["cnpj"])
-                ano, mes = a["competencia"].split("-")
-                base = _base_documentos(ctx)
-                destino = base / emp.pasta / f"{mes}{ano}" / nome_seguro(a.get("tipo_documento") or "OUTRO") / nome_seguro(a["nome"])
-                if not destino.resolve().is_relative_to(base.resolve()):
-                    raise DestinoInvalido(f"destino fora da pasta base: {destino}")
-            elif a["tipo"] == "lancamento_contabil":
-                resultado.append({"acao": a["tipo"], "status": "AGUARDANDO_LEIAUTE_DOMINIO",
-                                  "detalhe": "exportador só é escrito com o leiaute oficial de importação"})
-                continue
-            else:
-                resultado.append({"acao": a["tipo"], "status": "SEM_EXECUTOR"})
-                continue
-            try:
-                st = gravar(destino, Path(a["origem"]).read_bytes())
-            except ConflitoArquivo as exc:
-                st = f"CONFLITO: {exc}"
-            resultado.append({"acao": a["tipo"], "destino": str(destino), "status": st})
-        except Exception as exc:  # noqa: BLE001 — uma ação ruim não impede as outras
-            resultado.append({"acao": a["tipo"], "status": f"ERRO: {type(exc).__name__}: {exc}"})
+            st = gravar(destino, Path(a["origem"]).read_bytes())
+        except ConflitoArquivo as exc:
+            st = f"CONFLITO: {exc}"
+        r = {"acao": a["tipo"], "destino": str(destino), "status": st}
+    except Exception as exc:  # noqa: BLE001 — uma ação ruim não impede as outras
+        r = {"acao": a["tipo"], "status": f"ERRO: {type(exc).__name__}: {exc}"}
+    ok = r["status"] in ("GRAVADO", "JA_EXISTIA")
+    ctx.trilha.marcar_acao(a, "EXECUTADA" if ok else "FALHOU", None if ok else r["status"])
+    return r
+
+
+def executar_lote(caminho_aprovado: Path, ctx) -> list[dict]:
+    """Executor: só roda com APROVADO_* íntegro e registrado na trilha."""
+    lote = L.exigir_aprovado(caminho_aprovado, ctx.trilha)
+    resultado = [executar_acao(a, ctx) for a in lote["acoes"]]
     ctx.trilha.evento("LOTE_EXECUTADO", lote["id"], resultado)
     return resultado
 
 
 def n_executar(e, ctx):
-    """Executa os lotes aprovados (simulação grava em _STAGING)."""
-    out = []
+    """Executa os lotes aprovados e refaz ações que falharam antes (ex.: D: indisponível)."""
+    out, feitos = [], set()
     for l in e["lotes"]:
         if l.get("aprovado"):
+            feitos.add(l["id"])
             try:
                 out.append({"lote": l["id"], "resultado": executar_lote(Path(l["aprovado"]), ctx)})
             except Exception as exc:  # noqa: BLE001
                 out.append({"lote": l["id"], "resultado": [{"status": f"ERRO: {type(exc).__name__}: {exc}"}]})
+    for f in ctx.trilha.acoes_com_falha():
+        if f["lote"] in feitos:
+            continue
+        aprovado = ctx.dados / "lotes" / f"APROVADO_{f['lote']}.json"
+        try:
+            lote = L.exigir_aprovado(aprovado, ctx.trilha)
+            if ctx.trilha.id_acao(f["acao"]) not in {ctx.trilha.id_acao(a) for a in lote["acoes"]}:
+                raise L.AprovacaoRecusada("ação não pertence ao lote aprovado")
+            out.append({"lote": f["lote"], "resultado": [executar_acao(f["acao"], ctx)], "refeita": True})
+        except Exception as exc:  # noqa: BLE001
+            out.append({"lote": f["lote"], "resultado": [{"status": f"ERRO: {type(exc).__name__}: {exc}"}], "refeita": True})
     return {"execucoes": out}
 
 
@@ -335,13 +413,15 @@ def n_pareceres(e, ctx):
             lote = L.carregar(Path(l["arquivo"]))
             emp = ctx.carteira.get(l["cnpj"])
             perfil = ctx.perfis.em(l["cnpj"], ctx.hoje)
-            md = parecer.markdown(emp, l["competencia"], perfil, lote["achados"], lote["pendencias"],
+            md = parecer.markdown(emp, l["competencia"], perfil, lote["achados"],
+                                  lote["pendencias"] + lote.get("informativas", []),
                                   len(lote["acoes"]), inativas,
                                   (e.get("faturamento") or {}).get(f"{l['cnpj']}|{l['competencia']}"))
             gerados.append(parecer.salvar(pasta / l["competencia"], f"{emp.pasta}_{l['id'][-8:]}", md, lote["achados"]))
-            texto = solicitacoes.rascunho(emp, l["competencia"], lote["achados"], lote["pendencias"])
+            texto = solicitacoes.rascunho(emp, l["competencia"], lote["achados"],
+                                          lote["pendencias"] + lote.get("informativas", []))
             if texto:
-                solicitacoes.salvar(ctx.dados / "solicitacoes", emp, l["competencia"], texto)
+                solicitacoes.salvar(ctx.dados / "solicitacoes", emp, l["competencia"], texto, l["id"][-8:])
         except Exception as exc:  # noqa: BLE001
             falhas.append(f"{l['id']}: {type(exc).__name__}: {exc}")
     resumo = [f"# Resumo do ciclo {e['_run_id'][:8]} — {ctx.hoje:%d/%m/%Y} ({ctx.config['modo']})", "",
@@ -359,6 +439,11 @@ def n_pareceres(e, ctx):
     resumo += alertas or ["- Nenhum (ou nenhuma obrigação com norma conferida)."]
     resumo += ["", "## Pendências sem empresa identificada", ""]
     resumo += [f"- {p['codigo']}: {p['mensagem']}" for p in e.get("pendencias_gerais", [])] or ["- Nenhuma."]
+    falhas_exec = [(x["lote"], r) for x in e.get("execucoes", []) for r in x["resultado"]
+                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA", "AGUARDANDO_LEIAUTE_DOMINIO")]
+    if falhas_exec:
+        resumo += ["", "## Execuções com falha (serão refeitas no próximo ciclo)", ""]
+        resumo += [f"- `{lid}` {r.get('acao', '')}: {r['status']}" for lid, r in falhas_exec]
     if falhas:
         resumo += ["", "## Falhas ao gerar pareceres", ""] + [f"- {f}" for f in falhas]
     caminho = pasta / f"resumo_{e['_run_id'][:8]}.md"
@@ -372,14 +457,12 @@ def n_pareceres(e, ctx):
 def _alertas_vencimento(ctx) -> list[str]:
     from datetime import date as _date
 
-    from ..obrigacoes.calendario import alertas, gerar
+    from ..obrigacoes.calendario import alertas, competencias_para_alerta, gerar
     cal = ctx.config.get("calendario") or {}
     feriados = {_date.fromisoformat(str(f)) for f in cal.get("feriados") or []}
     dias = tuple(cal.get("dias_alerta", [3, 0]))
     linhas = []
-    y, m = ctx.hoje.year, ctx.hoje.month
-    comps = {f"{y:04d}-{m:02d}", f"{y - (m == 1):04d}-{(m - 2) % 12 + 1:02d}"}
-    for comp in sorted(comps):
+    for comp in competencias_para_alerta(ctx.hoje, ctx.catalogo):
         d = _date.fromisoformat(comp + "-01")
         perfis = {e.cnpj: ctx.perfis.em(e.cnpj, d) for e in ctx.carteira if e.ativa}
         for a in alertas(gerar(comp, perfis, ctx.catalogo, feriados), ctx.hoje, dias):

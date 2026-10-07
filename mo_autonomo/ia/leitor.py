@@ -34,6 +34,19 @@ def _json(texto: str) -> dict:
     return json.loads(m.group(0))
 
 
+def _token_presente(trecho: str, texto: str) -> bool:
+    """O trecho aparece isolado (não como pedaço de outro número: '150,00' não casa '1.150,00')."""
+    if not trecho:
+        return False
+    return re.search(r"(?<![\d.,])" + re.escape(trecho) + r"(?![\d]|[.,]\d)", texto) is not None
+
+
+def _cnpj_como_token(cnpj: str, texto: str) -> bool:
+    """CNPJ presente como um número só (com ou sem pontuação), não costurado de números diferentes."""
+    padrao = (rf"(?<![\dA-Za-z]){cnpj[:2]}\.?{cnpj[2:5]}\.?{cnpj[5:8]}/?{cnpj[8:12]}-?{cnpj[12:]}(?![\dA-Za-z])")
+    return re.search(padrao, texto) is not None
+
+
 def ler_nao_estruturado(texto: str, cascata: Cascata, confianca_minima: float = 0.8,
                         nomes_sensiveis: list[str] | None = None) -> dict:
     """Devolve {status: OK|PENDENTE|FILA, ...}. Cada campo é validado contra o texto original."""
@@ -54,13 +67,13 @@ def ler_nao_estruturado(texto: str, cascata: Cascata, confianca_minima: float = 
     if tipo not in TIPOS:
         motivos.append(f"tipo inválido {tipo!r}")
     cnpj = so_digitos(dados.get("cnpj") or "") or None
-    if cnpj and (not cnpj_valido(cnpj) or cnpj not in so_digitos(texto)):
+    if cnpj and (not cnpj_valido(cnpj) or not _cnpj_como_token(cnpj, texto)):
         motivos.append("CNPJ devolvido não confere com o texto")
         cnpj = None
     valor = None
     if dados.get("valor"):
         bruto = str(dados["valor"])
-        if bruto.replace("R$", "").strip() not in texto:
+        if not _token_presente(bruto.replace("R$", "").strip(), texto):
             motivos.append("valor devolvido não aparece no texto")
         else:
             try:

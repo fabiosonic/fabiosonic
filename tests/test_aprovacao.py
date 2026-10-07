@@ -10,13 +10,17 @@ ACAO = {"tipo": "copiar_xml_rotina", "valor": "0"}
 CTRL = {"natureza": "CONTROLE", "bloqueia": False}
 
 
-def salvar(tmp_path, acoes=(ACAO,), achados=(), pend=()):
-    lote = L.montar_lote("T1", list(acoes), list(achados), list(pend))
+_N = {"n": 0}
+
+
+def salvar(tmp_path, acoes=(ACAO,), achados=(), pend=(), id_lote=None):
+    _N["n"] += 1
+    lote = L.montar_lote(id_lote or ("T1" if _N["n"] == 1 else f"T{_N['n']}"), list(acoes), list(achados), list(pend))
     return L.salvar(lote, tmp_path), lote
 
 
 def test_aprovacao_humana(tmp_path):
-    p, lote = salvar(tmp_path)
+    p, lote = salvar(tmp_path, id_lote="T1")
     t = Trilha(":memory:")
     with pytest.raises(L.AprovacaoRecusada, match="exatamente"):
         L.aprovar_humano(p, "aprovado", lote["hash"], "Fulano")
@@ -99,3 +103,10 @@ def test_sempre_humano_nao_passa_em_auto_mesmo_forjado(tmp_path):
     destino = L._gravar_aprovado(lote, tmp_path, "AUTO_APROVADO", "forjado")
     with pytest.raises(L.AprovacaoRecusada, match="humana"):
         L.exigir_aprovado(destino, Trilha(":memory:"))
+
+
+def test_lote_com_mesmo_id_nao_sobrescreve(tmp_path):
+    salvar(tmp_path, id_lote="X")
+    with pytest.raises(L.AprovacaoRecusada, match="já existe"):
+        salvar(tmp_path, acoes=[{"tipo": "copiar_xml_rotina", "valor": "9"}], id_lote="X")
+    assert salvar(tmp_path, id_lote="X")[0].exists()  # idêntico: idempotente

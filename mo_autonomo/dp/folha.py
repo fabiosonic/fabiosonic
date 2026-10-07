@@ -46,11 +46,17 @@ def irrf_mensal(base: Decimal, dependentes: int, params: dict) -> Decimal:
     imposto = max(imposto, Decimal("0"))
     red = params.get("redutor")
     if red:
-        # redutor aplicado sobre o rendimento tributável (base antes das deduções de dependentes)
-        if base <= Decimal(str(red["zera_ate"])):
+        # sobre qual valor o redutor é medido é decisão LEGAL: vem da norma (`redutor.base`)
+        if red.get("base") == "rendimento":
+            ref = base
+        elif red.get("base") == "base_calculo":
+            ref = base_calc
+        else:
+            raise ValueError("TABELA_IRRF_MENSAL.redutor.base não informado (rendimento | base_calculo)")
+        if ref <= Decimal(str(red["zera_ate"])):
             imposto = Decimal("0")
-        elif base <= Decimal(str(red["faixa_ate"])):
-            reducao = Decimal(str(red["constante"])) - Decimal(str(red["coeficiente"])) * base
+        elif ref <= Decimal(str(red["faixa_ate"])):
+            reducao = Decimal(str(red["constante"])) - Decimal(str(red["coeficiente"])) * ref
             imposto = max(imposto - max(reducao, Decimal("0")), Decimal("0"))
     return _q(imposto)
 
@@ -77,6 +83,9 @@ def conferir(folha: list[dict], cnpj: str, catalogo, tolerancia: Decimal = Decim
         inativas.append(f"INSS: {INSS} não conferida ({catalogo.status(INSS)})")
     if p_irrf["faixas"] is None or p_irrf["deducao_por_dependente"] is None:
         inativas.append(f"IRRF: {IRRF} não conferida ({catalogo.status(IRRF)})")
+    elif p_irrf["redutor"] and p_irrf["redutor"].get("base") not in ("rendimento", "base_calculo"):
+        inativas.append(f"IRRF: {IRRF}.redutor.base ausente — sobre qual valor medir o redutor é decisão legal")
+        p_irrf["faixas"] = None
     aliq_fgts = catalogo.parametro(FGTS, "aliquota_deposito")
     if aliq_fgts is None and any(l.get("remuneracao_fgts") is not None for l in folha):
         inativas.append(f"FGTS: {FGTS} não conferida ({catalogo.status(FGTS)})")

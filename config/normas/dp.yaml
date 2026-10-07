@@ -12,7 +12,10 @@
   parametros: {}
   # esperados: faixas: [{ate: <valor ou null>, aliquota: "<fração>", deduzir: "<valor>"}],
   #            deducao_por_dependente: "<valor>",
-  #            redutor: {zera_ate: "<valor>", faixa_ate: "<valor>", constante: "<valor>", coeficiente: "<fração>"}
+  #            redutor: {base: rendimento|base_calculo, zera_ate: "<valor>", faixa_ate: "<valor>",
+  #                      constante: "<valor>", coeficiente: "<fração>"}
+  #            (base: sobre qual valor a lei mede o redutor — conferir no texto legal; inclui o
+  #             tratamento do desconto simplificado, que este cálculo NÃO faz)
 
 - id: LEI_8036_FGTS
   titulo: Lei 8.036/1990 — FGTS

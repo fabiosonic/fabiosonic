@@ -46,7 +46,9 @@ def rascunho(empresa, competencia: str, achados: list[dict], pendencias: list[di
     return "\n".join(linhas)
 
 
-def salvar(pasta: Path, empresa, competencia: str, texto: str) -> Path:
-    destino = Path(pasta) / competencia / f"{empresa.pasta}.txt"
-    escrever_atomico(destino, texto.encode("utf-8"))
+def salvar(pasta: Path, empresa, competencia: str, texto: str, sufixo: str) -> Path:
+    """Um arquivo por ciclo (nunca sobrescreve um rascunho já gerado/editado)."""
+    destino = Path(pasta) / competencia / f"{empresa.pasta}_{sufixo}.txt"
+    if not destino.exists():
+        escrever_atomico(destino, texto.encode("utf-8"))
     return destino

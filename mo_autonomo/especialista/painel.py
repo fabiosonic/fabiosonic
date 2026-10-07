@@ -42,6 +42,10 @@ def gerar(estado: dict, ctx, cobertura: list[dict]) -> str:
         linhas_lotes.append(f"<tr><td>{_e(nome)}<br><span class='sub'>{_e(formatar_cnpj(l['cnpj']))}</span></td>"
                             f"<td>{_e(l['area'])}</td><td>{_e(l.get('competencia'))}</td><td>{sit}</td>"
                             f"<td>{motivos}</td><td><code>{_e(l['hash'][:16])}…</code></td></tr>")
+    falhas_exec = [(x["lote"], r) for x in estado.get("execucoes", []) for r in x["resultado"]
+                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA", "AGUARDANDO_LEIAUTE_DOMINIO")]
+    linhas_falhas = [f"<tr><td><code>{_e(l)}</code></td><td>{_e(r.get('acao'))}</td><td class='bad'>{_e(r['status'])}</td></tr>"
+                     for l, r in falhas_exec]
     por_codigo = Counter(p["codigo"] for p in gerais)
     linhas_gerais = [f"<tr><td>{_e(p['codigo'])}</td><td>{_e(p['mensagem'])}</td></tr>" for p in gerais[:200]]
     linhas_regras = [f"<tr><td>{_e(c['regra'])}</td><td>{_e(c['titulo'])}</td>"
@@ -61,6 +65,7 @@ def gerar(estado: dict, ctx, cobertura: list[dict]) -> str:
 </div>
 <h2>Lotes</h2><div class="wrap"><table><tr><th>Empresa</th><th>Área</th><th>Competência</th><th>Situação</th><th>Por que aguarda</th><th>Hash</th></tr>
 {''.join(linhas_lotes) or '<tr><td colspan=6>Nenhum lote neste ciclo.</td></tr>'}</table></div>
+{('<h2>Execuções com falha (refeitas no próximo ciclo)</h2><div class="wrap"><table><tr><th>Lote</th><th>Ação</th><th>Erro</th></tr>' + ''.join(linhas_falhas) + '</table></div>') if linhas_falhas else ''}
 <h2>Pendências sem empresa identificada</h2>
 <div class="sub">{_e(', '.join(f'{k}: {v}' for k, v in por_codigo.items()) or 'nenhuma')}</div>
 <div class="wrap"><table><tr><th>Código</th><th>Mensagem</th></tr>{''.join(linhas_gerais)}</table></div>

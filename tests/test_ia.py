@@ -24,17 +24,17 @@ TEXTO = f"Guia DAS da empresa ALFA COMERCIO CNPJ {CNPJ_A[:2]}.{CNPJ_A[2:5]}.{CNP
 def test_mascara_reversivel():
     m = Mascara()
     out = m.mascarar(TEXTO, ["ALFA COMERCIO"])
-    assert "[CNPJ_1]" in out and "[DOC_NUM_1]" in out and "[EMAIL_1]" in out
+    assert "[DOC_NUM_1]" in out and "[DOC_NUM_2]" in out and "[EMAIL_1]" in out and "09/2026" in out
     assert not contem_dado_pessoal(out) and "ALFA" not in out
     assert m.desmascarar(out) == TEXTO
 
 
 def test_local_recebe_bruto_nuvem_mascarado():
     local = Falso("local", local=True, erro=ErroProvedor("ollama fora"))
-    nuvem = Falso("gemini", respostas=["ok [CNPJ_1]"])
+    nuvem = Falso("gemini", respostas=["ok [DOC_NUM_1]"])
     r = Cascata([local, nuvem]).completar("sis", TEXTO, ["ALFA COMERCIO"])
     assert local.recebido[0] == TEXTO
-    assert "[CNPJ_1]" in nuvem.recebido[0] and not contem_dado_pessoal(nuvem.recebido[0])
+    assert "[DOC_NUM_1]" in nuvem.recebido[0] and not contem_dado_pessoal(nuvem.recebido[0])
     assert r["provedor"] == "gemini" and r["mascarado"] and CNPJ_A[:2] in r["texto"]
 
 
@@ -72,7 +72,7 @@ def json_ia(**kw):
 
 
 def test_leitor_valida_contra_texto():
-    c = Cascata([Falso("n", respostas=[json_ia(cnpj="[CNPJ_1]")])])
+    c = Cascata([Falso("n", respostas=[json_ia(cnpj="[DOC_NUM_1]")])])
     r = ler_nao_estruturado(TEXTO, c, nomes_sensiveis=["ALFA COMERCIO"])
     assert r["status"] == "OK" and r["cnpj"] == CNPJ_A and str(r["valor"]) == "1234.56"
 
@@ -175,3 +175,46 @@ def test_mascara_formatos_de_pdf_e_alfanumerico():
     # valores e datas não são confundidos com documento
     texto = "valor R$ 1.234.567,89 vencimento 20/11/2026 competência 10/2026"
     assert Mascara().mascarar(texto) == texto and not contem_dado_pessoal(texto)
+
+
+def test_mascara_quebras_de_pdf_e_alfanumerico_sem_pontuacao():
+    for t in ["CPF\n123.456.\n789-09", "123. 456. 789-09", "123.456.789 - 09", "123.456.789\u201309",
+              "12ABC34501DE35", "12.abc.345/01de-35"]:
+        m = Mascara().mascarar(t)
+        assert not contem_dado_pessoal(m), (t, m)
+    assert contem_dado_pessoal("123. 456. 789 - 09")
+    datas = "vencimentos 20/10/2026 05/11/2026 competência 10/2026"
+    assert Mascara().mascarar(datas) == datas and contem_dado_pessoal(datas) == []
+
+
+def test_validacao_por_token_da_resposta_da_ia():
+    texto = "Pedido 900000 lote 01000129 total R$ 1.150,00"
+    c = Cascata([Falso("n", local=True, respostas=[json_ia(valor="150,00", cnpj="90000001000129")])])
+    r = ler_nao_estruturado(texto, c)
+    assert r["status"] == "PENDENTE" and r["valor"] is None and r["cnpj"] is None
+
+
+def test_resposta_nao_json_passa_para_o_proximo():
+    import json as _json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from mo_autonomo.ia.cascata import ProvedorOpenAICompat
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<html>manutencao</html>")
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        um = ProvedorOpenAICompat("um", f"http://127.0.0.1:{srv.server_port}/v1", "m", local=True, timeout=5)
+        dois = Falso("dois", local=True, respostas=[_json.dumps({"ok": 1})])
+        assert Cascata([um, dois]).completar("s", "t")["provedor"] == "dois"
+    finally:
+        srv.shutdown()

@@ -108,23 +108,38 @@ def cmd_imap(args):
 
 
 def cmd_auditar(args):
-    from .dominio.auditoria import auditar, ler_relatorio
-    ctx = _ctx(args, fonte=object())
-    cols = (ctx.config.get("dominio") or {}).get("relatorio_colunas") or {}
-    rel = ler_relatorio(Path(args.relatorio), cols)
-    docs = []
     from .documentos.classificador import classificar
+    from .dominio.auditoria import auditar, ler_relatorio
+    from .util.documentos_id import so_digitos
+    ctx = _ctx(args, fonte=object())
+    cnpj = so_digitos(args.cnpj)
+    cols = (ctx.config.get("dominio") or {}).get("relatorio_colunas") or {}
+    rel = [l for l in ler_relatorio(Path(args.relatorio), cols)
+           if not l.get("competencia") or _mesma_competencia(l["competencia"], args.competencia)]
+    caminhos = dict(ctx.trilha.con.execute("SELECT sha256, caminho_bruto FROM anexos").fetchall())
+    docs = []
     for d in ctx.trilha.documentos(args.competencia):
-        if args.cnpj in d["cnpjs"]:
-            row = ctx.trilha.con.execute("SELECT caminho_bruto FROM anexos WHERE sha256=?", (d["sha256"],)).fetchone()
-            if row:
-                r = classificar(Path(row[0]).read_bytes(), ctx.catalogo)
-                if r["doc"]:
+        res = d.get("resumo") or {}
+        if cnpj in (d["cnpjs"] or []) or cnpj in (res.get("emitente"), res.get("prestador")):
+            if d["sha256"] in caminhos and Path(caminhos[d["sha256"]]).exists():
+                r = classificar(Path(caminhos[d["sha256"]]).read_bytes(), ctx.catalogo)
+                if r["doc"] and cnpj in (r["doc"].get("participantes") or []):
                     docs.append(r["doc"])
-    achados = auditar(docs, rel, args.cnpj, args.competencia)
+    achados = auditar(docs, rel, cnpj, args.competencia)
     for a in achados:
         print(f"[{a.regra}] {a.mensagem}")
-    print(f"{len(achados)} divergência(s).")
+    print(f"{len(achados)} divergência(s) ({len(docs)} documento(s) capturado(s), {len(rel)} linha(s) do Domínio).")
+
+
+def _mesma_competencia(valor: str, comp: str) -> bool:
+    """Aceita 'AAAA-MM', 'MM/AAAA' ou 'DD/MM/AAAA' do relatório."""
+    import re
+    v = valor.strip()
+    m = re.fullmatch(r"(\d{4})-(\d{2})(?:-\d{2})?", v) or None
+    if m:
+        return f"{m.group(1)}-{m.group(2)}" == comp
+    m = re.fullmatch(r"(?:\d{2}/)?(\d{2})/(\d{4})", v)
+    return bool(m) and f"{m.group(2)}-{m.group(1)}" == comp
 
 
 def cmd_dp(args):
@@ -202,8 +217,9 @@ def main(argv=None):
     com_config("executar", cmd_executar).add_argument("--aprovado", required=True)
     s = sub.add_parser("normas")
     s.add_argument("acao", choices=["validar", "cobertura", "monitorar", "conferir"])
-    s.add_argument("--pasta", default="config/normas")
-    s.add_argument("--dados", default="dados")
+    raiz = Path(__file__).resolve().parent.parent  # Agendador roda com diretório atual em System32
+    s.add_argument("--pasta", default=str(raiz / "config" / "normas"))
+    s.add_argument("--dados", default=str(raiz / "dados"))
     s.add_argument("--id")
     s.set_defaults(f=cmd_normas)
     com_config("perfil", cmd_perfil).add_argument("acao", choices=["atualizar", "relatorio"])

@@ -25,6 +25,9 @@ class ImapFalso:
             return "OK", [b"7 8"]
         return "OK", [(b"7 (BODY[] {10}", eml_bytes({"a.xml": nfe_xml()})), b")"]
 
+    def response(self, codigo):
+        return codigo, [b"555"] if codigo == "UIDVALIDITY" else [None]
+
     def store(self, *a):
         raise AssertionError("não deveria chegar aqui")
 
@@ -36,7 +39,7 @@ def test_imap_somente_leitura():
     falso = ImapFalso()
     f = FonteImap("h", 993, "u", "s", desde=date(2026, 10, 1), fabrica=lambda: falso)
     msgs = list(f.mensagens())
-    assert len(msgs) == 2 and msgs[0].uid == "imap:INBOX:7"
+    assert len(msgs) == 2 and msgs[0].uid == "imap:INBOX:555:7"  # UIDVALIDITY na chave
     assert ("select", "INBOX", True) in falso.chamadas
     assert ("uid", "search", None, "SINCE 01-Oct-2026") in falso.chamadas
     assert all("PEEK" in c[3] for c in falso.chamadas if c[:2] == ("uid", "fetch"))

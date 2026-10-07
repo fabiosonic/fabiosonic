@@ -35,6 +35,11 @@ CREATE INDEX IF NOT EXISTS ix_doc_chave ON documentos(chave);
 CREATE TABLE IF NOT EXISTS ofx_transacoes (
     banco TEXT, conta TEXT, fitid TEXT, sha256 TEXT, em TEXT, PRIMARY KEY (banco, conta, fitid)
 );
+CREATE TABLE IF NOT EXISTS acoes (
+    id TEXT PRIMARY KEY, lote TEXT, sha256 TEXT, cnpj TEXT, competencia TEXT, tipo TEXT,
+    estado TEXT, dados TEXT, detalhe TEXT, em TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_acoes_estado ON acoes(estado);
 CREATE TABLE IF NOT EXISTS aprovacoes (
     id INTEGER PRIMARY KEY AUTOINCREMENT, lote TEXT, hash TEXT, modo TEXT, motivo TEXT,
     usuario TEXT, em TEXT
@@ -121,6 +126,49 @@ class Trilha:
             if versao != versao_base:
                 out.append({"sha256": sha, "nome": nome, "origem": origem, "caminho": caminho, "reprocesso": True})
         return out
+
+    # --- ações (estado durável: PROPOSTA -> EXECUTADA | FALHOU) -------------------
+    @staticmethod
+    def id_acao(a: dict) -> str:
+        if a["tipo"] == "lancamento_contabil":
+            return f"lancamento_contabil|{a.get('banco')}|{a.get('conta')}|{a.get('fitid')}|{a['cnpj']}"
+        return f"{a['tipo']}|{a.get('sha256')}|{a['cnpj']}|{a.get('pasta_tipo') or ''}"
+
+    def acoes_ja_propostas(self, acoes: list[dict]) -> set[str]:
+        ids = [self.id_acao(a) for a in acoes]
+        if not ids:
+            return set()
+        marcas = ",".join("?" * len(ids))
+        return {r[0] for r in self.con.execute(
+            f"SELECT id FROM acoes WHERE id IN ({marcas}) AND estado IN ('PROPOSTA','EXECUTADA','FALHOU')", ids)}
+
+    def registrar_acoes(self, lote: str, acoes: list[dict]) -> None:
+        for a in acoes:
+            self.con.execute(
+                "INSERT OR IGNORE INTO acoes (id, lote, sha256, cnpj, competencia, tipo, estado, dados, detalhe, em)"
+                " VALUES (?,?,?,?,?,?,'PROPOSTA',?,NULL,?)",
+                (self.id_acao(a), lote, a.get("sha256"), a["cnpj"], a.get("competencia"), a["tipo"], dumps(a), agora()))
+        self.con.commit()
+
+    def marcar_acao(self, a: dict, estado: str, detalhe: str | None = None) -> None:
+        self.con.execute("UPDATE acoes SET estado=?, detalhe=?, em=? WHERE id=?",
+                         (estado, detalhe, agora(), self.id_acao(a)))
+        self.con.commit()
+
+    def acoes_com_falha(self) -> list[dict]:
+        return [{"lote": l, "acao": loads(d), "detalhe": det} for l, d, det in self.con.execute(
+            "SELECT lote, dados, detalhe FROM acoes WHERE estado='FALHOU' ORDER BY em")]
+
+    def atualizar_situacao(self, sha: str, situacao: str) -> None:
+        self.con.execute("UPDATE documentos SET situacao=? WHERE sha256=?", (situacao, sha))
+        self.con.commit()
+
+    def analisados_sem_lote(self) -> list[dict]:
+        """Documentos analisados cujo lote não chegou a ser gravado (queda no meio do ciclo)."""
+        rows = self.con.execute(
+            "SELECT d.sha256, a.nome, a.origem, a.caminho_bruto FROM documentos d JOIN anexos a USING (sha256)"
+            " WHERE d.situacao='ANALISADO'").fetchall()
+        return [{"sha256": r[0], "nome": r[1], "origem": r[2], "caminho": r[3], "reprocesso": True} for r in rows]
 
     def registrar_fitid(self, banco: str, conta: str, fitid: str, sha: str) -> bool:
         """True se a transação é nova (dedupe de extratos sobrepostos)."""

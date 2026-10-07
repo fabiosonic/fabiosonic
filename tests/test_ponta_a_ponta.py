@@ -78,7 +78,8 @@ def test_ciclo_completo_simulacao(tmp_path):
 
     contabil = L.carregar(Path(lotes[f"CONTABIL_{CNPJ_A}_2026-10"]["arquivo"]))
     assert len(contabil["acoes"]) == 1 and contabil["acoes"][0]["credito"] == "1.1.2.01"
-    assert [p["codigo"] for p in contabil["pendencias"]] == ["SEM_CONTRAPARTIDA"]  # tarifa sem histórico
+    assert contabil["pendencias"] == []  # a tarifa sem histórico não trava o lançamento bom
+    assert [p["codigo"] for p in contabil["informativas"]] == ["SEM_CONTRAPARTIDA"]
 
     gerais = {p["codigo"] for p in e["pendencias_gerais"]}
     assert {"DOCUMENTO_NAO_PROCESSADO", "ROTA_PENDENTE"} <= gerais  # pdf/lixo e nota de terceiro
@@ -117,7 +118,7 @@ def test_rascunho_de_solicitacao_ao_cliente(tmp_path):
                                                         "c.xml": nfe_xml(numero=5, protocolo=False)}))
     ctx = ctx_de(base)
     rodar_ciclo(ctx)
-    txt = (ctx.dados / "solicitacoes" / "2026-10" / "101-ALFA.txt").read_text(encoding="utf-8")
+    txt = next((ctx.dados / "solicitacoes" / "2026-10").glob("101-ALFA_*.txt")).read_text(encoding="utf-8")
     assert "não recebemos" in txt and "2, 3" in txt and "protocolo" in txt and "RASCUNHO" in txt
 
 
@@ -161,7 +162,7 @@ def test_sem_normas_conferidas_tudo_vira_pendencia(tmp_path):
     (base / "entrada" / "1.eml").write_bytes(eml_bytes({"n1.xml": nfe_xml(numero=1, crt="3")}))
     e = rodar_ciclo(ctx_de(base))
     lote = L.carregar(Path(e["lotes"][0]["arquivo"]))
-    assert lote["acoes"] == [] and lote["pendencias"][0]["codigo"] == "ROTA_PENDENTE"
+    assert lote["acoes"] == [] and lote["informativas"][0]["codigo"] == "ROTA_PENDENTE"
     assert not e["lotes"][0]["aprovado"]
 
 

@@ -147,7 +147,7 @@ PARAMS_TESTE = {  # valores fictícios só para exercitar o código
     "TABELA_IRRF_MENSAL": {"faixas": [{"ate": "2000.00", "aliquota": "0", "deduzir": "0"},
                                       {"ate": None, "aliquota": "0.10", "deduzir": "200.00"}],
                            "deducao_por_dependente": "100.00",
-                           "redutor": {"zera_ate": "2500.00", "faixa_ate": "3000.00", "constante": "300.00",
+                           "redutor": {"base": "rendimento", "zera_ate": "2500.00", "faixa_ate": "3000.00", "constante": "300.00",
                                        "coeficiente": "0.10"}},
 }
 

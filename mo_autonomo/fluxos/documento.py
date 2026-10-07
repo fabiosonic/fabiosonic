@@ -134,12 +134,14 @@ def n_registrar(e, ctx):
     """Grava o documento na trilha."""
     doc = e.get("doc") or {}
     pend = e.get("pendencias") or []
-    situacao = "FILA" if any(p["codigo"] == "FILA_IA" for p in pend) else ("PENDENTE" if pend else "OK")
+    # ANALISADO vira OK só quando o lote é gravado (n_montar_lotes): queda no meio não perde o documento
+    situacao = "FILA" if any(p["codigo"] == "FILA_IA" for p in pend) else ("PENDENTE" if pend else "ANALISADO")
     resumo = resumo_documento(doc)
     resumo["_versao_base"] = getattr(ctx, "versao_base", None)
+    rotas = list(e.get("rotas", [])) + [{"cnpj": x["cnpj"], "tipo": "EXTRATO"} for x in e.get("extratos_empresa") or []]
     ctx.trilha.registrar_documento(
-        e["sha256"], e.get("classe", "ERRO"), doc.get("chave"), [r["cnpj"] for r in e.get("rotas", [])],
-        doc.get("competencia"), e.get("rotas", []), situacao, resumo)
+        e["sha256"], e.get("classe", "ERRO"), doc.get("chave"), [r["cnpj"] for r in rotas],
+        doc.get("competencia"), rotas, situacao, resumo)
     return {}
 
 

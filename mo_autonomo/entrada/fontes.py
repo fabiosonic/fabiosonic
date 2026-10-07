@@ -85,6 +85,7 @@ class FonteImap:
         self.host, self.porta, self.usuario, self.senha = host, porta, usuario, senha
         self.pasta, self.desde, self.ssl = pasta, desde, ssl
         self._fabrica = fabrica
+        self.uidvalidity = "0"
 
     def _conectar(self):
         if self._fabrica:
@@ -97,6 +98,12 @@ class FonteImap:
         tipo, _ = con.select(self.pasta, readonly=True)  # EXAMINE
         if tipo != "OK":
             raise RuntimeError(f"não foi possível abrir {self.pasta}")
+        # UID só é único dentro do UIDVALIDITY (RFC 3501): entra na chave do e-mail
+        try:
+            _, val = con.response("UIDVALIDITY")
+            self.uidvalidity = (val[0].decode() if val and val[0] else "0")
+        except Exception:  # noqa: BLE001
+            self.uidvalidity = "0"
         return _ImapSomenteLeitura(con)
 
     def testar(self) -> dict:
@@ -121,7 +128,7 @@ class FonteImap:
                     continue
                 for p in partes:
                     if isinstance(p, tuple):
-                        yield EmailBruto(uid=f"imap:{self.pasta}:{uid.decode()}", dados=p[1])
+                        yield EmailBruto(uid=f"imap:{self.pasta}:{self.uidvalidity}:{uid.decode()}", dados=p[1])
         finally:
             try:
                 con.logout()

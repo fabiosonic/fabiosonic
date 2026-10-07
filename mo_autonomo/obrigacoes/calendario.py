@@ -82,9 +82,24 @@ def gerar(competencia: str, perfis_por_cnpj: dict, catalogo, feriados: set[date]
 
 
 def alertas(vencimentos: list[Vencimento], hoje: date, dias: tuple[int, ...] = (3, 0)) -> list[dict]:
-    out = []
+    """Alerta tudo que vence entre hoje e o maior prazo configurado (não perde alerta se o PC não
+    rodou no dia exato, ex.: fim de semana)."""
+    out, janela = [], max(dias) if dias else 0
     for v in vencimentos:
         faltam = (v.vencimento - hoje).days
-        if faltam in dias:
+        if 0 <= faltam <= janela:
             out.append({"quando": "HOJE" if faltam == 0 else f"em {faltam} dia(s)", "vencimento": v})
     return out
+
+
+def competencias_para_alerta(hoje: date, catalogo) -> list[str]:
+    """Competências cujo vencimento pode cair perto de hoje (até o maior meses_apos_competencia)."""
+    maior = max([int(ob["meses_apos_competencia"]) for _, ob in obrigacoes_conferidas(catalogo)] or [1])
+    out = []
+    y, m = hoje.year, hoje.month
+    for k in range(0, maior + 1):
+        mm = m - k
+        yy = y + (mm - 1) // 12
+        mm = (mm - 1) % 12 + 1
+        out.append(f"{yy:04d}-{mm:02d}")
+    return sorted(out)
