@@ -607,7 +607,12 @@ def n_pareceres(e, ctx):
     resumo += ["", "## Pendências sem empresa identificada", ""]
     resumo += [f"- {p['codigo']}: {p['mensagem']}" for p in e.get("pendencias_gerais", [])] or ["- Nenhuma."]
     falhas_exec = [(x["lote"], r) for x in e.get("execucoes", []) for r in x["resultado"]
-                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA")]
+                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA") and not str(r.get("status")).startswith("IGNORADO")]
+    ignorados = [(x["lote"], r) for x in e.get("execucoes", []) for r in x["resultado"]
+                 if str(r.get("status")).startswith("IGNORADO")]
+    if ignorados:
+        resumo += ["", "## Não exportados de propósito (informativo)", ""]
+        resumo += [f"- `{lid}` {r.get('acao', '')} ({r.get('lancamentos', '')}): {r['status']}" for lid, r in ignorados]
     if falhas_exec:
         resumo += ["", "## Execuções com falha (serão refeitas no próximo ciclo)", ""]
         resumo += [f"- `{lid}` {r.get('acao', '')}: {r['status']}" for lid, r in falhas_exec]

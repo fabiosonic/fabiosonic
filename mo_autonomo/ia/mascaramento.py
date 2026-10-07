@@ -4,19 +4,24 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-_SEP = r"[\s./\-\u2013\u2014]{0,3}"
+_SEP = r"[\s./_\-\u2013\u2014]{0,3}"
 _DATA = re.compile(r"(?<!\d)\d{2}/\d{2}/\d{4}(?!\d)|(?<!\d)\d{2}/\d{4}(?!\d)")
 PADROES = {
     # CNPJ alfanumérico (com ou sem pontuação; exige ao menos uma letra) — numérico cai em DOC_NUM
-    "CNPJ": re.compile(r"(?<![A-Z0-9])(?=[A-Z0-9./-]*[A-Z])[A-Z0-9]{2}\.?[A-Z0-9]{3}\.?[A-Z0-9]{3}/?[A-Z0-9]{4}-?\d{2}(?![A-Z0-9])",
+    # sem exigir fronteira à esquerda: o texto extraído de PDF cola o rótulo no número ("CNPJ12ABC...")
+    "CNPJ": re.compile(r"(?:(?<![A-Z0-9])|(?<=CNPJ)|(?<=CPF))(?=[A-Z0-9./_-]{0,20}?[A-Z])"
+                       r"[A-Z0-9]{2}[._]?[A-Z0-9]{3}[._]?[A-Z0-9]{3}[/_]?[A-Z0-9]{4}[_-]?\d{2}(?![A-Z0-9])",
                        re.IGNORECASE),
-    "EMAIL": re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"),
-    "TELEFONE": re.compile(r"(?<!\d)(?:\(?\d{2}\)?\s?)?9?\d{4}[\s-]?\d{4}(?!\d)"),
+    "EMAIL": re.compile(r"[\w.+-]+\s*(?:@|\\u0040|&#64;|\(at\)|\[at\])\s*[\w-]+(?:\s*\.\s*[\w-]+)+", re.IGNORECASE),
+    "TELEFONE": re.compile(r"(?<!\d)(?:\(?\d{2}\)?\s?)?9?\d{4}[\s.-]?\d{4}(?!\d)"),
+    # CPF/CNPJ separado por vírgula (OCR): só no desenho exato, para não engolir valores "1.500,00"
+    "DOC_VIRGULA": re.compile(r"(?<!\d)\d{2,3}(?:[,\s]{1,2}\d{3}){2}[,\s/]{1,2}\d{2,4}(?:[,\s-]{1,2}\d{2})?(?!\d)"),
     # qualquer sequência de 11+ dígitos, mesmo com espaço/ponto/barra/hífen entre eles:
     # cobre CPF, CNPJ, chave de acesso impressa em grupos, PIS, contas.
     "DOC_NUM": re.compile(r"(?<!\d)\d(?:" + _SEP + r"\d){10,}(?!\d)"),
 }
-ORDEM = ("EMAIL", "CNPJ", "DOC_NUM", "TELEFONE")
+ORDEM = ("EMAIL", "CNPJ", "DOC_NUM", "DOC_VIRGULA", "TELEFONE")
+_BASE64 = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
 
 
 @dataclass
@@ -65,11 +70,42 @@ def _letras(n: int) -> str:
             return s
 
 
+def _dv_alfa(base: str) -> str:
+    """Dígitos verificadores do CNPJ (o alfanumérico usa o valor ASCII − 48 de cada caractere)."""
+    def dv(s):
+        pesos = list(range(len(s) - 7, 1, -1)) + list(range(9, 1, -1))
+        r = sum((ord(c) - 48) * p for c, p in zip(s, pesos)) % 11
+        return "0" if r < 2 else str(11 - r)
+    d1 = dv(base)
+    return d1 + dv(base + d1)
+
+
+def _cnpj_alfa_escondido(texto: str) -> bool:
+    """CNPJ alfanumérico picado por espaços/pontuação ("12 ABC 345 01DE 35"): junta tudo e procura
+    janela de 14 caracteres com letra cujos dígitos verificadores batem."""
+    # só sequências de pedaços inteiros (começo e fim de "palavra"), para não pegar texto comum
+    pedacos = re.findall(r"[A-Z0-9]+", texto.upper())
+    for i in range(len(pedacos)):
+        s = ""
+        for p in pedacos[i:i + 6]:
+            s += p
+            if len(s) > 14:
+                break
+            if (len(s) == 14 and s[12:].isdigit() and not s[:12].isdigit() and any(c.isdigit() for c in s[:12])
+                    and _dv_alfa(s[:12]) == s[12:]):
+                return True
+    return False
+
+
 def contem_dado_pessoal(texto: str) -> list[str]:
     """Guarda final antes da nuvem: checa o texto e também a versão sem espaços/pontuação."""
     sem_datas = _DATA.sub(" ", texto)
     achados = [tipo for tipo in ORDEM if PADROES[tipo].search(sem_datas)]
-    compacto = re.sub(r"(?<=[0-9A-Za-z])[\s./\-\u2013\u2014]+(?=[0-9])", "", sem_datas)
+    compacto = re.sub(r"(?<=[0-9A-Za-z])[\s./_\-\u2013\u2014]+(?=[0-9])", "", sem_datas)
     if "DOC_NUM" not in achados and re.search(r"\d{11,}", compacto):
         achados.append("DOC_NUM")
+    if "CNPJ" not in achados and _cnpj_alfa_escondido(sem_datas):
+        achados.append("CNPJ")
+    if _BASE64.search(sem_datas):  # conteúdo codificado não dá para inspecionar: não sai para a nuvem
+        achados.append("BASE64")
     return achados

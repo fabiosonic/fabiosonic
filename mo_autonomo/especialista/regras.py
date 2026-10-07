@@ -285,7 +285,9 @@ REGRAS: list[Regra] = [
           normas=("LC_116_2003", "LEIAUTE_NFSE_ABRASF"),
           parametros=(("LEIAUTE_NFSE_ABRASF", "codigos_iss_retido"),), tipos=("NFSE",), papel=DESTINATARIO),
     Regra("NFSE_RETENCOES_FEDERAIS", "Retenção de CSLL/COFINS/PIS esperada e ausente", r_retencoes_federais,
-          normas=("LEI_10833_ART30", "LEIAUTE_NFSE_NACIONAL"),  # o leiaute nacional diz o que conta como retido
+          # o leiaute nacional só é usado no padrão NACIONAL e, sem ele conferido, a regra nem afirma nada
+          # lá; citá-lo aqui rebaixaria a natureza das notas ABRASF, que não dependem dele
+          normas=("LEI_10833_ART30",),
           parametros=(("LEI_10833_ART30", "codigos_servico_sujeitos"), ("LEI_10833_ART30", "regimes_tomador_obrigados")),
           tipos=("NFSE",), papel=DESTINATARIO),
     Regra("DOC_COMPETENCIA_ROTINA", "Competência fora da janela da rotina automática", r_competencia_rotina,

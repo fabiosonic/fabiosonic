@@ -67,17 +67,30 @@ def ler(caminho: Path) -> list[dict]:
 def escrever_plano(contas: list[dict], destino: Path, sobrescrever: bool = False) -> None:
     """Grava de forma atômica. Plano já existente só é trocado com `sobrescrever`, e o anterior
     fica guardado como plano_contas.AAAAMMDDHHMMSS.bak (nada é apagado)."""
-    if destino.exists():
-        if not sobrescrever:
-            raise FileExistsError(f"{destino} já existe (use --sobrescrever para trocar; o anterior vira .bak)")
-        bak = destino.with_name(f"{destino.stem}.{datetime.now():%Y%m%d%H%M%S}.bak")
-        escrever_atomico(bak, destino.read_bytes())
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
     w.writerow(["codigo", "descricao", "analitica", "classificacao", "grupo"])
     for c in contas:
         w.writerow([c["codigo"], c["descricao"], "S" if c["analitica"] else "N", c["classificacao"], c["grupo"]])
-    escrever_atomico(destino, buf.getvalue().encode("utf-8"))
+    novo = buf.getvalue().encode("utf-8")
+    if destino.exists():
+        atual = destino.read_bytes()
+        if atual == novo:
+            return  # mesmo plano: nada a trocar, nada a guardar
+        if not sobrescrever:
+            raise FileExistsError(f"{destino} já existe e é diferente (use --sobrescrever; o anterior vira .bak)")
+        carimbo = f"{datetime.now():%Y%m%d%H%M%S}"
+        for n in range(1000):  # nome único: um .bak nunca sobrescreve outro
+            bak = destino.with_name(f"{destino.stem}.{carimbo}{'' if n == 0 else f'-{n}'}.bak")
+            try:
+                with open(bak, "xb") as f:
+                    f.write(atual)
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise FileExistsError(f"não foi possível criar .bak único para {destino}")
+    escrever_atomico(destino, novo)
 
 
 def importar_pasta(pasta: Path, carteira, destino_dados: Path, sobrescrever: bool = False) -> dict:

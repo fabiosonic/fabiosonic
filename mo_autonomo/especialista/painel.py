@@ -43,7 +43,7 @@ def gerar(estado: dict, ctx, cobertura: list[dict]) -> str:
                             f"<td>{_e(l['area'])}</td><td>{_e(l.get('competencia'))}</td><td>{sit}</td>"
                             f"<td>{motivos}</td><td><code>{_e(l['hash'][:16])}…</code></td></tr>")
     falhas_exec = [(x["lote"], r) for x in estado.get("execucoes", []) for r in x["resultado"]
-                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA")]
+                   if r.get("status") not in ("GRAVADO", "JA_EXISTIA") and not str(r.get("status")).startswith("IGNORADO")]
     linhas_falhas = [f"<tr><td><code>{_e(l)}</code></td><td>{_e(r.get('acao'))}</td><td class='bad'>{_e(r['status'])}</td></tr>"
                      for l, r in falhas_exec]
     por_codigo = Counter(p["codigo"] for p in gerais)

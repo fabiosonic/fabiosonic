@@ -83,11 +83,28 @@ def auditar(capturados: list[dict], relatorio: list[dict], cnpj: str, competenci
             k = d.get("chave")
         if k:
             nossos[k] = d
-    dom = {l["chave"]: l for l in relatorio if l["cnpj"] == cnpj}
     achados = []
 
     def a(regra, titulo, msg, chave, correcao, valor=None):
         achados.append(Achado(regra, titulo, CONTROLE, msg, cnpj, competencia, chave, [], correcao, True, valor))
+
+    grupos: dict = {}
+    for n, l in enumerate(relatorio, start=1):
+        if l["cnpj"] != cnpj:
+            continue
+        if not l.get("chave"):  # sem chave não dá para cruzar: cada linha é uma pendência, nunca "chave vazia"
+            a("DOMINIO_SEM_CHAVE", "Linha do Domínio sem chave identificável",
+              f"Linha {n} do relatório sem chave (valor {l.get('valor')}).", f"linha-{n}",
+              "Conferir o mapeamento de colunas (chave/número/prestador) do relatório.", l.get("valor"))
+            continue
+        grupos.setdefault(l["chave"], []).append(l)
+    dom = {}
+    for ch, ls in grupos.items():
+        dom[ch] = ls[0]
+        if len(ls) > 1:
+            a("DOMINIO_DUPLICADO", "Documento escriturado mais de uma vez no Domínio",
+              f"Chave {ch} aparece {len(ls)} vezes no relatório do Domínio.", ch,
+              "Excluir a escrituração em duplicidade no Domínio.", sum((x["valor"] for x in ls[1:]), type(ls[0]["valor"])(0)))
 
     for ch, d in sorted(nossos.items()):
         if ch not in dom:

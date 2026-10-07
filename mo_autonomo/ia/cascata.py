@@ -166,6 +166,21 @@ class Cascata:
         raise SemProvedorDisponivel("; ".join(erros) or "todos os provedores em espera de cota")
 
 
+def _host_local(url: str) -> bool:
+    """`local: true` só vale para endereço da própria máquina ou da rede interna: um erro de config
+    não pode mandar documento bruto para a internet (regra 11)."""
+    import ipaddress
+    from urllib.parse import urlparse
+    host = (urlparse(url).hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private
+
+
 def montar_cascata(config_ia: dict, arquivo_estado: str | None = None) -> Cascata:
     provs = []
     for p in config_ia.get("provedores", []):
@@ -173,7 +188,7 @@ def montar_cascata(config_ia: dict, arquivo_estado: str | None = None) -> Cascat
             continue
         provs.append(ProvedorOpenAICompat(
             nome=p["nome"], base_url=p["base_url"], modelo=p["modelo"], chave_env=p.get("chave_env"),
-            local=bool(p.get("local", False)), timeout=float(p.get("timeout", 120)),
+            local=bool(p.get("local", False)) and _host_local(p["base_url"]), timeout=float(p.get("timeout", 120)),
         ))
     return Cascata(provs, espera_padrao_s=float(config_ia.get("espera_padrao_s", 3600)),
                    arquivo_estado=arquivo_estado)

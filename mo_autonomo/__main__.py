@@ -123,8 +123,18 @@ def cmd_auditar(args):
     ctx = _ctx(args, fonte=object())
     cnpj = so_digitos(args.cnpj)
     cols = (ctx.config.get("dominio") or {}).get("relatorio_colunas") or {}
-    rel = [l for l in ler_relatorio(Path(args.relatorio), cols)
-           if not l.get("competencia") or _mesma_competencia(l["competencia"], args.competencia)]
+    if not cols.get("competencia"):
+        sys.exit("config dominio.relatorio_colunas sem 'competencia': sem ela notas de outros meses "
+                 "virariam divergência. Mapeie a coluna de competência/data do relatório.")
+    rel, ilegiveis = [], []
+    for n, l in enumerate(ler_relatorio(Path(args.relatorio), cols), start=1):
+        mesma = _mesma_competencia(l.get("competencia") or "", args.competencia)
+        if mesma is None:
+            ilegiveis.append(f"linha {n}: competência {l.get('competencia')!r} não reconhecida (chave {l.get('chave')})")
+        elif mesma:
+            rel.append(l)
+    for i in ilegiveis:
+        print("PENDÊNCIA:", i)
     caminhos = dict(ctx.trilha.con.execute("SELECT sha256, caminho_bruto FROM anexos").fetchall())
     docs = []
     for d in ctx.trilha.documentos(args.competencia):
@@ -140,15 +150,17 @@ def cmd_auditar(args):
     print(f"{len(achados)} divergência(s) ({len(docs)} documento(s) capturado(s), {len(rel)} linha(s) do Domínio).")
 
 
-def _mesma_competencia(valor: str, comp: str) -> bool:
-    """Aceita 'AAAA-MM', 'MM/AAAA' ou 'DD/MM/AAAA' do relatório."""
+def _mesma_competencia(valor: str, comp: str) -> bool | None:
+    """Aceita 'AAAA-MM', 'MM/AAAA' ou 'DD/MM/AAAA' do relatório. None = formato não reconhecido."""
     import re
     v = valor.strip()
     m = re.fullmatch(r"(\d{4})-(\d{2})(?:-\d{2})?", v) or None
     if m:
         return f"{m.group(1)}-{m.group(2)}" == comp
     m = re.fullmatch(r"(?:\d{2}/)?(\d{2})/(\d{4})", v)
-    return bool(m) and f"{m.group(2)}-{m.group(1)}" == comp
+    if not m:
+        return None
+    return f"{m.group(2)}-{m.group(1)}" == comp
 
 
 def cmd_dp(args):
