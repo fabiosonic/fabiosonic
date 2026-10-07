@@ -2,7 +2,10 @@
   titulo: Metadados/dicionário dos Dados Abertos do CNPJ (Receita Federal)
   area: cadastro
   status: PENDENTE
-  parametros: {}
+  parametros:
+    # PROPOSTA de fonte SECUNDÁRIA (triviumcontabil, toexceed): situação cadastral 01 nula, 02 ativa,
+    # 03 suspensa, 04 inapta, 08 baixada. valor_opcao_sim: SEM proposta (não confirmado na busca).
+    codigo_situacao_ativa: "02"
   # esperados: codigo_situacao_ativa: "<código>"; valor_opcao_sim: "<valor>";
   #            codigo_matriz: "<código>"
   observacao: >-

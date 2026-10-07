@@ -19,7 +19,8 @@
     # aqui como fatia Python [início, fim) => [6, 20] e [20, 22]
     chave_pos_cnpj_emitente: [6, 20]
     chave_pos_modelo: [20, 22]
-    # SEM proposta confiável: modelo_nfce, ind_tot_compoe (preencher na conferência)
+    modelo_nfce: "65"                   # mod 55 = NF-e, 65 = NFC-e (senior, sebrae)
+    ind_tot_compoe: ["1"]               # indTot 1 = vProd compõe o total da NF-e; 0 = não compõe (senior, inventti)
   # parametros esperados após conferência:
   #   crt_por_regime: {"1": [SIMPLES], "2": [SIMPLES], "3": [PRESUMIDO, REAL, IMUNE, ISENTA], "4": [MEI]}
   #   tp_evento_cancelamento: ["<código>"]; cstat_evento_homologado: ["<código>"]
@@ -55,9 +56,14 @@
   titulo: Leiaute da NFS-e Padrão Nacional (DPS/NFS-e) — anexos de leiaute e tabelas
   area: fiscal
   status: PENDENTE
-  parametros: {}
+  fonte_url_sugerida: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica
+  parametros:
+    # PROPOSTA de fonte SECUNDÁRIA (focusnfe, tecnospeed; NT 007 SE/CGNFS-e): tpRetPisCofins 0 nenhum retido;
+    # 3 PIS/COFINS/CSLL retidos; 4 PIS/COFINS retidos e CSLL não; 5-9 combinações parciais; 1 e 2 legados.
+    # Aqui só os códigos em que PIS **e** COFINS estão retidos (a regra soma os dois juntos).
+    codigos_pis_cofins_retidos: ["3", "4"]
+    # codigos_iss_retido: SEM proposta (só se confirmou tpRetISSQN 1 = não retido)
   # esperados: codigos_iss_retido: ["<código tpRetISSQN de retenção>"]
-  #            codigos_pis_cofins_retidos: ["<código tpRetPisCofins que indica retenção>"]
 
 - id: LC_116_2003
   titulo: Lei Complementar 116/2003 — ISS (lista de serviços, local de incidência, retenção)
@@ -125,5 +131,7 @@
   titulo: Leiaute ABRASF de NFS-e adotado pelo município (versão do webservice municipal)
   area: fiscal
   status: PENDENTE
-  parametros: {}
-  # esperados: codigos_iss_retido: ["<valor de IssRetido que indica retenção>"]
+  parametros:
+    # PROPOSTA de fonte SECUNDÁRIA (senior — leiaute ABRASF 2.04): IssRetido 1 = retido, 2 = não retido.
+    # Conferir no leiaute do webservice do município (cada prefeitura publica o seu).
+    codigos_iss_retido: ["1"]

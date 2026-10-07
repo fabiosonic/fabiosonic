@@ -71,7 +71,8 @@ Fonte secundária: juruadocs.com (transcrição do art. 15), guiatrabalhista.com
 
 A conferir com atenção: se há outros cStat que também valem como autorizado (ex.: 150, fora de prazo)
 ou como evento homologado (ex.: 155). O mapeamento CRT 3 → Imune/Isenta é proposta do sistema.
-**Sem proposta:** `modelo_nfce` e `ind_tot_compoe` — a busca não trouxe o texto com confiança.
+Também propostos: `modelo_nfce` = 65 (NFC-e; NF-e é 55) e `ind_tot_compoe` = 1 (vProd compõe o total)
+— fontes: senior, sebrae, inventti.
 
 ## MOC_CTE — tomador do serviço
 
@@ -85,9 +86,25 @@ ou como evento homologado (ex.: 155). O mapeamento CRT 3 → Imune/Isenta é pro
 
 Fontes secundárias: aegro, oobj, alterdata.
 
+## LEIAUTE_NFSE_NACIONAL — retenções (proposta parcial)
+
+`codigos_pis_cofins_retidos` = 3 e 4 (NT 007 SE/CGNFS-e: 0 nenhum retido; 3 PIS/COFINS/CSLL retidos;
+4 PIS/COFINS retidos e CSLL não; 5–9 retenções parciais; 1 e 2 legados). Só entram os códigos em que PIS
+**e** COFINS estão retidos, porque a regra soma os dois juntos. Retenções parciais (5–9) ainda não são
+tratadas. `codigos_iss_retido` (tpRetISSQN) sem proposta. Fontes: focusnfe, tecnospeed.
+
+## LEIAUTE_NFSE_ABRASF — ISS retido
+
+`codigos_iss_retido` = 1 (IssRetido 1 = retido, 2 = não retido; leiaute ABRASF 2.04). Conferir no leiaute
+do webservice do seu município. Fonte: senior.
+
+## DICIONARIO_DADOS_ABERTOS_CNPJ
+
+`codigo_situacao_ativa` = 02 (01 nula, 02 ativa, 03 suspensa, 04 inapta, 08 baixada). `valor_opcao_sim`
+sem proposta. Fontes: triviumcontabil, toexceed.
+
 ## Ainda sem proposta
 
-LEIAUTE_NFSE_NACIONAL/ABRASF (códigos de retenção), LEI_10833_ART30 (serviços sujeitos), TABELA_NCM_
-MONOFASICO, DICIONARIO_DADOS_ABERTOS_CNPJ (códigos de situação/opção), LC 123, Res. CGSN 140, RICMS-RJ,
-ISS-RJ, EFD-Reinf, reforma tributária e normas contábeis: a busca não trouxe os valores com confiança
-suficiente — ficam para a conferência no site oficial.
+LEI_10833_ART30 (serviços sujeitos à retenção), TABELA_NCM_MONOFASICO, tpRetISSQN da NFS-e nacional,
+opção pelo Simples no dicionário do CNPJ, LC 123, Res. CGSN 140, RICMS-RJ, ISS-RJ, EFD-Reinf, reforma
+tributária e normas contábeis.
