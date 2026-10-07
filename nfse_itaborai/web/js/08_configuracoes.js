@@ -121,6 +121,13 @@ PAGINAS.config = async el => {
   <div class="card"><h2>Regras de despesa do extrato</h2><p class="sub">Uma por linha: PALAVRA = Categoria. Débito cujo histórico contém a palavra entra nessa categoria.</p>
     <textarea id="regras" rows="6">${esc(c.regras_despesa.map(([p, k]) => `${p.trim()} = ${k}`).join("\n"))}</textarea></div>
   <div class="card"><h2>Empresa e PIX</h2><div class="campos">${tx("empresa", "pix_chave", "Chave PIX que recebe")}${tx("empresa", "pix_cidade", "Cidade (PIX)")}${tx("empresa", "whatsapp", "WhatsApp do escritório")}${tx("empresa", "assinatura", "Assinatura das mensagens")}</div></div>
+  <div class="card"><h2>${ic("email")}Aparência dos e-mails</h2><p class="sub">A logo e as cores da empresa vão em todos os e-mails aos clientes (boleto, lembrete, cobrança, agradecimento e nota fiscal). A logo vai <b>dentro</b> do e-mail: aparece no Gmail, no Outlook e no celular.</p>
+    <div class="campos"><label class="soltar mini"><input type="file" id="logo_arq" accept="image/png,image/jpeg,image/webp" hidden>${ic("download")}<span><b id="logo_rot">Selecionar a logo</b><small>PNG, JPG ou WEBP — o sistema recorta as bordas e reduz o tamanho</small></span></label>
+    <div id="logo_ver" class="inteiro"></div>
+    ${tx("empresa", "cor_email", "Cor de destaque (botões e valores)", "color")}${tx("empresa", "logo_fundo", "Fundo do cabeçalho e do rodapé", "color")}
+    ${tx("empresa", "site", "Site ou Instagram (rodapé)")}${tx("empresa", "rodape_email", "Frase do rodapé (opcional)")}</div>
+    <p class="sub">O rodapé também mostra o CNPJ, o telefone e o e-mail da empresa (preenchidos em “Dados da empresa”, acima) e o botão do WhatsApp do escritório.</p>
+    <p><button class="btn sec" type="button" id="em_previa">${ic("email")}Ver como fica</button> <button class="btn sec" type="button" id="em_teste">Enviar um exemplo para o meu e-mail</button> <button class="btn sec" type="button" id="logo_tirar" hidden>Remover a logo</button></p></div>
   <div class="card"><h2>Cobrança</h2><div class="campos">
     <label>Meio de cobrança<select data-s="cobranca" data-k="provedor">${[["inter", "Inter: boleto + PIX"], ["pix", "Só PIX copia e cola"], ["nenhum", "Nenhum"]].map(([v, t]) => `<option value="${v}" ${c.cobranca.provedor == v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <h3 class="bloco">Banco Inter (boletos)</h3>${tx("cobranca", "inter_client_id", "Inter: client_id")}${tx("cobranca", "inter_client_secret", "Inter: client_secret", "password")}
@@ -219,6 +226,22 @@ PAGINAS.config = async el => {
     const r = await api("certificado/enviar", { arquivo: await lerB64(f), senha });
     $("#cert_res").innerHTML = `<div class="msg ${r.vencido ? "erro" : "ok"}"><b>${esc(r.titular)}</b> — CNPJ ${fmtDoc(r.cnpj || "")} — válido até ${r.validade} (${r.dias_restantes} dias). Certificado guardado nesta empresa.</div>`;
     $("#cert_senha").value = ""; $("#cert_nome").textContent = "Certificado A1 cadastrado nesta empresa — clique para trocar"; };
+  const logoMostrar = async () => { const r = await api("marca/info");
+    $("#logo_ver").innerHTML = r.tem_logo ? `<div style="display:inline-block;background:${esc($("[data-k=logo_fundo]").value)};padding:12px 20px;border-radius:10px"><img src="${r.logo}" alt="logo" style="max-width:240px;display:block"></div>` : '<p class="sub">Sem logo: o cabeçalho mostra o nome da empresa.</p>';
+    $("#logo_rot").textContent = r.tem_logo ? "Trocar a logo" : "Selecionar a logo"; $("#logo_tirar").hidden = !r.tem_logo; };
+  logoMostrar();
+  $("[data-k=logo_fundo]").oninput = logoMostrar;
+  $("#logo_arq").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try { const r = await prepararLogo(f);
+      $("[data-k=logo_fundo]").value = r.fundo; if (r.cor) $("[data-k=cor_email]").value = r.cor;
+      await api("marca/logo", { arquivo: r.png, fundo: r.fundo, cor: r.cor }); aviso("Logo guardada nesta empresa ✔ — confira em “Ver como fica”.", 6000); logoMostrar();
+    } catch (x) { aviso(x.message || "Não consegui ler esta imagem.", 6000); } };
+  $("#logo_tirar").onclick = async () => { if (!confirm("Remover a logo dos e-mails?")) return; await api("marca/remover"); logoMostrar(); };
+  $("#em_previa").onclick = async () => { if (!await salvarTudo()) return; const r = await api("marca/previa");
+    modal(`<h2>Como o cliente recebe</h2><p class="sub"><b>Assunto:</b> ${esc(r.assunto)}${r.titulo_id ? " · exemplo com o título em aberto mais recente" : ""}</p><iframe id="em_frame" style="width:100%;height:70vh;border:1px solid var(--borda);border-radius:8px;background:#fff"></iframe>`, true);
+    $("#em_frame").srcdoc = r.html; };
+  $("#em_teste").onclick = async () => { if (!await salvarTudo()) return; const para = prompt("Enviar o exemplo para qual e-mail?", c.smtp.usuario || c.empresa.email || ""); if (!para) return;
+    const r = await api("marca/enviar_previa", { para }); aviso(r.mensagem, 8000); };
   $$(".inter_arq").forEach(i => i.onchange = async e => { const f = e.target.files[0]; if (!f) return;
     await api("inter/arquivo", { tipo: i.dataset.t, arquivo: await lerB64(f) }); aviso(`Arquivo .${i.dataset.t} do Inter guardado nesta empresa ✔`); ir("config"); });
   $("#busca_ant").onclick = () => { $("#migra_cfg").innerHTML = '<div class="msg">Procurando…</div>'; mostrarMigracao($("#migra_cfg"), true); };
@@ -365,4 +388,34 @@ async function cartaoAtualizacao(box) {
   $$("[data-volta]", box).forEach(b => b.onclick = async () => {
     if (!confirm(`Voltar o programa para a ${b.textContent}? Os dados não mudam (antes é feito backup).`)) return;
     await api("atualizacao/voltar", { nome: b.dataset.volta }); esperarNova(); });
+}
+
+// Logo dos e-mails: recorta a borda da cor do fundo, reduz para até 560 px e converte em PNG (aceita WEBP/JPG).
+// Devolve também a cor do fundo (cabeçalho) e uma cor de destaque tirada da própria logo.
+async function prepararLogo(arquivo) {
+  const url = URL.createObjectURL(arquivo);
+  try {
+    const img = await new Promise((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => erro(new Error("Não consegui abrir esta imagem.")); i.src = url; });
+    const w = img.naturalWidth, h = img.naturalHeight, cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const g = cv.getContext("2d"); g.drawImage(img, 0, 0); const px = g.getImageData(0, 0, w, h).data;
+    const pt = (x, y) => { const i = (y * w + x) * 4; return [px[i], px[i + 1], px[i + 2], px[i + 3]]; };
+    const cantos = [pt(2, 2), pt(w - 3, 2), pt(2, h - 3), pt(w - 3, h - 3)];
+    const transparente = cantos.every(p => p[3] < 20);
+    const fundo = transparente ? [11, 31, 58] : [0, 1, 2].map(k => Math.round(cantos.reduce((a, p) => a + p[k], 0) / 4));
+    const diferente = (x, y) => { const p = pt(x, y); if (p[3] < 20) return false; if (transparente) return true; return Math.abs(p[0] - fundo[0]) + Math.abs(p[1] - fundo[1]) + Math.abs(p[2] - fundo[2]) > 60; };
+    let x0 = w, y0 = h, x1 = 0, y1 = 0; const passo = Math.max(1, Math.floor(Math.min(w, h) / 400));
+    let soma = [0, 0, 0], n = 0;
+    for (let y = 0; y < h; y += passo) for (let x = 0; x < w; x += passo) if (diferente(x, y)) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      const [r, gg, b] = pt(x, y), mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+      if (mx > 150 && (mx - mn) / mx > .55) { soma[0] += r; soma[1] += gg; soma[2] += b; n++; } }
+    if (x1 <= x0 || y1 <= y0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; }
+    const m = Math.round(Math.max(x1 - x0, y1 - y0) * .05); x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(w - 1, x1 + m); y1 = Math.min(h - 1, y1 + m);
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1, esc_ = Math.min(1, 560 / cw), out = document.createElement("canvas");
+    out.width = Math.round(cw * esc_); out.height = Math.round(ch * esc_);
+    const o = out.getContext("2d"); o.imageSmoothingQuality = "high"; o.drawImage(cv, x0, y0, cw, ch, 0, 0, out.width, out.height);
+    const hex = a => "#" + a.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+    const cor = n ? hex(soma.map(v => v / n * .78)) : "";          // um pouco mais escura: texto branco legível nos botões
+    return { png: out.toDataURL("image/png"), fundo: hex(fundo), cor };
+  } finally { URL.revokeObjectURL(url); }
 }

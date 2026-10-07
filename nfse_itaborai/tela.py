@@ -12,7 +12,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import (acesso, contatos, mensagens, textos, licenca, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
+from . import (acesso, contatos, marca, mensagens, textos, licenca, assistente, atualizacao, automacao, cartao, nitrus, paises, whatsapp, whatsapp_web, backup, clientes, fiscal, cobranca, conciliacao, contabil, config, db, emissor, financeiro, importacao,
                empresas, importador, inter, lote, migracao, nacional, relatorios, saude, servicos)
 from . import __version__
 from .validacao import ErroValidacao
@@ -351,6 +351,11 @@ ROTAS = {
     "mensagem": lambda c: mensagens.obter(_id(c)),
     "mensagem/reenviar": lambda c: mensagens.reenviar(_id(c)),
     "modelos_msg": lambda c: textos.listar(),
+    "marca/info": lambda c: marca.info(),
+    "marca/logo": lambda c: marca.salvar_logo(str(c.get("arquivo") or ""), str(c.get("fundo") or ""), str(c.get("cor") or "")),
+    "marca/remover": lambda c: marca.remover_logo(),
+    "marca/previa": lambda c: cobranca.previa_email(),
+    "marca/enviar_previa": lambda c: cobranca.enviar_previa_email(str(c.get("para") or "")),
     "cobranca/suspensao_previa": lambda c: cobranca.previa_suspensao(),
     "modelos_msg/salvar": lambda c: textos.salvar(str(c.get("chave", "")), str(c.get("assunto") or ""), str(c.get("texto") or "")),
     "modelos_msg/previa": lambda c: textos.previa(str(c.get("chave", "")), str(c.get("assunto") or ""), str(c.get("texto") or "")),

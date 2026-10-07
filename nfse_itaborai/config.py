@@ -18,6 +18,10 @@ PADRAO = {
         "email": "",                # e-mail da empresa na NFS-e (Emissor Nacional: prest/email no DANFSe)
         "telefone": "",             # telefone da empresa na NFS-e (Emissor Nacional: prest/fone no DANFSe)
         "contato_na_nota": True,    # Itaboraí não tem campo de contato do prestador: vai nas observações da nota
+        "cor_email": "#1f4fbf",     # cor de destaque dos e-mails (botões, valores) — Aparência dos e-mails
+        "logo_fundo": "#0b1f3a",    # fundo do cabeçalho e do rodapé (a cor do fundo da logo)
+        "site": "",                 # site ou Instagram no rodapé dos e-mails
+        "rodape_email": "",         # frase do rodapé dos e-mails (ex.: "Contabilidade que cuida do seu negócio")
     },
     "smtp": {"host": "", "porta": 587, "usuario": "", "senha": "", "remetente": "", "ssl": False,
              "copia_para": ""},

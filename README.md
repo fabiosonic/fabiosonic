@@ -563,6 +563,21 @@ use o botão **Enviar ao cliente**.
   prazos mudados em Configurações › Cobrança.
 - Ao atualizar, a régua antiga (+1, +5, +15, +30 dias) é trocada por esse ciclo automaticamente.
 
+### Aparência dos e-mails (logo e cores de cada empresa)
+
+Em **Configurações › Aparência dos e-mails** cada empresa escolhe a sua logo (PNG, JPG ou WEBP), a cor de
+destaque, a cor do cabeçalho/rodapé, o site e uma frase de rodapé. A tela recorta as bordas da imagem, reduz o
+tamanho e sugere as cores a partir da própria logo; **Ver como fica** mostra o e-mail e **Enviar um exemplo**
+manda um para o escritório conferir no Gmail/celular.
+
+- A logo vai **embutida** no e-mail (imagem `cid:logo`): aparece sem depender de site nem de "baixar imagens".
+- Fica em `dados/logo_email.png` **da empresa** (entra no backup; nunca aparece em outra empresa) e **não faz
+  parte do programa**: quem compra o sistema começa sem logo (cabeçalho com o nome da empresa) e só troca o
+  arquivo pela tela. Nada da marca de um cliente vai no pacote de instalação ou de atualização.
+- Todos os e-mails a clientes usam a mesma moldura (boleto, lembrete, vence hoje, atraso, vários títulos,
+  agradecimento, nota fiscal e aviso de suspensão), com o botão do WhatsApp do escritório e CNPJ/telefone/e-mail
+  no rodapé. Pessoa física e MEI são chamados pelo primeiro nome ("Olá, Bruno!").
+
 ### Modelos das mensagens (editáveis)
 
 Em **Mensagens › Modelos das mensagens** dá para editar o assunto e o texto de cada mensagem: boleto, lembrete, vence

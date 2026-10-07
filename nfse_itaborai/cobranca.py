@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, horario, inter, mensagens, pix, textos, whatsapp, whatsapp_web
+from . import clientes, config, db, emissor, financeiro, horario, inter, marca, mensagens, pix, textos, whatsapp, whatsapp_web
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -366,7 +366,7 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
     No WhatsApp não há anexo: sai a linha digitável e o PIX, e o PDF fica no e-mail."""
     cfg = cfg or config.carregar()
     c = _conteudo(t, etapa, cfg, em)
-    linhas = [f"Olá, {c['nome']}!", "", c["abertura"]]
+    linhas = [f"Olá, {saudacao(t, c['nome'])}!", "", c["abertura"]]
     if c["atraso"]:
         linhas.append("Se já pagou, por favor desconsidere e nos envie o comprovante.")
     linhas += ["", f"Referente a: {c['referente']} — competência {c['competencia']}"]
@@ -396,44 +396,105 @@ def mensagem(t: dict, etapa: int, cfg: dict | None = None, em: date | None = Non
     return c["assunto"], "\n".join(linhas)
 
 
+def saudacao(t: dict, nome: str) -> str:
+    """Pessoa física (CPF) ou MEI com o CPF/CNPJ no nome: chama pelo primeiro nome ('Olá, Bruno!').
+    Empresa: o nome da empresa, como antes."""
+    bruto = str(t.get("cliente_nome") or "")
+    doc = re.sub(r"\D", "", str(t.get("cpf_cnpj") or ""))
+    pessoa = len(doc) == 11 or re.match(r"^\s*\d{2}\.?\d{3}\.?\d{3}\s", bruto) or re.search(r"\b\d{11}\s*$", bruto)
+    if not pessoa:
+        return nome
+    limpo = re.sub(r"^\s*[\d./-]+\s+|\s+[\d./-]+\s*$", "", nome).strip()
+    primeiro = (limpo.split() or [nome])[0]
+    return primeiro.capitalize() if primeiro.isupper() else primeiro
+
+
+def previa_email() -> dict:
+    """Aparência do e-mail (Configurações): o boleto do título em aberto mais recente — ou um exemplo."""
+    cfg = config.carregar()
+    t = (db.linhas("SELECT * FROM titulos WHERE status='aberto' ORDER BY id DESC LIMIT 1") or [None])[0]
+    if t:
+        html = mensagem_html(t, ETAPA_BOLETO, cfg)
+        assunto = _conteudo(t, ETAPA_BOLETO, cfg)["assunto"]
+    else:
+        assunto = "Boleto dos honorários"
+        html = marca.html_de_texto("Olá, Cliente Exemplo!\n\nSegue a cobrança dos honorários de R$ 1.200,00, com "
+                                   "vencimento em 20/10/2026.", cfg, assunto)
+    logo = marca.info()["logo"]
+    return {"assunto": assunto, "html": html.replace(f"cid:{marca.CID}", logo) if logo else html, "titulo_id": t["id"] if t else None}
+
+
+def enviar_previa_email(para: str = "") -> dict:
+    """Manda o exemplo para o próprio escritório ver no Gmail/Outlook/celular (não vai a cliente)."""
+    cfg = config.carregar()
+    para = (para or cfg["smtp"].get("usuario") or cfg["empresa"].get("email") or "").strip()
+    if "@" not in para:
+        raise ValueError("Informe o e-mail que vai receber o exemplo.")
+    p = previa_email()
+    html = p["html"]
+    logo = marca.info()["logo"]
+    if logo:
+        html = html.replace(logo, f"cid:{marca.CID}")
+    enviar_email(para, "[EXEMPLO] " + p["assunto"], "Exemplo do e-mail de cobrança (só o escritório recebe).", cfg,
+                 html=html, teste=True, ref={"tipo": "Teste"})
+    return {"mensagem": f"Exemplo enviado para {para}. Confira na caixa de entrada (e no celular)."}
+
+
 def mensagem_html(t: dict, etapa: int, cfg: dict | None = None, em: date | None = None) -> str:
-    """Versão formatada do e-mail de cobrança (compatível com Gmail/Outlook: tabelas e estilos em linha)."""
+    """Versão formatada do e-mail de cobrança, com a logo e as cores da empresa (marca.casca)."""
     from html import escape as e
     cfg = cfg or config.carregar()
     c = _conteudo(t, etapa, cfg, em)
-    cor = "#b42318" if c["atraso"] else "#1f4fbf"
-    selo = "EM ATRASO" if c["atraso"] else ("VENCE HOJE" if etapa == 0 else "LEMBRETE")
+    cs = marca.cores(cfg)
+    cor = marca.VERMELHO if c["atraso"] else cs["destaque"]
+    selo = "PAGAMENTO EM ATRASO" if c["atraso"] else ("VENCE HOJE" if etapa == 0 else "BOLETO DOS HONORÁRIOS"
+                                                      if etapa == ETAPA_BOLETO else "LEMBRETE DE VENCIMENTO")
     linha = lambda r, v, forte=False: (  # noqa: E731
-        f'<tr><td style="padding:6px 0;color:#667085;font-size:14px">{r}</td>'
-        f'<td style="padding:6px 0;text-align:right;font-size:14px;{"font-weight:700;color:#101828" if forte else "color:#101828"}">{v}</td></tr>')
+        f'<tr><td style="padding:7px 0;color:#667085;font-size:14px;border-bottom:1px solid #eef1f5">{r}</td>'
+        f'<td style="padding:7px 0;text-align:right;font-size:14px;border-bottom:1px solid #eef1f5;'
+        f'{"font-weight:700;" if forte else ""}color:#101828">{v}</td></tr>')
     botao = lambda url, txt, fundo: (  # noqa: E731
         f'<a href="{e(url)}" style="display:inline-block;background:{fundo};color:#ffffff;text-decoration:none;'
-        f'font-weight:700;font-size:15px;padding:12px 20px;border-radius:8px;margin:4px 6px 4px 0">{txt}</a>')
-    caixa = lambda titulo, conteudo: (  # noqa: E731
-        f'<p style="margin:18px 0 6px;font-size:13px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.04em">{titulo}</p>'
-        f'<div style="background:#f4f6f9;border:1px solid #e3e7ee;border-radius:8px;padding:12px;font-family:Consolas,Menlo,monospace;'
-        f'font-size:13px;color:#101828;word-break:break-all">{e(conteudo)}</div>')
+        f'font-weight:700;font-size:15px;padding:13px 22px;border-radius:8px;margin:4px 6px 4px 0">{txt}</a>')
+    caixa = lambda titulo, conteudo, dica="": (  # noqa: E731
+        f'<p style="margin:18px 0 6px;font-size:12px;color:#667085;font-weight:700;text-transform:uppercase;letter-spacing:.06em">{titulo}</p>'
+        f'<div style="background:#f4f7fb;border:1px dashed #c7d2e2;border-radius:8px;padding:12px;font-family:Consolas,Menlo,monospace;'
+        f'font-size:13px;color:#101828;word-break:break-all">{e(conteudo)}</div>'
+        + (f'<p style="margin:4px 0 0;font-size:12px;color:#98a2b3">{dica}</p>' if dica else ""))
+    valor_destaque = c["total"] if c["atraso"] else c["valor"]
+    rotulo_valor = "Valor atualizado (multa e juros)" if c["atraso"] else "Valor"
+    destaque = (f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:{marca.clara(cor, .93)};'
+                f'border-left:4px solid {cor};border-radius:10px;margin:4px 0 18px"><tr>'
+                f'<td style="padding:16px 18px"><span style="font-size:12px;color:#667085;text-transform:uppercase;letter-spacing:.06em">'
+                f'{rotulo_valor}</span><br><span style="font-size:28px;font-weight:700;color:#101828">{valor_destaque}</span></td>'
+                f'<td align="right" style="padding:16px 18px"><span style="font-size:12px;color:#667085;text-transform:uppercase;'
+                f'letter-spacing:.06em">Vencimento</span><br><span style="font-size:20px;font-weight:700;color:{cor}">'
+                f'{c["vencimento"]}</span></td></tr></table>')
     detalhes = (linha("Referente a", e(c["referente"])) + linha("Competência", c["competencia"])
-                + linha("Vencimento", c["vencimento"]) + linha("Valor", c["valor"], not c["atraso"])
-                + (linha("Valor atualizado (multa e juros)", c["total"], True) if c["atraso"] else "")
-                + (linha("NFS-e", (f'<a href="{e(c["nfse_link"])}" style="color:#1f4fbf">nº {e(c["nfse"])}</a>'
+                + (linha("Valor original", c["valor"]) if c["atraso"] else "")
+                + (linha("NFS-e", (f'<a href="{e(c["nfse_link"])}" style="color:{cs["destaque"]}">nº {e(c["nfse"])}</a>'
                                    if c["nfse_link"] else f"nº {e(c['nfse'])}")) if c["nfse"] else ""))
     pagar = ""
     if c["boleto_link"]:
-        pagar += botao(c["boleto_link"], "Pagar boleto / PIX", "#1f4fbf")
+        pagar += botao(c["boleto_link"], "Pagar boleto / PIX", cs["destaque"])
     if c["cartao"]:
         pagar += botao(c["cartao"]["link"], "Pagar com cartão de crédito", "#344054")
-    corpo = (f'<p style="margin:0 0 4px;font-size:16px;color:#101828">Olá, <b>{e(c["nome"])}</b>!</p>'
-             f'<p style="margin:8px 0 16px;font-size:15px;line-height:1.5;color:#344054">{e(c["abertura"])}'
+    pdf = ""
+    if _pdf_vai(c, cfg):
+        pdf = (f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0 0"><tr>'
+               f'<td style="padding:12px 14px;border:1px solid #e3e7ee;border-radius:8px;font-size:14px;color:#344054;line-height:1.5">'
+               f'📎 <b>O boleto em PDF segue anexo a este e-mail.</b>'
+               + (" Pague pelo código de barras ou pelo <b>QR Code do PIX</b> impresso no boleto." if c["pix"] else "")
+               + "</td></tr></table>")
+    corpo = (f'<p style="margin:0 0 6px;font-size:17px;color:#101828">Olá, <b>{e(saudacao(t, c["nome"]))}</b>!</p>'
+             f'<p style="margin:6px 0 16px;font-size:15px;line-height:1.6;color:#344054">{e(c["abertura"])}'
              + (" Se já pagou, por favor desconsidere e nos envie o comprovante." if c["atraso"] else "") + "</p>"
-             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e3e7ee;'
-             f'border-bottom:1px solid #e3e7ee;margin:0 0 8px">{detalhes}</table>'
+             + destaque
+             + f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 4px">{detalhes}</table>'
              + (f'<div style="margin:16px 0 4px">{pagar}</div>' if pagar else "")
-             + (caixa("Linha digitável do boleto", c["linha"]) if c["linha"] else "")
-             + ('<p style="margin:6px 0 0;font-size:13px;color:#667085">O boleto em PDF segue em anexo'
-                + (" — pague pelo código de barras ou pelo <b>QR Code do PIX</b> impresso no boleto" if c["pix"] else "") + ".</p>"
-                if _pdf_vai(c, cfg) else "")
-             + (caixa("PIX copia e cola", c["pix"]) if _pix_na_mensagem(c, cfg) else ""))
+             + pdf
+             + (caixa("Linha digitável do boleto", c["linha"], "Copie e cole no app do seu banco, em “Pagar boleto”.") if c["linha"] else "")
+             + (caixa("PIX copia e cola", c["pix"], "No app do banco: PIX › Pix copia e cola.") if _pix_na_mensagem(c, cfg) else ""))
     if c["cartao"]:
         k = c["cartao"]
         corpo += (f'<div style="margin:18px 0 0;padding:12px 14px;border:1px solid #e3e7ee;border-radius:8px;font-size:14px;color:#344054;line-height:1.5">'
@@ -441,20 +502,9 @@ def mensagem_html(t: dict, etapa: int, cfg: dict | None = None, em: date | None 
                   + (f' — inclui {_brl(k["acrescimo"])} da taxa da operadora, por conta de quem paga com cartão.' if k["acrescimo"] else ".")
                   + " Parcelamento disponível, com os juros por conta do titular do cartão."
                   + (" <b>Pelo boleto ou PIX, sem acréscimo.</b>" if k["acrescimo"] and (c["linha"] or c["pix"]) else "")
-                  + f'<br><a href="{e(k["link"])}" style="color:#1f4fbf">{e(k["link"])}</a></div>')
-    rodape = e(c["assinatura"]) + (f' · WhatsApp {e(c["whatsapp"])}' if c["whatsapp"] else "")
-    return (f'<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
-            f'<title>{e(c["assunto"])}</title></head><body style="margin:0;padding:0;background:#f4f6f9">'
-            f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f9;padding:24px 12px">'
-            f'<tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
-            f'style="max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e3e7ee;font-family:Segoe UI,Arial,sans-serif">'
-            f'<tr><td style="padding:18px 24px;border-bottom:4px solid {cor}"><span style="font-size:17px;font-weight:700;color:#101828">'
-            f'{e(cfg["empresa"]["nome"])}</span><span style="float:right;font-size:12px;font-weight:700;color:{cor};'
-            f'border:1px solid {cor};border-radius:999px;padding:3px 10px">{selo}</span></td></tr>'
-            f'<tr><td style="padding:22px 24px">{corpo}</td></tr>'
-            f'<tr><td style="padding:14px 24px;background:#f8f9fb;border-top:1px solid #e3e7ee;border-radius:0 0 12px 12px;'
-            f'font-size:13px;color:#667085">Atenciosamente,<br><b style="color:#344054">{rodape}</b></td></tr>'
-            f'</table></td></tr></table></body></html>')
+                  + f'<br><a href="{e(k["link"])}" style="color:{cs["destaque"]}">{e(k["link"])}</a></div>')
+    corpo += ('<p style="margin:20px 0 0;font-size:15px;color:#344054">Obrigado pela parceria!</p>' if not c["atraso"] else "")
+    return marca.casca(cfg, c["assunto"], corpo, selo, marca.VERMELHO if c["atraso"] else "")
 
 
 def _para(cli: dict) -> str:
@@ -495,8 +545,14 @@ def enviar_email(para: str, assunto: str, texto: str, cfg: dict | None = None, a
         msg["Bcc"] = s["copia_para"]
     msg["Subject"] = assunto
     msg.set_content(texto)
+    if not html and not teste:
+        html = marca.html_de_texto(texto, cfg, assunto, (ref or {}).get("tipo", ""))
     if html:
         msg.add_alternative(html, subtype="html")
+        logo = marca.logo() if f"cid:{marca.CID}" in html else b""
+        if logo:
+            msg.get_payload()[1].add_related(logo, maintype="image", subtype="png", cid=f"<{marca.CID}>",
+                                             filename="logo.png", disposition="inline")
     import mimetypes
     for caminho in anexos or []:
         tipo = (mimetypes.guess_type(str(caminho))[0] or "application/octet-stream").split("/", 1)
@@ -819,7 +875,7 @@ def mensagem_grupo(itens: list[tuple[dict, int]], cfg: dict | None = None, em: d
     """(assunto, texto) de uma mensagem com vários títulos do mesmo cliente (e-mail ou WhatsApp)."""
     cfg = cfg or config.carregar()
     cs, g = _grupo(itens, cfg, em, canal)
-    linhas = [f"Olá, {g['nome']}!", "", g["abertura"]]
+    linhas = [f"Olá, {saudacao(cs[0]['_t'], g['nome'])}!", "", g["abertura"]]
     if g["atraso"]:
         linhas.append("Se já pagou, por favor desconsidere e nos envie o comprovante.")
     for i, c in enumerate(cs, 1):
@@ -852,8 +908,8 @@ def mensagem_grupo_html(itens: list[tuple[dict, int]], cfg: dict | None = None, 
     from html import escape as e
     cfg = cfg or config.carregar()
     cs, g = _grupo(itens, cfg, em)
-    cor = "#b42318" if g["atraso"] else "#1f4fbf"
-    selo = "EM ATRASO" if g["atraso"] else "COBRANÇA"
+    destaque = marca.cores(cfg)["destaque"]
+    selo = "PAGAMENTOS EM ATRASO" if g["atraso"] else "BOLETOS DOS HONORÁRIOS"
     td = 'style="padding:8px 6px;border-bottom:1px solid #e3e7ee;font-size:14px;color:#101828;vertical-align:top"'
     th = 'style="padding:6px;border-bottom:2px solid #e3e7ee;font-size:12px;color:#667085;text-align:left"'
     linhas = "".join(
@@ -873,31 +929,19 @@ def mensagem_grupo_html(itens: list[tuple[dict, int]], cfg: dict | None = None, 
         f'font-size:12px;color:#101828;word-break:break-all">{e(conteudo)}</div>')
     pagar = ""
     for i, c in enumerate(cs, 1):
-        bloco = ((f'<a href="{e(c["boleto_link"])}" style="color:#1f4fbf;font-weight:700">Pagar boleto / PIX</a> ' if c["boleto_link"] else "")
-                 + (f'· <a href="{e(c["cartao"]["link"])}" style="color:#1f4fbf">cartão de crédito ({_brl(c["cartao"]["valor"])}, taxa por conta de quem paga com cartão)</a>' if c["cartao"] else "")
+        bloco = ((f'<a href="{e(c["boleto_link"])}" style="color:{destaque};font-weight:700">Pagar boleto / PIX</a> ' if c["boleto_link"] else "")
+                 + (f'· <a href="{e(c["cartao"]["link"])}" style="color:{destaque}">cartão de crédito ({_brl(c["cartao"]["valor"])}, taxa por conta de quem paga com cartão)</a>' if c["cartao"] else "")
                  + (caixa("Linha digitável", c["linha"]) if c["linha"] else "") + (caixa("PIX copia e cola", c["pix"]) if _pix_na_mensagem(c, cfg) else ""))
         if bloco:
             pagar += (f'<div style="margin:16px 0 0;padding-top:12px;border-top:1px dashed #e3e7ee">'
                       f'<p style="margin:0 0 6px;font-size:14px;color:#101828"><b>{i}) {e(c["referente"])}</b> — '
                       f'vencimento {c["vencimento"]}</p>{bloco}</div>')
-    corpo = (f'<p style="margin:0 0 4px;font-size:16px;color:#101828">Olá, <b>{e(g["nome"])}</b>!</p>'
+    corpo = (f'<p style="margin:0 0 4px;font-size:16px;color:#101828">Olá, <b>{e(saudacao(cs[0]["_t"], g["nome"]))}</b>!</p>'
              f'<p style="margin:8px 0 16px;font-size:15px;line-height:1.5;color:#344054">{e(g["abertura"])}'
              + (" Se já pagou, por favor desconsidere e nos envie o comprovante." if g["atraso"] else "") + "</p>"
              + tabela + ('<p style="margin:6px 0 0;font-size:13px;color:#667085">Os boletos em PDF seguem em anexo.</p>' if g["pdf"] else "")
              + pagar)
-    rodape = e(g["assinatura"]) + (f' · WhatsApp {e(g["whatsapp"])}' if g["whatsapp"] else "")
-    return (f'<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
-            f'<title>{e(g["assunto"])}</title></head><body style="margin:0;padding:0;background:#f4f6f9">'
-            f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f9;padding:24px 12px">'
-            f'<tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
-            f'style="max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e3e7ee;font-family:Segoe UI,Arial,sans-serif">'
-            f'<tr><td style="padding:18px 24px;border-bottom:4px solid {cor}"><span style="font-size:17px;font-weight:700;color:#101828">'
-            f'{e(cfg["empresa"]["nome"])}</span><span style="float:right;font-size:12px;font-weight:700;color:{cor};'
-            f'border:1px solid {cor};border-radius:999px;padding:3px 10px">{selo}</span></td></tr>'
-            f'<tr><td style="padding:22px 24px">{corpo}</td></tr>'
-            f'<tr><td style="padding:14px 24px;background:#f8f9fb;border-top:1px solid #e3e7ee;border-radius:0 0 12px 12px;'
-            f'font-size:13px;color:#667085">Atenciosamente,<br><b style="color:#344054">{rodape}</b></td></tr>'
-            f'</table></td></tr></table></body></html>')
+    return marca.casca(cfg, g["assunto"], corpo, selo, marca.VERMELHO if g["atraso"] else "")
 
 
 # ---------------------------------------------------------------- depois do pagamento: agradecimento e nota fiscal
@@ -919,10 +963,10 @@ def mensagem_pagamento(t: dict, cfg: dict) -> tuple[str, str]:
     dados = _dados_modelo(t, cfg)
     if textos.personalizado(cfg, "agradecimento", "texto") or textos.personalizado(cfg, "agradecimento", "assunto"):
         corpo = textos.texto(cfg, "agradecimento", "texto", dados)
-        texto = "\n".join([f"Olá, {dados['cliente']}!", "", corpo, "", *_saldo_parcial(t),
+        texto = "\n".join([f"Olá, {saudacao(t, dados['cliente'])}!", "", corpo, "", *_saldo_parcial(t),
                             "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
         return textos.texto(cfg, "agradecimento", "assunto", dados), texto
-    texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
+    texto = "\n".join([f"Olá, {saudacao(t, nome_cliente(t['cliente_nome']))}!", "",
                         f"Recebemos o seu pagamento de {_brl(t['valor_pago_cent'] or t['valor_cent'])} em "
                         f"{_data(t['data_pagamento'])}, referente a: {ref}.", "",
                         *_saldo_parcial(t),
@@ -938,11 +982,11 @@ def mensagem_nfse(t: dict, cfg: dict) -> tuple[str, str]:
     if textos.personalizado(cfg, "nota_fiscal", "texto") or textos.personalizado(cfg, "nota_fiscal", "assunto"):
         dados = _dados_modelo(t, cfg)
         corpo = textos.texto(cfg, "nota_fiscal", "texto", dados)
-        texto = "\n".join([f"Olá, {dados['cliente']}!", "", corpo,
+        texto = "\n".join([f"Olá, {saudacao(t, dados['cliente'])}!", "", corpo,
                             *([f"Consulta da nota: {link}"] if link and link not in corpo else []),
                             "", "Atenciosamente,", emp.get("assinatura") or emp["nome"]])
         return textos.texto(cfg, "nota_fiscal", "assunto", dados), texto
-    texto = "\n".join([f"Olá, {nome_cliente(t['cliente_nome'])}!", "",
+    texto = "\n".join([f"Olá, {saudacao(t, nome_cliente(t['cliente_nome']))}!", "",
                         (f"Segue a nota fiscal de serviço (NFS-e nº {t['nfse_numero']}) referente ao pagamento de "
                          f"{_brl(t['valor_pago_cent'] or t['valor_cent'])} — competência {t['competencia'][5:]}/{t['competencia'][:4]}."
                          if t.get("status") == "pago" else
