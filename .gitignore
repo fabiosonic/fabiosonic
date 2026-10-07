@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# dados reais e saídas — nunca versionar (LGPD)
+config/config.yaml
+config/empresas.csv
+config/socios.csv
+config/contas_bancarias.csv
+dados/
+_BRUTO_EMAIL/
+_STAGING/
+*.sqlite
+*.sqlite3
+*.db
+.env

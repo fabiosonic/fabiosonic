@@ -1,0 +1,23 @@
+- id: TABELA_INSS_SEGURADO
+  titulo: Tabela de contribuição do segurado empregado (INSS) — portaria interministerial do ano
+  area: dp
+  status: PENDENTE
+  parametros: {}
+  # esperados: faixas: [{ate: "<valor>", aliquota: "<fração>"}, ...] (cálculo progressivo)
+
+- id: TABELA_IRRF_MENSAL
+  titulo: Tabela progressiva mensal do IRPF/IRRF e redutor (Lei 15.270/2025)
+  area: dp
+  status: PENDENTE
+  parametros: {}
+  # esperados: faixas: [{ate: <valor ou null>, aliquota: "<fração>", deduzir: "<valor>"}],
+  #            deducao_por_dependente: "<valor>",
+  #            redutor: {zera_ate: "<valor>", faixa_ate: "<valor>", constante: "<valor>", coeficiente: "<fração>"}
+
+- id: LEI_8036_FGTS
+  titulo: Lei 8.036/1990 — FGTS
+  area: dp
+  status: PENDENTE
+  fonte_url_sugerida: https://www.planalto.gov.br/ccivil_03/leis/l8036consol.htm
+  parametros: {}
+  # esperados: aliquota_deposito: "<fração>"

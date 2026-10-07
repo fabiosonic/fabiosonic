@@ -1,0 +1,52 @@
+# Copie para config/config.yaml (não versionado) e ajuste.
+modo: simulacao            # simulacao | producao (produção só a pedido explícito do usuário)
+
+pastas:
+  dados: dados             # trilha.sqlite, _BRUTO_EMAIL, _STAGING, lotes, pareceres
+  normas: config/normas
+  xml_notas_producao: 'D:\XML NOTAS'   # usado só em modo producao
+
+cadastro:
+  empresas: config/empresas.csv          # gerado da exportação do cadastro do Domínio
+  contas_bancarias: config/contas_bancarias.csv
+
+receita:
+  pasta_dados_abertos: dados/rfb         # zips oficiais Empresas*, Estabelecimentos*, Simples*
+  colunas: {}                            # sobrescreve posições se o metadado oficial mudar
+
+email:
+  tipo: pasta                            # pasta (testes) | imap
+  pasta_eml: dados/entrada_eml
+  host:                                  # servidor IMAP do Email em Nuvem (pendente)
+  porta: 993
+  ssl: true
+  usuario: fiscal@moraeseoliveiracontabil.com.br
+  pasta: INBOX
+  desde_dias: 30
+  senha_env: MO_IMAP_SENHA               # ou keyring: serviço abaixo
+  keyring_servico: mo_autonomo_imap
+
+dominio:
+  tipos_pasta: {}                        # sobrescreve nomes das pastas, se diferirem
+  relatorio_colunas: {}                  # ex.: {chave: "Chave", valor: "Valor Contábil", cnpj: "CNPJ"}
+
+contabil:
+  minimo_ocorrencias: 2                  # vezes que o histórico precisa aparecer no razão
+  dominancia: 0.8                        # fração mínima da contrapartida mais usada
+
+aprovacao_por_excecao:
+  ativa: false                           # ligar só depois de conferir a amostra da simulação
+  valor_limite:                          # obrigatório para auto-aprovação
+  acoes_auto_permitidas: [copiar_xml_rotina]
+
+ia:
+  ativa: false
+  confianca_minima: 0.8
+  espera_padrao_s: 3600                  # pausa do provedor que estourou cota sem Retry-After
+  provedores:                            # ordem = prioridade. Limites gratuitos mudam: conferir no site de cada um.
+    - {nome: ollama_local, base_url: 'http://localhost:11434/v1', modelo: 'qwen2.5:7b', local: true}
+    - {nome: gemini, base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', modelo: 'gemini-2.0-flash', chave_env: GEMINI_API_KEY}
+    - {nome: groq, base_url: 'https://api.groq.com/openai/v1', modelo: 'llama-3.3-70b-versatile', chave_env: GROQ_API_KEY}
+    - {nome: openrouter, base_url: 'https://openrouter.ai/api/v1', modelo: 'meta-llama/llama-3.3-70b-instruct:free', chave_env: OPENROUTER_API_KEY}
+    - {nome: mistral, base_url: 'https://api.mistral.ai/v1', modelo: 'mistral-small-latest', chave_env: MISTRAL_API_KEY}
+    - {nome: cerebras, base_url: 'https://api.cerebras.ai/v1', modelo: 'llama-3.3-70b', chave_env: CEREBRAS_API_KEY}

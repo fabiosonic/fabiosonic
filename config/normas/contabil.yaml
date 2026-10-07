@@ -1,0 +1,19 @@
+- id: ITG_2000
+  titulo: ITG 2000 (R1) — Escrituração Contábil
+  area: contabil
+  status: PENDENTE
+
+- id: NBC_TG_1000
+  titulo: NBC TG 1000 — Contabilidade para Pequenas e Médias Empresas
+  area: contabil
+  status: PENDENTE
+
+- id: ITG_1000
+  titulo: ITG 1000 — Modelo Contábil para Microempresa e Empresa de Pequeno Porte
+  area: contabil
+  status: PENDENTE
+
+- id: CPC_47
+  titulo: CPC 47 — Receita de Contrato com Cliente
+  area: contabil
+  status: PENDENTE

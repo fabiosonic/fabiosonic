@@ -1,0 +1,10 @@
+- id: DICIONARIO_DADOS_ABERTOS_CNPJ
+  titulo: Metadados/dicionário dos Dados Abertos do CNPJ (Receita Federal)
+  area: cadastro
+  status: PENDENTE
+  parametros: {}
+  # esperados: codigo_situacao_ativa: "<código>"; valor_opcao_sim: "<valor>";
+  #            codigo_matriz: "<código>"
+  observacao: >-
+    Códigos de situação cadastral e de opção pelo Simples/MEI usados para montar o perfil.
+    Localizar o PDF de metadados no portal de dados abertos da RFB (gov.br) e conferir.

@@ -1,0 +1,95 @@
+# Normas fiscais. Todas PENDENTES: precisam de conferência humana na fonte oficial.
+- id: MOC_NFE
+  titulo: Manual de Orientação do Contribuinte NF-e/NFC-e (leiaute e códigos — CRT, tpNF, idDest, eventos)
+  area: fiscal
+  status: PENDENTE
+  dispositivos: ["campo C21 CRT", "campo B11 tpNF", "campo B11a idDest", "eventos tpEvento"]
+  parametros: {}
+  # parametros esperados após conferência:
+  #   crt_por_regime: {"1": [SIMPLES], "2": [SIMPLES], "3": [PRESUMIDO, REAL, IMUNE, ISENTA], "4": [MEI]}
+  #   tp_evento_cancelamento: "<código>"
+  observacao: Localizar a versão vigente do MOC no Portal Nacional da NF-e.
+
+- id: TABELA_CFOP
+  titulo: Tabela de Códigos Fiscais de Operações e Prestações (CFOP)
+  area: fiscal
+  status: PENDENTE
+  parametros: {}
+  # esperados: cfop_digitos_saida: ["5","6","7"]; cfop_digitos_entrada: ["1","2","3"];
+  #            cfop_digito_por_iddest: {"1": ["1","5"], "2": ["2","6"], "3": ["3","7"]}
+
+- id: LEIAUTE_NFSE_NACIONAL
+  titulo: Leiaute da NFS-e Padrão Nacional (DPS/NFS-e) — anexos de leiaute e tabelas
+  area: fiscal
+  status: PENDENTE
+  parametros: {}
+  # esperados: codigos_iss_retido: ["<código tpRetISSQN de retenção>"]
+
+- id: LC_116_2003
+  titulo: Lei Complementar 116/2003 — ISS (lista de serviços, local de incidência, retenção)
+  area: fiscal
+  status: PENDENTE
+  fonte_url_sugerida: https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp116.htm
+  dispositivos: ["art. 3º", "art. 6º"]
+
+- id: LEI_10833_ART30
+  titulo: Lei 10.833/2003, arts. 30 a 36 — retenção de CSLL, COFINS e PIS/Pasep na fonte
+  area: fiscal
+  status: PENDENTE
+  fonte_url_sugerida: https://www.planalto.gov.br/ccivil_03/leis/2003/l10.833.htm
+  parametros: {}
+  # esperados: aliquota_total_csrf, valor_minimo_dispensa, servicos_sujeitos
+
+- id: LC_123_2006
+  titulo: Lei Complementar 123/2006 — Simples Nacional
+  area: fiscal
+  status: PENDENTE
+  fonte_url_sugerida: https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm
+  aplica_se: {regimes: [SIMPLES, MEI]}
+  dispositivos: ["art. 3º", "art. 18", "anexos I a V"]
+
+- id: RES_CGSN_140_2018
+  titulo: Resolução CGSN 140/2018 — regulamento do Simples Nacional
+  area: fiscal
+  status: PENDENTE
+  aplica_se: {regimes: [SIMPLES, MEI]}
+
+- id: TABELA_NCM_MONOFASICO
+  titulo: Produtos sujeitos à tributação concentrada (monofásica) de PIS/COFINS — lista de NCM
+  area: fiscal
+  status: PENDENTE
+  aplica_se: {regimes: [SIMPLES]}
+  parametros: {}
+  # esperados: ncm_prefixos_monofasicos: ["<NCM ou prefixo>", ...] com dispositivo de cada um
+
+- id: RICMS_RJ
+  titulo: Regulamento do ICMS do Estado do Rio de Janeiro
+  area: fiscal
+  status: PENDENTE
+  aplica_se: {ufs: [RJ]}
+
+- id: ISS_MUNICIPIO_RJ
+  titulo: Legislação do ISS do Município do Rio de Janeiro
+  area: fiscal
+  status: PENDENTE
+  aplica_se: {municipios: ["3304557"]}
+
+- id: LEIAUTE_EFD_REINF
+  titulo: Leiaute da EFD-Reinf (R-4010/R-4020) e notas técnicas vigentes
+  area: fiscal
+  status: PENDENTE
+
+- id: LEI_9250_ART6A
+  titulo: Lei 9.250/1995, art. 6º-A (incluído pela Lei 15.270/2025) — IRRF sobre lucros e dividendos
+  area: fiscal
+  status: PENDENTE
+  fonte_url_sugerida: https://www.planalto.gov.br/ccivil_03/leis/l9250.htm
+  parametros: {}
+  observacao: No projeto original constava como CONFERIDO; reconferir e registrar conferido_por/data aqui.
+
+- id: LEIAUTE_NFSE_ABRASF
+  titulo: Leiaute ABRASF de NFS-e adotado pelo município (versão do webservice municipal)
+  area: fiscal
+  status: PENDENTE
+  parametros: {}
+  # esperados: codigos_iss_retido: ["<valor de IssRetido que indica retenção>"]

@@ -1,0 +1,149 @@
+"""Cascata de provedores de IA (gratuitos) com troca automática por cota/limite.
+
+Ordem típica (config `ia.provedores`):
+  1. ollama local      -> recebe texto bruto (local: true)
+  2..n. APIs gratuitas compatíveis com OpenAI (Gemini/AI Studio, Groq, OpenRouter :free,
+        Mistral, Cerebras, GitHub Models...) -> só texto MASCARADO; a cascata recusa enviar
+        se detectar CPF/CNPJ/e-mail/chave.
+Erro de cota/limite (HTTP 429, 402, ou corpo citando quota/rate limit) põe o provedor em
+espera até `Retry-After` (ou `espera_padrao_s`) e passa para o próximo. Sem nenhum
+disponível: `SemProvedorDisponivel` -> o documento vai para a fila e é reprocessado depois.
+Limites dos planos gratuitos mudam: ficam no config, não no código.
+"""
+from __future__ import annotations
+
+import json
+import os
+import time
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
+from typing import Callable, Protocol
+
+from .mascaramento import Mascara, contem_dado_pessoal
+
+
+class ErroCota(RuntimeError):
+    def __init__(self, msg, espera_s: float | None = None):
+        super().__init__(msg)
+        self.espera_s = espera_s
+
+
+class ErroProvedor(RuntimeError):
+    pass
+
+
+class SemProvedorDisponivel(RuntimeError):
+    pass
+
+
+class VazamentoBloqueado(RuntimeError):
+    pass
+
+
+class Provedor(Protocol):
+    nome: str
+    local: bool
+
+    def completar(self, sistema: str, usuario: str) -> str: ...
+
+
+def _post_json(url: str, corpo: dict, cabecalhos: dict, timeout: float) -> dict:
+    req = urllib.request.Request(url, data=json.dumps(corpo).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", **cabecalhos})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as exc:
+        corpo_erro = exc.read().decode(errors="replace")[:500]
+        if exc.code in (402, 429) or "quota" in corpo_erro.lower() or "rate limit" in corpo_erro.lower():
+            ra = exc.headers.get("Retry-After") if exc.headers else None
+            espera = float(ra) if ra and ra.replace(".", "", 1).isdigit() else None
+            raise ErroCota(f"HTTP {exc.code}: {corpo_erro}", espera) from exc
+        raise ErroProvedor(f"HTTP {exc.code}: {corpo_erro}") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ErroProvedor(f"falha de conexão: {exc}") from exc
+
+
+@dataclass
+class ProvedorOpenAICompat:
+    """Qualquer API compatível com /chat/completions (inclui Ollama em /v1)."""
+    nome: str
+    base_url: str
+    modelo: str
+    chave_env: str | None = None
+    local: bool = False
+    timeout: float = 120.0
+    temperatura: float = 0.0
+
+    def completar(self, sistema: str, usuario: str) -> str:
+        cab = {}
+        if self.chave_env:
+            chave = os.environ.get(self.chave_env)
+            if not chave:
+                raise ErroProvedor(f"variável {self.chave_env} não definida")
+            cab["Authorization"] = f"Bearer {chave}"
+        r = _post_json(self.base_url.rstrip("/") + "/chat/completions",
+                       {"model": self.modelo, "temperature": self.temperatura,
+                        "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]},
+                       cab, self.timeout)
+        try:
+            return r["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ErroProvedor(f"resposta inesperada: {str(r)[:200]}") from exc
+
+
+@dataclass
+class Cascata:
+    provedores: list
+    espera_padrao_s: float = 3600.0
+    relogio: Callable[[], float] = time.time
+    _bloqueado_ate: dict = field(default_factory=dict)
+    registro: list = field(default_factory=list)
+
+    def disponiveis(self):
+        agora = self.relogio()
+        return [p for p in self.provedores if self._bloqueado_ate.get(p.nome, 0) <= agora]
+
+    def completar(self, sistema: str, texto: str, nomes_sensiveis: list[str] | None = None) -> dict:
+        """Tenta cada provedor na ordem. Devolve {texto, provedor, mascarado}."""
+        mascara = Mascara()
+        texto_mascarado = None
+        erros = []
+        for p in self.disponiveis():
+            if p.local:
+                envio, mascarado = texto, False
+            else:
+                if texto_mascarado is None:
+                    texto_mascarado = mascara.mascarar(texto, nomes_sensiveis)
+                    vazou = contem_dado_pessoal(texto_mascarado) + contem_dado_pessoal(sistema)
+                    if vazou:
+                        raise VazamentoBloqueado(f"texto ainda contém {vazou}; envio à nuvem bloqueado")
+                envio, mascarado = texto_mascarado, True
+            try:
+                resposta = p.completar(sistema, envio)
+            except ErroCota as exc:
+                self._bloqueado_ate[p.nome] = self.relogio() + (exc.espera_s or self.espera_padrao_s)
+                erros.append(f"{p.nome}: cota ({exc})")
+                self.registro.append({"provedor": p.nome, "resultado": "COTA"})
+                continue
+            except ErroProvedor as exc:
+                erros.append(f"{p.nome}: {exc}")
+                self.registro.append({"provedor": p.nome, "resultado": "ERRO"})
+                continue
+            self.registro.append({"provedor": p.nome, "resultado": "OK"})
+            return {"texto": mascara.desmascarar(resposta) if mascarado else resposta,
+                    "provedor": p.nome, "mascarado": mascarado}
+        raise SemProvedorDisponivel("; ".join(erros) or "todos os provedores em espera de cota")
+
+
+def montar_cascata(config_ia: dict) -> Cascata:
+    provs = []
+    for p in config_ia.get("provedores", []):
+        if not p.get("ativo", True):
+            continue
+        provs.append(ProvedorOpenAICompat(
+            nome=p["nome"], base_url=p["base_url"], modelo=p["modelo"], chave_env=p.get("chave_env"),
+            local=bool(p.get("local", False)), timeout=float(p.get("timeout", 120)),
+        ))
+    return Cascata(provs, espera_padrao_s=float(config_ia.get("espera_padrao_s", 3600)))

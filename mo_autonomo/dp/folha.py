@@ -1,0 +1,99 @@
+"""Conferência de folha (INSS e IRRF do empregado) contra tabelas CONFERIDAS do catálogo.
+
+Sem TABELA_INSS_SEGURADO / TABELA_IRRF_MENSAL conferidas, a conferência fica INATIVA (regra 3).
+Entrada (exportação da folha, CSV `;`):
+cpf;nome;competencia;salario_contribuicao;inss_descontado;base_irrf;dependentes;irrf_descontado
+"""
+from __future__ import annotations
+
+import csv
+from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
+
+from ..especialista.modelo import Achado, natureza_por_normas
+from ..util.dinheiro import CENTAVO, dinheiro
+
+INSS, IRRF = "TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL"
+
+
+def _q(v: Decimal) -> Decimal:
+    return v.quantize(CENTAVO, rounding=ROUND_HALF_UP)
+
+
+def inss_progressivo(base: Decimal, faixas: list[dict]) -> Decimal:
+    """faixas: [{ate: valor, aliquota: fração}] em ordem; teto = última faixa."""
+    total, anterior = Decimal("0"), Decimal("0")
+    for f in faixas:
+        ate = Decimal(str(f["ate"]))
+        aliq = Decimal(str(f["aliquota"]))
+        if base <= anterior:
+            break
+        faixa = min(base, ate) - anterior
+        total += faixa * aliq
+        anterior = ate
+    return _q(total)
+
+
+def irrf_mensal(base: Decimal, dependentes: int, params: dict) -> Decimal:
+    base_calc = base - Decimal(str(params["deducao_por_dependente"])) * dependentes
+    imposto = Decimal("0")
+    for f in params["faixas"]:
+        ate = f.get("ate")
+        if ate is None or base_calc <= Decimal(str(ate)):
+            imposto = base_calc * Decimal(str(f["aliquota"])) - Decimal(str(f["deduzir"]))
+            break
+    imposto = max(imposto, Decimal("0"))
+    red = params.get("redutor")
+    if red:
+        # redutor aplicado sobre o rendimento tributável (base antes das deduções de dependentes)
+        if base <= Decimal(str(red["zera_ate"])):
+            imposto = Decimal("0")
+        elif base <= Decimal(str(red["faixa_ate"])):
+            reducao = Decimal(str(red["constante"])) - Decimal(str(red["coeficiente"])) * base
+            imposto = max(imposto - max(reducao, Decimal("0")), Decimal("0"))
+    return _q(imposto)
+
+
+def ler_folha(caminho: Path) -> list[dict]:
+    with open(caminho, encoding="utf-8-sig", newline="") as f:
+        linhas = list(csv.DictReader(f, delimiter=";"))
+    out = []
+    for l in linhas:
+        out.append({"cpf": l["cpf"], "nome": l.get("nome", ""), "competencia": l["competencia"],
+                    "salario_contribuicao": dinheiro(l["salario_contribuicao"]),
+                    "inss_descontado": dinheiro(l["inss_descontado"]), "base_irrf": dinheiro(l["base_irrf"]),
+                    "dependentes": int(l.get("dependentes") or 0), "irrf_descontado": dinheiro(l["irrf_descontado"])})
+    return out
+
+
+def conferir(folha: list[dict], cnpj: str, catalogo, tolerancia: Decimal = Decimal("0.01")) -> dict:
+    achados, inativas = [], []
+    faixas_inss = catalogo.parametro(INSS, "faixas")
+    p_irrf = {k: catalogo.parametro(IRRF, k) for k in ("faixas", "deducao_por_dependente", "redutor")}
+    if faixas_inss is None:
+        inativas.append(f"INSS: {INSS} não conferida ({catalogo.status(INSS)})")
+    if p_irrf["faixas"] is None or p_irrf["deducao_por_dependente"] is None:
+        inativas.append(f"IRRF: {IRRF} não conferida ({catalogo.status(IRRF)})")
+    for l in folha:
+        ref = f"{l['competencia']}/{l['cpf'][-4:]}"
+        if faixas_inss is not None:
+            esperado = inss_progressivo(l["salario_contribuicao"], faixas_inss)
+            if abs(esperado - l["inss_descontado"]) > tolerancia:
+                achados.append(Achado("DP_INSS_DIVERGENTE", "INSS do empregado divergente da tabela",
+                                      natureza_por_normas((INSS,), catalogo),
+                                      f"{l['nome']}: descontado {l['inss_descontado']} × calculado {esperado}.",
+                                      cnpj, l["competencia"], ref,
+                                      [{"id": INSS, "status": catalogo.status(INSS)}],
+                                      "Revisar base e tabela no cálculo da folha.", True,
+                                      l["inss_descontado"] - esperado))
+        if p_irrf["faixas"] is not None and p_irrf["deducao_por_dependente"] is not None:
+            esperado = irrf_mensal(l["base_irrf"], l["dependentes"], p_irrf)
+            if abs(esperado - l["irrf_descontado"]) > tolerancia:
+                achados.append(Achado("DP_IRRF_DIVERGENTE", "IRRF do empregado divergente da tabela",
+                                      natureza_por_normas((IRRF,), catalogo),
+                                      f"{l['nome']}: descontado {l['irrf_descontado']} × calculado {esperado}.",
+                                      cnpj, l["competencia"], ref,
+                                      [{"id": IRRF, "status": catalogo.status(IRRF)}],
+                                      "Revisar base, dependentes e tabela/redutor do IRRF.", True,
+                                      l["irrf_descontado"] - esperado))
+    return {"achados": achados, "inativas": inativas}
