@@ -89,6 +89,12 @@ exigem APROVADO humano.
 
 ## Degrau 6 — Contábil e DP
 
+**Plano de contas (cada empresa tem o seu):** no Domínio, para cada empresa, gere a mesma exportação
+do plano que está no Drive como "PLANO DE CONTAS.csv" (*Impressão de campos da consulta*). Salve
+todos numa pasta com o **código da empresa no início do nome** (ex.: `12 - LMG.csv`) e rode:
+`python -m mo_autonomo contabil importar-planos --pasta "D:\PLANOS DOMINIO"`. O comando lista quem
+ainda está sem plano. O código **reduzido** de cada conta é o que vai no TXT de importação.
+
 - Contábil: coloque `plano_contas.csv` e `razao.csv` (exportados do Domínio) em
   `dados\dominio\<código>\` e cadastre as contas em `contas_bancarias.csv`. Os OFX que
   chegarem por e-mail viram lotes de lançamentos propostos. A gravação no Domínio só será
