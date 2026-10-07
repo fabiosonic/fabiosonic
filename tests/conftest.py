@@ -147,7 +147,9 @@ PARAMS_TESTE = {  # valores fictícios só para exercitar o código
                                        "coeficiente": "0.10"}},
 }
 
-TODAS = ["MOC_NFE", "TABELA_CFOP", "LEIAUTE_NFSE_NACIONAL", "LEIAUTE_NFSE_ABRASF", "LC_116_2003",
+PARAMS_TESTE["LEI_8036_FGTS"] = {"aliquota_deposito": "0.05"}  # fictício
+
+TODAS = ["LEI_8036_FGTS", "MOC_NFE", "TABELA_CFOP", "LEIAUTE_NFSE_NACIONAL", "LEIAUTE_NFSE_ABRASF", "LC_116_2003",
          "LEI_10833_ART30", "LC_123_2006", "RES_CGSN_140_2018", "TABELA_NCM_MONOFASICO",
          "DICIONARIO_DADOS_ABERTOS_CNPJ", "TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL"]
 

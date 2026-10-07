@@ -3,6 +3,7 @@
 Sem TABELA_INSS_SEGURADO / TABELA_IRRF_MENSAL conferidas, a conferência fica INATIVA (regra 3).
 Entrada (exportação da folha, CSV `;`):
 cpf;nome;competencia;salario_contribuicao;inss_descontado;base_irrf;dependentes;irrf_descontado
+[;remuneracao_fgts;fgts_depositado]   (opcionais: conferência do FGTS)
 """
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from pathlib import Path
 from ..especialista.modelo import Achado, natureza_por_normas
 from ..util.dinheiro import CENTAVO, dinheiro
 
-INSS, IRRF = "TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL"
+INSS, IRRF, FGTS = "TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL", "LEI_8036_FGTS"
 
 
 def _q(v: Decimal) -> Decimal:
@@ -62,7 +63,9 @@ def ler_folha(caminho: Path) -> list[dict]:
         out.append({"cpf": l["cpf"], "nome": l.get("nome", ""), "competencia": l["competencia"],
                     "salario_contribuicao": dinheiro(l["salario_contribuicao"]),
                     "inss_descontado": dinheiro(l["inss_descontado"]), "base_irrf": dinheiro(l["base_irrf"]),
-                    "dependentes": int(l.get("dependentes") or 0), "irrf_descontado": dinheiro(l["irrf_descontado"])})
+                    "dependentes": int(l.get("dependentes") or 0), "irrf_descontado": dinheiro(l["irrf_descontado"]),
+                    "remuneracao_fgts": dinheiro(l["remuneracao_fgts"]) if l.get("remuneracao_fgts") else None,
+                    "fgts_depositado": dinheiro(l["fgts_depositado"]) if l.get("fgts_depositado") else None})
     return out
 
 
@@ -74,8 +77,20 @@ def conferir(folha: list[dict], cnpj: str, catalogo, tolerancia: Decimal = Decim
         inativas.append(f"INSS: {INSS} não conferida ({catalogo.status(INSS)})")
     if p_irrf["faixas"] is None or p_irrf["deducao_por_dependente"] is None:
         inativas.append(f"IRRF: {IRRF} não conferida ({catalogo.status(IRRF)})")
+    aliq_fgts = catalogo.parametro(FGTS, "aliquota_deposito")
+    if aliq_fgts is None and any(l.get("remuneracao_fgts") is not None for l in folha):
+        inativas.append(f"FGTS: {FGTS} não conferida ({catalogo.status(FGTS)})")
     for l in folha:
         ref = f"{l['competencia']}/{l['cpf'][-4:]}"
+        if aliq_fgts is not None and l.get("remuneracao_fgts") is not None and l.get("fgts_depositado") is not None:
+            esperado = _q(l["remuneracao_fgts"] * Decimal(str(aliq_fgts)))
+            if abs(esperado - l["fgts_depositado"]) > tolerancia:
+                achados.append(Achado("DP_FGTS_DIVERGENTE", "FGTS divergente da alíquota legal",
+                                      natureza_por_normas((FGTS,), catalogo),
+                                      f"{l['nome']}: depositado {l['fgts_depositado']} × calculado {esperado}.",
+                                      cnpj, l["competencia"], ref, [{"id": FGTS, "status": catalogo.status(FGTS)}],
+                                      "Conferir base do FGTS e guia (FGTS Digital).", True,
+                                      l["fgts_depositado"] - esperado))
         if faixas_inss is not None:
             esperado = inss_progressivo(l["salario_contribuicao"], faixas_inss)
             if abs(esperado - l["inss_descontado"]) > tolerancia:

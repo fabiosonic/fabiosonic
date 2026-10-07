@@ -85,6 +85,22 @@ def test_conferencia_folha():
     assert inativo["achados"] == [] and len(inativo["inativas"]) == 2
 
 
+def test_fgts(tmp_path):
+    cat = catalogo_teste()
+    ok = folha(remuneracao_fgts=Decimal("1500.00"), fgts_depositado=Decimal("75.00"))
+    assert conferir(ok, CNPJ_A, cat)["achados"] == []
+    r = conferir(folha(remuneracao_fgts=Decimal("1500.00"), fgts_depositado=Decimal("70.00")), CNPJ_A, cat)
+    assert [a.regra for a in r["achados"]] == ["DP_FGTS_DIVERGENTE"] and r["achados"][0].valor == Decimal("-5.00")
+    sem = conferir(ok, CNPJ_A, catalogo_teste(conferidas=["TABELA_INSS_SEGURADO", "TABELA_IRRF_MENSAL"]))
+    assert sem["achados"] == [] and any("FGTS" in i for i in sem["inativas"])
+    from mo_autonomo.dp.folha import ler_folha
+    arq = tmp_path / "f.csv"
+    arq.write_text("cpf;nome;competencia;salario_contribuicao;inss_descontado;base_irrf;dependentes;irrf_descontado;"
+                   "remuneracao_fgts;fgts_depositado\n00000000191;X;2026-09;1500,00;200,00;2800,00;0;60,00;1500,00;75,00\n",
+                   encoding="utf-8")
+    assert conferir(ler_folha(arq), CNPJ_A, cat)["achados"] == []
+
+
 def test_auditoria_dominio(tmp_path):
     rel = tmp_path / "rel.csv"
     rel.write_text("Chave;Valor Contábil;CNPJ Empresa\nK1;100,00;" + CNPJ_A + "\nK2;55,00;" + CNPJ_A +
