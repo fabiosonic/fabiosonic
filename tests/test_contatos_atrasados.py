@@ -22,7 +22,7 @@ def test_importa_so_clientes_existentes_e_ignora_enfeites(base):  # noqa: F811
     assert [i["cpf_cnpj"] for i in a["itens"]] == [CLI_A["cpf_cnpj"]]          # B: só enfeites, nada muda
     assert [f["cpf_cnpj"] for f in a["fora_do_cadastro"]] == ["45309710000136"]  # não é cadastrado
     r = contatos.aplicar(dados)
-    assert r == {"clientes": 1, "emails": 1, "whatsapp": 1, "fora_do_cadastro": 1}
+    assert r == {"clientes": 1, "emails": 1, "whatsapp": 1, "adicionais": 0, "fora_do_cadastro": 1}
     c = clientes.obter(CLI_A["cpf_cnpj"])
     assert (c["email"], c["telefone"]) == ("financeiro@clientea.com.br", "21982424959")
     assert clientes.obter("45309710000136") is None
@@ -94,3 +94,28 @@ def test_recorrencias_da_moraes_comecam_em_outubro(base, monkeypatch):  # noqa: 
         con.execute("PRAGMA user_version=3")
         db._migrar(con)
     assert db.linhas("SELECT inicio FROM contratos WHERE id=?", (k["id"],))[0]["inicio"] == "2026-10"
+
+
+def test_todos_os_contatos_da_empresa_entram_como_adicionais(base):  # noqa: F811
+    """Exportação S3D: uma linha por contato. O principal vazio é preenchido (financeiro) e os outros e-mails e
+    celulares entram como adicionais; o que já existe não se repete nem é apagado."""
+    clientes.salvar(clientes.obter(CLI_A["cpf_cnpj"]) | {"email": "dono@clientea.com.br", "telefone": "",
+                                                          "emails_extras": [], "whatsapps_extras": []})
+    cab = "Razão social;CNPJ;Fone;Nome do Contato;Telefone do Contato;Email do Contato;Departamentos do Contato\r\n"
+    linhas = [("Almir", "", "almir@clientea.com.br", "Contábil, Fiscal"),
+              ("Bruna", "(21) 99138-2888", "bruna@clientea.com.br", "Pessoal"),
+              ("Fin", "(21) 98242-4959", "financeiro@clientea.com.br", "Financeiro"),
+              ("Dono", "(21) 97654-3210", "DONO@clientea.com.br", "Diretoria"),
+              ("Lixo", "(21) 1111-1111", "aguardando@aguardando.com", "Outros")]
+    dados = (cab + "".join(f"CLIENTE A;{CLI_A['cpf_cnpj']};2126271130;{n};{f};{e};\"{d}\"\r\n" for n, f, e, d in linhas)).encode("utf-8-sig")
+    a = contatos.analisar(dados)
+    i = a["itens"][0]
+    assert i["email_novo"] == "financeiro@clientea.com.br" and i["fone_novo"] == "21982424959"
+    assert set(i["emails_adicionais"]) == {"almir@clientea.com.br", "bruna@clientea.com.br", "financeiro@clientea.com.br"}
+    r = contatos.aplicar(dados)                                     # sem substituir: o e-mail principal fica
+    c = clientes.obter(CLI_A["cpf_cnpj"])
+    assert c["email"] == "dono@clientea.com.br" and c["telefone"] == "21982424959"
+    assert set(c["emails_extras"]) == {"almir@clientea.com.br", "bruna@clientea.com.br", "financeiro@clientea.com.br"}
+    assert set(c["whatsapps_extras"]) == {"21991382888", "21976543210"}
+    assert r["adicionais"] == 5
+    assert contatos.analisar(dados)["itens"] == []                  # de novo: nada a fazer, nada repetido

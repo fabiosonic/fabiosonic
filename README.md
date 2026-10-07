@@ -783,6 +783,15 @@ pela metade (ex.: CEP com 5 dígitos) é apontado para corrigir ou deixar em bra
 cobrança, o boleto do Inter continua exigindo endereço (regra do banco): sem ele a cobrança sai pelo PIX do
 escritório e o boleto é registrado quando o endereço for preenchido.
 
+### Importar todos os contatos da planilha (S3D: empresas e contatos)
+
+Clientes › "Importar e-mails e WhatsApp (CSV)" lê a exportação de empresas e contatos (uma linha por contato, com
+Departamentos). Para cada cliente **já cadastrado na empresa aberta**: o e-mail/WhatsApp principal vazio é preenchido
+com o contato do Financeiro, e **todos os outros e-mails e celulares** da empresa entram como contatos adicionais (que
+também recebem as mensagens). Nada que já está no cadastro é apagado nem repetido; trocar o principal só com
+"Substituir". Ignorados: e-mails provisórios ("aguardando@…"), do próprio escritório, telefones fixos e de enfeite. Com
+várias empresas, importe o mesmo arquivo com cada empresa aberta: cada uma recebe só os contatos dos clientes dela.
+
 ### Vários e-mails e WhatsApp por cliente
 
 No cadastro do cliente (Clientes › Editar), além do **e-mail e telefone principais** (os que vão na NFS-e e no

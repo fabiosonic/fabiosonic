@@ -4,6 +4,8 @@ Cada empresa pode ter vários contatos (por departamento). Para cobrança vale o
 - e-mail: o do contato do Financeiro, preferindo endereços/nomes com "financeiro";
 - WhatsApp: só celular (DDD + 9 dígitos começando por 9); números de enfeite (1111-1111) e fixos são ignorados.
 Só clientes já cadastrados são atualizados; quem não está no cadastro aparece na conferência.
+Os demais e-mails e celulares da empresa (outros contatos/departamentos) entram como contatos ADICIONAIS do cliente,
+que também recebem as mensagens — nada que já está no cadastro é apagado.
 """
 
 from __future__ import annotations
@@ -113,6 +115,24 @@ def escolher(e: dict) -> dict:
             "contato": (email or zap or {}).get("nome", "")}
 
 
+_EMAIL = re.compile(r"[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+")
+
+
+def todos(e: dict) -> dict:
+    """Todos os e-mails válidos e celulares da empresa no arquivo (todos os contatos + o fone da empresa), sem repetir."""
+    emails = list(dict.fromkeys(c["email"].lower() for c in e["contatos"] if _EMAIL.fullmatch(c["email"] or "")))
+    fones = list(dict.fromkeys(f for f in [celular(c["fone"]) for c in e["contatos"]] + [celular(e.get("fone_empresa", ""))] if f))
+    return {"emails": emails, "celulares": fones}
+
+
+def _adicionais(c: dict, e: dict, email_principal: str, fone_principal: str) -> tuple[list[str], list[str]]:
+    """E-mails e celulares do arquivo que o cliente ainda não tem (nem como principal, nem como adicional)."""
+    t = todos(e)
+    tem_e = set(clientes.emails(c)) | {email_principal.lower()}
+    tem_f = set(clientes.whatsapps(c)) | {fone_principal}
+    return [x for x in t["emails"] if x not in tem_e], [x for x in t["celulares"] if x not in tem_f]
+
+
 def analisar(dados: str | bytes) -> dict:
     """Conferência antes de gravar: o que muda em cada cliente do cadastro."""
     empresas = ler(dados)
@@ -128,14 +148,20 @@ def analisar(dados: str | bytes) -> dict:
         email_atual, fone_atual = c.get("email", ""), clientes._digitos(c.get("telefone"))
         if provisorio(email_atual):
             email_atual = ""                                 # e-mail de enfeite no cadastro conta como vazio
-        muda_email = bool(novo["email"]) and novo["email"].lower() != email_atual.lower()
-        muda_fone = bool(novo["whatsapp"]) and novo["whatsapp"] != fone_atual[-11:]
-        if not (muda_email or muda_fone):
+        muda_email = bool(novo["email"]) and novo["email"].lower() != email_atual.lower() \
+            and novo["email"].lower() not in clientes.emails(c)
+        muda_fone = bool(novo["whatsapp"]) and novo["whatsapp"] != fone_atual[-11:] \
+            and novo["whatsapp"] not in clientes.whatsapps(c)
+        # o principal vazio é preenchido; os demais contatos do arquivo entram como adicionais
+        ex_e, ex_f = _adicionais(c, e, novo["email"] if muda_email and not email_atual else "",
+                                 novo["whatsapp"] if muda_fone and not celular(fone_atual) else "")
+        if not (muda_email or muda_fone or ex_e or ex_f):
             continue
         itens.append({"cpf_cnpj": doc, "razao_social": c.get("razao_social") or e["razao"], "contato": novo["contato"],
                       "email_atual": email_atual, "email_novo": novo["email"] if muda_email else "",
                       "fone_atual": fone_atual, "fone_novo": novo["whatsapp"] if muda_fone else "",
                       "fixo": bool(fone_atual) and not celular(fone_atual),
+                      "emails_adicionais": ex_e, "whatsapps_adicionais": ex_f,
                       "preenche": (muda_email and not email_atual) or (muda_fone and not celular(fone_atual))})
     itens.sort(key=lambda i: i["razao_social"].lower())
     return {"empresas": len(empresas), "itens": itens, "fora_do_cadastro": fora,
@@ -143,21 +169,33 @@ def analisar(dados: str | bytes) -> dict:
 
 
 def aplicar(dados: str | bytes, substituir: bool = False, apenas: list[str] | None = None) -> dict:
-    """Grava os contatos. Sem 'substituir', só preenche o que está vazio no cadastro."""
+    """Grava os contatos. Sem 'substituir', só preenche o principal que está vazio; os outros e-mails e celulares
+    da empresa entram como adicionais (nada é apagado)."""
     a = analisar(dados)
-    feitos = emails = fones = 0
+    empresas = ler(dados)
+    feitos = emails = fones = adicionais = 0
     for i in a["itens"]:
         if apenas is not None and i["cpf_cnpj"] not in apenas:
             continue
         c = clientes.obter(i["cpf_cnpj"])
         novo = dict(c)
+        antigos_e, antigos_f = clientes.emails(c), clientes.whatsapps(c)
         if i["email_novo"] and (substituir or not i["email_atual"]):
             novo["email"] = i["email_novo"]
             emails += 1
         if i["fone_novo"] and (substituir or not celular(i["fone_atual"])):   # fixo não recebe WhatsApp: troca
             novo["telefone"] = i["fone_novo"]
             fones += 1
+        # o que saiu do principal (substituição) não se perde: vira adicional
+        ex_e = [x for x in antigos_e + todos(empresas[i["cpf_cnpj"]])["emails"] if x not in clientes.emails(novo | {"emails_extras": []})]
+        ex_f = [x for x in antigos_f + todos(empresas[i["cpf_cnpj"]])["celulares"]
+                if x not in clientes.whatsapps(novo | {"whatsapps_extras": []}) and (celular(x) or x in antigos_f)]
+        novo["emails_extras"] = list(dict.fromkeys(ex_e))
+        novo["whatsapps_extras"] = list(dict.fromkeys(ex_f))
+        adicionais += max(0, len(novo["emails_extras"]) - len(c.get("emails_extras") or [])) \
+            + max(0, len(novo["whatsapps_extras"]) - len(c.get("whatsapps_extras") or []))
         if novo != c:
             clientes.salvar(novo)
             feitos += 1
-    return {"clientes": feitos, "emails": emails, "whatsapp": fones, "fora_do_cadastro": len(a["fora_do_cadastro"])}
+    return {"clientes": feitos, "emails": emails, "whatsapp": fones, "adicionais": adicionais,
+            "fora_do_cadastro": len(a["fora_do_cadastro"])}

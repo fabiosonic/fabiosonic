@@ -153,7 +153,8 @@ function importarContatos() {
   modal(`<h2>Importar e-mails e WhatsApp dos clientes</h2>
     <p class="sub">Escolha a planilha de contatos (CSV separado por ponto e vírgula, com as colunas <b>CPF/CNPJ</b>, <b>Celular</b> e <b>E-mail</b>
     — ou a exportação de contatos com Departamentos, da qual entra o contato do <b>Financeiro</b>). Só clientes <b>já cadastrados</b> são
-    atualizados; como WhatsApp, só celular; e-mails provisórios ("aguardando@…") e do próprio escritório são ignorados.
+    atualizados; o principal vazio é preenchido e <b>todos os outros e-mails e celulares</b> da empresa entram como contatos adicionais
+    (que também recebem as mensagens); nada é apagado. Como WhatsApp, só celular; e-mails provisórios ("aguardando@…") e do próprio escritório são ignorados.
     Nada é gravado antes da sua conferência.</p>
     <label class="soltar"><input type="file" id="ct_csv" accept=".csv,text/csv" hidden>${ic("download")}<span><b>Escolher a planilha (.csv)</b><small>empresas_contatos.csv</small></span></label>
     <div id="ct_res"></div>`, true);
@@ -164,18 +165,19 @@ function importarContatos() {
       const a = await api("contatos/analisar", { arquivo: r.result });
       const L = a.itens, troca = L.filter(i => (i.email_novo && i.email_atual) || (i.fone_novo && i.fone_atual && !i.fixo)).length;
       const cel = (atual, novo, fmt) => novo ? `${atual ? `<s class="sub">${esc(fmt(atual))}</s><br>` : ""}<b>${esc(fmt(novo))}</b>` : `<span class="sub">${esc(fmt(atual) || "—")}</span>`;
-      $("#ct_res").innerHTML = `<p>${a.empresas} empresa(s) no arquivo · <b>${L.length}</b> cliente(s) com e-mail/WhatsApp novo · ${a.sem_mudanca} já estavam iguais
+      $("#ct_res").innerHTML = `<p>${a.empresas} empresa(s) no arquivo · <b>${L.length}</b> cliente(s) com contato novo (${L.reduce((n, i) => n + i.emails_adicionais.length + i.whatsapps_adicionais.length, 0)} adicional(is)) · ${a.sem_mudanca} já estavam iguais
         ${a.fora_do_cadastro.length ? ` · ${a.fora_do_cadastro.length} não estão no cadastro (não são incluídas)` : ""}</p>
         ${L.length ? tabela([{ t: "Cliente", f: i => celNome(i.razao_social, i.contato ? "contato: " + esc(i.contato) : "") },
           { t: "E-mail", f: i => cel(i.email_atual, i.email_novo, x => x) },
-          { t: "WhatsApp", f: i => cel(i.fone_atual, i.fone_novo, fone) }], L) : ""}
+          { t: "WhatsApp", f: i => cel(i.fone_atual, i.fone_novo, fone) },
+          { t: "Adicionais (também recebem)", f: i => [...i.emails_adicionais, ...i.whatsapps_adicionais.map(fone)].map(x => `<div class="sub">+ ${esc(x)}</div>`).join("") || '<span class="sub">—</span>' }], L) : ""}
         ${troca ? `<label class="chk"><input type="checkbox" id="ct_subst"> Substituir também os ${troca} cliente(s) que já têm e-mail/telefone cadastrado (riscados acima)</label>` : ""}
         ${a.fora_do_cadastro.length ? `<details><summary class="sub">Empresas do arquivo que não estão no cadastro</summary><p class="sub">${a.fora_do_cadastro.map(x => esc(x.razao_social) + " (" + fmtDoc(x.cpf_cnpj) + ")").join("; ")}</p></details>` : ""}
         <p><button class="btn" id="ct_ok" ${L.length ? "" : "disabled"}>Gravar os contatos</button> <button class="btn sec" onclick="fechar()">Cancelar</button></p>
         <p class="sub">A cobrança por WhatsApp continua só para os clientes que você marcar em Clientes (coluna WhatsApp).</p>`;
       if ($("#ct_ok")) $("#ct_ok").onclick = async () => { $("#ct_ok").disabled = true;
         const x = await api("contatos/aplicar", { arquivo: r.result, substituir: !!($("#ct_subst") || {}).checked });
-        fechar(); aviso(`Contatos gravados ✔ ${x.clientes} cliente(s): ${x.emails} e-mail(s) e ${x.whatsapp} WhatsApp.`, 9000);
+        fechar(); aviso(`Contatos gravados ✔ ${x.clientes} cliente(s): ${x.emails} e-mail(s) e ${x.whatsapp} WhatsApp principais + ${x.adicionais} contato(s) adicional(is).`, 9000);
         await carregarEstado(); ir("clientes"); };
     };
     r.readAsDataURL(f);
