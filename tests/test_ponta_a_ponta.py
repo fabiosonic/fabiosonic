@@ -111,6 +111,16 @@ def test_ciclo_completo_simulacao(tmp_path):
     assert e3["emails_lidos"] == 1 and e3["anexos"] == []
 
 
+def test_rascunho_de_solicitacao_ao_cliente(tmp_path):
+    base = projeto(tmp_path)
+    (base / "entrada" / "1.eml").write_bytes(eml_bytes({"a.xml": nfe_xml(numero=1), "b.xml": nfe_xml(numero=4),
+                                                        "c.xml": nfe_xml(numero=5, protocolo=False)}))
+    ctx = ctx_de(base)
+    rodar_ciclo(ctx)
+    txt = (ctx.dados / "solicitacoes" / "2026-10" / "101-ALFA.txt").read_text(encoding="utf-8")
+    assert "não recebemos" in txt and "2, 3" in txt and "protocolo" in txt and "RASCUNHO" in txt
+
+
 def test_cruzamento_receita_no_ciclo(tmp_path):
     base = projeto(tmp_path)
     (base / "dados" / "apuracao").mkdir(parents=True)

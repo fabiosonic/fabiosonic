@@ -14,7 +14,7 @@ from ..aprovacao import lote as L
 from ..contabil.lancamentos import DePara, PlanoContas, _ler_csv, propor
 from ..dominio.pastas import ConflitoArquivo, caminho_destino, gravar
 from ..entrada.anexos import ZipSuspeito, anexos_do_email
-from ..especialista import parecer
+from ..especialista import parecer, solicitacoes
 from ..especialista.motor import avaliar_competencia, cobertura
 from ..grafo.motor import FIM, Grafo
 from ..util.arquivos import escrever_atomico, sha256_bytes
@@ -229,6 +229,9 @@ def n_pareceres(e, ctx):
                               len(lote["acoes"]), inativas,
                               (e.get("faturamento") or {}).get(f"{l['cnpj']}|{l['competencia']}"))
         gerados.append(parecer.salvar(pasta / l["competencia"], f"{emp.pasta}_{l['id'][-8:]}", md, lote["achados"]))
+        texto = solicitacoes.rascunho(emp, l["competencia"], lote["achados"], lote["pendencias"])
+        if texto:
+            solicitacoes.salvar(ctx.dados / "solicitacoes", emp, l["competencia"], texto)
     resumo = [f"# Resumo do ciclo {e['_run_id'][:8]} — {ctx.hoje:%d/%m/%Y} ({ctx.config['modo']})", "",
               f"- E-mails novos: {e.get('emails_lidos', 0)}", f"- Anexos novos: {len(e.get('anexos', []))}",
               f"- Lotes: {len(e['lotes'])} (auto-aprovados: {sum(1 for l in e['lotes'] if l.get('aprovado'))})", "",
