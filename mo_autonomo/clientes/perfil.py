@@ -84,6 +84,24 @@ def data_da_competencia(comp: str) -> date:
     return date(a, m, calendar.monthrange(a, m)[1])
 
 
+def perfil_na_competencia(perfis, cnpj: str, comp: str):
+    """Perfil do mês: olhado no último dia, mas se o regime MUDOU dentro do mês (exclusão do Simples,
+    desenquadramento do MEI) o mês fica sem regime e vira pendência bloqueante (regra 2) — não dá para
+    escolher um regime para o mês inteiro. Empresa aberta no meio do mês não conta como mudança."""
+    from dataclasses import replace
+    fim = perfis.em(cnpj, data_da_competencia(comp))
+    if fim is None:
+        return None
+    a, m = (int(x) for x in comp[:7].split("-"))
+    ini = perfis.em(cnpj, date(a, m, 1))
+    if ini is None or any(p.codigo == "ANTERIOR_A_ABERTURA" for p in ini.pendencias) or ini.regime == fim.regime:
+        return fim
+    return replace(fim, regime=None, regime_fonte="ALTERADO_NO_MES", pendencias=list(fim.pendencias) + [Pendencia(
+        "REGIME_ALTERADO_NA_COMPETENCIA",
+        f"Regime em 01/{m:02d}/{a}: {ini.regime or 'indefinido'}; em {fim.data_ref:%d/%m/%Y}: "
+        f"{fim.regime or 'indefinido'}. Separar a apuração por período antes de seguir.", cnpj)])
+
+
 def montar_perfil(empresa: Empresa, receita: dict | None, catalogo: Catalogo, data_ref: date) -> PerfilFiscal:
     pend: list[Pendencia] = []
     fontes: dict = {"dominio": True, "receita": receita is not None}

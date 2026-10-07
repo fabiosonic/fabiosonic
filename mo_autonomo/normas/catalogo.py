@@ -36,18 +36,36 @@ def url_oficial(url: str | None) -> bool:
     netloc = u.netloc.lower()
     if "@" in netloc or porta not in (None, 443):  # usuário na URL ou porta estranha
         return False
-    host = (u.hostname or "").lower().rstrip(".")
-    if netloc.rstrip(".").removesuffix(":443").rstrip(".") != host or not re.fullmatch(r"[a-z0-9.-]+", host):
+    host = (u.hostname or "").lower().removesuffix(".")
+    if netloc.removesuffix(":443").removesuffix(".") != host or not re.fullmatch(r"[a-z0-9.-]+", host):
         return False
     return any(host == d or host.endswith("." + d) for d in DOMINIOS_OFICIAIS)
 
 
 # quem confere é gente: nome de ferramenta/IA não vale como conferente (regra 1). Palavras que também
 # são nomes/sobrenomes reais ("Ai Ling", "Roberto Sistema") só são recusadas quando são o valor inteiro.
-_FERRAMENTA = re.compile(r"\b(?:claude|gpt|chatgpt|ollama|llm|bot|chatbot|script|mo_autonomo|openai|anthropic|"
-                         r"copilot|ia\s+local|intelig[eê]ncia\s+artificial)\b|\bgpt-?\d", re.IGNORECASE)
-_SO_FERRAMENTA = {"ia", "ai", "auto", "automatico", "automático", "modelo", "sistema", "gemini", "robo", "robô",
-                  "maquina", "máquina", "computador"}
+_FERRAMENTA = re.compile(r"\b(?:claude|gpt|chatgpt|ollama|llm|bot|chatbot|script|mo autonomo|openai|anthropic|"
+                         r"copilot|opus|sonnet|haiku|grok|llama|mistral|deepseek|ia local|ia generativa|"
+                         r"inteligencia artificial)\b|\bgpt\d|claude", re.IGNORECASE)
+# palavras que sozinhas (ou só combinadas entre si) indicam máquina; misturadas a um nome, são nome/sobrenome
+_SO_FERRAMENTA = {"ia", "ai", "auto", "automatico", "modelo", "sistema", "gemini", "robo", "maquina", "computador",
+                  "de", "do", "da", "local", "generativa", "revisado", "revisada", "conferido"}
+
+
+def _normal(s: str) -> str:
+    import unicodedata
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", s)).strip()
+
+
+def _e_pessoa(quem: str) -> bool:
+    n = _normal(quem)
+    palavras = n.split()
+    if len(re.sub(r"[^a-z]", "", n)) < 2 or _FERRAMENTA.search(n) or _FERRAMENTA.search(n.replace(" ", "")):
+        return False
+    if n.replace(" ", "") in _SO_FERRAMENTA or all(p in _SO_FERRAMENTA or p.isdigit() for p in palavras):
+        return False  # "I.A.", "IA IA", "Modelo de IA", "Gemini 2.5"
+    return True
 
 
 @dataclass
@@ -94,8 +112,7 @@ class Norma:
             if not url_oficial(self.fonte_url):
                 raise NormaInvalida(f"{self.id}: fonte não oficial {self.fonte_url}")
             quem = str(self.conferido_por).strip()
-            if (len(re.sub(r"[^A-Za-zÀ-ÿ]", "", quem)) < 2 or _FERRAMENTA.search(quem)
-                    or quem.lower() in _SO_FERRAMENTA):
+            if not _e_pessoa(quem):
                 raise NormaInvalida(f"{self.id}: conferido_por precisa ser o nome de uma pessoa ({quem!r})")
             if isinstance(self.conferido_em, date) and self.conferido_em > date.today():
                 raise NormaInvalida(f"{self.id}: conferido_em no futuro ({self.conferido_em})")

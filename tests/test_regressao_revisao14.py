@@ -47,3 +47,30 @@ def test_formas_legitimas_de_url_oficial(url):
                                  "http://www.gov.br/x", "https://www.gov.br.evil.com/x"])
 def test_truques_continuam_recusados(url):
     assert not url_oficial(url)
+
+
+# --- revisão 15 ---
+from mo_autonomo.clientes.perfil import Perfis, perfil_na_competencia  # noqa: E402
+from mo_autonomo.clientes.cadastro import Carteira  # noqa: E402
+
+
+def test_exclusao_do_simples_no_meio_do_mes_vira_pendencia():
+    s = {"opcao_simples": "S", "data_opcao_simples": date(2020, 1, 1), "data_exclusao_simples": date(2026, 9, 15),
+         "opcao_mei": "N", "data_opcao_mei": None, "data_exclusao_mei": None}
+    e = emp("PRESUMIDO")
+    perfis = Perfis(Carteira([e]), {e.cnpj: rfb(s)}, catalogo_teste())
+    p = perfil_na_competencia(perfis, e.cnpj, "2026-09")
+    assert p.regime is None and any(x.codigo == "REGIME_ALTERADO_NA_COMPETENCIA" and x.bloqueia for x in p.pendencias)
+    assert perfil_na_competencia(perfis, e.cnpj, "2026-10").regime == "PRESUMIDO"
+
+
+@pytest.mark.parametrize("quem", ["I.A.", "A.I.", "IA.", "ia!", "Sistema.", "Automático.", "IA IA", "ia-local",
+                                  "Ia - local", "IA (revisado)", "Modelo de IA", "IA Generativa", "Gemini 2.5",
+                                  "Opus", "Claude_Code", "ClaudeOpus"])
+def test_ferramenta_disfarcada_recusada(quem):
+    with pytest.raises(NormaInvalida):
+        Catalogo.de_lista([_n(quem)])
+
+
+def test_host_com_dois_pontos_finais_recusado():
+    assert not url_oficial("https://www.gov.br..:443/x")

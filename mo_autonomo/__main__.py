@@ -191,10 +191,10 @@ def cmd_calendario(args):
 
 def gerar_calendario(ctx, competencia):
     from .obrigacoes.calendario import gerar
-    from .clientes.perfil import data_da_competencia
+    from .clientes.perfil import perfil_na_competencia
     cal = ctx.config.get("calendario") or {}
     feriados = {date.fromisoformat(str(f)) for f in cal.get("feriados") or []}
-    perfis = {e.cnpj: ctx.perfis.em(e.cnpj, data_da_competencia(competencia)) for e in ctx.carteira if e.ativa}
+    perfis = {e.cnpj: perfil_na_competencia(ctx.perfis, e.cnpj, competencia) for e in ctx.carteira if e.ativa}
     return gerar(competencia, perfis, ctx.catalogo, feriados)
 
 
