@@ -3,7 +3,7 @@
 Sem TABELA_INSS_SEGURADO / TABELA_IRRF_MENSAL conferidas, a conferência fica INATIVA (regra 3).
 Entrada (exportação da folha, CSV `;`):
 cpf;nome;competencia;salario_contribuicao;inss_descontado;base_irrf;dependentes;irrf_descontado
-[;remuneracao_fgts;fgts_depositado]   (opcionais: conferência do FGTS)
+[;remuneracao_fgts;fgts_depositado;aprendiz]   (opcionais: conferência do FGTS; aprendiz = S/N)
 """
 from __future__ import annotations
 
@@ -73,7 +73,8 @@ def ler_folha(caminho: Path) -> list[dict]:
                     "inss_descontado": dinheiro_br(l["inss_descontado"]), "base_irrf": dinheiro_br(l["base_irrf"]),
                     "dependentes": int(l.get("dependentes") or 0), "irrf_descontado": dinheiro_br(l["irrf_descontado"]),
                     "remuneracao_fgts": dinheiro_br(l["remuneracao_fgts"]) if l.get("remuneracao_fgts") else None,
-                    "fgts_depositado": dinheiro_br(l["fgts_depositado"]) if l.get("fgts_depositado") else None})
+                    "fgts_depositado": dinheiro_br(l["fgts_depositado"]) if l.get("fgts_depositado") else None,
+                    "aprendiz": (l.get("aprendiz") or "").strip().upper() in ("S", "SIM", "1")})
     return out
 
 
@@ -99,7 +100,7 @@ def _params(catalogo, comp: str, folha_tem_fgts: bool) -> tuple:
     """Parâmetros CONFERIDOS e VIGENTES na competência (tabela de outro ano não serve)."""
     em = _mes(comp)
     if em is None:
-        return None, {"faixas": None}, None, [f"{comp}: competência ilegível (esperado AAAA-MM ou MM/AAAA) — folha não conferida"]
+        return None, {"faixas": None}, (None, None), [f"{comp}: competência ilegível (esperado AAAA-MM ou MM/AAAA) — folha não conferida"]
     inativas = []
     faixas_inss = catalogo.parametro(INSS, "faixas", em)
     p_irrf = {k: catalogo.parametro(IRRF, k, em) for k in ("faixas", "deducao_por_dependente", "redutor")}
@@ -112,9 +113,10 @@ def _params(catalogo, comp: str, folha_tem_fgts: bool) -> tuple:
         inativas.append(f"IRRF: {IRRF}.redutor.base ausente — sobre qual valor medir o redutor é decisão legal")
         p_irrf["faixas"] = None
     aliq_fgts = catalogo.parametro(FGTS, "aliquota_deposito", em)
+    aliq_aprendiz = catalogo.parametro(FGTS, "aliquota_deposito_aprendiz", em)
     if aliq_fgts is None and folha_tem_fgts:
         inativas.append(f"FGTS {comp}: {FGTS} não conferida ou não vigente ({catalogo.status(FGTS)})")
-    return faixas_inss, p_irrf, aliq_fgts, inativas
+    return faixas_inss, p_irrf, (aliq_fgts, aliq_aprendiz), inativas
 
 
 def conferir(folha: list[dict], cnpj: str, catalogo, tolerancia: Decimal = Decimal("0.01")) -> dict:
@@ -124,7 +126,10 @@ def conferir(folha: list[dict], cnpj: str, catalogo, tolerancia: Decimal = Decim
         if comp not in cache:
             cache[comp] = _params(catalogo, comp, any(x.get("remuneracao_fgts") is not None for x in folha))
             inativas.extend(cache[comp][3])
-        faixas_inss, p_irrf, aliq_fgts, _ = cache[comp]
+        faixas_inss, p_irrf, (aliq_normal, aliq_aprendiz), _ = cache[comp]
+        aliq_fgts = aliq_aprendiz if l.get("aprendiz") else aliq_normal
+        if l.get("aprendiz") and aliq_aprendiz is None and l.get("remuneracao_fgts") is not None:
+            inativas.append(f"FGTS {comp}/{l['cpf'][-4:]}: aprendiz sem {FGTS}.aliquota_deposito_aprendiz conferida")
         ref = f"{l['competencia']}/{l['cpf'][-4:]}"
         if aliq_fgts is not None and l.get("remuneracao_fgts") is not None and l.get("fgts_depositado") is not None:
             esperado = _q(l["remuneracao_fgts"] * Decimal(str(aliq_fgts)))

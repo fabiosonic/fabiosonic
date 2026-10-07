@@ -165,9 +165,16 @@ def r_retencoes_federais(doc, ctx):
     ret = doc.get("retencoes_federais") or {}
     retidos = [ret.get("csll")]
     if doc.get("padrao") == "NACIONAL":
-        # no padrão nacional PIS/COFINS só contam como retidos se o código de retenção disser
+        # no padrão nacional o código tpRetPisCofins diz QUAIS tributos foram retidos (pode ser parcial)
+        mapa = ctx.catalogo.parametro("LEIAUTE_NFSE_NACIONAL", "retencao_por_codigo", doc.get("emissao"))
         cod_ret = ctx.catalogo.parametro("LEIAUTE_NFSE_NACIONAL", "codigos_pis_cofins_retidos", doc.get("emissao"))
-        if cod_ret is None:
+        codigo = str(doc.get("pis_cofins_retencao_codigo"))
+        if mapa is not None:
+            if codigo not in {str(k) for k in mapa}:
+                return []  # código fora da tabela conferida: não dá para afirmar nada
+            tributos = {str(t).lower() for t in ({str(k): v for k, v in mapa.items()}[codigo] or [])}
+            retidos = [ret.get(t) for t in ("pis", "cofins", "csll") if t in tributos]
+        elif cod_ret is None:
             if not ret.get("csll"):
                 return []  # sem o código conferido não dá para afirmar ausência de PIS/COFINS retidos
         elif str(doc.get("pis_cofins_retencao_codigo")) in [str(x) for x in cod_ret]:

@@ -47,3 +47,4 @@
     # PROPOSTA (fonte secundária: juruadocs.com, guiatrabalhista.com.br) — art. 15: "8% (oito por cento) da
     # remuneração paga ou devida, no mês anterior"; aprendiz 2% (§ 7º, não tratado no cálculo atual)
     aliquota_deposito: "0.08"
+    aliquota_deposito_aprendiz: "0.02"   # art. 15, § 7º (contrato de aprendizagem) — usado quando a folha marca aprendiz=S

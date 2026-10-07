@@ -51,8 +51,8 @@ Fontes secundárias: valorfinal.com.br, portaltributario.com.br, caltrab.com.
 ## LEI_8036_FGTS — Lei 8.036/1990, art. 15
 
 - `aliquota_deposito: 0.08` — "8% (oito por cento) da remuneração paga ou devida, no mês anterior".
-- Atenção: § 7º reduz para **2% no contrato de aprendizagem**. O cálculo atual não diferencia aprendiz:
-  folha de aprendiz vai aparecer como divergente até essa regra ser tratada.
+- `aliquota_deposito_aprendiz: 0.02` — § 7º, contrato de aprendizagem. A folha indica o aprendiz na
+  coluna opcional `aprendiz` (S/N); sem esse parâmetro conferido, a linha do aprendiz fica inativa.
 
 Fonte secundária: juruadocs.com (transcrição do art. 15), guiatrabalhista.com.br.
 
@@ -90,8 +90,8 @@ Fontes secundárias: aegro, oobj, alterdata.
 
 `codigos_pis_cofins_retidos` = 3 e 4 (NT 007 SE/CGNFS-e: 0 nenhum retido; 3 PIS/COFINS/CSLL retidos;
 4 PIS/COFINS retidos e CSLL não; 5–9 retenções parciais; 1 e 2 legados). Só entram os códigos em que PIS
-**e** COFINS estão retidos, porque a regra soma os dois juntos. Retenções parciais (5–9) ainda não são
-tratadas. `codigos_iss_retido` (tpRetISSQN) sem proposta. Fontes: focusnfe, tecnospeed.
+**e** COFINS estão retidos, porque a regra soma os dois juntos. A tabela completa `retencao_por_codigo` (0 nenhum; 3 PIS/COFINS/CSLL; 4 PIS/COFINS; 5 PIS; 6 COFINS;
+7 COFINS/CSLL; 8 CSLL; 9 PIS/CSLL) trata as retenções parciais; código fora da tabela não gera apontamento. `codigos_iss_retido` (tpRetISSQN) sem proposta. Fontes: focusnfe, tecnospeed.
 
 ## LEIAUTE_NFSE_ABRASF — ISS retido
 
