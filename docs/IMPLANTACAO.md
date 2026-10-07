@@ -3,6 +3,16 @@
 Ordem pensada para ligar a autonomia **aos poucos**, cada degrau com um critério objetivo.
 Nada aqui mexe na caixa real, no `D:` ou no Domínio sem você decidir.
 
+## Antes de tudo — o caminho mais curto
+
+Abra o **Claude no PC do escritório** (claude.ai/download → aba **Code** → pasta do projeto, branch
+`claude/cool-albattani-c06s52`) e peça: *"Continue o mo_autonomo: instale, configure as 4 caixas de
+e-mail, importe os planos de contas do Domínio, monte as fichas das normas pelos sites oficiais e rode o
+ciclo em simulação"*. Lá o Claude alcança o `D:`, o Domínio, o e-mail e os sites do governo — e faz por
+você os degraus abaixo, parando só onde a sua assinatura é exigida (conferir norma e digitar APROVADO).
+
+Os valores já levantados para conferência estão em `docs/FICHAS_NORMAS.md`.
+
 ## Degrau 0 — Instalar (30 min)
 
 1. Instale Python 3.12+ (python.org, marcar "Add to PATH") e Git.
@@ -34,6 +44,8 @@ Para cada norma, na ordem: `python -m mo_autonomo normas conferir --id <ID>` ger
 `dados\conferencia\<ID>.md` com o texto oficial e o bloco YAML a preencher. Você confere o
 trecho literal e preenche `status: CONFERIDO`, `conferido_por`, `conferido_em`, `hash_texto`
 e os `parametros` no arquivo `config\normas\*.yaml`.
+As propostas já levantadas (INSS, IRRF, FGTS, códigos da NF-e/CT-e/CFOP/NFS-e) estão em
+`docs/FICHAS_NORMAS.md`: confira cada valor no texto oficial antes de marcar CONFERIDO.
 
 1. `MOC_NFE` (sentido da NF-e, NFC-e, indTot, CRT, cancelamento, posições da chave)
 2. `MOC_CTE` (tomador)
