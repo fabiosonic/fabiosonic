@@ -4,7 +4,22 @@
   area: fiscal
   status: PENDENTE
   dispositivos: ["campo C21 CRT", "campo B11 tpNF", "campo B11a idDest", "eventos tpEvento"]
-  parametros: {}
+  fonte_url_sugerida: https://www.nfe.fazenda.gov.br/portal/listaConteudo.aspx?tipoConteudo=ndIjl+iEFdE=
+  parametros:
+    # PROPOSTAS de fonte SECUNDÁRIA (busca web 07/10/2026; portal oficial bloqueado) — conferir no MOC/NTs.
+    # CRT (NT 2024.001): 1 Simples Nacional; 2 excesso de sublimite; 3 regime normal; 4 MEI
+    #   (tecnospeed, contmatic, inventti). O mapeamento para os regimes do cadastro é proposta do sistema.
+    crt_por_regime: {"1": [SIMPLES], "2": [SIMPLES], "3": [PRESUMIDO, REAL, IMUNE, ISENTA], "4": [MEI]}
+    tp_nf_saida: "1"                    # tpNF: 0 entrada, 1 saída (nfe.io, tecnospeed)
+    fin_nfe_devolucao: ["4"]            # finNFe 4 = devolução (tecnospeed, oobj)
+    tp_evento_cancelamento: ["110111"]  # evento de cancelamento (projetoacbr, nfe.io)
+    cstat_evento_homologado: ["135"]    # "Evento registrado e vinculado a NF-e" (projetoacbr) — conferir outros cStat válidos
+    cstat_autorizado: ["100"]           # "Autorizado o uso da NF-e" (projetoacbr) — conferir 150 (fora de prazo)
+    # chave de 44 dígitos: CNPJ do emitente nas posições 7–20 e modelo nas 21–22 (senior, dootax);
+    # aqui como fatia Python [início, fim) => [6, 20] e [20, 22]
+    chave_pos_cnpj_emitente: [6, 20]
+    chave_pos_modelo: [20, 22]
+    # SEM proposta confiável: modelo_nfce, ind_tot_compoe (preencher na conferência)
   # parametros esperados após conferência:
   #   crt_por_regime: {"1": [SIMPLES], "2": [SIMPLES], "3": [PRESUMIDO, REAL, IMUNE, ISENTA], "4": [MEI]}
   #   tp_evento_cancelamento: ["<código>"]; cstat_evento_homologado: ["<código>"]
@@ -17,16 +32,24 @@
   titulo: Manual de Orientação do Contribuinte CT-e (leiaute — tomador do serviço)
   area: fiscal
   status: PENDENTE
-  parametros: {}
+  fonte_url_sugerida: https://www.cte.fazenda.gov.br/portal/
+  parametros:
+    # PROPOSTA de fonte SECUNDÁRIA (oobj, webmania): toma3 0-Remetente 1-Expedidor 2-Recebedor
+    # 3-Destinatário; toma4 4-Outros (dados no próprio grupo) — conferir no MOC CT-e 4.00
+    tomador_por_codigo: {"0": rem, "1": exped, "2": receb, "3": dest}
   # esperados: tomador_por_codigo: {"<código toma3>": rem|exped|receb|dest, ...}
 
 - id: TABELA_CFOP
   titulo: Tabela de Códigos Fiscais de Operações e Prestações (CFOP)
   area: fiscal
   status: PENDENTE
-  parametros: {}
-  # esperados: cfop_digitos_saida: ["5","6","7"]; cfop_digitos_entrada: ["1","2","3"];
-  #            cfop_digito_por_iddest: {"1": ["1","5"], "2": ["2","6"], "3": ["3","7"]}
+  fonte_url_sugerida: https://www.confaz.fazenda.gov.br/  # Convênio s/nº de 1970 (SINIEF), Anexo — CFOP
+  parametros:
+    # PROPOSTA de fonte SECUNDÁRIA (aegro, oobj, alterdata): 1º dígito do CFOP — entradas 1 (estadual),
+    # 2 (interestadual), 3 (exterior); saídas 5, 6, 7 respectivamente. idDest 1 interna, 2 interestadual,
+    # 3 exterior (rejeições 732/733 da SEFAZ). Conferir no Convênio SINIEF / Ajuste.
+    cfop_digitos_por_tpnf: {"0": ["1", "2", "3"], "1": ["5", "6", "7"]}
+    cfop_digito_por_iddest: {"1": ["1", "5"], "2": ["2", "6"], "3": ["3", "7"]}
 
 - id: LEIAUTE_NFSE_NACIONAL
   titulo: Leiaute da NFS-e Padrão Nacional (DPS/NFS-e) — anexos de leiaute e tabelas

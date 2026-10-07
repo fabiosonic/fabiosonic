@@ -56,7 +56,38 @@ Fontes secundárias: valorfinal.com.br, portaltributario.com.br, caltrab.com.
 
 Fonte secundária: juruadocs.com (transcrição do art. 15), guiatrabalhista.com.br.
 
-## Normas fiscais (MOC NF-e, MOC CT-e, CFOP, NFS-e, dicionário CNPJ…)
+## MOC_NFE — Manual de Orientação do Contribuinte NF-e/NFC-e (proposta parcial)
 
-Sem proposta: a busca não trouxe o texto dos manuais com confiança suficiente. Ficam vazias até o
-acesso aos sites oficiais (Portal NF-e, CONFAZ, Receita) ou ao PC do escritório.
+| Parâmetro | Valor proposto | O que é | Fonte secundária |
+|---|---|---|---|
+| `crt_por_regime` | 1→Simples, 2→Simples (excesso de sublimite), 3→Presumido/Real/Imune/Isenta, 4→MEI | campo CRT (NT 2024.001) | tecnospeed, contmatic, inventti |
+| `tp_nf_saida` | 1 | tpNF: 0 entrada, 1 saída | nfe.io, tecnospeed |
+| `fin_nfe_devolucao` | 4 | finNFe = devolução | tecnospeed, oobj |
+| `tp_evento_cancelamento` | 110111 | evento de cancelamento | projetoacbr, nfe.io |
+| `cstat_evento_homologado` | 135 | "Evento registrado e vinculado a NF-e" | projetoacbr |
+| `cstat_autorizado` | 100 | "Autorizado o uso da NF-e" | projetoacbr |
+| `chave_pos_cnpj_emitente` | posições 7–20 da chave | CNPJ do emitente | senior, dootax |
+| `chave_pos_modelo` | posições 21–22 da chave | modelo (55/65) | senior, dootax |
+
+A conferir com atenção: se há outros cStat que também valem como autorizado (ex.: 150, fora de prazo)
+ou como evento homologado (ex.: 155). O mapeamento CRT 3 → Imune/Isenta é proposta do sistema.
+**Sem proposta:** `modelo_nfce` e `ind_tot_compoe` — a busca não trouxe o texto com confiança.
+
+## MOC_CTE — tomador do serviço
+
+`tomador_por_codigo`: toma3 0 = Remetente, 1 = Expedidor, 2 = Recebedor, 3 = Destinatário
+(toma4 = 4 Outros, com os dados no próprio grupo). Fontes secundárias: oobj, webmania.
+
+## TABELA_CFOP — primeiro dígito
+
+- Por tipo da nota: entrada (tpNF 0) → 1, 2, 3; saída (tpNF 1) → 5, 6, 7.
+- Por destino (idDest): 1 interna → 1/5; 2 interestadual → 2/6; 3 exterior → 3/7 (rejeições 732/733).
+
+Fontes secundárias: aegro, oobj, alterdata.
+
+## Ainda sem proposta
+
+LEIAUTE_NFSE_NACIONAL/ABRASF (códigos de retenção), LEI_10833_ART30 (serviços sujeitos), TABELA_NCM_
+MONOFASICO, DICIONARIO_DADOS_ABERTOS_CNPJ (códigos de situação/opção), LC 123, Res. CGSN 140, RICMS-RJ,
+ISS-RJ, EFD-Reinf, reforma tributária e normas contábeis: a busca não trouxe os valores com confiança
+suficiente — ficam para a conferência no site oficial.
