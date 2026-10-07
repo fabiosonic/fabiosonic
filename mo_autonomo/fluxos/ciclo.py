@@ -215,14 +215,19 @@ def _bloqueia_doc(d: dict, cnpj: str) -> list[dict]:
     return [p for p in d.get("pendencias", []) if p.get("cnpj") in (cnpj, None)]
 
 
-def _salvar_lote(ctx, lote_id, acoes, achados, pend, info, cnpj, comp, area) -> dict | None:
+def _salvar_lote(ctx, lote_id, acoes, achados, pend, info, cnpj, comp, area, achados_info=None) -> dict | None:
     ja = ctx.trilha.acoes_ja_propostas(acoes)
     acoes = [a for a in acoes if ctx.trilha.id_acao(a) not in ja]
-    if not (acoes or achados or pend or info):
+    achados_info = achados_info or []
+    if not (acoes or achados or pend or info or achados_info):
         return None
-    lote = L.montar_lote(lote_id, acoes, achados, _unicas(pend), _unicas(info))
+    pend, info = _unicas(pend), _unicas(info)
+    if not acoes and not ctx.trilha.conteudo_novo(f"{area}|{cnpj}|{comp}", [achados, pend, info, achados_info]):
+        return None  # reprocesso sem nada novo: não gera lote/parecer repetido
+    lote = L.montar_lote(lote_id, acoes, achados, pend, info, achados_info)
     arquivo = L.salvar(lote, ctx.dados / "lotes")
     ctx.trilha.registrar_acoes(lote["id"], acoes)
+    ctx.trilha.conteudo_novo(f"{area}|{cnpj}|{comp}", [achados, pend, info, achados_info], registrar=True)
     return {"id": lote["id"], "cnpj": cnpj, "competencia": comp, "area": area, "arquivo": str(arquivo),
             "hash": lote["hash"]}
 
@@ -231,15 +236,18 @@ def n_montar_lotes(e, ctx):
     """Um lote por empresa × competência × área. Pendência de um documento NÃO trava os outros:
 
     - ações só de documentos sem pendência para a empresa;
-    - pendências de documentos vão como `informativas` (aparecem no parecer, não bloqueiam);
-    - `pendencias` do lote = só as do grupo inteiro (ex.: falha na análise do mês);
-    - ação já proposta/executada em outro lote não é proposta de novo.
+    - pendências e achados de documentos retidos vão como `informativas`/`achados_informativos`
+      (aparecem no parecer, não bloqueiam a aprovação nem a auto-aprovação das notas limpas);
+    - `pendencias` do lote = falha do grupo inteiro (ex.: análise do mês falhou). Nesse caso o lote
+      NÃO leva ações e os documentos ficam ANALISADO, voltando no próximo ciclo;
+    - documento só vira OK se o lote do grupo dele foi gravado.
     """
     lotes = []
     run = e["_run_id"][:8]
     comp_achados = e.get("achados_competencia", {})
     falhas_comp = defaultdict(list)
     gerais = list(e.get("pendencias_gerais", []))
+    nao_ok: set = set()
     for f in e.get("falhas_competencia", []):
         if f.get("cnpj"):
             falhas_comp[(f["cnpj"], f["referencia"])].append(f)
@@ -247,26 +255,30 @@ def n_montar_lotes(e, ctx):
             gerais.append(f)
     for (cnpj, comp), docs in sorted(_grupos(e).items(), key=lambda x: (x[0][0], x[0][1] or "")):
         try:
-            acoes, achados, info = [], [], []
+            acoes, achados, info, achados_info = [], [], [], []
             pend = list(falhas_comp.get((cnpj, comp), []))
             for d in docs:
-                achados += [a for a in d.get("achados", []) if a.get("cnpj") == cnpj]
+                proprios = [a for a in d.get("achados", []) if a.get("cnpj") == cnpj]
                 bloqueios = _bloqueia_doc(d, cnpj)
                 if bloqueios:
                     info += bloqueios
+                    achados_info += proprios
                     continue
+                achados += proprios
                 for r in d.get("rotas", []):
                     if r["cnpj"] == cnpj and comp:
                         acoes.append(_acao_documento(d, r, cnpj, comp))
-            if comp is None:
-                info.append(_falha("SEM_COMPETENCIA", "documento sem data de competência", cnpj))
+            if pend:  # grupo com falha: nada de ação; documentos voltam no próximo ciclo
+                nao_ok |= {d["sha256"] for d in docs}
+                acoes = []
             achados += comp_achados.get(f"{cnpj}|{comp}", [])
             l = _salvar_lote(ctx, f"FISCAL_{cnpj}_{comp or 'SEMCOMP'}_{run}", acoes, achados, pend, info, cnpj, comp,
-                             "FISCAL")
+                             "FISCAL", achados_info)
             if l:
                 lotes.append(l)
         except Exception as exc:  # noqa: BLE001
             gerais.append(_falha("ERRO_LOTE", f"{cnpj} {comp}: {type(exc).__name__}: {exc}", None, cnpj))
+            nao_ok |= {d["sha256"] for d in docs}
     pend_ofx = set()
     por_chave = defaultdict(lambda: {"lancamentos": [], "pendencias": [], "shas": set()})
     for p in e.get("contabil", []):  # vários extratos da mesma empresa/mês = um lote só
@@ -278,24 +290,32 @@ def n_montar_lotes(e, ctx):
             pend_ofx.add(p.get("sha256"))
     for (cnpj, comp), g in sorted(por_chave.items(), key=lambda x: (x[0][0], x[0][1] or "")):
         try:
-            vistos, acoes = set(), []
+            vistos, acoes, pend_g = set(), [], list(g["pendencias"])
             for l in g["lancamentos"]:
                 a = {"tipo": "lancamento_contabil", **l, "valor": str(l["valor"])}
+                if not l.get("fitid"):
+                    pend_g.append(_falha("SEM_FITID", f"transação de {l['data']} valor {l['valor']} sem FITID no "
+                                         "extrato: sem identificador não há como evitar duplicidade", cnpj, l.get("sha256")))
+                    pend_ofx.add(l.get("sha256"))
+                    continue
                 if ctx.trilha.id_acao(a) not in vistos:
                     vistos.add(ctx.trilha.id_acao(a))
                     acoes.append(a)
-            l = _salvar_lote(ctx, f"CONTABIL_{cnpj}_{comp or 'SEMCOMP'}_{run}", acoes, [], [], g["pendencias"],
+            l = _salvar_lote(ctx, f"CONTABIL_{cnpj}_{comp or 'SEMCOMP'}_{run}", acoes, [], [], pend_g,
                              cnpj, comp, "CONTABIL")
             if l:
                 lotes.append(l)
         except Exception as exc:  # noqa: BLE001
             gerais.append(_falha("ERRO_LOTE", f"contábil {cnpj}: {type(exc).__name__}: {exc}"))
-            pend_ofx |= g["shas"]
+            nao_ok |= g["shas"]
     for d in e["documentos"]:
         if not d.get("rotas") and not d.get("extratos_empresa") and not any(p.get("cnpj") for p in d.get("pendencias", [])):
             gerais += [p for p in d.get("pendencias", [])]
-    # lotes gravados: documentos analisados viram OK (ou PENDENTE, no caso de OFX com transação sem destino)
+    # lotes gravados: documentos analisados viram OK (OFX com transação sem destino -> PENDENTE;
+    # grupo que não gravou lote -> continua ANALISADO e volta no próximo ciclo)
     for d in e["documentos"]:
+        if d.get("sha256") in nao_ok:
+            continue
         if d.get("sha256") in pend_ofx:
             ctx.trilha.atualizar_situacao(d["sha256"], "PENDENTE")
         elif not d.get("pendencias") and d.get("classe") != "ERRO":
@@ -314,10 +334,28 @@ def _unicas(pends):
 
 
 def n_aprovar(e, ctx):
-    """Aprovação por exceção (só se ativa e se o lote cumprir todas as condições)."""
+    """Aprovação por exceção (só se ativa e se o lote cumprir todas as condições).
+
+    Também reapresenta lotes de ciclos anteriores que ainda têm ações PROPOSTA sem aprovação
+    (ex.: ciclo caiu depois de gravar o lote): ficam visíveis no resumo/painel e podem ser
+    auto-aprovados.
+    """
     politica = ctx.config.get("aprovacao_por_excecao") or {}
     out = []
-    for l in e["lotes"]:
+    atuais = {l["id"] for l in e["lotes"]}
+    lotes = list(e["lotes"])
+    for lid in ctx.trilha.lotes_aguardando():
+        arq = ctx.dados / "lotes" / f"lote_{lid}.json"
+        if lid in atuais or not arq.exists():
+            continue
+        try:
+            lote = L.carregar(arq)
+        except Exception:  # noqa: BLE001
+            continue
+        partes = lid.split("_")
+        lotes.append({"id": lid, "cnpj": partes[1], "competencia": partes[2] if partes[2] != "SEMCOMP" else None,
+                      "area": partes[0], "arquivo": str(arq), "hash": lote["hash"], "reapresentado": True})
+    for l in lotes:
         try:
             aprovado = L.aprovar_auto(Path(l["arquivo"]), politica, ctx.trilha)
             motivos = [] if aprovado else L.avaliar_auto(L.carregar(Path(l["arquivo"])), politica).motivos
@@ -355,7 +393,7 @@ def executar_acao(a: dict, ctx) -> dict:
                     "detalhe": "exportador só é escrito com o leiaute oficial de importação"}
         else:
             r = {"acao": a["tipo"], "status": "SEM_EXECUTOR"}
-            ctx.trilha.marcar_acao(a, "FALHOU", r["status"])
+            ctx.trilha.marcar_acao(a, "BLOQUEADA", r["status"])
             return r
         try:
             st = gravar(destino, Path(a["origem"]).read_bytes())
@@ -365,7 +403,13 @@ def executar_acao(a: dict, ctx) -> dict:
     except Exception as exc:  # noqa: BLE001 — uma ação ruim não impede as outras
         r = {"acao": a["tipo"], "status": f"ERRO: {type(exc).__name__}: {exc}"}
     ok = r["status"] in ("GRAVADO", "JA_EXISTIA")
-    ctx.trilha.marcar_acao(a, "EXECUTADA" if ok else "FALHOU", None if ok else r["status"])
+    if ok:
+        ctx.trilha.marcar_acao(a, "EXECUTADA")
+    elif r["status"].startswith("CONFLITO"):
+        ctx.trilha.marcar_acao(a, "BLOQUEADA", r["status"])  # repetir não resolve: precisa de pessoa
+    else:
+        teto = int((ctx.config.get("execucao") or {}).get("max_tentativas", 24))
+        ctx.trilha.marcar_falha(a, r["status"], teto)
     return r
 
 
@@ -407,13 +451,13 @@ def n_pareceres(e, ctx):
     inativas = [c for c in cobertura(ctx.catalogo) if not c["ativa"]]
     gerados, falhas = [], []
     for l in e["lotes"]:
-        if l["area"] != "FISCAL" or l["competencia"] is None:
+        if l["area"] != "FISCAL" or l["competencia"] is None or l.get("reapresentado"):
             continue
         try:
             lote = L.carregar(Path(l["arquivo"]))
             emp = ctx.carteira.get(l["cnpj"])
             perfil = ctx.perfis.em(l["cnpj"], ctx.hoje)
-            md = parecer.markdown(emp, l["competencia"], perfil, lote["achados"],
+            md = parecer.markdown(emp, l["competencia"], perfil, lote["achados"] + lote.get("achados_informativos", []),
                                   lote["pendencias"] + lote.get("informativas", []),
                                   len(lote["acoes"]), inativas,
                                   (e.get("faturamento") or {}).get(f"{l['cnpj']}|{l['competencia']}"))
@@ -430,7 +474,8 @@ def n_pareceres(e, ctx):
               "## Lotes aguardando APROVADO", ""]
     for l in e["lotes"]:
         if not l.get("aprovado"):
-            resumo.append(f"- `{l['id']}` hash `{l['hash'][:16]}…` — {'; '.join(l.get('aguardando') or [])}")
+            origem = " (de ciclo anterior)" if l.get("reapresentado") else ""
+            resumo.append(f"- `{l['id']}`{origem} hash `{l['hash'][:16]}…` — {'; '.join(l.get('aguardando') or [])}")
     try:
         alertas = _alertas_vencimento(ctx)
     except Exception as exc:  # noqa: BLE001
@@ -444,6 +489,11 @@ def n_pareceres(e, ctx):
     if falhas_exec:
         resumo += ["", "## Execuções com falha (serão refeitas no próximo ciclo)", ""]
         resumo += [f"- `{lid}` {r.get('acao', '')}: {r['status']}" for lid, r in falhas_exec]
+    bloqueadas = ctx.trilha.acoes_bloqueadas()
+    if bloqueadas:
+        resumo += ["", "## Ações bloqueadas (precisam de uma pessoa: conflito ou tentativas esgotadas)", ""]
+        resumo += [f"- `{b['lote']}` {b['acao']['tipo']} {b['acao'].get('nome', b['acao'].get('fitid', ''))}: {b['detalhe']}"
+                   for b in bloqueadas]
     if falhas:
         resumo += ["", "## Falhas ao gerar pareceres", ""] + [f"- {f}" for f in falhas]
     caminho = pasta / f"resumo_{e['_run_id'][:8]}.md"

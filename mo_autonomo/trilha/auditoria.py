@@ -8,7 +8,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from ..util.arquivos import dumps, loads
+from ..util.arquivos import dumps, loads, sha256_bytes
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS anexos (
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS acoes (
     estado TEXT, dados TEXT, detalhe TEXT, em TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_acoes_estado ON acoes(estado);
+CREATE TABLE IF NOT EXISTS lotes_conteudo (chave TEXT PRIMARY KEY, hash TEXT, em TEXT);
 CREATE TABLE IF NOT EXISTS aprovacoes (
     id INTEGER PRIMARY KEY AUTOINCREMENT, lote TEXT, hash TEXT, modo TEXT, motivo TEXT,
     usuario TEXT, em TEXT
@@ -61,6 +62,8 @@ class Trilha:
         colunas = {r[1] for r in self.con.execute("PRAGMA table_info(documentos)")}
         if "resumo" not in colunas:  # migração de trilhas criadas antes desta versão
             self.con.execute("ALTER TABLE documentos ADD COLUMN resumo TEXT")
+        if "tentativas" not in {r[1] for r in self.con.execute("PRAGMA table_info(acoes)")}:
+            self.con.execute("ALTER TABLE acoes ADD COLUMN tentativas INTEGER DEFAULT 0")
         self.con.commit()
 
     def fechar(self):
@@ -131,7 +134,9 @@ class Trilha:
     @staticmethod
     def id_acao(a: dict) -> str:
         if a["tipo"] == "lancamento_contabil":
-            return f"lancamento_contabil|{a.get('banco')}|{a.get('conta')}|{a.get('fitid')}|{a['cnpj']}"
+            # FITID pode ser reaproveitado pelo banco em outro mês: data e valor entram na identidade
+            return (f"lancamento_contabil|{a.get('banco')}|{a.get('conta')}|{a.get('fitid')}|{a.get('data')}|"
+                    f"{a.get('valor')}|{a['cnpj']}")
         return f"{a['tipo']}|{a.get('sha256')}|{a['cnpj']}|{a.get('pasta_tipo') or ''}"
 
     def acoes_ja_propostas(self, acoes: list[dict]) -> set[str]:
@@ -154,6 +159,33 @@ class Trilha:
         self.con.execute("UPDATE acoes SET estado=?, detalhe=?, em=? WHERE id=?",
                          (estado, detalhe, agora(), self.id_acao(a)))
         self.con.commit()
+
+    def marcar_falha(self, a: dict, detalhe: str, teto: int) -> None:
+        """FALHOU (refeita no próximo ciclo) até o teto de tentativas; depois BLOQUEADA (precisa de pessoa)."""
+        self.con.execute("UPDATE acoes SET tentativas=COALESCE(tentativas,0)+1, detalhe=?, em=? WHERE id=?",
+                         (detalhe, agora(), self.id_acao(a)))
+        n = self.con.execute("SELECT tentativas FROM acoes WHERE id=?", (self.id_acao(a),)).fetchone()
+        estado = "BLOQUEADA" if n and n[0] >= teto else "FALHOU"
+        self.con.execute("UPDATE acoes SET estado=? WHERE id=?", (estado, self.id_acao(a)))
+        self.con.commit()
+
+    def acoes_bloqueadas(self) -> list[dict]:
+        return [{"lote": l, "acao": loads(d), "detalhe": det} for l, d, det in self.con.execute(
+            "SELECT lote, dados, detalhe FROM acoes WHERE estado='BLOQUEADA' ORDER BY em")]
+
+    def lotes_aguardando(self) -> list[str]:
+        """Lotes com ação PROPOSTA e nenhuma aprovação registrada."""
+        return [r[0] for r in self.con.execute(
+            "SELECT DISTINCT a.lote FROM acoes a LEFT JOIN aprovacoes p ON p.lote = a.lote"
+            " WHERE a.estado='PROPOSTA' AND p.lote IS NULL ORDER BY a.lote")]
+
+    def conteudo_novo(self, chave: str, conteudo, registrar: bool = False) -> bool:
+        h = sha256_bytes(dumps(conteudo).encode())
+        r = self.con.execute("SELECT hash FROM lotes_conteudo WHERE chave=?", (chave,)).fetchone()
+        if registrar:
+            self.con.execute("INSERT OR REPLACE INTO lotes_conteudo VALUES (?,?,?)", (chave, h, agora()))
+            self.con.commit()
+        return r is None or r[0] != h
 
     def acoes_com_falha(self) -> list[dict]:
         return [{"lote": l, "acao": loads(d), "detalhe": det} for l, d, det in self.con.execute(

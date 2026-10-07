@@ -31,11 +31,11 @@ def hash_lote(lote: dict) -> str:
 
 
 def montar_lote(id_lote: str, acoes: list[dict], achados: list[dict], pendencias: list[dict],
-                informativas: list[dict] | None = None) -> dict:
+                informativas: list[dict] | None = None, achados_informativos: list[dict] | None = None) -> dict:
     """`pendencias` bloqueiam o lote; `informativas` são pendências de documentos que ficaram FORA
     do lote (não têm ação aqui) — aparecem no parecer mas não travam as ações limpas."""
     lote = {"id": id_lote, "acoes": acoes, "achados": achados, "pendencias": pendencias,
-            "informativas": informativas or []}
+            "informativas": informativas or [], "achados_informativos": achados_informativos or []}
     lote["hash"] = hash_lote(lote)
     return lote
 

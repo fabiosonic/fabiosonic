@@ -128,7 +128,8 @@ def test_ofx_sobreposto_e_virada_de_mes(tmp_path):
     trans2 = trans[1:] + (("20261003", "300.00", "PIX RECEBIDO CLIENTE V", "F3"),)
     (base / "entrada" / "2.eml").write_bytes(eml_bytes({"b.ofx": ofx_bytes(trans=trans2)}, assunto="b"))
     e2 = rodar_ciclo(ctx)
-    lotes = [json.loads(Path(l["arquivo"]).read_text()) for l in e2["lotes"] if l["area"] == "CONTABIL"]
+    lotes = [json.loads(Path(l["arquivo"]).read_text()) for l in e2["lotes"]
+             if l["area"] == "CONTABIL" and not l.get("reapresentado")]
     fitids = [a["fitid"] for l in lotes for a in l["acoes"]]
     assert fitids == ["F3"]  # F2 já tinha sido proposto
 

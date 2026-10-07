@@ -104,7 +104,9 @@ def test_ciclo_completo_simulacao(tmp_path):
 
     # segundo ciclo: nada novo (e-mails já lidos, anexos deduplicados)
     e2 = rodar_ciclo(ctx)
-    assert e2["emails_lidos"] == 0 and e2["anexos"] == [] and e2["lotes"] == []
+    assert e2["emails_lidos"] == 0 and e2["anexos"] == []
+    assert all(l.get("reapresentado") for l in e2["lotes"])  # só os que ainda aguardam APROVADO
+    assert f"FISCAL_{CNPJ_A}_2026-10" not in {l["id"].rsplit("_", 1)[0] for l in e2["lotes"]}  # esse já foi aprovado
 
     # e-mail repetido com os mesmos anexos: dedupe por sha256
     (base / "entrada" / "3.eml").write_bytes(eml_bytes({"x.xml": nfe_xml(numero=1)}, assunto="reenvio"))

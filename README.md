@@ -67,10 +67,16 @@ flowchart TD
 - **Documento**: `ANALISADO` → `OK` só quando o lote dele é gravado; `PENDENTE` volta sozinho
   quando normas/cadastro/exportações mudam; `FILA` (sem IA disponível) volta todo ciclo;
   `ERRO` vira pendência com o motivo. Anexo capturado e não processado volta no ciclo seguinte.
-- **Ação** (tabela `acoes` da trilha): `PROPOSTA` → `EXECUTADA` | `FALHOU`. Ação não é proposta
-  duas vezes; a que falhou (ex.: `D:` fora do ar) é refeita no ciclo seguinte.
-- **Lote**: só documentos limpos. Pendência de um documento vai como *informativa* e não trava
-  o APROVADO das notas boas da mesma empresa.
+- **Ação** (tabela `acoes` da trilha): `PROPOSTA` → `EXECUTADA` | `FALHOU` | `BLOQUEADA`. Ação não
+  é proposta duas vezes; a que falhou (ex.: `D:` fora do ar) é refeita a cada ciclo até
+  `execucao.max_tentativas` (padrão 24); conflito de arquivo ou tentativas esgotadas viram
+  `BLOQUEADA` e aparecem no resumo para uma pessoa resolver. Lançamento contábil é identificado
+  por banco+conta+FITID+data+valor; transação sem FITID vira pendência `SEM_FITID`.
+- **Lote**: só documentos limpos. Pendência e achados de um documento retido vão como
+  *informativos* e não travam o APROVADO (nem a auto-aprovação) das notas boas. Falha do grupo
+  inteiro (ex.: análise do mês) bloqueia o lote sem ações e os documentos voltam no ciclo
+  seguinte. Lotes ainda sem aprovação de ciclos anteriores são reapresentados no resumo/painel.
+  Reprocesso que não muda nada não gera lote nem parecer repetido.
 
 ## Perfil fiscal do cliente
 

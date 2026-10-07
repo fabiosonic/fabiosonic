@@ -34,6 +34,10 @@ def n_identificar(e, ctx):
     rs = rotas(e["doc"], ctx.carteira, ctx.catalogo)
     pend = [{"codigo": "ROTA_PENDENTE", "mensagem": r.pendencia, "cnpj": r.cnpj, "referencia": e["sha256"]}
             for r in rs if r.pendencia]
+    if not e["doc"].get("competencia"):
+        pend += [{"codigo": "SEM_COMPETENCIA", "cnpj": r.cnpj, "referencia": e["sha256"],
+                  "mensagem": f"{e['nome']}: documento sem data de emissão/competência legível."}
+                 for r in rs if r.tipo]
     return {"rotas": [{"cnpj": r.cnpj, "tipo": r.tipo} for r in rs if r.tipo],
             "pendencias": e.get("pendencias", []) + pend}
 
