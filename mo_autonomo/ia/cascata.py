@@ -175,10 +175,14 @@ def _host_local(url: str) -> bool:
     if host == "localhost":
         return True
     try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return ip.is_loopback or ip.is_private
+        ips = [ipaddress.ip_address(host)]
+    except ValueError:  # nome (ex.: "ollama-pc"): vale se TODOS os endereços resolvidos forem locais
+        import socket
+        try:
+            ips = [ipaddress.ip_address(i[4][0].split("%")[0]) for i in socket.getaddrinfo(host, None)]
+        except (OSError, ValueError):
+            return False
+    return bool(ips) and all(ip.is_loopback or ip.is_private for ip in ips)
 
 
 def montar_cascata(config_ia: dict, arquivo_estado: str | None = None) -> Cascata:
@@ -186,6 +190,11 @@ def montar_cascata(config_ia: dict, arquivo_estado: str | None = None) -> Cascat
     for p in config_ia.get("provedores", []):
         if not p.get("ativo", True):
             continue
+        if p.get("local") and not _host_local(p["base_url"]):
+            import logging
+            logging.getLogger(__name__).warning(
+                "provedor %s marcado local, mas %s não é da máquina/rede interna: tratado como NUVEM "
+                "(só recebe texto mascarado)", p["nome"], p["base_url"])
         provs.append(ProvedorOpenAICompat(
             nome=p["nome"], base_url=p["base_url"], modelo=p["modelo"], chave_env=p.get("chave_env"),
             local=bool(p.get("local", False)) and _host_local(p["base_url"]), timeout=float(p.get("timeout", 120)),

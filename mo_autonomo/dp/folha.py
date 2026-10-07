@@ -77,12 +77,29 @@ def ler_folha(caminho: Path) -> list[dict]:
     return out
 
 
+def _mes(comp: str) -> date | None:
+    """Competência da exportação: 'AAAA-MM', 'MM/AAAA' ou 'DD/MM/AAAA'."""
+    import re
+    v = (comp or "").strip()
+    m = re.fullmatch(r"(\d{4})-(\d{2})(?:-\d{2})?", v)
+    if m:
+        a, mm = m.groups()
+    else:
+        m = re.fullmatch(r"(?:\d{2}/)?(\d{2})/(\d{4})", v)
+        if not m:
+            return None
+        mm, a = m.groups()
+    try:
+        return date(int(a), int(mm), 1)
+    except ValueError:
+        return None
+
+
 def _params(catalogo, comp: str, folha_tem_fgts: bool) -> tuple:
     """Parâmetros CONFERIDOS e VIGENTES na competência (tabela de outro ano não serve)."""
-    try:
-        em = date.fromisoformat(comp.strip()[:7] + "-01")
-    except ValueError:
-        return None, {"faixas": None}, None, [f"{comp}: competência ilegível (esperado AAAA-MM) — folha não conferida"]
+    em = _mes(comp)
+    if em is None:
+        return None, {"faixas": None}, None, [f"{comp}: competência ilegível (esperado AAAA-MM ou MM/AAAA) — folha não conferida"]
     inativas = []
     faixas_inss = catalogo.parametro(INSS, "faixas", em)
     p_irrf = {k: catalogo.parametro(IRRF, k, em) for k in ("faixas", "deducao_por_dependente", "redutor")}

@@ -4,7 +4,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-_SEP = r"[\s./_\-\u2013\u2014]{0,3}"
+# quebra de linha só conta como separador depois de pontuação ("123.456.\n789-09", PDF quebrado);
+# quebra solta não junta o fim de um valor ("1.234,56") com a linha numérica seguinte
+_SEP = r"[ \t./_\-\u2013\u2014]{0,3}(?:(?<=[./\-])\r?\n[ \t]?)?"
 _DATA = re.compile(r"(?<!\d)\d{2}/\d{2}/\d{4}(?!\d)|(?<!\d)\d{2}/\d{4}(?!\d)")
 PADROES = {
     # CNPJ alfanumérico (com ou sem pontuação; exige ao menos uma letra) — numérico cai em DOC_NUM
@@ -15,13 +17,25 @@ PADROES = {
     "EMAIL": re.compile(r"[\w.+-]+\s*(?:@|\\u0040|&#64;|\(at\)|\[at\])\s*[\w-]+(?:\s*\.\s*[\w-]+)+", re.IGNORECASE),
     "TELEFONE": re.compile(r"(?<!\d)(?:\(?\d{2}\)?\s?)?9?\d{4}[\s.-]?\d{4}(?!\d)"),
     # CPF/CNPJ separado por vírgula (OCR): só no desenho exato, para não engolir valores "1.500,00"
-    "DOC_VIRGULA": re.compile(r"(?<!\d)\d{2,3}(?:[,\s]{1,2}\d{3}){2}[,\s/]{1,2}\d{2,4}(?:[,\s-]{1,2}\d{2})?(?!\d)"),
+    # só logo após o rótulo CPF/CNPJ, para não engolir quantidade/preço com 3 casas ("10,000 150,000")
+    "DOC_VIRGULA": re.compile(r"(?<=CPF|PJ:|PF:|NPJ)[\s:]{0,3}\d{2,3}(?:[,_ ]\d{3}){2}[,_ /]\d{2,4}(?:[,_ -]\d{2})?(?!\d)",
+                              re.IGNORECASE),
     # qualquer sequência de 11+ dígitos, mesmo com espaço/ponto/barra/hífen entre eles:
     # cobre CPF, CNPJ, chave de acesso impressa em grupos, PIS, contas.
     "DOC_NUM": re.compile(r"(?<!\d)\d(?:" + _SEP + r"\d){10,}(?!\d)"),
 }
 ORDEM = ("EMAIL", "CNPJ", "DOC_NUM", "DOC_VIRGULA", "TELEFONE")
-_BASE64 = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+_BASE64 = re.compile(r"[A-Za-z0-9+/]{60,}={0,2}")
+
+
+def _parece_base64(texto: str) -> bool:
+    """Bloco codificado: longo E misturando maiúsculas, minúsculas e dígitos (texto colado sem espaço,
+    autenticação hexadecimal e linhas de '////' não são)."""
+    for m in _BASE64.finditer(texto):
+        s = m.group(0)
+        if any(c.isupper() for c in s) and any(c.islower() for c in s) and any(c.isdigit() for c in s):
+            return True
+    return False
 
 
 @dataclass
@@ -83,9 +97,12 @@ def _dv_alfa(base: str) -> str:
 def _cnpj_alfa_escondido(texto: str) -> bool:
     """CNPJ alfanumérico picado por espaços/pontuação ("12 ABC 345 01DE 35"): junta tudo e procura
     janela de 14 caracteres com letra cujos dígitos verificadores batem."""
-    # só sequências de pedaços inteiros (começo e fim de "palavra"), para não pegar texto comum
+    # só logo depois do rótulo CNPJ/CPF e com pedaços inteiros: juntar palavras quaisquer ("RECEBIDO" +
+    # número) acerta o dígito verificador por acaso ~1 vez em 100 e travaria a nuvem em todo extrato
     pedacos = re.findall(r"[A-Z0-9]+", texto.upper())
-    for i in range(len(pedacos)):
+    inicios = {j for k, p in enumerate(pedacos) if re.fullmatch(r"(?:CPF|CNPJ|CPFCNPJ)", p)
+               for j in range(k + 1, k + 3)}
+    for i in sorted(x for x in inicios if x < len(pedacos)):
         s = ""
         for p in pedacos[i:i + 6]:
             s += p
@@ -106,6 +123,6 @@ def contem_dado_pessoal(texto: str) -> list[str]:
         achados.append("DOC_NUM")
     if "CNPJ" not in achados and _cnpj_alfa_escondido(sem_datas):
         achados.append("CNPJ")
-    if _BASE64.search(sem_datas):  # conteúdo codificado não dá para inspecionar: não sai para a nuvem
+    if _parece_base64(sem_datas):  # conteúdo codificado não dá para inspecionar: não sai para a nuvem
         achados.append("BASE64")
     return achados

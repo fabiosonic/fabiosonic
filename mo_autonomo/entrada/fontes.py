@@ -104,6 +104,7 @@ class FonteImap:
         self._fabrica = fabrica
         self.ignorar = tuple(x.lower() for x in ignorar)
         self.uidvalidity = "0"
+        self.erros: list[str] = []
 
     def _login(self):
         if self._fabrica:
@@ -164,15 +165,20 @@ class FonteImap:
 
     def mensagens(self, ja_lido=None) -> Iterator[EmailBruto]:
         """`ja_lido(chave)`: pula o FETCH de e-mails já registrados na trilha (não baixa o mês toda hora)."""
+        self.erros = []
         con = self._conectar()
         try:
             criterio = f'SINCE {self.desde.strftime("%d-%b-%Y")}' if self.desde else "ALL"
             for pasta in self.pastas(con):
-                validade = self._examinar(con, pasta)
+                try:  # uma pasta que não abre não impede as outras da mesma caixa
+                    validade = self._examinar(con, pasta)
+                    tipo, dados = con.uid("search", None, criterio)
+                    if tipo != "OK":
+                        raise RuntimeError("busca recusada")
+                except Exception as exc:  # noqa: BLE001
+                    self.erros.append(f"{self.usuario} pasta {pasta}: {type(exc).__name__}: {exc}")
+                    continue
                 self.uidvalidity = validade
-                tipo, dados = con.uid("search", None, criterio)
-                if tipo != "OK":
-                    raise RuntimeError(f"falha na busca IMAP em {pasta}")
                 for uid in (dados[0].split() if dados and dados[0] else []):
                     chave = f"imap:{self.usuario.lower()}:{pasta}:{validade}:{uid.decode()}"
                     if ja_lido is not None and ja_lido(chave):
@@ -206,6 +212,7 @@ class FonteMultipla:
                 yield from f.mensagens(ja_lido=ja_lido)
             except Exception as exc:  # noqa: BLE001
                 self.erros.append(f"{nome}: {type(exc).__name__}: {exc}")
+            self.erros.extend(getattr(f, "erros", None) or [])
 
     def testar(self) -> list[dict]:
         out = []

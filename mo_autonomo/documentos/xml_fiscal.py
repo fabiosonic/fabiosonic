@@ -173,7 +173,8 @@ def _nfse_abrasf(raiz) -> dict:
     d["chave"] = None
     cod_ver = texto(inf, "CodigoVerificacao")
     d["emissao"] = _data(texto(inf, "DataEmissao"))
-    d["competencia"] = competencia(_data(texto(inf, "Competencia")) or d["emissao"])
+    # ABRASF 2.x: Competencia fica em DeclaracaoPrestacaoServico/InfDeclaracaoPrestacaoServico
+    d["competencia"] = competencia(_data(texto(primeiro(inf, "Competencia"))) or d["emissao"])
     prest = _um(primeiro(inf, "PrestadorServico"), primeiro(inf, "Prestador"))
     toma = _um(primeiro(inf, "TomadorServico"), primeiro(inf, "Tomador"))
     d["prestador_cnpj"] = so_digitos(texto(primeiro(prest, "CpfCnpj"), "Cnpj") or texto(prest, "Cnpj") or
@@ -217,6 +218,10 @@ def ler_xml(dados: bytes) -> dict:
     if primeiro(raiz, "infNFSe") is not None:
         return _nfse_nacional(raiz)
     if primeiro(raiz, "InfNfse") is not None:
+        n = len(todos(raiz, "InfNfse"))
+        if n > 1:  # lista/consulta com várias notas: ler só a 1ª perderia as outras (e o cancelamento se mistura)
+            raise DocumentoNaoReconhecido(f"XML com {n} NFS-e (lista/consulta da prefeitura): "
+                                          "baixar uma nota por arquivo ou separar antes de importar")
         return _nfse_abrasf(raiz)
     if nome.lower().startswith("procevento") or primeiro(raiz, "infEvento") is not None:
         d = _base("EVENTO_OUTRO")
