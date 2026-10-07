@@ -123,3 +123,39 @@ def conciliar_com_notas(lancamentos_ofx: list[dict], notas: list[dict], janela_d
                 pares.append({"fitid": t["fitid"], "chave": n.get("chave"), "valor": v})
                 break
     return pares
+
+
+def ler_txt_dominio(caminho: Path) -> list[dict]:
+    """Lançamentos já importados no Domínio (formato TXT do escritório) como histórico do de-para.
+
+    `DD/MM/AAAA;débito;crédito;valor;histórico;1;;;;;;` — linhas fora do formato são ignoradas.
+    """
+    import re as _re
+    bruto = Path(caminho).read_bytes()
+    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            texto = bruto.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    out = []
+    for l in texto.splitlines():
+        f = l.split(";")
+        if len(f) >= 5 and _re.fullmatch(r"\d{2}/\d{2}/\d{4}", f[0].strip()) and f[1].strip().isdigit() and f[2].strip().isdigit():
+            out.append({"data": f[0].strip(), "conta_debito": f[1].strip(), "conta_credito": f[2].strip(),
+                        "valor": f[3].strip(), "historico": f[4].strip()})
+    return out
+
+
+def historico_empresa(pasta_empresa: Path) -> list[dict]:
+    """Razão para o de-para: `razao.csv` (exportação) + todo TXT em `historico/` (lançamentos já
+    importados no Domínio, inclusive os exportados por este sistema depois do APROVADO)."""
+    linhas = []
+    razao = Path(pasta_empresa) / "razao.csv"
+    if razao.exists():
+        linhas += _ler_csv(razao)
+    pasta_hist = Path(pasta_empresa) / "historico"
+    if pasta_hist.is_dir():
+        for arq in sorted(pasta_hist.glob("*.txt")):
+            linhas += ler_txt_dominio(arq)
+    return linhas

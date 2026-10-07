@@ -95,6 +95,12 @@ todos numa pasta com o **código da empresa no início do nome** (ex.: `12 - LMG
 `python -m mo_autonomo contabil importar-planos --pasta "D:\PLANOS DOMINIO"`. O comando lista quem
 ainda está sem plano. O código **reduzido** de cada conta é o que vai no TXT de importação.
 
+**Histórico para o de-para (como o sistema escolhe a contrapartida):** copie os TXT de lançamentos
+que o escritório já importou no Domínio (ex.: `Dominio-LMG-ENGENHARIA-Bradesco-771457.txt`) para
+`dados\dominio\<código>\historico\`. O sistema aprende "histórico → conta" com eles (e com o
+`razao.csv`, se houver). Cada TXT que o próprio sistema exporta depois do APROVADO também é copiado
+para lá — quanto mais aprovado, mais ele acerta. Histórico ambíguo ou visto uma vez só vira pendência.
+
 - Contábil: coloque `plano_contas.csv` e `razao.csv` (exportados do Domínio) em
   `dados\dominio\<código>\` e cadastre as contas em `contas_bancarias.csv`. Os OFX que
   chegarem por e-mail viram lotes de lançamentos propostos. A gravação no Domínio só será

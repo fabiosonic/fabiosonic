@@ -13,7 +13,7 @@ from pathlib import Path
 import traceback
 
 from ..aprovacao import lote as L
-from ..contabil.lancamentos import DePara, PlanoContas, _ler_csv, propor
+from ..contabil.lancamentos import DePara, PlanoContas, historico_empresa, propor
 from ..dominio.pastas import ConflitoArquivo, DestinoInvalido, caminho_destino, gravar
 from ..entrada.anexos import anexos_do_email
 from ..especialista import parecer, solicitacoes
@@ -224,19 +224,21 @@ def n_contabil(e, ctx):
             cnpj = ex["cnpj"]
             try:
                 emp = ctx.carteira.get(cnpj)
-                plano_csv, razao_csv = pasta / emp.codigo_dominio / "plano_contas.csv", pasta / emp.codigo_dominio / "razao.csv"
+                plano_csv = pasta / emp.codigo_dominio / "plano_contas.csv"
+                historico = historico_empresa(pasta / emp.codigo_dominio)
                 por_mes = defaultdict(list)
                 for t in ex["transacoes"]:
                     por_mes[f"{t['data']:%Y-%m}"].append(t)
                 for comp, trans in sorted(por_mes.items()):
-                    if not plano_csv.exists() or not razao_csv.exists():
+                    if not plano_csv.exists() or not historico:
                         propostas.append({"cnpj": cnpj, "competencia": comp, "sha256": d["sha256"], "lancamentos": [],
                                           "pendencias": [_falha("SEM_EXPORTACAO_DOMINIO",
-                                                                f"Faltam plano_contas.csv/razao.csv em {pasta / emp.codigo_dominio} "
-                                                                f"({len(trans)} transação(ões) aguardando).", cnpj, d["sha256"])]})
+                                                                f"Faltam plano_contas.csv e razão/histórico (razao.csv ou TXT em historico/) "
+                                                                f"em {pasta / emp.codigo_dominio} ({len(trans)} transação(ões) aguardando).",
+                                                                cnpj, d["sha256"])]})
                         continue
                     conta = ex["conta_contabil"]
-                    r = propor({"transacoes": trans}, conta, DePara.do_razao(_ler_csv(razao_csv), conta),
+                    r = propor({"transacoes": trans}, conta, DePara.do_razao(historico, conta),
                                PlanoContas.carregar(plano_csv), int(cfg.get("minimo_ocorrencias", 2)),
                                float(cfg.get("dominancia", 0.8)))
                     lanc = [{**l, "banco": ex["banco"], "conta": ex["conta"], "cnpj": cnpj, "competencia": comp,
@@ -512,6 +514,13 @@ def _exportar_lancamentos(lote: dict, ctx) -> list[dict]:
         ok = st in ("GRAVADO", "JA_EXISTIA")
         for a in grupo:
             ctx.trilha.marcar_acao(a, "EXECUTADA" if ok else "BLOQUEADA", None if ok else st)
+        if ok and destino is not None:  # aprovado e exportado: passa a ensinar o de-para da empresa
+            emp = ctx.carteira.get(grupo[0]["cnpj"])
+            copia = ctx.dados / "dominio" / emp.codigo_dominio / "historico" / destino.name
+            try:
+                gravar(copia, destino.read_bytes())
+            except ConflitoArquivo:
+                pass
         out.append({"acao": "lancamento_contabil", "destino": str(destino) if destino else None,
                     "lancamentos": len(grupo), "status": st})
     return out
