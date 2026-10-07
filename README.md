@@ -11,6 +11,7 @@ transições são arestas fixas ou condicionais, cada passo é gravado como chec
 SQLite (um ciclo interrompido é retomado do ponto exato) e qualquer erro inesperado vira
 pendência com motivo — nunca some.
 
+> **Comece por [`docs/IMPLANTACAO.md`](docs/IMPLANTACAO.md)** (passo a passo no escritório).
 > Regras do projeto: [`CLAUDE.md`](CLAUDE.md). Esquema da base normativa:
 > [`config/normas/LEIA-ME.md`](config/normas/LEIA-ME.md).
 
