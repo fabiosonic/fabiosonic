@@ -149,3 +149,34 @@ def test_retomar_ciclo_interrompido(tmp_path, monkeypatch):
     monkeypatch.setattr(C, "n_pareceres", original)
     e = grafo_ciclo().retomar("runX", ctx.trilha, ctx)
     assert Path(e["resumo"]).exists() and e["_historico"][-1] == "pareceres"
+
+
+def test_fila_da_ia_reprocessa_no_ciclo_seguinte(tmp_path):
+    import json
+
+    from mo_autonomo.ia.cascata import Cascata, ErroCota
+    from tests.conftest import pdf_com_texto
+
+    class Prov:
+        nome, local = "nuvem", False
+
+        def __init__(self):
+            self.cota = True
+
+        def completar(self, s, u):
+            if self.cota:
+                raise ErroCota("429", espera_s=0)
+            return json.dumps({"tipo": "GUIA_TRIBUTO", "cnpj": None, "competencia": "2026-09",
+                               "valor": "150,00", "confianca": 0.9, "resumo": "guia"})
+
+    base = projeto(tmp_path)
+    (base / "entrada" / "1.eml").write_bytes(eml_bytes({"guia.pdf": pdf_com_texto("GUIA DE RECOLHIMENTO VALOR 150,00")}))
+    prov = Prov()
+    ctx = montar_contexto(carregar_config(base / "config" / "config.yaml"), hoje=HOJE, cascata=Cascata([prov]))
+    e1 = rodar_ciclo(ctx)
+    assert any(p["codigo"] == "FILA_IA" for p in e1["pendencias_gerais"])
+    assert len(ctx.trilha.na_fila()) == 1
+    prov.cota = False
+    e2 = rodar_ciclo(ctx)
+    assert e2["emails_lidos"] == 0 and len(e2["anexos"]) == 1
+    assert e2["documentos"][0]["leitura"]["status"] == "OK" and ctx.trilha.na_fila() == []

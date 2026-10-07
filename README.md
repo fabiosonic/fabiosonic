@@ -124,6 +124,17 @@ cota pausa aquele provedor (`Retry-After` ou `espera_padrao_s`) e passa para o p
 nenhum disponível o documento vai para a fila (`FILA_IA`) e volta no próximo ciclo. A IA
 nunca decide regra fiscal.
 
+## Monitor de normas e calendário
+
+- **Monitor**: baixa a `fonte_url` oficial, normaliza o texto e compara com `hash_texto`.
+  Norma CONFERIDA cujo texto mudou vira `ALTERADA_RECONFERIR`: as regras que dependem dela
+  ficam inativas até a pessoa reconferir.
+- **Calendário**: obrigações só de normas CONFERIDAS com parâmetro `obrigacoes`
+  (`codigo`, `dia`, `meses_apos_competencia`, `regimes`), filtradas pelo perfil de cada
+  cliente. Sábado, domingo ou feriado (`calendario.feriados`) → antecipa para o dia útil
+  anterior (regra do escritório). Alertas 3 dias antes e no dia entram no resumo do ciclo.
+- **Fila da IA**: documento que ficou sem IA disponível (cota) volta sozinho no próximo ciclo.
+
 ## Instalação (Windows do escritório)
 
 ```powershell
@@ -146,7 +157,10 @@ python -m mo_autonomo perfil relatorio
 python -m mo_autonomo imap testar
 python -m mo_autonomo auditar-dominio --relatorio rel.csv --cnpj 00000000000000 --competencia 2026-10
 python -m mo_autonomo dp conferir --folha folha.csv --cnpj 00000000000000
-python -m mo_autonomo normas cobertura
+python -m mo_autonomo normas cobertura   # quais regras estão ativas/inativas e por quê
+python -m mo_autonomo normas monitorar   # texto oficial mudou? norma volta a exigir conferência
+python -m mo_autonomo normas conferir --id MOC_NFE   # ficha p/ a pessoa conferir (não marca CONFERIDO)
+python -m mo_autonomo calendario --competencia 2026-10   # vencimentos por cliente + alertas
 python -m mo_autonomo grafo desenhar
 python -m pytest -q
 ```

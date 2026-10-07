@@ -46,10 +46,11 @@ class Norma:
     decisao_judicial: dict | None = None
     hash_texto: str | None = None
     observacao: str = ""
+    alterada: bool = False  # texto oficial mudou depois da conferência (monitor)
 
     @property
     def conferida(self) -> bool:
-        return self.status == "CONFERIDO"
+        return self.status == "CONFERIDO" and not self.alterada
 
     def vigente_em(self, d: date | None) -> bool:
         if d is None:
@@ -151,10 +152,17 @@ class Catalogo:
 
     def status(self, id_: str) -> str:
         n = self.normas.get(id_)
-        return n.status if n else "AUSENTE"
+        if n is None:
+            return "AUSENTE"
+        return "ALTERADA_RECONFERIR" if n.alterada else n.status
 
     def todas_conferidas(self, ids) -> bool:
         return all(self.status(i) == "CONFERIDO" for i in ids)
+
+    def marcar_alteradas(self, ids) -> None:
+        for i in ids:
+            if i in self.normas:
+                self.normas[i].alterada = True
 
     def parametro(self, id_norma: str, nome: str, em: date | None = None):
         """Devolve o parâmetro só se a norma estiver CONFERIDO e vigente. Senão None (regra 3)."""
@@ -167,6 +175,7 @@ class Catalogo:
         out = {s: 0 for s in STATUS}
         for n in self.normas.values():
             out[n.status] += 1
+        out["ALTERADA_RECONFERIR"] = sum(1 for n in self.normas.values() if n.alterada)
         return out
 
     def aplicaveis(self, perfil, em: date | None = None) -> list[Norma]:

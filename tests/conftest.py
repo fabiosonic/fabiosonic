@@ -186,3 +186,23 @@ def carteira():
 @pytest.fixture
 def perfis(carteira, catalogo):
     return Perfis(carteira, {}, catalogo)
+
+
+def pdf_com_texto(texto: str) -> bytes:
+    """PDF mínimo válido com uma linha de texto (para extração com pypdf)."""
+    conteudo = f"BT /F1 12 Tf 50 750 Td ({texto}) Tj ET".encode("latin-1")
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+            b"/Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length " + str(len(conteudo)).encode() + b" >>\nstream\n" + conteudo + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    saida, offsets = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, start=1):
+        offsets.append(len(saida))
+        saida += f"{i} 0 obj\n".encode() + o + b"\nendobj\n"
+    xref = len(saida)
+    saida += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    saida += b"".join(f"{o:010d} 00000 n \n".encode() for o in offsets)
+    saida += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return saida

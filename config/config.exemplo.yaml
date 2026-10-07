@@ -50,3 +50,7 @@ ia:
     - {nome: openrouter, base_url: 'https://openrouter.ai/api/v1', modelo: 'meta-llama/llama-3.3-70b-instruct:free', chave_env: OPENROUTER_API_KEY}
     - {nome: mistral, base_url: 'https://api.mistral.ai/v1', modelo: 'mistral-small-latest', chave_env: MISTRAL_API_KEY}
     - {nome: cerebras, base_url: 'https://api.cerebras.ai/v1', modelo: 'llama-3.3-70b', chave_env: CEREBRAS_API_KEY}
+
+calendario:
+  dias_alerta: [3, 0]                    # alerta 3 dias antes e no dia
+  feriados: []                           # AAAA-MM-DD (nacionais, RJ e municipais) — o escritório mantém

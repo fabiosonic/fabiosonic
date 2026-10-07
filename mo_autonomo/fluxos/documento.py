@@ -110,9 +110,11 @@ def n_falha(e, ctx):
 def n_registrar(e, ctx):
     """Grava o documento na trilha."""
     doc = e.get("doc") or {}
+    pend = e.get("pendencias") or []
+    situacao = "FILA" if any(p["codigo"] == "FILA_IA" for p in pend) else ("PENDENTE" if pend else "OK")
     ctx.trilha.registrar_documento(
         e["sha256"], e["classe"], doc.get("chave"), [r["cnpj"] for r in e.get("rotas", [])],
-        doc.get("competencia"), e.get("rotas", []), "PENDENTE" if e.get("pendencias") else "OK")
+        doc.get("competencia"), e.get("rotas", []), situacao)
     return {}
 
 

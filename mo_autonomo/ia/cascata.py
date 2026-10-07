@@ -123,7 +123,8 @@ class Cascata:
             try:
                 resposta = p.completar(sistema, envio)
             except ErroCota as exc:
-                self._bloqueado_ate[p.nome] = self.relogio() + (exc.espera_s or self.espera_padrao_s)
+                espera = exc.espera_s if exc.espera_s is not None else self.espera_padrao_s
+                self._bloqueado_ate[p.nome] = self.relogio() + espera
                 erros.append(f"{p.nome}: cota ({exc})")
                 self.registro.append({"provedor": p.nome, "resultado": "COTA"})
                 continue

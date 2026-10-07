@@ -89,6 +89,13 @@ class Trilha:
         )
         self.con.commit()
 
+    def na_fila(self) -> list[dict]:
+        """Documentos que aguardam IA (cota esgotada) — voltam no próximo ciclo."""
+        rows = self.con.execute(
+            "SELECT d.sha256, a.nome, a.origem, a.caminho_bruto FROM documentos d JOIN anexos a USING (sha256)"
+            " WHERE d.situacao='FILA' ORDER BY d.em").fetchall()
+        return [{"sha256": r[0], "nome": r[1], "origem": r[2], "caminho": r[3], "reprocesso": True} for r in rows]
+
     def documentos(self, competencia: str | None = None):
         sql = "SELECT sha256, tipo, chave, cnpjs, competencia, destinos, situacao FROM documentos"
         args: tuple = ()

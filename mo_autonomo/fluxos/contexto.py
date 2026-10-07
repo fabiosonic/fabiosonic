@@ -71,6 +71,8 @@ def montar_contexto(config: dict, hoje: date | None = None, fonte=None, cascata=
     dados = rel(pastas.get("dados") or "dados")
     trilha = Trilha(dados / "trilha.sqlite")
     catalogo = Catalogo.carregar(rel(pastas.get("normas") or "config/normas"))
+    from ..normas.monitor import carregar_alteradas
+    catalogo.marcar_alteradas(carregar_alteradas(dados / "normas_textos"))
     carteira = Carteira.carregar(rel((config.get("cadastro") or {}).get("empresas") or "config/empresas.csv"))
     receita = {}
     cache = dados / "rfb_carteira.json"

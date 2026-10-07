@@ -55,9 +55,19 @@ def cmd_executar(args):
 def cmd_normas(args):
     from .especialista.motor import cobertura
     from .normas.catalogo import Catalogo
+    from .normas.monitor import carregar_alteradas, ficha_conferencia, monitorar
     cat = Catalogo.carregar(args.pasta)
+    textos = Path(args.dados) / "normas_textos"
+    cat.marcar_alteradas(carregar_alteradas(textos))
     print("normas:", cat.resumo())
-    if args.acao == "cobertura":
+    if args.acao == "monitorar":
+        for r in monitorar(cat, textos):
+            print(f"{r['situacao']:<20} {r['id']}" + (f"  {r.get('erro')}" if r.get("erro") else ""))
+    elif args.acao == "conferir":
+        if not args.id:
+            sys.exit("informe --id")
+        print("ficha:", ficha_conferencia(cat, args.id, Path(args.dados) / "conferencia"))
+    elif args.acao == "cobertura":
         for c in cobertura(cat):
             print(f"{'ATIVA  ' if c['ativa'] else 'INATIVA'} {c['natureza']:<11} {c['regra']:<26} {c['motivo']}")
 
@@ -127,6 +137,30 @@ def cmd_dp(args):
         print(f"[{a.natureza}] {a.mensagem}")
 
 
+def cmd_calendario(args):
+    from .obrigacoes.calendario import alertas, gerar
+    ctx = _ctx(args, fonte=object())
+    venc = gerar_calendario(ctx, args.competencia)
+    linhas = ["vencimento;vencimento_legal;codigo;descricao;apelido;cnpj;norma"]
+    for v in venc:
+        linhas.append(f"{v.vencimento:%d/%m/%Y};{v.vencimento_legal:%d/%m/%Y};{v.codigo};{v.descricao};"
+                      f"{v.apelido};{v.cnpj};{v.norma}")
+    saida = ctx.dados / "relatorios" / f"calendario_{args.competencia}.csv"
+    escrever_atomico(saida, "\n".join(linhas).encode("utf-8-sig"))
+    print(f"{len(venc)} vencimento(s) -> {saida}")
+    for a in alertas(venc, date.today(), tuple((ctx.config.get("calendario") or {}).get("dias_alerta", [3, 0]))):
+        v = a["vencimento"]
+        print(f"ALERTA {a['quando']}: {v.codigo} {v.apelido} vence {v.vencimento:%d/%m/%Y}")
+
+
+def gerar_calendario(ctx, competencia):
+    from .obrigacoes.calendario import gerar
+    cal = ctx.config.get("calendario") or {}
+    feriados = {date.fromisoformat(str(f)) for f in cal.get("feriados") or []}
+    perfis = {e.cnpj: ctx.perfis.em(e.cnpj, date.fromisoformat(competencia + "-01")) for e in ctx.carteira if e.ativa}
+    return gerar(competencia, perfis, ctx.catalogo, feriados)
+
+
 def cmd_grafo(args):
     from .fluxos.ciclo import grafo_ciclo
     from .fluxos.documento import grafo_documento
@@ -150,8 +184,10 @@ def main(argv=None):
     s.add_argument("--usuario", required=True)
     com_config("executar", cmd_executar).add_argument("--aprovado", required=True)
     s = sub.add_parser("normas")
-    s.add_argument("acao", choices=["validar", "cobertura"])
+    s.add_argument("acao", choices=["validar", "cobertura", "monitorar", "conferir"])
     s.add_argument("--pasta", default="config/normas")
+    s.add_argument("--dados", default="dados")
+    s.add_argument("--id")
     s.set_defaults(f=cmd_normas)
     com_config("perfil", cmd_perfil).add_argument("acao", choices=["atualizar", "relatorio"])
     com_config("imap", cmd_imap).add_argument("acao", choices=["testar"])
@@ -163,6 +199,7 @@ def main(argv=None):
     s.add_argument("acao", choices=["conferir"])
     s.add_argument("--folha", required=True)
     s.add_argument("--cnpj", required=True)
+    com_config("calendario", cmd_calendario).add_argument("--competencia", required=True, help="AAAA-MM")
     s = sub.add_parser("grafo")
     s.add_argument("acao", choices=["desenhar"])
     s.set_defaults(f=cmd_grafo)

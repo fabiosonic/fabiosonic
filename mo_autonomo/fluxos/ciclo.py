@@ -47,6 +47,8 @@ def n_capturar(e, ctx):
             if ctx.trilha.registrar_anexo(sha, a.nome, a.origem, str(caminho)):
                 novos.append({"sha256": sha, "nome": a.nome, "origem": a.origem, "caminho": str(caminho)})
         ctx.trilha.registrar_email(msg.uid, cab["message_id"], cab["remetente"], cab["assunto"], cab["data"])
+    ja = {a["sha256"] for a in novos}
+    novos += [a for a in ctx.trilha.na_fila() if a["sha256"] not in ja]
     return {"anexos": novos, "emails_lidos": emails, "pendencias_gerais": e.get("pendencias_gerais", []) + pend}
 
 
@@ -222,11 +224,33 @@ def n_pareceres(e, ctx):
     for l in e["lotes"]:
         if not l.get("aprovado"):
             resumo.append(f"- `{l['id']}` hash `{l['hash'][:16]}…` — {'; '.join(l.get('aguardando') or [])}")
+    resumo += ["", "## Vencimentos próximos (calendário conferido)", ""]
+    resumo += _alertas_vencimento(ctx) or ["- Nenhum (ou nenhuma obrigação com norma conferida)."]
     resumo += ["", "## Pendências sem empresa identificada", ""]
     resumo += [f"- {p['codigo']}: {p['mensagem']}" for p in e.get("pendencias_gerais", [])] or ["- Nenhuma."]
     caminho = pasta / f"resumo_{e['_run_id'][:8]}.md"
     escrever_atomico(caminho, "\n".join(resumo).encode("utf-8"))
     return {"pareceres": gerados, "resumo": str(caminho)}
+
+
+def _alertas_vencimento(ctx) -> list[str]:
+    from datetime import date as _date
+
+    from ..obrigacoes.calendario import alertas, gerar
+    cal = ctx.config.get("calendario") or {}
+    feriados = {_date.fromisoformat(str(f)) for f in cal.get("feriados") or []}
+    dias = tuple(cal.get("dias_alerta", [3, 0]))
+    linhas = []
+    y, m = ctx.hoje.year, ctx.hoje.month
+    comps = {f"{y:04d}-{m:02d}", f"{y - (m == 1):04d}-{(m - 2) % 12 + 1:02d}"}
+    for comp in sorted(comps):
+        d = _date.fromisoformat(comp + "-01")
+        perfis = {e.cnpj: ctx.perfis.em(e.cnpj, d) for e in ctx.carteira if e.ativa}
+        for a in alertas(gerar(comp, perfis, ctx.catalogo, feriados), ctx.hoje, dias):
+            v = a["vencimento"]
+            linhas.append(f"- **{a['quando']}** — {v.codigo} ({v.descricao}) {v.apelido}: "
+                          f"{v.vencimento:%d/%m/%Y} [{v.norma}]")
+    return linhas
 
 
 def grafo_ciclo() -> Grafo:
