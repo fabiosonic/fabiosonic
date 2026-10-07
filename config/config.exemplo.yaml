@@ -34,7 +34,7 @@ email:
 
 dominio:
   tipos_pasta: {}                        # sobrescreve nomes das pastas, se diferirem
-  relatorio_colunas: {}                  # ex.: {chave: "Chave", valor: "Valor Contábil", cnpj: "CNPJ"}
+  relatorio_colunas: {}                  # ex.: {chave: "Chave", valor: "Valor Contábil", cnpj: "CNPJ", competencia: "Data"}
 
 contabil:
   minimo_ocorrencias: 2                  # vezes que o histórico precisa aparecer no razão
