@@ -81,9 +81,9 @@ def test_imap_nao_baixa_de_novo_o_que_ja_foi_lido():
             return "OK", [(b"x", eml_bytes({"a.xml": nfe_xml()}))]
     f = Falso()
     fonte = FonteImap("h", 993, "u", "s", desde=date(2026, 10, 1), fabrica=lambda: f)
-    lidos = {"imap:INBOX:9:1"}
+    lidos = {"imap:u:INBOX:9:1"}
     msgs = list(fonte.mensagens(ja_lido=lambda k: k in lidos))
-    assert [m.uid for m in msgs] == ["imap:INBOX:9:2"] and f.fetches == 1
+    assert [m.uid for m in msgs] == ["imap:u:INBOX:9:2"] and f.fetches == 1
 
 
 def test_acao_bloqueada_reproposta_volta_a_proposta(tmp_path):

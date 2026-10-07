@@ -59,3 +59,21 @@ def test_csv_ansi_do_windows(tmp_path):
     lote = L.carregar(Path(next(l for l in e["lotes"] if l["area"] == "CONTABIL")["arquivo"]))
     assert [a["debito"] for a in lote["acoes"]] == ["3.1.9.01"]
     assert not any(p["codigo"] == "ERRO_CONTABIL" for p in lote["informativas"])
+
+
+def test_uma_caixa_fora_do_ar_vira_pendencia_e_as_outras_seguem(tmp_path):
+    from mo_autonomo.entrada.fontes import FontePastaEml, FonteMultipla
+    base = projeto(tmp_path)
+    (base / "entrada" / "1.eml").write_bytes(eml_bytes({"n.xml": nfe_xml(numero=1)}))
+    ctx = ctx_de(base)
+
+    class Fora:
+        usuario = "dp@exemplo.test"
+
+        def mensagens(self, ja_lido=None):
+            raise OSError("senha não está no cofre")
+            yield  # noqa
+    ctx.fonte = FonteMultipla([Fora(), FontePastaEml(base / "entrada")])
+    e = rodar_ciclo(ctx)
+    assert e["emails_lidos"] == 1 and len(e["lotes"]) == 1
+    assert any("dp@exemplo.test" in p["mensagem"] for p in e["pendencias_gerais"] if p["codigo"] == "FONTE_EMAIL_INDISPONIVEL")

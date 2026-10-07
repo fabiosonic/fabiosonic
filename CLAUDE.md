@@ -1,8 +1,9 @@
 # Especialista contábil, fiscal e tributário — Moraes & Oliveira Contabilidade
 
 ## O que é este projeto
-`mo_autonomo` — sistema que recebe documentos dos clientes pela caixa
-fiscal@moraeseoliveiracontabil.com.br (provedor Email em Nuvem, IMAP), monta o PERFIL FISCAL de
+`mo_autonomo` — sistema que recebe documentos dos clientes pelas caixas fiscal@, moraes@,
+contabil@ e dp@moraeseoliveiracontabil.com.br (provedor Email em Nuvem, IMAP
+mail.emailemnuvem.com.br:993, todas as pastas — inclusive `INBOX.<empresa>`), monta o PERFIL FISCAL de
 cada cliente a partir de fontes oficiais, entrega os XML nas pastas lidas pelas Rotinas
 Automáticas do Domínio (Thomson Reuters), ANALISA cada documento como especialista contábil,
 fiscal e tributário (aponta erros e obrigações, cita a base legal, propõe correção), propõe

@@ -119,11 +119,23 @@ def montar_fonte(config: dict, rel, hoje: date):
     if tipo == "pasta":
         return FontePastaEml(rel(e.get("pasta_eml") or "dados/entrada_eml"))
     if tipo == "imap":
-        for k in ("host", "porta", "usuario"):
-            if not e.get(k):
-                raise ConfigInvalida(f"email.{k} não configurado")
-        senha = obter_senha(e.get("keyring_servico", "mo_autonomo_imap"), e["usuario"], e.get("senha_env"))
+        from ..entrada.fontes import FonteMultipla
+        caixas = e.get("caixas") or ([{"usuario": e["usuario"]}] if e.get("usuario") else [])
+        if not e.get("host") or not e.get("porta"):
+            raise ConfigInvalida("email.host/email.porta não configurados")
+        if not caixas:
+            raise ConfigInvalida("email.caixas (ou email.usuario) não configurado")
         desde = hoje - timedelta(days=int(e.get("desde_dias", 30)))
-        return FonteImap(e["host"], int(e["porta"]), e["usuario"], senha, e.get("pasta", "INBOX"), desde,
-                         ssl=bool(e.get("ssl", True)))
+        servico = e.get("keyring_servico", "mo_autonomo_imap")
+        fontes = []
+        for c in caixas:
+            usuario = c["usuario"] if isinstance(c, dict) else str(c)
+            cfg_c = c if isinstance(c, dict) else {}
+            senha_env = cfg_c.get("senha_env")
+            fontes.append(FonteImap(
+                cfg_c.get("host", e["host"]), int(cfg_c.get("porta", e["porta"])), usuario,
+                (lambda u=usuario, env=senha_env: obter_senha(servico, u, env)),
+                cfg_c.get("pasta", e.get("pasta", "*")), desde, ssl=bool(cfg_c.get("ssl", e.get("ssl", True))),
+                ignorar=tuple(cfg_c.get("ignorar_pastas", e.get("ignorar_pastas", ["INBOX.Trash", "INBOX.Spam", "INBOX.Junk"])))))
+        return FonteMultipla(fontes)
     raise ConfigInvalida(f"email.tipo desconhecido: {tipo}")

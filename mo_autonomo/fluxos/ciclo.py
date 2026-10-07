@@ -44,6 +44,8 @@ def n_capturar(e, ctx):
             emails += _capturar_email(msg, ctx, novos, pend)
     except Exception as exc:  # noqa: BLE001 — caixa fora do ar: o resto do ciclo roda mesmo assim
         pend.append(_falha("FONTE_EMAIL_INDISPONIVEL", f"Leitura da caixa interrompida: {type(exc).__name__}: {exc}"))
+    for erro in getattr(ctx.fonte, "erros", None) or []:  # várias caixas: diz qual falhou
+        pend.append(_falha("FONTE_EMAIL_INDISPONIVEL", f"Caixa {erro}"))
     ja = {a["sha256"] for a in novos}
     for extra in (ctx.trilha.anexos_sem_documento(), ctx.trilha.analisados_sem_lote(), ctx.trilha.na_fila(),
                   ctx.trilha.pendentes_para_reprocessar(ctx.versao_base)):

@@ -17,13 +17,17 @@ receita:
 email:
   tipo: pasta                            # pasta (testes) | imap
   pasta_eml: dados/entrada_eml
-  host: imap.emailemnuvem.com.br         # deduzido do SMTP do escritório (smtp.emailemnuvem.com.br:587);
+  host: mail.emailemnuvem.com.br         # o mesmo do motor_imap.py que o escritório já usa (SSL 993)
   porta: 993                             # confirmar com: python -m mo_autonomo imap testar
   ssl: true
-  usuario: fiscal@moraeseoliveiracontabil.com.br
-  pasta: INBOX
+  caixas:                                # cada caixa tem a própria senha no Cofre do Windows
+    - usuario: fiscal@moraeseoliveiracontabil.com.br
+    - usuario: moraes@moraeseoliveiracontabil.com.br
+    - usuario: contabil@moraeseoliveiracontabil.com.br
+    - usuario: dp@moraeseoliveiracontabil.com.br
+  pasta: "*"                             # todas as pastas (o escritório separa em INBOX.<empresa>)
+  ignorar_pastas: [INBOX.Trash, INBOX.Spam, INBOX.Junk]
   desde_dias: 30
-  senha_env: MO_IMAP_SENHA               # ou keyring: serviço abaixo
   keyring_servico: mo_autonomo_imap
 
 dominio:

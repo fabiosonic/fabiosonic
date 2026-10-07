@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import imaplib
+import re
 import os
 from dataclasses import dataclass
 from datetime import date
@@ -79,39 +80,85 @@ class _ImapSomenteLeitura:
         return self._con.uid(comando, *args)
 
 
+_LISTA = re.compile(r'^\((?P<flags>[^)]*)\)\s+(?:"[^"]*"|NIL)\s+(?P<nome>.+)$')
+
+
+def _nome_pasta(linha: bytes) -> tuple[str, str] | None:
+    """Interpreta uma linha do LIST: devolve (nome, flags) ou None."""
+    m = _LISTA.match(linha.decode("utf-8", "replace") if isinstance(linha, bytes) else str(linha))
+    if not m:
+        return None
+    nome = m.group("nome").strip()
+    if nome.startswith('"') and nome.endswith('"'):
+        nome = nome[1:-1].replace('\\"', '"')
+    return nome, m.group("flags")
+
+
 class FonteImap:
-    def __init__(self, host: str, porta: int, usuario: str, senha: str, pasta: str = "INBOX",
-                 desde: date | None = None, ssl: bool = True, fabrica=None):
+    """Uma caixa IMAP. `pasta="*"` lê TODAS as pastas (ex.: INBOX.<empresa>), sempre em EXAMINE."""
+
+    def __init__(self, host: str, porta: int, usuario: str, senha, pasta: str = "INBOX",
+                 desde: date | None = None, ssl: bool = True, fabrica=None, ignorar: tuple = ()):
         self.host, self.porta, self.usuario, self.senha = host, porta, usuario, senha
         self.pasta, self.desde, self.ssl = pasta, desde, ssl
         self._fabrica = fabrica
+        self.ignorar = tuple(x.lower() for x in ignorar)
         self.uidvalidity = "0"
 
-    def _conectar(self):
+    def _login(self):
         if self._fabrica:
             con = self._fabrica()
         elif self.ssl:
             con = imaplib.IMAP4_SSL(self.host, self.porta, timeout=60)
         else:
             con = imaplib.IMAP4(self.host, self.porta, timeout=60)
-        con.login(self.usuario, self.senha)
-        tipo, _ = con.select(self.pasta, readonly=True)  # EXAMINE
+        senha = self.senha() if callable(self.senha) else self.senha  # senha lida do keyring só na hora
+        con.login(self.usuario, senha)
+        return con
+
+    def _examinar(self, con, pasta: str) -> str:
+        """Abre a pasta só para leitura (EXAMINE) e devolve o UIDVALIDITY (RFC 3501)."""
+        nome = f'"{pasta}"' if " " in pasta and not pasta.startswith('"') else pasta
+        tipo, _ = con.select(nome, readonly=True)
         if tipo != "OK":
-            raise RuntimeError(f"não foi possível abrir {self.pasta}")
-        # UID só é único dentro do UIDVALIDITY (RFC 3501): entra na chave do e-mail
+            raise RuntimeError(f"não foi possível abrir {pasta}")
         try:
             _, val = con.response("UIDVALIDITY")
-            self.uidvalidity = (val[0].decode() if val and val[0] else "0")
+            return val[0].decode() if val and val[0] else "0"
         except Exception:  # noqa: BLE001
-            self.uidvalidity = "0"
+            return "0"
+
+    def _conectar(self):
+        con = self._login()
+        self.uidvalidity = self._examinar(con, "INBOX" if self.pasta == "*" else self.pasta)
         return _ImapSomenteLeitura(con)
+
+    def pastas(self, con) -> list[str]:
+        if self.pasta != "*":
+            return [self.pasta]
+        tipo, linhas = con.list()
+        if tipo != "OK":
+            raise RuntimeError("falha ao listar pastas IMAP")
+        out = []
+        for l in linhas or []:
+            r = _nome_pasta(l)
+            if not r or "\\noselect" in r[1].lower():
+                continue
+            if any(r[0].lower().startswith(x) for x in self.ignorar):
+                continue
+            out.append(r[0])
+        return out or ["INBOX"]
 
     def testar(self) -> dict:
         con = self._conectar()
         try:
-            tipo, dados = con.uid("search", None, "ALL")
-            total = len(dados[0].split()) if tipo == "OK" and dados and dados[0] else 0
-            return {"ok": True, "pasta": self.pasta, "mensagens": total}
+            pastas = self.pastas(con)
+            total = 0
+            for pasta in pastas:
+                self._examinar(con, pasta)
+                tipo, dados = con.uid("search", None, "ALL")
+                total += len(dados[0].split()) if tipo == "OK" and dados and dados[0] else 0
+            return {"ok": True, "pastas": len(pastas), "mensagens": total}
         finally:
             con.logout()
 
@@ -120,21 +167,51 @@ class FonteImap:
         con = self._conectar()
         try:
             criterio = f'SINCE {self.desde.strftime("%d-%b-%Y")}' if self.desde else "ALL"
-            tipo, dados = con.uid("search", None, criterio)
-            if tipo != "OK":
-                raise RuntimeError("falha na busca IMAP")
-            for uid in (dados[0].split() if dados and dados[0] else []):
-                chave = f"imap:{self.pasta}:{self.uidvalidity}:{uid.decode()}"
-                if ja_lido is not None and ja_lido(chave):
-                    continue
-                tipo, partes = con.uid("fetch", uid, "(BODY.PEEK[])")
+            for pasta in self.pastas(con):
+                validade = self._examinar(con, pasta)
+                self.uidvalidity = validade
+                tipo, dados = con.uid("search", None, criterio)
                 if tipo != "OK":
-                    continue
-                for p in partes:
-                    if isinstance(p, tuple):
-                        yield EmailBruto(uid=chave, dados=p[1])
+                    raise RuntimeError(f"falha na busca IMAP em {pasta}")
+                for uid in (dados[0].split() if dados and dados[0] else []):
+                    chave = f"imap:{self.usuario.lower()}:{pasta}:{validade}:{uid.decode()}"
+                    if ja_lido is not None and ja_lido(chave):
+                        continue
+                    tipo, partes = con.uid("fetch", uid, "(BODY.PEEK[])")
+                    if tipo != "OK":
+                        continue
+                    for p in partes:
+                        if isinstance(p, tuple):
+                            yield EmailBruto(uid=chave, dados=p[1])
         finally:
             try:
                 con.logout()
             except Exception:  # noqa: BLE001
                 pass
+
+
+class FonteMultipla:
+    """Lê várias caixas (fiscal@, moraes@, contabil@, dp@...). Uma caixa com problema não para as outras:
+    o erro fica em `erros` e o ciclo transforma em pendência dizendo qual caixa falhou."""
+
+    def __init__(self, fontes: list):
+        self.fontes = fontes
+        self.erros: list[str] = []
+
+    def mensagens(self, ja_lido=None) -> Iterator[EmailBruto]:
+        self.erros = []
+        for f in self.fontes:
+            nome = getattr(f, "usuario", None) or getattr(f, "pasta", "?")
+            try:
+                yield from f.mensagens(ja_lido=ja_lido)
+            except Exception as exc:  # noqa: BLE001
+                self.erros.append(f"{nome}: {type(exc).__name__}: {exc}")
+
+    def testar(self) -> list[dict]:
+        out = []
+        for f in self.fontes:
+            try:
+                out.append({"caixa": f.usuario, **f.testar()})
+            except Exception as exc:  # noqa: BLE001
+                out.append({"caixa": getattr(f, "usuario", "?"), "ok": False, "erro": f"{type(exc).__name__}: {exc}"})
+        return out

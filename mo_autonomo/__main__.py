@@ -111,7 +111,9 @@ def cmd_imap(args):
     from .fluxos.contexto import carregar_config, montar_fonte
     cfg = carregar_config(args.config)
     fonte = montar_fonte(cfg, lambda p: Path(p), date.today())
-    print(fonte.testar() if hasattr(fonte, "testar") else "fonte não é IMAP")
+    r = fonte.testar() if hasattr(fonte, "testar") else "fonte não é IMAP"
+    for linha in (r if isinstance(r, list) else [r]):
+        print(linha)
 
 
 def cmd_auditar(args):
