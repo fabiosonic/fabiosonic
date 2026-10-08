@@ -7,6 +7,7 @@ import mimetypes
 import os
 import re
 import time
+import urllib.parse
 import webbrowser
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -200,12 +201,12 @@ ROTAS = {
     "empresas": lambda c: empresas.listar(),
     "migracao/procurar": lambda c: migracao.procurar(),
     "migracao/importar": lambda c: migracao.importar(str(c.get("pasta", ""))),
-    "migracao/misturas": lambda c: migracao.misturas(),
-    "migracao/reparar": lambda c: migracao.reparar(),
-    "migracao/identidade": lambda c: migracao.identidade(),
-    "migracao/dados_anteriores": lambda c: migracao.dados_anteriores(),
-    "migracao/trazer_dados": lambda c: migracao.trazer_dados(str(c.get("fonte", "")), list(c.get("campos") or [])),
-    "migracao/usar_nome_oficial": lambda c: migracao.usar_nome_oficial(),
+    "migracao/misturas": lambda c: [] if emissor.empresa_adicional() else migracao.misturas(),
+    "migracao/reparar": lambda c: (_so_principal(), migracao.reparar())[1],
+    "migracao/identidade": lambda c: None if emissor.empresa_adicional() else migracao.identidade(),
+    "migracao/dados_anteriores": lambda c: (_so_principal(), migracao.dados_anteriores())[1],
+    "migracao/trazer_dados": lambda c: (_so_principal(), migracao.trazer_dados(str(c.get("fonte", "")), list(c.get("campos") or [])))[1],
+    "migracao/usar_nome_oficial": lambda c: (_so_principal(), migracao.usar_nome_oficial())[1],
     "importador/analisar": lambda c: importador.analisar(),
     "importador/importar": lambda c: importador.importar(str(c.get("empresa_id", "")), str(c.get("cnpj", "")),
                                                          c.get("servico") or None, c.get("servicos") or None),
@@ -472,6 +473,17 @@ def _conferir(c: dict) -> dict:
             f"ISS R$ {rps.valor_iss}, líquido R$ {rps.valor_liquido}", "alertas": alertas, "xml": xml}
 
 
+def _so_principal() -> None:
+    """As telas de versão anterior/identidade trabalham na pasta do sistema (1ª empresa): nunca em outra."""
+    if emissor.empresa_adicional():
+        raise ValueError("Esta função é só da empresa principal (a da pasta do sistema). Troque para ela antes — "
+                         "nada desta empresa foi alterado.")
+
+
+# rotas que a janela pode chamar mesmo depois de a empresa ter sido trocada em outra janela (só leitura da lista/troca)
+ROTAS_SEM_EMPRESA = {"estado", "empresas", "empresa/ativar", "empresa/criar", "licenca/status"}
+
+
 def tratar(rota: str, corpo: dict):
     func = ROTAS.get(rota)
     if not func:
@@ -501,7 +513,28 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(corpo)
 
+    def _na_empresa(self, pedida: str | None, rota: str, func):
+        """Cada pedido roda na empresa em uso, presa a ele do começo ao fim (trocar de empresa em outra janela no
+        meio não muda a pasta deste pedido). A janela que foi aberta para outra empresa é recusada e recarrega."""
+        atual = empresas.ativa()
+        if pedida and pedida != atual["id"] and rota not in ROTAS_SEM_EMPRESA:
+            return {"sucesso": False, "empresa_trocada": True,
+                    "erro": f"A empresa em uso foi trocada para {atual.get('nome') or atual['id']} (em outra janela). "
+                            "Esta tela será recarregada para não misturar os dados das empresas."}
+        if rota in ("empresa/ativar", "empresa/criar"):
+            return func()
+        with emissor.usar_empresa(empresas.pasta(atual)):
+            return func()
+
     def do_GET(self):  # noqa: N802
+        pedida = (urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("empresa") or [None])[0]
+        if pedida and pedida != empresas.ativa()["id"]:
+            return self._responder(409, "A empresa em uso mudou: feche esta aba e abra o arquivo de novo pela tela."
+                                   .encode("utf-8"), "text/plain; charset=utf-8")
+        with emissor.usar_empresa(empresas.pasta(empresas.ativa())):
+            return self._get()
+
+    def _get(self):
         caminho = self.path.split("?")[0]
         if caminho == "/favicon.ico":
             return self._responder(204, b"", "image/x-icon")
@@ -592,7 +625,7 @@ class _Handler(BaseHTTPRequestHandler):
             except ValueError as ex:
                 r = {"sucesso": False, "erro": str(ex)}
         else:
-            r = tratar(rota, corpo)
+            r = self._na_empresa(self.headers.get("X-Empresa"), rota, lambda: tratar(rota, corpo))
         self._responder(200, json.dumps(r, ensure_ascii=False, default=str).encode("utf-8"),
                         "application/json; charset=utf-8", extra)
 

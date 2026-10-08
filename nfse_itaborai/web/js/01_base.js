@@ -34,14 +34,22 @@ const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 600
 let ST = { clientes: [], padrao: {}, producao: false, config: {} };
 
 const API_CAB = { "X-Requested-With": "EmissorItaborai", "Content-Type": "application/json" };   // identifica a própria tela
+// Empresa desta janela: todo pedido leva o id dela e o servidor recusa se a empresa em uso tiver mudado
+// (ex.: trocada em outra janela). Assim uma tela nunca mostra nem grava dados de outra empresa.
+let EMPRESA_ID = "";
 async function api(rota, corpo) {
-  const r = await fetch("/api/" + rota, { method: "POST", headers: API_CAB, body: JSON.stringify(corpo || {}) });
+  const cab = EMPRESA_ID ? { ...API_CAB, "X-Empresa": EMPRESA_ID } : API_CAB;
+  const r = await fetch("/api/" + rota, { method: "POST", headers: cab, body: JSON.stringify(corpo || {}) });
   const d = await r.json();
+  if (d && d.empresa_trocada) { alert(d.erro); location.reload(); throw new Error(d.erro); }
   if (d && d.bloqueado) { telaPin(); throw new Error(d.erro); }
   if (d && d.licenca_bloqueada) { telaLicenca(d.licenca); throw new Error(d.erro); }
   if (d && d.erro && !Array.isArray(d)) { aviso("⚠ " + d.erro, 7000); destravar(); throw new Error(d.erro); }
   return d;
 }
+// Links de arquivos (boleto, CSV, relatório, backup) também levam a empresa desta janela.
+document.addEventListener("click", e => { const a = e.target.closest && e.target.closest('a[href^="/boleto/"], a[href^="/export/"], a[href^="/fechamento/"], a[href^="/backup/"]');
+  if (a && EMPRESA_ID) { const u = new URL(a.href, location.href); u.searchParams.set("empresa", EMPRESA_ID); a.href = u.pathname + u.search; } }, true);
 // Botão desativado durante uma operação ("Enviando…"): se a operação der erro, ele volta ao normal (não fica travado).
 document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("button");
   if (b && !b.disabled) { b._rotulo = b.innerHTML; b._clicado = Date.now(); } }, true);

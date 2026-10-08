@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import emissor
 
-ARQ_FABRICA = Path(__file__).resolve().parent.parent / "servico_padrao.json"
+ARQ_FABRICA = Path(__file__).resolve().parent / "servico_fabrica.json"   # modelo vazio (ver empresas.py)
 CAMPOS = ("descricao", "item_lista_servico", "codigo_desdobro", "codigo_nbs", "cnae", "aliquota_iss",
           "tipo_tributacao", "iss_retido", "indicador_operacao", "classificacao_tributaria", "ibpt_percentual",
           "observacoes", "codigo_tributacao_municipio", "codigo_interno")
@@ -37,7 +37,8 @@ def _nome_de(descricao: str) -> str:
 def _legado() -> dict:
     """servico_padrao.json da empresa (ou o de fábrica), da versão anterior ao catálogo."""
     local = emissor.raiz() / "servico_padrao.json"
-    arq = local if local.exists() else ARQ_FABRICA
+    instalacao = Path(__file__).resolve().parent.parent / "servico_padrao.json"   # o que vem no pacote (1ª empresa)
+    arq = local if local.exists() else ARQ_FABRICA if emissor.empresa_adicional() or not instalacao.exists() else instalacao
     return json.loads(arq.read_text(encoding="utf-8"))
 
 

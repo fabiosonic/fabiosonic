@@ -322,8 +322,8 @@ def cliente_de_xml(xml: str, cnpj_prestador: str | None = None) -> dict | None:
         }
     else:
         return None
-    if cnpj_prestador and _digitos(prest) and _digitos(prest) != _digitos(cnpj_prestador):
-        return None
+    if cnpj_prestador and _digitos(prest) != _digitos(cnpj_prestador):
+        return None                    # nota de outra empresa (ou sem o CNPJ do emissor): nunca entra nesta
     if c.get("estrangeiro"):
         try:
             c = normalizar(c)
@@ -338,6 +338,9 @@ def cliente_de_xml(xml: str, cnpj_prestador: str | None = None) -> dict | None:
 
 def importar_xmls(pasta: Path, cnpj_prestador: str | None = None) -> dict:
     """Varre a pasta (e subpastas) e atualiza o cadastro com o tomador mais recente de cada CNPJ."""
+    if len(_digitos(cnpj_prestador)) != 14:
+        raise ValueError("CNPJ da empresa não configurado: sem ele não dá para saber quais notas são desta empresa, "
+                         "e nenhum cliente é importado.")
     encontrados: dict[str, dict] = {}
     lidos = ignorados = 0
     for arq in sorted(Path(pasta).rglob("*.xml")):

@@ -228,6 +228,8 @@ function docDe(txt) { const m = String(txt).match(/(\d[\d./-]{7,})\s*$/); return
 function form(el) { const o = {}; $$("[name]", el).forEach(i => o[i.name] = i.type == "checkbox" ? i.checked : i.value); return o; }
 async function carregarEstado() {
   ST = await api("estado");
+  if (EMPRESA_ID && ST.empresa && ST.empresa.id != EMPRESA_ID) { location.reload(); return; }   // nunca misturar telas de empresas
+  EMPRESA_ID = (ST.empresa || {}).id || "";
   if (ST.licenca && !ST.licenca.liberado) telaLicenca(ST.licenca);
   const b = $("#amb");
   b.innerHTML = `<span class="ponto"></span><span><b>${ST.producao ? "Produção" : "Homologação"}</b><small>${ST.producao ? "Notas com validade fiscal" : "Teste, sem validade"} · ${nomeCanal(true)} · v${esc(ST.versao || "")}</small></span>`;
@@ -250,8 +252,9 @@ async function trocarEmpresa(pre) {
       <p><button class="btn" id="criar_emp">Cadastrar e usar</button></p></details>
     <p><button class="btn sec" onclick="fechar()">Fechar</button></p>`);
   if (pre) { $(".nova-emp").open = true; $("#f_emp [name=nome]").value = pre.nome || ""; $("#f_emp [name=cnpj]").value = fmtDoc(pre.cnpj || ""); }
-  $$(".emp").forEach(b => b.onclick = async () => { await api("empresa/ativar", { id: b.dataset.id }); fechar(); await carregarEstado(); ir(PAG); aviso("Empresa em uso: " + b.querySelector("b").textContent); });
-  $("#criar_emp").onclick = async () => { await api("empresa/criar", form($("#f_emp"))); fechar(); await carregarEstado(); ir("config"); aviso("Empresa cadastrada. Complete as configurações e o serviço padrão.", 7000); };
+  // Trocar de empresa recarrega a tela inteira: nenhuma lista, filtro ou cadastro da empresa anterior fica na memória.
+  $$(".emp").forEach(b => b.onclick = async () => { await api("empresa/ativar", { id: b.dataset.id }); fechar(); location.reload(); });
+  $("#criar_emp").onclick = async () => { await api("empresa/criar", form($("#f_emp"))); fechar(); history.replaceState(null, "", "#config"); location.reload(); };
 }
 $("#amb").onclick = async () => {
   const p = !ST.producao;

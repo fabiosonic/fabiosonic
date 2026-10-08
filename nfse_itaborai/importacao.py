@@ -162,7 +162,9 @@ def importar_xml(em: date | None = None) -> dict:
         return {"pasta": "não configurada"}
     if not pasta.exists():
         return {"pasta": "não encontrada"}
-    cnpj = emissor.prestador_do_ambiente().cnpj
+    cnpj = emissor.so_digitos(emissor.prestador_do_ambiente().cnpj)
+    if len(cnpj) != 14:
+        return {"pasta": "CNPJ da empresa não configurado"}
     r = clientes.importar_xmls(pasta, cnpj)
     notas = ler_notas(pasta, cnpj)
     return {"clientes_novos": r["clientes_novos"], "notas_lidas": len(notas),
@@ -173,10 +175,16 @@ def importar_xml(em: date | None = None) -> dict:
 
 def conta_da_empresa(texto: str) -> bool:
     """O extrato é da conta desta empresa? A primeira conta importada fica vinculada à empresa."""
+    from . import empresas
     conta = conciliacao.conta_ofx(texto)
     contas = config.carregar()["financeiro"].get("contas_bancarias") or []
-    if not conta or conta in contas:
+    if conta in contas and conta:
         return True
+    if not conta:
+        # extrato sem número da conta: com mais de uma empresa não dá para saber de quem é — só pela tela
+        return len(empresas.listar()) == 1
+    if any(conta in (empresas._cfg_de(p).get("financeiro", {}).get("contas_bancarias") or []) for _e, p in empresas._outras()):
+        return False                   # conta de outra empresa
     if not contas:
         config.salvar({"financeiro": {"contas_bancarias": [conta]}})
         return True
@@ -184,6 +192,9 @@ def conta_da_empresa(texto: str) -> bool:
 
 
 def importar_manual(texto: str) -> dict:
+    """Pela tela: o usuário escolheu a empresa. Extrato sem número da conta é aceito; conta de outra empresa, nunca."""
+    if not conciliacao.conta_ofx(texto):
+        return conciliacao.importar(texto)
     if not conta_da_empresa(texto):
         raise ValueError(f"Este extrato é da conta {conciliacao.conta_ofx(texto)}, que não é a desta empresa "
                          f"({', '.join(config.carregar()['financeiro']['contas_bancarias'])}). Troque de empresa "

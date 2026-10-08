@@ -38,7 +38,8 @@ def test_nova_empresa_isolada(multi):
     # credenciais, configurações, clientes e serviço padrão são da nova empresa
     assert emissor.env("ITABORAI_CNPJ") == "11222333000181" and emissor.env("ITABORAI_CHAVE") == "k2"
     assert not emissor.em_producao() and config.carregar()["emissao"]["canal"] == "nacional"
-    assert clientes.listar() == [] and lote.servico_padrao()["item_lista_servico"] == "17.19"
+    # começa sem serviço (nunca o da 1ª empresa): ela cadastra o seu
+    assert clientes.listar() == [] and lote.servico_padrao()["item_lista_servico"] == "" and not lote.servico_padrao()["descricao"]
     assert config.carregar()["pastas"]["extratos"].endswith("PADARIA BOM PAO LTDA")
     clientes.salvar({"cpf_cnpj": "54399432000146", "razao_social": "CLIENTE DA PADARIA"})
     financeiro.criar_titulo("54399432000146", "100", vencimento="2026-10-10", emitir_nfse=False)

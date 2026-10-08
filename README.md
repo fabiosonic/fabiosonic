@@ -326,6 +326,17 @@ financeiro (dentro do limite da licença).
   - cada empresa tem a própria pasta de extratos;
   - o sistema memoriza a conta bancária do primeiro extrato e ignora extratos de outra conta, para que um
     extrato nunca seja conciliado na empresa errada.
+- **Cada janela é de uma empresa (3.18):** todo pedido da tela leva a empresa daquela janela e fica preso a ela do
+  começo ao fim. Se a empresa em uso for trocada em outra janela, a janela antiga é recusada e recarregada — ela
+  nunca mostra nem grava dados da outra. Trocar de empresa recarrega a tela inteira (sem listas na memória).
+- **XML:** uma nota só entra na empresa cujo CNPJ é o do emissor; nota sem o CNPJ do emissor não entra em
+  nenhuma, e empresa sem CNPJ configurado não importa nada.
+- **Extratos:** conta já vinculada a outra empresa nunca é conciliada nesta; extrato sem número da conta não é
+  importado pelo robô quando há mais de uma empresa (importe pela tela, na empresa certa).
+- **Serviço:** empresa nova começa sem serviço cadastrado (o modelo de fábrica é vazio); nunca recebe o serviço da
+  primeira empresa.
+- **Versão anterior / dados da empresa:** essas telas trabalham só na empresa principal; na outra empresa elas
+  recusam, sem mexer em nada.
 
 
 ## Faturamento, regra da NFS-e e recorrência

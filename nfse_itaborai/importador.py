@@ -305,7 +305,9 @@ def importar(empresa_id: str, cnpj_prestador: str, servico: dict | None = None,
     if not emp:
         raise ValueError("Empresa não encontrada.")
     cnpj = _digitos(cnpj_prestador)
-    if emp.get("cnpj") and cnpj != _digitos(emp["cnpj"]):
+    if len(_digitos(emp.get("cnpj"))) != 14:
+        raise ValueError(f"A empresa {emp['nome']} está sem CNPJ: informe o CNPJ dela em Configurações antes de importar.")
+    if cnpj != _digitos(emp["cnpj"]):
         raise ValueError(f"Estas notas foram emitidas pelo CNPJ {cnpj}, não por {emp['nome']}. Os clientes de uma "
                          "empresa não podem ser cadastrados em outra.")
     destino = arquivo_da_empresa(cnpj)

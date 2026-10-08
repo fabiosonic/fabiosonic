@@ -15,7 +15,9 @@ from pathlib import Path
 from . import emissor
 from .xml_rps import so_digitos
 
-ARQ_PADRAO_SERVICO = Path(__file__).resolve().parent.parent / "servico_padrao.json"
+# modelo de fábrica, vazio e dentro do programa: o servico_padrao.json da pasta do sistema é o da 1ª empresa
+# e nunca é copiado para outra (cada empresa começa sem serviço e cadastra o seu)
+ARQ_PADRAO_SERVICO = Path(__file__).resolve().parent / "servico_fabrica.json"
 SEGREDO = "••••••"
 CAMPOS_ENV = {  # campo da tela -> variável do .env
     "cnpj": "ITABORAI_CNPJ", "im": "ITABORAI_IM", "chave": "ITABORAI_CHAVE", "ie": "ITABORAI_IE",
@@ -74,7 +76,9 @@ def listar() -> list[dict]:
     for e in reg["empresas"]:
         with emissor.usar_empresa(pasta(e)):
             prod = emissor.em_producao()
-        out.append(e | {"nome": _nome_config(pasta(e)) or e["nome"], "ativa": e["id"] == reg["ativa"], "producao": prod})
+            cnpj = so_digitos(emissor.env("ITABORAI_CNPJ")) or e.get("cnpj", "")
+        out.append(e | {"nome": _nome_config(pasta(e)) or e["nome"], "ativa": e["id"] == reg["ativa"], "producao": prod,
+                        "cnpj": cnpj})
     return out
 
 
@@ -108,7 +112,7 @@ def criar(d: dict) -> dict:
     if not cnpj_valido(cnpj):
         raise ValueError("CNPJ inválido.")
     reg = _ler()
-    if any(e["cnpj"] == cnpj for e in reg["empresas"]):
+    if any(e["cnpj"] == cnpj for e in reg["empresas"]) or any(e["cnpj"] == cnpj for e in listar()):
         raise ValueError("Esta empresa já está cadastrada.")
     rel = f"empresas/{cnpj}"
     destino = emissor.BASE / rel
