@@ -382,9 +382,14 @@ async function cartaoAtualizacao(box) {
   $("#at_arq", box).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
     const arquivo = await lerB64(f); const a = await api("atualizacao/analisar", { arquivo });
     const txt = a.mais_nova ? `Atualizar da versão ${a.versao_atual} para a ${a.versao_nova}?` : `Este ZIP é da versão ${a.versao_nova}${a.mesma ? " (a mesma instalada)" : ", ANTERIOR à instalada (" + a.versao_atual + ")"}. Instalar mesmo assim?`;
-    if (!confirm(txt + "\n\nSe o robô estiver rodando, ele é parado com segurança (termina o boleto ou a nota em andamento). Antes, o sistema faz backup de todas as empresas. Seus dados não são alterados.")) return;
-    aviso("Parando o robô com segurança, fazendo backup e atualizando… (pode levar até 3 minutos)", 240000);
-    await api("atualizacao/aplicar", { arquivo, permitir_anterior: !a.mais_nova }); esperarNova(); };
+    // janela do próprio sistema (o navegador pode bloquear o confirm() depois de muitas perguntas)
+    modal(`<h2>${ic("download")}Atualizar o sistema</h2><p><b>${esc(txt)}</b></p>
+      <p class="sub">Se o robô estiver rodando, ele é parado com segurança (termina o boleto ou a nota em andamento). Antes, o sistema faz backup de todas as empresas. Seus dados não são alterados.</p>
+      <p><button class="btn" id="at_ok">${ic("ok")}Atualizar agora</button> <button class="btn sec" onclick="fechar()">Cancelar</button></p>`);
+    $("#at_ok").onclick = async () => { $("#at_ok").disabled = true;
+      $("#modal_corpo").innerHTML = `<h2>Atualizando…</h2><p>Parando o robô com segurança, fazendo backup e trocando os arquivos do programa. Pode levar até 3 minutos — não feche esta janela.</p>`;
+      try { await api("atualizacao/aplicar", { arquivo, permitir_anterior: !a.mais_nova }); } catch (x) { fechar(); return; }
+      esperarNova(); }; };
   $$("[data-volta]", box).forEach(b => b.onclick = async () => {
     if (!confirm(`Voltar o programa para a ${b.textContent}? Os dados não mudam (antes é feito backup).`)) return;
     await api("atualizacao/voltar", { nome: b.dataset.volta }); esperarNova(); });
