@@ -78,3 +78,17 @@ def test_lista_de_empresas_usa_o_cnpj_do_env_e_nao_deixa_duplicar(multi):  # noq
     assert empresas.listar()[0]["cnpj"] == "24875410000144"
     with pytest.raises(ValueError, match="já está cadastrada"):
         empresas.criar({"nome": "COPIA", "cnpj": "24.875.410/0001-44"})
+
+
+def test_cliente_excluido_nao_volta_pelo_xml_so_pelo_cadastro(multi, tmp_path):  # noqa: F811
+    pasta = tmp_path / "x"
+    pasta.mkdir()
+    (pasta / "n.xml").write_text(NOTA.format(emit="<emit><CNPJ>24875410000144</CNPJ></emit>",
+                                             prest="<prest><CNPJ>24875410000144</CNPJ></prest>"), encoding="utf-8")
+    assert clientes.importar_xmls(pasta, "24875410000144")["clientes_novos"] == 1
+    clientes.excluir("00482301000107")
+    assert clientes.importar_xmls(pasta, "24875410000144")["clientes_novos"] == 0 and not clientes.obter("00482301000107")
+    clientes.salvar({"cpf_cnpj": "00482301000107", "razao_social": "MERCADINHO GIRASSOL"})
+    clientes.excluir("00482301000107")
+    clientes.salvar({"cpf_cnpj": "00482301000107", "razao_social": "MERCADINHO GIRASSOL"})
+    assert "00482301000107" not in clientes.excluidos()

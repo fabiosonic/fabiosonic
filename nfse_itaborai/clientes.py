@@ -200,6 +200,9 @@ def salvar(c: dict) -> dict:
         raise ValueError("Razão social obrigatória.")
     lista = [x for x in listar() if _digitos(x.get("cpf_cnpj")) != c["cpf_cnpj"]]
     antigo = obter(c["cpf_cnpj"]) or {}
+    fora = excluidos()
+    if c["cpf_cnpj"] in fora:                     # cadastrado de novo pela tela: volta a valer para o XML
+        _gravar_excluidos(fora - {c["cpf_cnpj"]})
     # regra fiscal e serviço habitual do tomador só mudam quando vierem no cadastro (importações não apagam)
     lista.append({**{k: antigo[k] for k in ("ultima_nfse", "ultima_data", "ultimo_valor", "notas_vistas", "fiscal",
                                             "servico_id", "estrangeiro", "whatsapp_cobranca", "codigo_externo", "padroes_nota",
@@ -220,11 +223,31 @@ def registrar_ultima_nota(cpf_cnpj: str, valor, data: str, numero: str) -> None:
             return
 
 
+def _arq_excluidos() -> Path:
+    return emissor.RAIZ / "dados" / "clientes_excluidos.json"
+
+
+def excluidos() -> set[str]:
+    """Clientes excluídos pela tela: a leitura dos XML não os cadastra de novo (só o cadastro manual traz de volta)."""
+    try:
+        return set(json.loads(_arq_excluidos().read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return set()
+
+
+def _gravar_excluidos(docs: set[str]) -> None:
+    arq = _arq_excluidos()
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    arq.write_text(json.dumps(sorted(docs), indent=2), encoding="utf-8")
+
+
 def excluir(cpf_cnpj: str) -> bool:
     doc = _digitos(cpf_cnpj)
     lista = listar()
     nova = [c for c in lista if _digitos(c.get("cpf_cnpj")) != doc]
     _gravar(nova)
+    if doc:
+        _gravar_excluidos(excluidos() | {doc})
     return len(nova) != len(lista)
 
 
@@ -360,8 +383,11 @@ def importar_xmls(pasta: Path, cnpj_prestador: str | None = None) -> dict:
         else:
             anterior["notas_vistas"] = c["notas_vistas"]
     atuais = {chave_cliente(c): c for c in listar()}
+    fora = excluidos()
     novos = 0
     for doc, c in encontrados.items():
+        if doc not in atuais and doc in fora:
+            continue                               # excluído pela tela: o XML não traz de volta
         if doc not in atuais:
             novos += 1
             if c.get("estrangeiro"):                 # cliente do exterior: ganha a chave interna 99xxxxxxx

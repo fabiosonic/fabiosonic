@@ -333,6 +333,8 @@ financeiro (dentro do limite da licença).
   nenhuma, e empresa sem CNPJ configurado não importa nada.
 - **Extratos:** conta já vinculada a outra empresa nunca é conciliada nesta; extrato sem número da conta não é
   importado pelo robô quando há mais de uma empresa (importe pela tela, na empresa certa).
+- **Cliente excluído não volta pelo XML (3.18.1):** quem foi excluído pela tela fica anotado em
+  `dados/clientes_excluidos.json` da empresa; a leitura dos XML não o cadastra de novo (só o cadastro manual).
 - **Serviço:** empresa nova começa sem serviço cadastrado (o modelo de fábrica é vazio); nunca recebe o serviço da
   primeira empresa.
 - **Versão anterior / dados da empresa:** essas telas trabalham só na empresa principal; na outra empresa elas
