@@ -128,6 +128,15 @@ abaixo de um número já usado em produção.
 certificado digital (ou das notas do Emissor Nacional) deste CNPJ, o Painel avisa e oferece **"Usar …"** com o nome
 oficial. A razão social também pode ser corrigida à mão em Configurações › Empresa emissora e credenciais.
 
+### Robô parado com segurança durante a atualização (3.18.3)
+
+Ao atualizar pela tela, o sistema pede ao robô que pare (`dados_locais/parar_robo`). O robô — o da tela e o do
+Agendador do Windows — confere esse pedido antes de cada empresa, de cada etapa e de cada título, e para num ponto
+seguro: nunca no meio do registro de um boleto no banco ou da emissão de uma nota (o que poderia gerar boleto ou
+nota em dobro). A atualização espera até 3 minutos; trava de robô cujo processo não existe mais (queda de energia,
+janela fechada no meio) é descartada na hora. Se o robô não chegar a um ponto seguro nesse tempo, nada é alterado
+e a tela pede para tentar de novo. O pedido de parada vence em 15 minutos e é apagado quando o sistema abre.
+
 ## O sistema
 
 | Menu | O que faz |

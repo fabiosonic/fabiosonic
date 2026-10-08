@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import date
 
-from . import backup, cobranca, config, db, emissor, financeiro, importacao, importador, inter, saude
+from . import parada, backup, cobranca, config, db, emissor, financeiro, importacao, importador, inter, saude
 
 
 TRAVA_MAX_SEG = 2 * 3600
@@ -45,6 +45,8 @@ def rodar(em: date | None = None, forcar: bool = False, url: str | None = None) 
     lic = licenca.situacao()
     if not lic["liberado"]:
         return {"executado": False, "motivo": lic["mensagem"]}
+    if parada.pedida():
+        return {"executado": False, "motivo": "Robô parado para a atualização do sistema."}
     with _trava() as livre:
         if not livre:
             return {"executado": False, "motivo": "Outra execução do robô está em andamento."}
@@ -60,9 +62,15 @@ def rodar_todas(em: date | None = None, forcar: bool = False) -> dict:
         return {"executado": False, "motivo": lic["mensagem"]}
     res = {}
     for e in empresas.listar():
+        if parada.pedida():
+            res[e["nome"]] = {"executado": False, "motivo": "parado para a atualização do sistema"}
+            continue
         with emissor.usar_empresa(empresas.pasta(e)):
             try:
                 res[e["nome"]] = rodar(em, forcar)
+            except parada.RoboParado as ex:
+                db.registrar("robo", str(ex))
+                res[e["nome"]] = {"executado": False, "motivo": str(ex)}
             except Exception as ex:  # noqa: BLE001 — uma empresa com problema não para as outras
                 db.registrar("robo_erro", str(ex))
                 res[e["nome"]] = {"executado": False, "motivo": f"erro: {ex}"}
@@ -80,8 +88,11 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
     def etapa(nome, ligado, func):
         if not ligado:
             return
+        parada.conferir()                       # atualização pediu: para aqui, entre uma etapa e outra
         try:
             res[nome] = func()
+        except parada.RoboParado:
+            raise
         except Exception as ex:  # noqa: BLE001 — o robô nunca para por causa de uma etapa
             res[nome] = f"erro: {ex}"
             db.registrar("robo_erro", f"{nome}: {ex}")
@@ -101,6 +112,7 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
             return "ambiente de homologação: o robô só emite NFS-e em produção"
         ok = erro = 0
         for t in financeiro.listar_titulos("sem_nfse", em=em):
+            parada.conferir()
             pago_aguardando = t["status"] == "pago" and t["nfse_status"] == "pendente"   # nota após o pagamento
             if not pago_aguardando and (t["nfse_status"] not in ("pendente", "teste") or t["status"] != "aberto"):
                 continue                      # erros ficam para revisão humana, sem reenvio infinito
@@ -116,6 +128,7 @@ def _rodar(em: date | None = None, forcar: bool = False, url: str | None = None)
                " AND COALESCE(boleto_situacao,'')=''"
                + ("" if boleto else " AND pix_copia_cola=''"))
         for t in db.linhas(sql):
+            parada.conferir()
             if t["nfse_status"] in ("pendente", "erro", "teste"):
                 continue                      # cobra junto com a nota válida
             if str(t["cpf_cnpj"]).startswith("99") and len(str(t["cpf_cnpj"])) == 9:
@@ -172,8 +185,11 @@ def _rodar_pagamentos(em: date) -> dict:
     def etapa(nome, ligado, func):
         if not ligado:
             return
+        parada.conferir()                       # atualização pediu: para aqui, entre uma etapa e outra
         try:
             res[nome] = func()
+        except parada.RoboParado:
+            raise
         except Exception as ex:  # noqa: BLE001
             res[nome] = f"erro: {ex}"
             db.registrar("robo_erro", f"{nome} (rotina rápida): {ex}")
@@ -190,6 +206,7 @@ def _rodar_pagamentos(em: date) -> dict:
             return 0
         n = 0
         for t in db.linhas("SELECT id FROM titulos WHERE status='pago' AND nfse_status='pendente'"):
+            parada.conferir()
             n += bool(financeiro.emitir_nfse_titulo(t["id"])["sucesso"])
         return n
     etapa("nfse", auto["emitir_nfse"], notas_pagas)
@@ -207,6 +224,8 @@ def rodar_pagamentos(em: date | None = None) -> dict:
     em = em or financeiro.hoje()
     res = {}
     for e in empresas.listar():
+        if parada.pedida():
+            break                                # atualização do sistema pediu para parar
         with emissor.usar_empresa(empresas.pasta(e)):
             with _trava() as livre:
                 if not livre:
@@ -214,6 +233,9 @@ def rodar_pagamentos(em: date | None = None) -> dict:
                     continue
                 try:
                     res[e["nome"]] = _rodar_pagamentos(em)
+                except parada.RoboParado as ex:
+                    db.registrar("robo", str(ex))
+                    break
                 except Exception as ex:  # noqa: BLE001
                     db.registrar("robo_erro", f"rotina rápida: {ex}")
     from datetime import datetime

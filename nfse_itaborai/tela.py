@@ -694,6 +694,8 @@ def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
     except Exception as ex:  # noqa: BLE001 — nunca impede o sistema de abrir
         print(f"Aviso: não foi possível proteger as senhas agora ({ex}).")
     importador.caixa()  # cria a pasta IMPORTAR XML dentro da pasta do sistema
+    from . import parada
+    parada.liberar()    # sistema (re)aberto: o pedido de parada feito pela atualização não vale mais
     url = f"http://127.0.0.1:{porta}"
     print(f"Sistema versão {__version__} em {url} (para fechar: botão “Encerrar o sistema” na tela)")
     if robo:

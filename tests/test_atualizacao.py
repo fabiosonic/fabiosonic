@@ -73,11 +73,15 @@ def test_versao_anterior_so_com_confirmacao(multi):  # noqa: F811
     assert atualizacao.aplicar(_zip("1.0.0"), permitir_anterior=True)["ok"]
 
 
-def test_nao_atualiza_com_robo_rodando(multi):  # noqa: F811
+def test_nao_atualiza_com_robo_rodando(multi, monkeypatch):  # noqa: F811
+    import os
+    from nfse_itaborai import parada
     _programa(multi)
-    (multi / "dados" / "robo.lock").write_text("1", encoding="utf-8")
-    with pytest.raises(ValueError, match="robô está rodando"):
+    monkeypatch.setattr(atualizacao, "ESPERA_PARADA_SEG", 2)
+    (multi / "dados" / "robo.lock").write_text(str(os.getpid()), encoding="utf-8")   # robô vivo que não termina
+    with pytest.raises(ValueError, match="robô parar"):
         atualizacao.aplicar(_zip())
+    assert not parada.pedida()                       # desistiu: o robô volta a trabalhar
     assert (multi / "nfse_itaborai" / "velho.py").exists()
     assert emissor.BASE == multi
 

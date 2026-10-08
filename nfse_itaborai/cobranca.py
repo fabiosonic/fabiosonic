@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
-from . import clientes, config, db, emissor, financeiro, horario, inter, marca, mensagens, pix, textos, whatsapp, whatsapp_web
+from . import clientes, config, db, emissor, financeiro, horario, inter, marca, mensagens, parada, pix, textos, whatsapp, whatsapp_web
 
 
 # ---------------------------------------------------------------- meio de pagamento
@@ -792,6 +792,8 @@ def rodar_regua(em: date | None = None, cfg: dict | None = None) -> dict:
                 continue
             _registrar_whatsapp(t, etapa, cli, cfg, em, res)
     for cli, itens in por_cliente.values():
+        if parada.pedida():
+            break                                  # atualização do sistema: os demais saem na próxima rodada
         _email_cobranca(cli, itens, em, cfg, res)
     _pos_pagamento(em, cfg, res)
     if any(res.values()):

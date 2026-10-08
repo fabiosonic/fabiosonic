@@ -18,7 +18,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from . import __version__, emissor
+from . import __version__, emissor, parada
 
 PASTAS_PROGRAMA = ("nfse_itaborai", "schemas", "docs")
 ARQUIVOS_PROGRAMA = ("README.md", "MANUAL.html", "MANUAL.pdf", "pyproject.toml", ".gitattributes", ".gitignore")
@@ -63,12 +63,35 @@ def analisar(dados: bytes) -> dict:
 
 
 def _robo_rodando() -> bool:
+    """Alguma empresa com o robô trabalhando? Trava de processo que não existe mais (queda, janela fechada no
+    meio) é apagada aqui mesmo — ela não segura a atualização."""
     from . import empresas
     for e in empresas.listar():
         trava = empresas.pasta(e) / "dados" / "robo.lock"
-        if trava.exists() and time.time() - trava.stat().st_mtime < 2 * 3600:
-            return True
+        try:
+            idade = time.time() - trava.stat().st_mtime
+            pid = int((trava.read_text(encoding="utf-8").strip() or "0"))
+        except (OSError, ValueError):
+            continue
+        if idade >= 2 * 3600 or not parada.pid_vivo(pid):
+            trava.unlink(missing_ok=True)
+            continue
+        return True
     return False
+
+
+ESPERA_PARADA_SEG = 180
+
+
+def parar_robo(espera_seg: int | None = None) -> bool:
+    """Pede para o robô parar e espera ele chegar a um ponto seguro (fim da etapa/título em andamento)."""
+    parada.pedir()
+    limite = time.time() + (ESPERA_PARADA_SEG if espera_seg is None else espera_seg)
+    while _robo_rodando():
+        if time.time() >= limite:
+            return False
+        time.sleep(2)
+    return True
 
 
 def _guardar_programa_atual(base: Path) -> Path:
@@ -86,13 +109,24 @@ def _guardar_programa_atual(base: Path) -> Path:
 
 
 def aplicar(dados: bytes, permitir_anterior: bool = False) -> dict:
-    from . import backup, db, empresas
     info = analisar(dados)
     if not info["mais_nova"] and not permitir_anterior:
         raise ValueError(f"O ZIP é da versão {info['versao_nova']}, que não é mais nova que a instalada "
                          f"({info['versao_atual']}). Para voltar de versão, confirme a opção na tela.")
-    if _robo_rodando():
-        raise ValueError("O robô está rodando agora. Tente atualizar daqui a alguns minutos.")
+    if not parar_robo():
+        parada.liberar()
+        raise ValueError("Pedi para o robô parar, mas ele ainda está terminando um envio ao banco ou à prefeitura "
+                         "(cortar no meio poderia gerar boleto ou nota em dobro). Tente de novo em 2 ou 3 minutos — "
+                         "nada foi alterado.")
+    try:
+        return _aplicar(dados)
+    except Exception:
+        parada.liberar()                       # deu errado: o robô volta a trabalhar
+        raise
+
+
+def _aplicar(dados: bytes) -> dict:
+    from . import backup, db, empresas
     base = Path(emissor.BASE)
     backups = []
     for e in empresas.listar():                                  # dados de cada empresa protegidos antes
