@@ -1126,6 +1126,23 @@ def pagar_despesa(did: int, data: str = "") -> None:
         con.execute("UPDATE despesas SET status='pago', data_pagamento=? WHERE id=?", (data or hoje().isoformat(), did))
 
 
+def estornar_despesa(did: int) -> dict:
+    """Desfaz o pagamento: a despesa volta a 'a pagar'. Se o pagamento veio do extrato, o débito do banco volta para
+    a Conciliação (pendente) e não é usado de novo sozinho — você decide o que ele é."""
+    d = db.linhas("SELECT * FROM despesas WHERE id=?", (did,))
+    if not d:
+        raise ValueError("Despesa não encontrada.")
+    if d[0]["status"] != "pago":
+        raise ValueError("Só despesa paga pode ter o pagamento estornado.")
+    with db.conexao() as con:
+        con.execute("UPDATE despesas SET status='aberto', data_pagamento='' WHERE id=?", (did,))
+        n = con.execute("UPDATE movimentos SET despesa_id=NULL, manual=1 WHERE despesa_id=?", (did,)).rowcount
+        con.execute("INSERT INTO log (quando, tipo, mensagem) VALUES (?,?,?)",
+                    (db.agora(), "estorno_despesa", f"Despesa {did} ({d[0]['descricao']}, {reais(d[0]['valor_cent'])}): "
+                                                    f"pagamento estornado" + (" — débito do extrato volta à Conciliação" if n else "")))
+    return {"ok": True, "extrato": bool(n)}
+
+
 def excluir_despesa(did: int) -> None:
     with db.conexao() as con:
         con.execute("UPDATE despesas SET status='cancelado' WHERE id=?", (did,))

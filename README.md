@@ -704,6 +704,17 @@ pelo celular); a opção "substituir" troca também os já cadastrados.
   pedir, pelo botão *Gerar boleto* do título.
 - As datas de vencimento nunca são prorrogadas pelo sistema.
 
+### Contas a pagar: estorno e baixa pela Conciliação (3.18.5)
+
+- **Estornar pagamento:** na aba Pagas, o botão desfaz a baixa e a despesa volta para A pagar. Se o pagamento veio do
+  extrato, o débito do banco volta para a Conciliação como pendente e não é usado de novo sozinho.
+- **Baixar uma conta a pagar pela Conciliação:** num débito não conciliado, escolha "Baixar uma conta a pagar…" (ou
+  clique na sugestão de mesmo valor). A despesa fica paga na data do débito; se o banco debitou outro valor (juros,
+  multa, desconto), ela fica com o valor efetivamente pago. Se o débito já tinha virado despesa automática, o botão
+  "É conta a pagar" no Extrato da conta faz a troca e cancela a automática (nada fica em dobro).
+- **Despesas do extrato a partir de** (Configurações › Financeiro): débitos anteriores não viram despesa.
+- Tela e robô conciliando o mesmo débito ao mesmo tempo não criam mais despesa em dobro.
+
 ### Pagamento parcial
 
 Quando o cliente paga menos que o devido (Pix, transferência, extrato ou baixa manual), o título é baixado com o valor

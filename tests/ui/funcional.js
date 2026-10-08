@@ -465,6 +465,22 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     await p.evaluate(id => excluirDesp(id), n.id); await espera(800);
     certo(!(await api('despesas', { filtro: 'todos' })).some(x => x.id === n.id), 'não excluiu');
   });
+  await passo('Contas a pagar: estornar pagamento', async () => {
+    const d = (await api('despesas', { filtro: 'pago' })).find(x => x.descricao === 'ALUGUEL OUTUBRO'); certo(d, 'sem despesa paga');
+    await ir('pagar'); await p.evaluate(x => estornarDesp(x), d); await espera(500); await p.click('#est_ok'); await espera(1000);
+    certo((await api('despesas', { filtro: 'a_pagar' })).some(x => x.id === d.id), 'não voltou para A pagar');
+  });
+  await passo('Conciliação: débito do banco baixa uma conta a pagar escolhida', async () => {
+    const n = await api('despesa/salvar', { descricao: 'INTERNET PREDIALNET', valor: '99,90', vencimento: '2026-10-10' });
+    const ofx = '<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261011<TRNAMT>-105.00<FITID>ui-net-1<MEMO>PAGAMENTO PREDIALNET</STMTTRN></BANKTRANLIST></OFX>';
+    await api('conciliacao/importar', { ofx });
+    const m = (await api('conciliacao/extrato', {})).movimentos.find(x => x.fitid === 'ui-net-1'); certo(m, 'débito não importado');
+    await ir('conciliacao', 1500); await p.evaluate(([id, v]) => escolherDespesa(id, v), [m.id, m.valor_cent]); await espera(1200);
+    await p.click(`#vd_lista tr:has-text("INTERNET PREDIALNET") button`); await espera(1500);
+    const d = (await api('despesas', { filtro: 'pago' })).find(x => x.id === n.id);
+    certo(d && d.valor_cent === 10500 && d.data_pagamento === '2026-10-11', 'conta a pagar não baixada: ' + JSON.stringify(d));
+    return 'baixada com R$ 105,00 em 11/10';
+  });
 
   // ------------------------------------------------------------ conciliação
   await passo('Conciliação: importar extrato OFX (baixa automática)', async () => {

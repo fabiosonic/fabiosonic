@@ -498,7 +498,7 @@ PAGINAS.pagar = async el => {
   <p class="sub">${lst.length} despesa(s) · ${brl(lst.reduce((a, d) => a + d.valor_cent, 0))}</p>
   ${tabela([{ t: "Descrição", f: d => `${esc(d.descricao)}<div class="sub">${esc(d.fornecedor)}${d.recorrente ? " · recorrente" : ""}</div>` }, { t: "Categoria", fsel: 1, fv: d => d.categoria, f: d => esc(d.categoria) },
     { t: "Vencimento", f: d => dt(d.vencimento) }, { t: "Valor", n: 1, f: d => num(d.valor_cent) }, { t: "Situação", fsel: 1, fv: d => textoDe(selo(d.situacao)), f: d => selo(d.situacao) },
-    { t: "", f: d => d.status == "aberto" ? `<button class="btn min" onclick="pagarDesp(${d.id})">Pagar</button> <button class="btn min sec ico" title="Editar" aria-label="Editar" onclick='editarDesp(${JSON.stringify(d).replace(/'/g, "&#39;")})'>${ic("editar")}</button> <button class="btn min sec ico perigo-txt" title="Excluir" aria-label="Excluir" onclick="excluirDesp(${d.id})">${ic("lixeira")}</button>` : "" }], lst, "Nada por aqui.", { filtros: "pagar", soma: d => d.valor_cent })}</div>`;
+    { t: "", f: d => d.status == "aberto" ? `<button class="btn min" onclick="pagarDesp(${d.id})">Pagar</button> <button class="btn min sec ico" title="Editar" aria-label="Editar" onclick='editarDesp(${JSON.stringify(d).replace(/'/g, "&#39;")})'>${ic("editar")}</button> <button class="btn min sec ico perigo-txt" title="Excluir" aria-label="Excluir" onclick="excluirDesp(${d.id})">${ic("lixeira")}</button>` : d.status == "pago" ? `<button class="btn min sec" title="Desfaz o pagamento: a despesa volta para A pagar" onclick='estornarDesp(${JSON.stringify({ id: d.id, descricao: d.descricao, valor_cent: d.valor_cent, data_pagamento: d.data_pagamento, fornecedor: d.fornecedor }).replace(/'/g, "&#39;")})'>Estornar pagamento</button>` : "" }], lst, "Nada por aqui.", { filtros: "pagar", soma: d => d.valor_cent })}</div>`;
   $$(".abas button", el).forEach(b => b.onclick = () => { FILTRO_PAG = b.dataset.f; ir("pagar"); });
   $("#nd").onclick = () => editarDesp({});
 };
@@ -513,6 +513,13 @@ async function editarDesp(d) {
   $("#ok").onclick = async () => { const f = form($("#fd")); if (d.id) f.id = d.id; await api("despesa/salvar", f); fechar(); ir("pagar"); };
 }
 async function pagarDesp(id) { await api("despesa/pagar", { id }); aviso("Despesa paga ✔"); ir("pagar"); }
+function estornarDesp(d) {
+  modal(`<h2>Estornar pagamento</h2><p><b>${esc(d.descricao)}</b> · ${brl(d.valor_cent)}${d.data_pagamento ? ` · pago em ${dt(d.data_pagamento)}` : ""}</p>
+    <p class="sub">A despesa volta para <b>A pagar</b>.${d.fornecedor == "extrato" ? " Ela veio do extrato do banco: o débito volta para a <b>Conciliação</b>, como pendente, para você dizer o que ele é." : ""} Se a despesa não existe, depois de estornar use “Excluir”.</p>
+    <p><button class="btn" id="est_ok">Estornar</button> <button class="btn sec" onclick="fechar()">Voltar</button></p>`);
+  $("#est_ok").onclick = async () => { const r = await api("despesa/estornar", { id: d.id }); fechar();
+    aviso("Pagamento estornado ✔ — a despesa está em A pagar" + (r.extrato ? "; o débito do banco voltou para a Conciliação." : "."), 8000); ir("pagar"); };
+}
 async function excluirDesp(id) { if (confirm("Excluir esta despesa?")) { await api("despesa/excluir", { id }); ir("pagar"); } }
 
 // ---------------------------------------------------------------- conciliação
@@ -529,10 +536,10 @@ PAGINAS.conciliacao = async el => {
     <button class="btn" id="ext_baixar">${ic("download")}Baixar extrato agora</button></div><div id="ext_res" class="sub"></div></div>` : ""}
   <div class="card"><div class="card-cab"><h2>${ic("alerta")}Lançamentos não conciliados (${pend.length})</h2><span class="sub">vincule ao título, classifique ou lance como despesa</span></div>
   ${tabela([{ t: "Data", f: m => dt(m.data) }, { t: "Histórico", f: m => esc(m.descricao) }, { t: "Valor", n: 1, f: m => `<span class="${m.valor_cent < 0 ? "neg" : ""}">${num(m.valor_cent)}</span>` },
-    { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => `<button class="btn min ${s.pago ? "" : "sec"}" onclick="vincular(${m.id},${s.id})" title="${s.pago ? "Título já baixado pelo banco: só vincula, sem baixar de novo" : "Venc. " + dt(s.vencimento)}">${s.pago ? ic("ok") + "Já pago · " : ""}${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
+    { t: "O que é", f: m => `<div class="acoes-linha" style="justify-content:flex-start;flex-wrap:wrap">${m.sugestoes.map(s => s.despesa ? `<button class="btn min sec" onclick="vincularDesp(${m.id},${s.id})" title="Conta a pagar em aberto, venc. ${dt(s.vencimento)}: dá baixa com a data do débito">${ic("pagar")}Pagar: ${esc(s.cliente.slice(0, 28))} · ${num(s.valor_cent)}</button>` : `<button class="btn min ${s.pago ? "" : "sec"}" onclick="vincular(${m.id},${s.id})" title="${s.pago ? "Título já baixado pelo banco: só vincula, sem baixar de novo" : "Venc. " + dt(s.vencimento)}">${s.pago ? ic("ok") + "Já pago · " : ""}${esc(nomeCli(s.cliente).slice(0, 28))} · ${num(s.valor_cent)}</button>`).join("")}
       <select class="classif" data-m="${m.id}" data-v="${m.valor_cent}"><option value="">${m.valor_cent > 0 ? "Classificar entrada…" : "Classificar saída…"}</option>${m.valor_cent > 0
         ? '<option value="vincular">Vincular a um cliente / título…</option><option value="transferencia">Transferência entre contas</option><option value="aporte">Aporte / dinheiro do sócio</option><option value="outra_receita">Outra receita (não é honorário)</option>'
-        : '<option value="despesa">Lançar como despesa paga</option><option value="distribuicao">Distribuição de lucros / retirada do sócio</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (estorno…)</option>'}</select></div>`, filtro: false }], pend, "Tudo conciliado ✔", { filtros: "conc_pend", soma: m => m.valor_cent })}</div>
+        : '<option value="baixar">Baixar uma conta a pagar…</option><option value="despesa">Lançar como despesa paga (nova)</option><option value="distribuicao">Distribuição de lucros / retirada do sócio</option><option value="transferencia">Transferência entre contas</option><option value="outra_saida">Saída sem despesa (estorno…)</option>'}</select></div>`, filtro: false }], pend, "Tudo conciliado ✔", { filtros: "conc_pend", soma: m => m.valor_cent })}</div>
   <div class="card"><div class="card-cab"><h2>${ic("banco")}Extrato da conta</h2><span class="sub">todos os lançamentos importados — entradas e saídas</span></div>
     <div class="barra"><label>Período<select id="ex_per">${(() => { const h = new Date(hojeISO() + "T12:00"), o = [];
       for (let k = 0; k < 12; k++) { const d = new Date(h.getFullYear(), h.getMonth() - k, 1), v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; o.push(`<option value="${v}" ${v == EXT_PER ? "selected" : ""}>${mesExtenso(v)}</option>`); }
@@ -541,6 +548,7 @@ PAGINAS.conciliacao = async el => {
     <div id="ex_tab"><div class="vazio">Carregando…</div></div></div>`;
   $$(".classif", el).forEach(sel => sel.onchange = () => { const v = sel.value; if (!v) return;
     if (v == "vincular") { sel.value = ""; return escolherTitulo(+sel.dataset.m, +sel.dataset.v); }
+    if (v == "baixar") { sel.value = ""; return escolherDespesa(+sel.dataset.m, +sel.dataset.v); }
     if (v == "despesa") { const c = prompt("Categoria da despesa na DRE (Folha, Pró-labore, Encargos, Benefícios, Aluguel, Energia/Internet, Sistemas, Contador/Assessoria, Serviços de terceiros, Marketing, Material, Impostos, Taxas, Bancárias, Outras):", "Outras"); if (c === null) { sel.value = ""; return; } return classificarMov(+sel.dataset.m, v, c); }
     classificarMov(+sel.dataset.m, v); });
   $("#ex_per").onchange = e => { EXT_PER = e.target.value; extratoConta(); };
@@ -587,6 +595,7 @@ async function extratoConta() {
       { t: "No sistema", fsel: 1, fv: m => m.situacao == "titulo" ? "Recebimento de título" : m.despesa_auto && m.categoria == "Outras" ? "Despesa a revisar (Outras)" : m.situacao == "despesa" ? "Despesa" : m.detalhe,
         f: m => m.despesa_auto ? `<div class="acoes-linha" style="justify-content:flex-start"><span class="selo ${m.categoria == "Outras" ? "alerta" : "neutro"}">Despesa automática</span>
             <select class="recat" style="width:230px;height:30px;padding:3px 8px;font-size:12.5px" data-m="${m.id}" title="Classificação na DRE (vale também para os próximos desta contraparte)">${opcoesCategoria(e.categorias, m.categoria)}</select>
+            <button class="btn min sec" onclick="escolherDespesa(${m.id},${m.valor_cent})" title="Este débito pagou uma conta que já estava no Contas a pagar: baixa a conta e cancela esta despesa automática">É conta a pagar</button>
             <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Cancela a despesa automática e devolve o lançamento para os não conciliados">Desfazer</button></div>`
           : `<span class="selo ${cls[m.situacao]}">${esc(m.detalhe)}</span>${m.situacao == "classificado" ? ` <button class="btn min sec" onclick="classificarMov(${m.id},'')" title="Volta para os não conciliados">Desfazer</button>` : ""}` }],
       vis, "Nenhum lançamento neste período.", { filtros: "conc_extrato", soma: m => m.valor_cent });
@@ -611,6 +620,27 @@ async function classificarMov(id, tipo, categoria = "") {
 }
 async function vincular(movimento, titulo) { const r = await api("conciliacao/vincular", { movimento, titulo });
   aviso(r.baixado ? "Conciliado e baixado ✔" : "Conciliado ✔ (título já estava pago: só vinculado)"); fechar(); ir("conciliacao"); }
+// Pagamento do extrato -> conta a pagar: escolhe a despesa e dá a baixa com a data do débito
+async function vincularDesp(movimento, despesa) {
+  const r = await api("conciliacao/vincular_despesa", { movimento, despesa }); fechar();
+  aviso("Conta a pagar baixada ✔" + (r.diferenca_cent ? ` (valor pago diferente do previsto: ${r.diferenca_cent > 0 ? "+" : "−"}${num(Math.abs(r.diferenca_cent))}; a despesa ficou com o valor pago)` : "")
+    + (r.despesa_automatica_cancelada ? " A despesa automática do extrato foi cancelada para não ficar em dobro." : ""), 9000); ir("conciliacao");
+}
+async function escolherDespesa(mov, valor) {
+  const pago = Math.abs(valor);
+  modal(`<h2>Baixar uma conta a pagar com o débito de ${num(pago)}</h2><p class="sub">Escolha a despesa do Contas a pagar que este pagamento quitou. Ela fica paga na data do débito. Se o valor for diferente (juros, multa ou desconto), a despesa fica com o valor pago no banco.</p>
+    <label class="inteiro">Procurar (descrição, fornecedor ou categoria)<input id="vd_busca" placeholder="digite para procurar"></label><div id="vd_lista"><div class="vazio">Carregando…</div></div>
+    <p><button class="btn sec" onclick="fechar()">Voltar</button></p>`, true);
+  const listar = async () => { const l = await api("conciliacao/despesas", { busca: $("#vd_busca").value.trim(), valor: pago });
+    $("#vd_lista").innerHTML = tabela([{ t: "Despesa", f: d => `${esc(d.descricao)}<div class="sub">${esc(d.fornecedor || "")} · ${esc(d.categoria)}</div>` },
+      { t: "Vencimento", f: d => dt(d.vencimento) },
+      { t: "Situação", f: d => d.status == "pago" ? `<span class="selo bom">paga à mão em ${dt(d.data_pagamento || d.vencimento)}</span>` : `<span class="selo alerta">a pagar</span>` },
+      { t: "Valor", n: 1, f: d => d.valor_cent == pago ? `<b>${num(d.valor_cent)}</b>` : `<span class="sub">${num(d.valor_cent)}</span>` },
+      { t: "", f: d => `<button class="btn min" onclick="vincularDesp(${mov},${d.id})">${d.valor_cent == pago ? "Baixar" : "Baixar com " + num(pago)}</button>` }],
+      l, "Nenhuma conta a pagar em aberto. Cadastre em Contas a pagar ou use “Lançar como despesa paga”."); };
+  let t; $("#vd_busca").oninput = () => { clearTimeout(t); t = setTimeout(listar, 250); };
+  listar();
+}
 // Escolher à mão o cliente/título do recebimento (inclui títulos que o banco já baixou e ainda sem lançamento do extrato)
 async function escolherTitulo(mov, valor) {
   modal(`<h2>Vincular o recebimento de ${num(valor)}</h2><p class="sub">Escolha o título do cliente. Em aberto: o sistema dá a baixa. Já pago (boleto/PIX reconhecido pelo banco): só vincula, sem baixar de novo e sem nova nota.</p>

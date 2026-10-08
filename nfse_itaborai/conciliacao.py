@@ -153,6 +153,12 @@ def _corrigir_transferencias() -> int:
     return n
 
 
+def _vincular(mov_id: int, did: int) -> bool:
+    """Liga o débito à despesa só se ninguém ligou antes (tela e robô conciliando ao mesmo tempo não duplicam)."""
+    with db.conexao() as con:
+        return con.execute("UPDATE movimentos SET despesa_id=? WHERE id=? AND despesa_id IS NULL", (did, mov_id)).rowcount == 1
+
+
 def conciliar() -> dict:
     baixados = pagas = 0
     _corrigir_transferencias()
@@ -180,6 +186,8 @@ def conciliar() -> dict:
                     con.execute("UPDATE movimentos SET titulo_id=? WHERE id=?", (c[0]["id"], m["id"]))
                 baixados += 1
         else:
+            if m.get("manual"):
+                continue                       # débito desfeito/estornado por você: só a tela decide o que ele é
             desp = [d for d in db.linhas("SELECT * FROM despesas WHERE status='aberto'")
                     if d["valor_cent"] == -m["valor_cent"]]
             if len(desp) == 1:
@@ -188,16 +196,24 @@ def conciliar() -> dict:
             elif not desp and (_norm(_contraparte(m["descricao"])) in (config.carregar()["financeiro"].get("contrapartes_fora_dre") or {})):
                 classificar(m["id"], config.carregar()["financeiro"]["contrapartes_fora_dre"][_contraparte(m["descricao"])], iguais=False)
                 continue
+            elif not desp and m["data"] < (config.carregar()["financeiro"].get("despesas_desde") or ""):
+                classificar(m["id"], "anterior", iguais=False)   # antes do início do controle de despesas
+                continue
             elif not desp and config.carregar()["automacao"].get("despesas_do_extrato") and not m.get("manual"):
                 did = financeiro.salvar_despesa({"descricao": (m["descricao"] or "Débito em conta")[:120],
                                                  "fornecedor": "extrato", "categoria": categoria(m["descricao"]),
                                                  "valor": financeiro.reais(-m["valor_cent"]), "vencimento": m["data"]})
                 financeiro.pagar_despesa(did, m["data"])
+                if not _vincular(m["id"], did):        # outra rotina conciliou este débito ao mesmo tempo
+                    with db.conexao() as con:
+                        con.execute("DELETE FROM despesas WHERE id=?", (did,))
+                    continue
+                pagas += 1
+                continue
             else:
                 continue
-            with db.conexao() as con:
-                con.execute("UPDATE movimentos SET despesa_id=? WHERE id=?", (did, m["id"]))
-            pagas += 1
+            if _vincular(m["id"], did):
+                pagas += 1
     return {"titulos": baixados, "despesas": pagas}
 
 
@@ -205,9 +221,13 @@ def nao_conciliados() -> list[dict]:
     lst = db.linhas("SELECT * FROM movimentos WHERE titulo_id IS NULL AND despesa_id IS NULL "
                     "AND COALESCE(classificacao,'')='' ORDER BY data DESC")
     abertos = db.linhas("SELECT * FROM titulos WHERE status='aberto'")
+    a_pagar = None
     for m in lst:
         if m["valor_cent"] <= 0:
-            m["sugestoes"] = []
+            if a_pagar is None:
+                a_pagar = despesas_para_vincular()
+            m["sugestoes"] = [{"id": d["id"], "cliente": d["descricao"], "valor_cent": d["valor_cent"], "vencimento": d["vencimento"],
+                               "pago": False, "despesa": True} for d in a_pagar if d["valor_cent"] == -m["valor_cent"]][:5]
             continue
         pagos = _ja_pagos(m)
         abertos_c = _candidatos(m, abertos)
@@ -218,6 +238,55 @@ def nao_conciliados() -> list[dict]:
                           + [{"id": t["id"], "cliente": t["cliente_nome"], "valor_cent": t["valor_cent"],
                               "vencimento": t["vencimento"], "pago": False} for t in abertos_c])[:5]
     return lst
+
+
+def despesas_para_vincular(busca: str = "", valor_cent: int = 0) -> list[dict]:
+    """Contas a pagar que um débito do banco pode quitar: em aberto, e pagas à mão ainda sem lançamento do extrato.
+    Com o valor do débito, as de mesmo valor vêm primeiro e depois as mais próximas."""
+    b = _norm(busca)
+    out = []
+    for d in db.linhas("SELECT * FROM despesas d WHERE d.status='aberto' OR (d.status='pago' AND d.fornecedor!='extrato' "
+                       "AND NOT EXISTS (SELECT 1 FROM movimentos x WHERE x.despesa_id=d.id)) ORDER BY d.vencimento"):
+        if b and b not in _norm(d["descricao"]) and b not in _norm(d.get("fornecedor") or "") and b not in _norm(d["categoria"]):
+            continue
+        out.append({k: d[k] for k in ("id", "descricao", "fornecedor", "categoria", "valor_cent", "vencimento", "status",
+                                      "data_pagamento")})
+    if valor_cent:
+        out.sort(key=lambda d: (d["valor_cent"] != valor_cent, abs(d["valor_cent"] - valor_cent), d["vencimento"]))
+    return out
+
+
+def vincular_despesa(mov_id: int, did: int) -> dict:
+    """Pagamento do extrato = conta a pagar: dá baixa na despesa com a data do débito. Se o banco debitou outro valor
+    (juros, multa, desconto), a despesa fica com o valor efetivamente pago. Se o débito já tinha virado despesa
+    automática do extrato, ela é cancelada (não fica em dobro)."""
+    m = db.linhas("SELECT * FROM movimentos WHERE id=?", (mov_id,))
+    d = db.linhas("SELECT * FROM despesas WHERE id=?", (did,))
+    if not m or not d:
+        raise ValueError("Lançamento ou despesa não encontrado.")
+    m, d = m[0], d[0]
+    if m["valor_cent"] >= 0:
+        raise ValueError("Só uma saída do banco pode pagar uma conta a pagar.")
+    if m["titulo_id"]:
+        raise ValueError("Este lançamento já está vinculado a um título.")
+    if d["status"] == "cancelado" or (d["status"] == "pago" and db.linhas("SELECT 1 FROM movimentos WHERE despesa_id=? AND id!=?", (did, mov_id))):
+        raise ValueError("Esta despesa já foi paga por outro lançamento do extrato.")
+    auto = None
+    if m["despesa_id"] and m["despesa_id"] != did:
+        atual = db.linhas("SELECT * FROM despesas WHERE id=?", (m["despesa_id"],))
+        if atual and atual[0]["fornecedor"] != "extrato" and atual[0]["status"] != "cancelado":
+            raise ValueError(f"Este lançamento já paga a despesa “{atual[0]['descricao']}”. Estorne aquele pagamento antes.")
+        auto = m["despesa_id"]
+    pago = -m["valor_cent"]
+    with db.conexao() as con:
+        if auto:
+            con.execute("UPDATE despesas SET status='cancelado' WHERE id=?", (auto,))
+        con.execute("UPDATE despesas SET status='pago', data_pagamento=?, valor_cent=? WHERE id=?", (m["data"], pago, did))
+        con.execute("UPDATE movimentos SET despesa_id=?, classificacao='', manual=0 WHERE id=?", (did, mov_id))
+    dif = pago - d["valor_cent"]
+    db.registrar("conciliacao", f"Débito de {financeiro.reais(pago)} em {m['data']} baixou a despesa {did} ({d['descricao']})"
+                 + (f"; valor previsto {financeiro.reais(d['valor_cent'])}" if dif else ""))
+    return {"ok": True, "diferenca_cent": dif, "despesa_automatica_cancelada": bool(auto)}
 
 
 def titulos_para_vincular(busca: str = "") -> list[dict]:
@@ -260,9 +329,10 @@ def vincular(mov_id: int, titulo_id: int) -> dict:
 
 CLASSES = {"transferencia": "Transferência entre contas", "aporte": "Aporte / dinheiro do sócio",
            "outra_receita": "Outra receita (não é honorário)", "outra_saida": "Saída sem despesa (retirada, estorno…)",
-           "distribuicao": "Distribuição de lucros / retirada do sócio"}
+           "distribuicao": "Distribuição de lucros / retirada do sócio",
+           "anterior": "Antes do início do controle de despesas"}
 # saídas que NÃO são despesa (não entram na DRE): escolhidas na mesma lista das categorias
-FORA_DRE = ("distribuicao", "transferencia", "outra_saida")
+FORA_DRE = ("distribuicao", "transferencia", "outra_saida", "anterior")
 
 
 def _da_propria_empresa(m: dict) -> bool:
@@ -369,7 +439,7 @@ def categorias_despesa() -> list[dict]:
     extras = sorted(usadas - conhecidas, key=str.lower)
     if extras:   # categoria criada pelo escritório: na DRE entra em despesas administrativas
         grupos[2]["categorias"] += extras
-    grupos.append({"grupo": "Fora da DRE (não é despesa)", "categorias": [], "fora": [{"valor": "__cls:" + k, "nome": CLASSES[k]} for k in FORA_DRE]})
+    grupos.append({"grupo": "Fora da DRE (não é despesa)", "categorias": [], "fora": [{"valor": "__cls:" + k, "nome": CLASSES[k]} for k in FORA_DRE if k != "anterior"]})
     return grupos
 
 

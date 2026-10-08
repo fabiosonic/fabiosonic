@@ -87,6 +87,7 @@ PADRAO = {
         "dia_vencimento_padrao": 10,
         "prazo_avulso_dias": 5,     # vencimento de nota avulsa = emissão + N dias
         "inicio_financeiro": "",    # notas externas a partir desta data viram contas a receber (definido no 1º uso)
+        "despesas_desde": "",          # débitos do extrato antes desta data não viram despesa (Configurações › Financeiro)
         "dia_geracao": 1,           # dia do mês em que a recorrência gera os títulos
         "aliquota_simples_pct": 3.99,  # usada só sem histórico; com histórico calcula pelo RBT12 (Anexo III)
         "das_mei_mensal": "",       # MEI: valor do DAS-MEI do mês (INSS + ISS), para a DRE

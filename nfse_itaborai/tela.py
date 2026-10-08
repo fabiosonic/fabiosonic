@@ -333,6 +333,7 @@ ROTAS = {
     "despesa/salvar": lambda c: {"id": financeiro.salvar_despesa(c)},
     "despesa/pagar": lambda c: (financeiro.pagar_despesa(_id(c), c.get("data", "")), {"ok": True})[1],
     "despesa/excluir": lambda c: (financeiro.excluir_despesa(_id(c)), {"ok": True})[1],
+    "despesa/estornar": lambda c: financeiro.estornar_despesa(_id(c)),
     # conciliação
     "conciliacao/importar": lambda c: importacao.importar_manual(str(c.get("ofx", ""))),
     "conciliacao/inter": lambda c: importacao.importar_extrato_inter(int(c.get("dias") or 0) or None),
@@ -343,6 +344,8 @@ ROTAS = {
     "conciliacao/extrato": lambda c: conciliacao.extrato(str(c.get("inicio") or ""), str(c.get("fim") or "")),
     "conciliacao/classificar": lambda c: conciliacao.classificar(_id(c, "movimento"), str(c.get("tipo") or ""),
                                                                  c.get("iguais", True) is not False, str(c.get("categoria") or "")),
+    "conciliacao/despesas": lambda c: conciliacao.despesas_para_vincular(str(c.get("busca") or ""), int(c.get("valor") or 0)),
+    "conciliacao/vincular_despesa": lambda c: conciliacao.vincular_despesa(_id(c, "movimento"), _id(c, "despesa")),
     "conciliacao/vincular": lambda c: _e_envia(conciliacao.vincular(_id(c, "movimento"), _id(c, "titulo"))),
     "conciliacao/agenda": lambda c: {"intervalo": automacao._intervalo(config.carregar()), **automacao.AGENDA},
     "titulo/enviar_nfse": lambda c: cobranca.enviar_nfse_titulo(_id(c)),
