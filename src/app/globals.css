@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Identidade visual própria: paleta neutra (ardósia) com destaque azul-petróleo moderado. */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --color-brand-50: #eef7f8;
+  --color-brand-100: #d5ecef;
+  --color-brand-600: #0e6b78;
+  --color-brand-700: #0b5763;
+  --color-brand-800: #0a4650;
+
+  --color-gain-700: #11683d;
+  --color-gain-50: #ecf8f1;
+  --color-loss-700: #a3261b;
+  --color-loss-50: #fdf0ee;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #f6f7f9;
+  color: #1e293b;
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1;
+}
+
+/* Foco visível consistente para navegação por teclado. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

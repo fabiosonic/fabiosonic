@@ -1,0 +1,631 @@
+// Schema da plataforma de opções (MVP).
+// Convenções: valores monetários em Decimal(18,4); datas de referência em DATE;
+// exclusões de usuário são substituídas por desativação (ver docs/arquitetura.md).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Acesso (modelos exigidos pelo better-auth + campos próprios)
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  ANALYST
+  USER
+}
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          Role     @default(USER)
+  active        Boolean  @default(true)
+  // Contas fictícias criadas pelo seed; bloqueadas quando APP_ENV=production.
+  isDemo        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions         Session[]
+  accounts         Account[]
+  portfolio        Portfolio?
+  strategies       Strategy[]        @relation("StrategyAuthor")
+  analyses         Analysis[]        @relation("AnalysisAuthor")
+  revisions        ContentRevision[]
+  simulations      Simulation[]
+  lessonProgress   LessonProgress[]
+  liveEvents       LiveEvent[]
+  requests         AnalysisRequest[] @relation("RequestOwner")
+  assignedRequests AnalysisRequest[] @relation("RequestAssignee")
+  requestEvents    RequestEvent[]
+  notifications    Notification[]
+  auditEvents      AuditEvent[]
+  importBatches    ImportBatch[]
+
+  @@index([role])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+// Tokens temporários (inclui recuperação de senha, de uso único).
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rate_limit")
+}
+
+// Caixa de e-mail de desenvolvimento (EMAIL_TRANSPORT=dev).
+model DevEmail {
+  id        String   @id @default(cuid())
+  to        String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([to, createdAt])
+  @@map("dev_email")
+}
+
+// ---------------------------------------------------------------------------
+// Mercado
+// ---------------------------------------------------------------------------
+
+enum DataSource {
+  DEMO
+  DELAYED
+  REALTIME
+}
+
+enum AssetType {
+  ACAO
+  ETF
+  FII
+  INDICE
+}
+
+enum OptionType {
+  CALL
+  PUT
+}
+
+enum OptionStyle {
+  AMERICANA
+  EUROPEIA
+}
+
+model Asset {
+  id         String     @id @default(cuid())
+  ticker     String     @unique
+  name       String
+  type       AssetType  @default(ACAO)
+  lastPrice  Decimal    @db.Decimal(18, 4)
+  priceAt    DateTime
+  dataSource DataSource @default(DEMO)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  options    OptionContract[]
+  strategies Strategy[]
+  analyses   Analysis[]
+
+  @@map("asset")
+}
+
+model OptionContract {
+  id         String      @id @default(cuid())
+  symbol     String      @unique
+  assetId    String
+  asset      Asset       @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  type       OptionType
+  style      OptionStyle @default(AMERICANA)
+  strike     Decimal     @db.Decimal(18, 4)
+  expiration DateTime    @db.Date
+  lastPrice  Decimal?    @db.Decimal(18, 4)
+  // Multiplicador: opções de ações na B3 referem-se a 1 ação por opção.
+  multiplier Int         @default(1)
+  dataSource DataSource  @default(DEMO)
+  quoteAt    DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([assetId, expiration])
+  @@index([expiration])
+  @@map("option_contract")
+}
+
+// ---------------------------------------------------------------------------
+// Carteira e conexão B3
+// ---------------------------------------------------------------------------
+
+enum ConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  SYNCING
+  ERROR
+}
+
+enum PositionSource {
+  B3_DEMO
+  CSV
+}
+
+enum InstrumentType {
+  ACAO
+  OPCAO
+  FII
+  ETF
+  OUTRO
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  ERROR
+}
+
+model Portfolio {
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionStatus   ConnectionStatus @default(DISCONNECTED)
+  // "DEMO" no MVP; integração oficial usaria outro provedor.
+  connectionProvider String?
+  connectedAt        DateTime?
+  lastSyncAt         DateTime?
+  lastReferenceDate  DateTime?        @db.Date
+  lastError          String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  positions     Position[]
+  syncRuns      SyncRun[]
+  importBatches ImportBatch[]
+
+  @@map("portfolio")
+}
+
+model Position {
+  id             String         @id @default(cuid())
+  portfolioId    String
+  portfolio      Portfolio      @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  ticker         String
+  instrumentType InstrumentType @default(ACAO)
+  quantity       Int
+  averagePrice   Decimal        @db.Decimal(18, 4)
+  referenceDate  DateTime       @db.Date
+  source         PositionSource
+  importBatchId  String?
+  importBatch    ImportBatch?   @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([portfolioId, ticker, source])
+  @@index([portfolioId])
+  @@map("position")
+}
+
+model SyncRun {
+  id             String     @id @default(cuid())
+  portfolioId    String
+  portfolio      Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  provider       String
+  status         SyncStatus
+  referenceDate  DateTime?  @db.Date
+  positionsCount Int        @default(0)
+  message        String?
+  startedAt      DateTime   @default(now())
+  finishedAt     DateTime?
+
+  @@index([portfolioId, startedAt])
+  @@map("sync_run")
+}
+
+model ImportBatch {
+  id           String    @id @default(cuid())
+  portfolioId  String
+  portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  createdById  String
+  createdBy    User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  fileName     String
+  fileHash     String
+  rowsTotal    Int
+  rowsImported Int
+  rowsSkipped  Int
+  createdAt    DateTime  @default(now())
+
+  positions Position[]
+
+  @@unique([portfolioId, fileHash])
+  @@map("import_batch")
+}
+
+// ---------------------------------------------------------------------------
+// Conteúdo: operações prontas (estratégias) e análises
+// ---------------------------------------------------------------------------
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LegSide {
+  BUY
+  SELL
+}
+
+enum LegInstrument {
+  CALL
+  PUT
+  STOCK
+}
+
+model Strategy {
+  id             String        @id @default(cuid())
+  title          String
+  strategyType   String
+  assetId        String
+  asset          Asset         @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  summary        String
+  assumptions    String
+  riskNotes      String
+  // Preço de referência do ativo-objeto usado nas premissas.
+  referencePrice Decimal       @db.Decimal(18, 4)
+  expiration     DateTime      @db.Date
+  status         ContentStatus @default(DRAFT)
+  authorId       String
+  author         User          @relation("StrategyAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  publishedAt    DateTime?
+  archivedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  legs StrategyLeg[]
+
+  @@index([status, publishedAt])
+  @@index([assetId])
+  @@index([expiration])
+  @@map("strategy")
+}
+
+model StrategyLeg {
+  id           String        @id @default(cuid())
+  strategyId   String
+  strategy     Strategy      @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  position     Int
+  side         LegSide
+  instrument   LegInstrument
+  strike       Decimal?      @db.Decimal(18, 4)
+  premium      Decimal       @db.Decimal(18, 4)
+  quantity     Int
+  optionSymbol String?
+
+  @@index([strategyId])
+  @@map("strategy_leg")
+}
+
+model Analysis {
+  id          String        @id @default(cuid())
+  title       String
+  assetId     String?
+  asset       Asset?        @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  summary     String
+  body        String
+  status      ContentStatus @default(DRAFT)
+  authorId    String
+  author      User          @relation("AnalysisAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  publishedAt DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, publishedAt])
+  @@map("analysis")
+}
+
+// Histórico de alterações relevantes de conteúdos.
+model ContentRevision {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  changes    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@map("content_revision")
+}
+
+// ---------------------------------------------------------------------------
+// Simulações (boletas)
+// ---------------------------------------------------------------------------
+
+enum SimulationMode {
+  RAPIDA
+  CLASSICA
+  PREVISOES
+}
+
+model Simulation {
+  id               String         @id @default(cuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  mode             SimulationMode
+  underlyingTicker String
+  spotPrice        Decimal        @db.Decimal(18, 4)
+  multiplier       Int            @default(1)
+  fees             Decimal        @default(0) @db.Decimal(18, 4)
+  expiration       DateTime?      @db.Date
+  // Cenários nomeados de preço (visão de previsões): [{label, price}]
+  scenarios        Json?
+  notes            String?
+  sourceStrategyId String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  legs SimulationLeg[]
+
+  @@index([userId, updatedAt])
+  @@map("simulation")
+}
+
+model SimulationLeg {
+  id           String        @id @default(cuid())
+  simulationId String
+  simulation   Simulation    @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  position     Int
+  side         LegSide
+  instrument   LegInstrument
+  strike       Decimal?      @db.Decimal(18, 4)
+  premium      Decimal       @db.Decimal(18, 4)
+  quantity     Int
+  optionSymbol String?
+
+  @@index([simulationId])
+  @@map("simulation_leg")
+}
+
+// ---------------------------------------------------------------------------
+// Cursos, aulas e lives
+// ---------------------------------------------------------------------------
+
+model Course {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  description String
+  status      ContentStatus @default(DRAFT)
+  position    Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  modules    CourseModule[]
+  liveEvents LiveEvent[]
+
+  @@map("course")
+}
+
+model CourseModule {
+  id       String @id @default(cuid())
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title    String
+  position Int
+
+  lessons Lesson[]
+
+  @@index([courseId, position])
+  @@map("course_module")
+}
+
+model Lesson {
+  id          String       @id @default(cuid())
+  moduleId    String
+  module      CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  content     String
+  // Somente links autorizados (https). Conteúdo demonstrativo não possui vídeo.
+  videoUrl    String?
+  durationMin Int          @default(10)
+  position    Int
+
+  progress LessonProgress[]
+
+  @@index([moduleId, position])
+  @@map("lesson")
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+
+  @@unique([userId, lessonId])
+  @@map("lesson_progress")
+}
+
+enum LiveKind {
+  LIVE
+  AULA
+}
+
+enum LiveStatus {
+  SCHEDULED
+  CANCELED
+  DONE
+}
+
+model LiveEvent {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  kind        LiveKind
+  status      LiveStatus @default(SCHEDULED)
+  startsAt    DateTime
+  durationMin Int        @default(60)
+  link        String?
+  courseId    String?
+  course      Course?    @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdById String
+  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([startsAt])
+  @@map("live_event")
+}
+
+// ---------------------------------------------------------------------------
+// Pedidos de análise e notificações
+// ---------------------------------------------------------------------------
+
+enum RequestStatus {
+  OPEN
+  IN_ANALYSIS
+  ANSWERED
+  CLOSED
+}
+
+enum RequestEventKind {
+  CREATED
+  MESSAGE
+  STATUS_CHANGED
+}
+
+model AnalysisRequest {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation("RequestOwner", fields: [userId], references: [id], onDelete: Cascade)
+  subject      String
+  assetTicker  String?
+  question     String
+  status       RequestStatus @default(OPEN)
+  assignedToId String?
+  assignedTo   User?         @relation("RequestAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  closedAt     DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  events RequestEvent[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("analysis_request")
+}
+
+model RequestEvent {
+  id         String           @id @default(cuid())
+  requestId  String
+  request    AnalysisRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  kind       RequestEventKind
+  body       String?
+  fromStatus RequestStatus?
+  toStatus   RequestStatus?
+  createdAt  DateTime         @default(now())
+
+  @@index([requestId, createdAt])
+  @@map("request_event")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@map("notification")
+}
+
+// ---------------------------------------------------------------------------
+// Auditoria
+// ---------------------------------------------------------------------------
+
+model AuditEvent {
+  id           String   @id @default(cuid())
+  actorId      String?
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail   String?
+  action       String
+  resourceType String
+  resourceId   String?
+  requestId    String
+  ipAddress    String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([resourceType, createdAt])
+  @@index([action])
+  @@map("audit_event")
+}
