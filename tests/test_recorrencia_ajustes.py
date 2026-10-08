@@ -64,3 +64,20 @@ def test_inicio_e_fim_pela_tela_de_recorrencia(base):  # noqa: F811
                                         "dia_vencimento": 10, "repetir": True, "inicio": "2026-11", "fim": "2026-10"}])
     linha = next(l for l in financeiro.lista_recorrencia() if l.get("id") == k["id"])
     assert (linha["inicio"], linha["fim"]) == ("2026-11", "2027-01")
+
+
+def test_acrescimo_incluido_depois_do_titulo_gerado_vai_para_o_contas_a_receber(base, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(financeiro, "hoje", lambda: date(2026, 10, 8))
+    k = _contrato(valor="800")
+    with db.conexao() as con:
+        con.execute("UPDATE contratos SET confirmado=1")
+    [tid] = financeiro.gerar_titulos("2026-10", date(2026, 10, 1))
+    assert financeiro.obter_titulo(tid)["valor_cent"] == 80000
+    financeiro.salvar_ajuste({"contrato_id": k["id"], "tipo": "acrescimo", "descricao": "Serviço extra",
+                              "valor": "1.000,00", "unico": True, "inicio": "2026-10"})
+    ab = financeiro.titulos_abertos_do_contrato(k["id"])
+    assert [(t["id"], t["valor_recorrencia"]) for t in ab] == [(tid, 180000)]
+    r = financeiro.aplicar_contrato_aos_titulos(k["id"])
+    t = financeiro.obter_titulo(tid)
+    assert r["titulos"] == [tid] and t["valor_cent"] == 180000 and "Serviço extra" in t["descricao"]
+    assert financeiro.titulos_abertos_do_contrato(k["id"]) == []

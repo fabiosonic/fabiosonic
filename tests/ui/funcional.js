@@ -378,6 +378,15 @@ async function escolherCliente(sel, texto) { await p.fill(sel, texto); await p.d
     certo(depois > antes, `nenhum título gerado para 2026-11 (${antes} → ${depois})`);
     return `${depois - antes} título(s) gerado(s)`;
   });
+  await passo('Recorrência: acréscimo incluído depois do título gerado atualiza o Contas a receber', async () => {
+    const t = (await api('titulos', { filtro: 'todos' })).find(x => x.competencia === '2026-11' && x.contrato_id && x.status === 'aberto' && x.nfse_status !== 'emitida');
+    certo(t, 'nenhum título de 2026-11 da recorrência');
+    await api('contrato/ajuste_salvar', { contrato_id: t.contrato_id, tipo: 'acrescimo', descricao: 'Serviço extra', valor: '1.000,00', unico: true, inicio: '2026-11' });
+    await ir('contratos'); const txt = await p.evaluate(id => levarAosAbertos(id, true), t.contrato_id);
+    const t2 = (await api('titulos', { filtro: 'todos' })).find(x => x.id === t.id);
+    certo(t2.valor_cent === t.valor_cent + 100000, `título continuou com ${t2.valor_cent} (era ${t.valor_cent})`);
+    return txt.trim();
+  });
   await passo('Recorrência: tirar da recorrência', async () => {
     const k = (await api('contratos')).find(x => x.cpf_cnpj === '54399432000146');
     await ir('contratos'); await p.evaluate(id => encerrar(id), k.id); await espera(1500);

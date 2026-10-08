@@ -351,22 +351,31 @@ function editarContrato(c) {
         { t: "Descrição", f: x => esc(x.descricao) }, { t: "Valor", n: 1, f: x => num(x.valor_cent) },
         { t: "Período", f: x => x.fim == x.inicio ? `só ${mes(x.inicio)}` : `${mes(x.inicio)} → ${x.fim ? mes(x.fim) : "sem fim"}` },
         { t: "", f: x => `<button class="btn min sec ico perigo-txt" type="button" data-ajx="${x.id}" title="Excluir" aria-label="Excluir">${ic("lixeira")}</button>` }], a, "Nenhum acréscimo ou desconto.");
-      $$("[data-ajx]").forEach(b => b.onclick = async () => { await api("contrato/ajuste_excluir", { id: b.dataset.ajx }); lista(); }); };
+      $$("[data-ajx]").forEach(b => b.onclick = async () => { await api("contrato/ajuste_excluir", { id: b.dataset.ajx }); lista(); await levarAosAbertos(c.id); }); };
     lista();
     $("#aj_unico").onchange = e => { $("#aj_fim").disabled = e.target.value == "1"; if (e.target.value == "1") $("#aj_fim").value = ""; };
     $("#aj_add").onclick = async () => {
       await api("contrato/ajuste_salvar", { contrato_id: c.id, tipo: $("#aj_tipo").value, descricao: $("#aj_desc").value, valor: $("#aj_valor").value,
         unico: $("#aj_unico").value == "1", inicio: $("#aj_ini").value, fim: $("#aj_fim").value });
-      $("#aj_desc").value = ""; $("#aj_valor").value = ""; aviso("Incluído ✔"); lista(); };
+      $("#aj_desc").value = ""; $("#aj_valor").value = ""; aviso("Incluído ✔"); lista(); await levarAosAbertos(c.id); };
   }
   $("#ok").onclick = async () => { const f = form($("#fc")); f.cpf_cnpj = docDe(f.cliente); if (c.id) f.id = c.id; const k = await api("contrato/salvar", f); fechar();
     let extra = "";
-    if (c.id && c.valor_cent && k.valor_cent != c.valor_cent) {
-      const ab = await api("contrato/abertos", { id: c.id });
-      if (ab.titulos.length && confirm(`Há ${ab.titulos.length} título(s) em aberto já gerado(s) com o valor antigo. Aplicar o novo valor a eles (boleto cancelado no banco e refeito)?`)) {
-        const r = await api("contrato/aplicar_abertos", { id: c.id }); extra = ` ${r.titulos.length} título(s) atualizado(s)${r.boletos ? `, ${r.boletos} boleto(s) refeito(s)` : ""}.`; } }
+    if (c.id) extra = await levarAosAbertos(c.id, true);
     if (k.gerados && k.gerados.length) extra += ` Título de ${mesExtenso(hojeISO().slice(0, 7))} gerado no Contas a receber.`;
     aviso("Recorrência salva ✔" + extra, 8000); await carregarEstado(); ir("contratos"); };
+}
+// Valor mensal, acréscimo ou desconto mudou: títulos em aberto já gerados (deste mês em diante) com valor diferente
+// do que a recorrência dá agora são atualizados — com confirmação, porque o boleto é cancelado no banco e refeito.
+async function levarAosAbertos(cid, silencioso = false) {
+  const ab = await api("contrato/abertos", { id: cid });
+  if (!ab.titulos.length) return "";
+  if (!confirm(ab.titulos.map(t => `${mes(t.competencia)}: ${brl(t.valor_cent)} → ${brl(t.valor_recorrencia)}`).join("\n")
+    + `\n\nO título já gerado está com o valor antigo. Atualizar no Contas a receber? O boleto antigo é cancelado no banco e um novo é registrado com o valor certo (o cliente recebe o boleto novo).`)) return " Título já gerado ficou com o valor antigo (o Painel avisa).";
+  const r = await api("contrato/aplicar_abertos", { id: cid });
+  const txt = ` ${r.titulos.length} título(s) atualizado(s) no Contas a receber${r.boletos ? `, ${r.boletos} boleto(s) refeito(s)` : ""}.`;
+  if (!silencioso) aviso("✔" + txt, 8000);
+  return txt;
 }
 async function encerrar(id) { if (confirm("Tirar este cliente da recorrência? Ele deixa de gerar cobranças.")) { await api("contrato/excluir", { id }); ir("contratos"); } }
 
