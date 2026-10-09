@@ -177,6 +177,7 @@ def _atualizar(c: dict, voltar: bool = False) -> dict:
     r = atualizacao.voltar(str(c.get("nome", ""))) if voltar else \
         atualizacao.aplicar(_b64(c), permitir_anterior=bool(c.get("permitir_anterior")))
     if c.get("reiniciar", True):
+        atualizacao._reiniciando.set()           # o vigia não dispara uma segunda reabertura
         atualizacao.reiniciar()
     return r
 
@@ -488,6 +489,11 @@ ROTAS_SEM_EMPRESA = {"estado", "empresas", "empresa/ativar", "empresa/criar", "l
 
 
 def tratar(rota: str, corpo: dict):
+    if atualizacao.desatualizado() and rota not in ("estado",):
+        atualizacao.reiniciar_se_desatualizado()
+        return {"sucesso": False, "reabrindo": True,
+                "erro": f"O sistema foi atualizado para a versão {atualizacao.versao_no_disco()} e está reabrindo. "
+                        "A tela recarrega sozinha em alguns segundos."}
     func = ROTAS.get(rota)
     if not func:
         return {"erro": "Rota inválida"}
@@ -671,6 +677,16 @@ def _encerrar() -> dict:
     return {"ok": True}
 
 
+def _vigiar_versao(intervalo: int = 30) -> None:
+    """Se os arquivos do programa forem trocados (atualização) e este processo não reiniciar, ele se reabre sozinho."""
+    import threading
+
+    def laco():
+        while not atualizacao.reiniciar_se_desatualizado():
+            time.sleep(intervalo)
+    threading.Thread(target=laco, daemon=True, name="vigia-versao").start()
+
+
 def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
     srv = None
     for p in range(porta, porta + 20):
@@ -703,6 +719,7 @@ def servir(porta: int = 8765, abrir: bool = True, robo: bool = True) -> None:
     print(f"Sistema versão {__version__} em {url} (para fechar: botão “Encerrar o sistema” na tela)")
     if robo:
         automacao.iniciar_em_segundo_plano()
+    _vigiar_versao()
     if abrir:
         webbrowser.open(url)
     try:

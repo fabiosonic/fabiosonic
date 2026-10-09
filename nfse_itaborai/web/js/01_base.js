@@ -41,6 +41,7 @@ async function api(rota, corpo) {
   const cab = EMPRESA_ID ? { ...API_CAB, "X-Empresa": EMPRESA_ID } : API_CAB;
   const r = await fetch("/api/" + rota, { method: "POST", headers: cab, body: JSON.stringify(corpo || {}) });
   const d = await r.json();
+  if (d && d.reabrindo) { aviso("⟳ " + d.erro, 60000); esperarReabrir(); throw new Error(d.erro); }
   if (d && d.empresa_trocada) { alert(d.erro); location.reload(); throw new Error(d.erro); }
   if (d && d.bloqueado) { telaPin(); throw new Error(d.erro); }
   if (d && d.licenca_bloqueada) { telaLicenca(d.licenca); throw new Error(d.erro); }
@@ -246,3 +247,12 @@ new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
 
 // menu compacto (notebook): o nome de cada item aparece ao passar o mouse
 document.querySelectorAll("#menu nav a, #menu .tema").forEach(a => { if (!a.title) a.title = a.textContent.trim(); });
+
+// Sistema atualizado reabrindo: espera a versão nova responder e recarrega a tela
+async function esperarReabrir() {
+  if (esperarReabrir.ativo) return; esperarReabrir.ativo = true;
+  const antes = (await fetch("/api/versao").then(r => r.json()).catch(() => ({}))).inicio;
+  for (let i = 0; i < 90; i++) { await new Promise(ok => setTimeout(ok, 2000));
+    try { const v = await (await fetch("/api/versao")).json(); if (v.inicio && v.inicio != antes) { location.reload(); return; } } catch (e) { /* reabrindo */ } }
+  aviso("O sistema não voltou sozinho: abra pelo atalho “Sistema Financeiro NFS-e” na área de trabalho.", 60000);
+}

@@ -173,11 +173,43 @@ def voltar(nome: str) -> dict:
     return aplicar(arq.read_bytes(), permitir_anterior=True)
 
 
+def versao_no_disco() -> str:
+    """Versão dos arquivos do programa instalados agora (pode ser mais nova que a que está rodando)."""
+    try:
+        m = re.search(r'__version__\s*=\s*"([^"]+)"', (Path(__file__).parent / "__init__.py").read_text(encoding="utf-8"))
+        return m.group(1) if m else __version__
+    except OSError:
+        return __version__
+
+
+def desatualizado() -> bool:
+    """Os arquivos foram atualizados mas este processo ainda roda a versão anterior?"""
+    return versao_no_disco() != __version__
+
+
+_reiniciando = threading.Event()
+
+
+def reiniciar_se_desatualizado() -> bool:
+    """Chamado pela tela e por um vigia a cada 30 s: o sistema velho na memória se troca sozinho pelo novo."""
+    if not desatualizado() or _reiniciando.is_set():
+        return _reiniciando.is_set()
+    _reiniciando.set()
+    from . import db
+    try:
+        db.registrar("atualizacao", f"Reabrindo: rodava a versão {__version__}, mas os arquivos já são da {versao_no_disco()}")
+    except Exception:  # noqa: BLE001
+        pass
+    reiniciar(espera=2.0)
+    return True
+
+
 def reiniciar(espera: float = 1.0) -> None:
     """Fecha este processo e abre o sistema de novo (já com os arquivos novos)."""
     base = Path(emissor.BASE)
     if sys.platform == "win32":  # pragma: no cover - só Windows
-        cmd = ["cmd", "/c", f'timeout /t 3 /nobreak >nul & wscript.exe "{base / "SISTEMA.vbs"}"']
+        # "timeout" não funciona sem janela (sai na hora e o sistema velho continuava aberto): ping espera ~3 s
+        cmd = ["cmd", "/c", f'ping -n 4 127.0.0.1 >nul & wscript.exe "{base / "SISTEMA.vbs"}"']
         subprocess.Popen(cmd, cwd=base, creationflags=0x08000000 | 0x00000008)   # sem janela, desvinculado
     else:
         subprocess.Popen([sys.executable, "-c", "import time, subprocess, sys; time.sleep(3); "

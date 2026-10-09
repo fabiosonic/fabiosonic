@@ -41,3 +41,16 @@ def test_trava_de_processo_morto_e_ignorada_e_robo_vivo_e_esperado(multi, monkey
     assert not atualizacao.parar_robo(espera_seg=2)
     trava.unlink()
     parada.liberar()
+
+
+def test_processo_com_versao_antiga_na_memoria_se_reabre(monkeypatch):
+    from nfse_itaborai import tela
+    chamadas = []
+    monkeypatch.setattr(atualizacao, "versao_no_disco", lambda: "99.0.0")
+    monkeypatch.setattr(atualizacao, "reiniciar", lambda espera=1.0: chamadas.append(espera))
+    monkeypatch.setattr(atualizacao, "_reiniciando", threading.Event())
+    monkeypatch.setattr(atualizacao.db if hasattr(atualizacao, "db") else db, "registrar", lambda *a: None)
+    r = tela.tratar("despesa/estornar", {"id": 1})
+    assert r["reabrindo"] and "99.0.0" in r["erro"] and chamadas == [2.0]
+    tela.tratar("despesas", {})
+    assert chamadas == [2.0]                                  # uma reabertura só
