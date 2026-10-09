@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import os
 import re
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -602,7 +603,8 @@ def valor_devido(t: dict, data: str = "") -> int:
     return encargos(t | {"status": "aberto"}, em)["total_cent"]
 
 
-def baixar(tid: int, data: str = "", valor=None, forma: str = "manual", parcial: str = "") -> dict:
+def baixar(tid: int, data: str = "", valor=None, forma: str = "manual", parcial: str = "",
+           nota_em_segundo_plano: bool = False) -> dict:
     """Baixa o título. Pago a menos (diferença acima de R$ 0,01): o escritório decide se a diferença é desconto ou
     vira uma nova conta a receber ('parcial'; vazio = fica pendente de decisão e a nota aguarda)."""
     t = obter_titulo(tid)
@@ -624,11 +626,35 @@ def baixar(tid: int, data: str = "", valor=None, forma: str = "manual", parcial:
                                         "aviso": f"Pagamento parcial: faltaram R$ {_br(devido - pago)}. "
                                                  "Decida em Contas a receber se a diferença é desconto ou nova cobrança."}
         return decidir_parcial(tid, parcial)
-    nota = _nota_apos_pagamento(tid)
+    nota = _nota_apos_pagamento(tid, nota_em_segundo_plano)
     return obter_titulo(tid) | {"nfse_resultado": nota}
 
 
-def _nota_apos_pagamento(tid: int) -> str:
+SEGUNDO_PLANO = None          # None = em segundo plano, menos nos testes (emissão na hora, para conferir o resultado)
+_ULTIMA_EMISSAO: list = []                                    # thread da última emissão em segundo plano (testes)
+
+
+def _emitir_em_segundo_plano(tid: int) -> None:
+    """Baixa pela tela: a tela não espera a prefeitura. A nota sai numa linha própria, presa à pasta desta empresa;
+    a reserva atômica de emitir_nfse_titulo garante que o robô não emita a mesma nota ao mesmo tempo."""
+    import threading
+    pasta = emissor.raiz()
+
+    def emitir():
+        with emissor.usar_empresa(pasta):
+            try:
+                r = emitir_nfse_titulo(tid)
+                if r.get("sucesso"):
+                    from . import automacao
+                    automacao.disparar_pagamentos()          # e-mail/WhatsApp com a nota já sai
+            except Exception as ex:  # noqa: BLE001 — a baixa já valeu; o robô tenta de novo
+                db.registrar("nfse", f"Título {tid}: emissão após o pagamento ficou pendente ({ex})")
+    th = threading.Thread(target=emitir, daemon=True, name=f"nfse-{tid}")
+    _ULTIMA_EMISSAO[:] = [th]
+    th.start()
+
+
+def _nota_apos_pagamento(tid: int, segundo_plano: bool = False) -> str:
     """A nota que esperava o pagamento — ou que ainda não saiu — é emitida na hora, em produção; se a prefeitura
     falhar, o robô tenta de novo."""
     t = obter_titulo(tid)
@@ -638,6 +664,10 @@ def _nota_apos_pagamento(tid: int) -> str:
         atualizar_titulo(tid, nfse_status="pendente")
     if not emissor.em_producao():
         return "Ambiente de homologação: a NFS-e fica pendente e sai automaticamente quando o sistema estiver em produção."
+    if segundo_plano and (SEGUNDO_PLANO if SEGUNDO_PLANO is not None else not os.environ.get("PYTEST_CURRENT_TEST")):
+        _emitir_em_segundo_plano(tid)
+        return ("A NFS-e está sendo emitida agora (leva de segundos a alguns minutos, conforme a prefeitura). "
+                "Acompanhe na coluna NFS-e; o envio ao cliente sai sozinho.")
     try:
         r = emitir_nfse_titulo(tid)
         return (f"NFS-e nº {r['titulo']['nfse_numero']} emitida." if r["sucesso"] else

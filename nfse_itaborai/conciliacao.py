@@ -307,7 +307,7 @@ def titulos_para_vincular(busca: str = "") -> list[dict]:
     return out
 
 
-def vincular(mov_id: int, titulo_id: int) -> dict:
+def vincular(mov_id: int, titulo_id: int, nota_em_segundo_plano: bool = False) -> dict:
     """Liga o lançamento do extrato ao título. Título em aberto: dá a baixa. Título já pago (o banco reconheceu o
     boleto/PIX antes do extrato chegar): só vincula, sem baixar de novo e sem nova nota."""
     m = db.linhas("SELECT * FROM movimentos WHERE id=?", (mov_id,))[0]
@@ -317,7 +317,8 @@ def vincular(mov_id: int, titulo_id: int) -> dict:
     if m["valor_cent"] <= 0:
         raise ValueError("Só lançamentos de entrada podem ser vinculados a um título.")
     if t["status"] == "aberto":
-        financeiro.baixar(titulo_id, m["data"], financeiro.reais(m["valor_cent"]), "extrato")
+        financeiro.baixar(titulo_id, m["data"], financeiro.reais(m["valor_cent"]), "extrato",
+                          nota_em_segundo_plano=nota_em_segundo_plano)
     elif t["status"] != "pago":
         raise ValueError("Título cancelado não pode receber o lançamento.")
     with db.conexao() as con:

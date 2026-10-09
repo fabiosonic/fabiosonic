@@ -75,3 +75,28 @@ def test_pix_copia_e_cola_so_sem_o_boleto(base):  # noqa: F811
     assert "000201PIXCOPIAECOLA" in cobranca.mensagem(t, -3, cfg, date(2026, 10, 17))[1]
     so_pix = _titulo()                                                           # PIX avulso (sem boleto)
     assert "000201PIXCOPIAECOLA" in cobranca.mensagem(so_pix, -3, config.carregar(), date(2026, 10, 17))[1]
+
+
+def test_baixa_pela_tela_nao_espera_a_prefeitura(base, monkeypatch):  # noqa: F811
+    import threading
+    from nfse_itaborai import automacao
+    from nfse_itaborai.tela import tratar
+    libera = threading.Event()
+    emitidas = []
+
+    def emitir_lento(tid, url=None):            # prefeitura demorando
+        libera.wait(5)
+        emitidas.append((tid, str(emissor.raiz())))
+        financeiro.atualizar_titulo(tid, nfse_status="emitida", nfse_numero="99009999")
+        return {"sucesso": True, "erros": [], "titulo": financeiro.obter_titulo(tid)}
+    monkeypatch.setattr(emissor, "em_producao", lambda: True)
+    monkeypatch.setattr(financeiro, "emitir_nfse_titulo", emitir_lento)
+    monkeypatch.setattr(financeiro, "SEGUNDO_PLANO", True)
+    monkeypatch.setattr(automacao, "disparar_pagamentos", lambda: None)
+    tid = financeiro.criar_titulo(CLI_A["cpf_cnpj"], "962,73", vencimento="2026-10-20", emitir_nfse=False)
+    financeiro.atualizar_titulo(tid, nfse_status="apos_pagamento")
+    r = tratar("titulo/baixar", {"id": tid, "data": "2026-10-09", "valor": "962,73", "forma": "pix"})
+    assert r["status"] == "pago" and "sendo emitida" in r["nfse_resultado"] and emitidas == []   # tela liberada já
+    libera.set()
+    financeiro._ULTIMA_EMISSAO[0].join(5)
+    assert emitidas == [(tid, str(emissor.raiz()))] and financeiro.obter_titulo(tid)["nfse_numero"] == "99009999"
