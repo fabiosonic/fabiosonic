@@ -1,0 +1,11 @@
+{
+  "name": "radar-tributario",
+  "version": "1.0.0",
+  "description": "Recuperação de créditos do Simples Nacional (PIS/COFINS monofásico e ICMS-ST) a partir de XMLs de NF-e/NFC-e",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "exemplos": "node tools/gerar-exemplos.js"
+  },
+  "license": "UNLICENSED"
+}
