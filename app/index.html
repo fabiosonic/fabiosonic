@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Radar Tributário</title>
+  <title>Painel Financeiro BPO</title>
   <link rel="stylesheet" href="css/estilo.css">
 </head>
 <body>
   <header class="topo">
     <div>
-      <h1>Radar Tributário</h1>
-      <p>Recuperação de créditos do Simples Nacional: PIS/COFINS monofásico e ICMS-ST</p>
+      <h1>Painel Financeiro</h1>
+      <p>BPO financeiro: extratos bancários → fluxo de caixa e DRE gerencial do cliente</p>
     </div>
-    <span class="selo">Processamento 100% local: nenhum XML sai deste computador</span>
+    <span class="selo">Processamento 100% local: nenhum extrato sai deste computador</span>
   </header>
 
   <main>
     <section class="cartao nao-imprimir">
-      <h2>1. Dados da análise</h2>
+      <h2>1. Dados do relatório</h2>
       <div class="grade">
         <label>Escritório
           <input id="escritorio" placeholder="Nome do seu escritório">
@@ -25,103 +25,76 @@
         <label>Cliente
           <input id="cliente" placeholder="Razão social do cliente">
         </label>
-        <label>Honorários de êxito (%)
-          <input id="honorarios" type="number" min="0" max="100" step="0.5" value="20">
-        </label>
-        <label>RBT12 padrão (R$)
-          <input id="rbt12" type="number" min="0" step="1000" placeholder="Usado quando faltar histórico">
-        </label>
       </div>
     </section>
 
     <section class="cartao nao-imprimir">
-      <h2>2. XMLs de vendas do cliente</h2>
+      <h2>2. Extratos bancários do cliente</h2>
       <div id="soltar" class="soltar">
-        <p><strong>Arraste aqui</strong> os XMLs de NF-e/NFC-e de saída (e os de cancelamento)</p>
+        <p><strong>Arraste aqui</strong> os extratos em OFX ou CSV (uma ou várias contas, vários meses)</p>
         <div class="botoes">
           <label class="botao">Selecionar arquivos
-            <input id="arquivos" type="file" accept=".xml" multiple hidden>
+            <input id="arquivos" type="file" accept=".ofx,.csv,.txt" multiple hidden>
           </label>
-          <label class="botao secundario">Selecionar pasta
-            <input id="pasta" type="file" webkitdirectory multiple hidden>
-          </label>
+          <button id="limpar" class="botao secundario" type="button">Limpar</button>
         </div>
-        <p class="dica">Dica: para testar, selecione a pasta <code>exemplos/xml</code> do projeto.</p>
+        <p class="dica">Para testar, use os arquivos da pasta <code>exemplos/extratos</code> do projeto.</p>
       </div>
       <p id="progresso" class="dica"></p>
     </section>
 
     <section id="resultado" hidden>
       <div class="cabecalho-relatorio">
-        <h2>Relatório de Diagnóstico de Créditos Tributários</h2>
+        <h2>Relatório Financeiro Gerencial</h2>
         <p id="identificacao"></p>
       </div>
 
       <div class="kpis">
-        <div class="kpi destaque"><span>Crédito estimado</span><strong id="kTotal"></strong></div>
-        <div class="kpi"><span>PIS/COFINS monofásico</span><strong id="kPis"></strong></div>
-        <div class="kpi"><span>ICMS-ST</span><strong id="kIcms"></strong></div>
-        <div class="kpi nao-imprimir"><span>Honorários de êxito</span><strong id="kHon"></strong></div>
+        <div class="kpi"><span>Receita no período</span><strong id="kReceita"></strong></div>
+        <div class="kpi"><span>Resultado operacional</span><strong id="kResultado"></strong><small id="kMargem"></small></div>
+        <div class="kpi"><span>Geração de caixa</span><strong id="kCaixa"></strong></div>
+        <div class="kpi destaque"><span>Ponto de equilíbrio (receita/mês)</span><strong id="kEquilibrio"></strong><small id="kEquilibrioObs"></small></div>
       </div>
 
       <div id="alertas"></div>
 
       <div class="botoes nao-imprimir">
         <button id="imprimir" class="botao">Imprimir / salvar PDF</button>
-        <button id="csv" class="botao secundario">Exportar CSV</button>
+        <button id="csv" class="botao secundario">Exportar lançamentos (CSV)</button>
       </div>
 
       <section class="cartao">
-        <h3>Apuração mensal</h3>
-        <p class="dica nao-imprimir">Ajuste o RBT12 de qualquer mês conforme o extrato do PGDAS-D; o cálculo é refeito na hora.</p>
-        <div class="rolagem">
-          <table id="tMeses">
-            <thead><tr>
-              <th>Competência</th><th>Receita</th><th>Monofásica</th><th>Com ICMS-ST</th>
-              <th>RBT12</th><th>Faixa</th><th>Alíq. efetiva</th>
-              <th>Crédito PIS/COFINS</th><th>Crédito ICMS</th><th>Total</th>
-            </tr></thead>
-            <tbody></tbody>
-            <tfoot></tfoot>
-          </table>
+        <h3>DRE gerencial (regime de caixa)</h3>
+        <div class="rolagem"><table id="tDre"><thead></thead><tbody></tbody></table></div>
+      </section>
+
+      <section class="cartao">
+        <h3>Contas bancárias</h3>
+        <div class="rolagem"><table id="tContas">
+          <thead><tr><th>Conta</th><th>Entradas</th><th>Saídas</th><th>Saldo final (extrato)</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </section>
+
+      <section class="cartao nao-imprimir">
+        <h3>Lançamentos</h3>
+        <div class="filtros">
+          <label class="linha"><input type="checkbox" id="soPendentes"> Mostrar só os lançamentos a classificar</label>
+          <label class="linha"><input type="checkbox" id="lembrar" checked> Ao reclassificar, aplicar a todos com o mesmo histórico e lembrar para os próximos meses</label>
         </div>
-      </section>
-
-      <section class="cartao">
-        <h3>Por grupo de produtos (PIS/COFINS)</h3>
-        <div class="rolagem"><table id="tGrupos">
-          <thead><tr><th>Grupo</th><th>Fundamento legal</th><th>Receita</th><th>Crédito</th></tr></thead>
+        <div class="rolagem lista"><table id="tLanc">
+          <thead><tr><th>Data</th><th>Conta</th><th>Histórico</th><th>Valor</th><th>Categoria</th></tr></thead>
           <tbody></tbody>
         </table></div>
-      </section>
-
-      <section class="cartao">
-        <h3>Principais produtos monofásicos</h3>
-        <div class="rolagem"><table id="tProdutos">
-          <thead><tr><th>NCM</th><th>Descrição</th><th>Grupo</th><th>Receita</th></tr></thead>
-          <tbody></tbody>
-        </table></div>
-      </section>
-
-      <section class="cartao">
-        <h3>Fundamentação e próximos passos</h3>
-        <ul class="texto">
-          <li>Revendedor de produtos sujeitos à tributação concentrada (monofásica) de PIS/COFINS não deve recolher esses tributos no DAS: a receita é segregada no PGDAS-D (LC 123/2006, art. 18, §4º-A, I; Resolução CGSN 140/2018, art. 25).</li>
-          <li>Da mesma forma, a receita de mercadorias com ICMS já retido por substituição tributária é segregada, excluindo a parcela de ICMS do DAS.</li>
-          <li>Os valores pagos a maior podem ser recuperados dos últimos 5 anos (CTN, art. 168, I), mediante retificação do PGDAS-D e pedido de restituição ou compensação no Portal do Simples Nacional. O ICMS segue o procedimento definido pela Secretaria da Fazenda estadual.</li>
-          <li>Valores nominais. A restituição é atualizada pela taxa Selic, o que aumenta o montante a receber.</li>
-          <li>Diagnóstico por triagem de NCM: deve ser validado pelo contador responsável (NCM, Ex-TIPI, extratos do PGDAS-D e segregações já feitas) antes de qualquer pedido.</li>
-        </ul>
       </section>
     </section>
   </main>
 
-  <footer class="nao-imprimir">Radar Tributário · ferramenta de apoio técnico. Não substitui a análise do profissional contábil.</footer>
+  <footer class="nao-imprimir">Painel Financeiro · relatório gerencial com base em movimentação bancária. Não substitui as demonstrações contábeis.</footer>
 
-  <script src="js/simples-nacional.js"></script>
-  <script src="js/ncm-monofasico.js"></script>
-  <script src="js/nfe-parser.js"></script>
-  <script src="js/analise.js"></script>
+  <script src="js/categorias.js"></script>
+  <script src="js/extrato.js"></script>
+  <script src="js/relatorio.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

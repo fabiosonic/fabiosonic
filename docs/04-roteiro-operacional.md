@@ -1,35 +1,41 @@
-# Roteiro Operacional: execução de um caso de recuperação
+# Roteiro Operacional: rotina do BPO Financeiro
 
-> Confirme sempre o caminho atual dos serviços nos portais: menus e nomes mudam com frequência.
+## Implantação (primeiras 2 semanas do cliente)
+- [ ] Contrato assinado e taxa de implantação recebida.
+- [ ] Lista de todas as contas bancárias, maquininhas e carteiras digitais da empresa (Anexo I do contrato).
+- [ ] Perfil de **operador** (agendar sem aprovar) e/ou perfil de consulta em cada banco.
+- [ ] Separar as contas pessoais dos sócios: retiradas passam a ser feitas como pró-labore ou distribuição de lucros, em data fixa.
+- [ ] Carregar 3 a 6 meses de extratos no Painel e classificar os lançamentos pendentes. As regras ficam salvas para os meses seguintes.
+- [ ] Combinar o canal de envio dos boletos (e-mail ou pasta compartilhada exclusiva do cliente).
+- [ ] Agendar a primeira reunião de resultado.
 
-## 1. Coleta (D+0 a D+5)
-- [ ] Procuração eletrônica no e-CAC e acesso ao Portal do Simples Nacional.
-- [ ] XMLs de **saída** (NF-e e NFC-e) dos últimos 60 meses, incluindo os eventos de cancelamento.
-  Fontes: ERP/PDV do cliente, portal da SEFAZ estadual, sistema fiscal do escritório.
-- [ ] Extratos do PGDAS-D do período, que mostram o RBT12 de cada mês e se houve segregação.
+## Rotina diária (15 a 30 minutos por cliente)
+- [ ] Baixar os extratos (OFX) e conferir as entradas do dia.
+- [ ] Agendar os pagamentos que vencem nos próximos 2 dias úteis e avisar o cliente para aprovar.
+- [ ] Registrar os recebimentos e identificar os clientes inadimplentes (plano Gestão ou superior).
 
-## 2. Diagnóstico (D+5 a D+7)
-- [ ] Abrir `app/index.html`, carregar os XMLs e informar o RBT12 dos meses sem histórico.
-- [ ] Revisar os **principais produtos**: confirmar NCM e eventuais "Ex" da TIPI (atenção a mudanças de NCM em 2017 e 2022).
-- [ ] Conferir NCMs com o XML de **entrada** (CST PIS/COFINS 02/04 do fornecedor é forte indício de monofásico).
-- [ ] Excluir meses em que o cliente já segregava as receitas.
-- [ ] Salvar o PDF e o CSV como papéis de trabalho.
+## Rotina semanal
+- [ ] Projeção de caixa das próximas 4 semanas e aviso ao cliente sobre qualquer dia com saldo previsto negativo.
+- [ ] Cobrança dos títulos vencidos (plano Gestão ou superior).
 
-## 3. Retificação (PIS/COFINS no DAS)
-- [ ] No PGDAS-D, retificar cada competência segregando a receita de revenda de mercadorias
-  "com tributação monofásica" de PIS/COFINS e, quando aplicável, "com substituição tributária" de ICMS.
-- [ ] A retificação gera o valor pago a maior por competência.
+## Fechamento mensal (até o dia 10)
+1. Carregar todos os extratos do mês no Painel (`app/index.html`).
+2. Zerar os lançamentos "a classificar". Pergunte ao cliente o que não for possível identificar.
+3. Conferir se o **saldo final do extrato** bate com o saldo do banco em todas as contas.
+4. Revisar os alertas: retiradas maiores que o resultado, mês negativo, juros e tarifas, peso da folha.
+5. Salvar o PDF ("Imprimir / salvar PDF") e o CSV dos lançamentos. O CSV alimenta a contabilidade e reduz o retrabalho no fechamento contábil.
+6. Escrever 3 recomendações objetivas no e-mail de envio, por exemplo: "renegociar a taxa da maquininha", "fixar o pró-labore em R$ X".
+7. Fazer a reunião (mensal ou trimestral, conforme o plano).
 
-## 4. Pedido
-- [ ] **Restituição:** serviço de pedido eletrônico de restituição no Portal do Simples Nacional, por competência.
-  O valor é corrigido pela Selic.
-- [ ] **Compensação:** alternativa para abater débitos futuros do próprio Simples, quando for mais vantajosa ao cliente.
-- [ ] **ICMS:** a parcela de ICMS do DAS segue o rito do estado (pedido à SEFAZ). Verifique a regulamentação estadual.
-- [ ] Mantenha uma planilha de controle com competência, valor, número do pedido, data, situação e data do crédito.
+## Padrão de qualidade
+| Indicador | Meta |
+|-----------|------|
+| Relatório entregue até o dia 10 | 100% dos clientes |
+| Lançamentos a classificar no fechamento | 0 |
+| Pagamento perdido por falha do escritório | 0 |
+| Diferença entre o saldo do extrato e o saldo do banco | R$ 0,00 |
 
-## 5. Daqui pra frente
-- [ ] Parametrizar o sistema fiscal para segregar automaticamente por NCM/CSOSN todo mês.
-- [ ] Mostrar ao cliente a economia mensal e usar isso para propor revisão de honorários e serviços consultivos.
-
-## 6. Faturamento
-- [ ] Acompanhar o crédito da restituição e emitir a NFS-e do honorário de êxito na data contratual.
+## Segurança
+- Senhas guardadas em gerenciador de senhas, com acesso individual por analista, nunca em planilha.
+- Escritório sem poder de aprovação de pagamentos (contrato, cláusula 3).
+- Extratos em pasta por cliente, com acesso restrito, apagados conforme o prazo do contrato.

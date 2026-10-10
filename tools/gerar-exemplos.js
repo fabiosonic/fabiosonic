@@ -1,79 +1,79 @@
 #!/usr/bin/env node
 /*
- * Gera XMLs fictícios de NFC-e de uma farmácia optante pelo Simples Nacional,
- * para demonstração do Radar Tributário. Uso: node tools/gerar-exemplos.js
+ * Gera extratos fictícios (OFX e CSV) de uma padaria para demonstrar o Painel Financeiro.
+ * Uso: node tools/gerar-exemplos.js
  */
 'use strict';
 var fs = require('fs');
 var path = require('path');
 
-var DESTINO = path.join(__dirname, '..', 'exemplos', 'xml');
-var CNPJ = '11222333000181';
+var DESTINO = path.join(__dirname, '..', 'exemplos', 'extratos');
+var MESES = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'];
 
-var PRODUTOS = [
-  { cod: '001', desc: 'DIPIRONA SODICA 500MG 10CP', ncm: '30049099', csosn: '500', cfop: '5405', preco: 8.90 },
-  { cod: '002', desc: 'AMOXICILINA 500MG 21CAP', ncm: '30041011', csosn: '500', cfop: '5405', preco: 32.50 },
-  { cod: '003', desc: 'SHAMPOO ANTICASPA 200ML', ncm: '33051000', csosn: '500', cfop: '5405', preco: 24.90 },
-  { cod: '004', desc: 'CREME DENTAL 90G', ncm: '33061000', csosn: '500', cfop: '5405', preco: 6.50 },
-  { cod: '005', desc: 'FRALDA INFANTIL G 30UN', ncm: '96190000', csosn: '102', cfop: '5102', preco: 54.90 },
-  { cod: '006', desc: 'AGUA MINERAL 500ML', ncm: '22011000', csosn: '500', cfop: '5405', preco: 3.00 },
-  { cod: '007', desc: 'TERMOMETRO DIGITAL', ncm: '90251190', csosn: '102', cfop: '5102', preco: 29.90 }
-];
+// Gerador pseudoaleatório determinístico
+var semente = 42;
+function aleatorio() { semente = (semente * 16807) % 2147483647; return semente / 2147483647; }
+function entre(a, b) { return Math.round((a + (b - a) * aleatorio()) * 100) / 100; }
 
-function competencias() { // jan/2025 a set/2026
-  var out = [];
-  for (var i = 0; i < 21; i++) {
-    var a = 2025 + Math.floor(i / 12), m = (i % 12) + 1;
-    out.push(a + '-' + (m < 10 ? '0' : '') + m);
+function lancamentosDoMes(comp, idx) {
+  var l = [];
+  function add(dia, hist, valor) { l.push({ data: comp + '-' + ('0' + dia).slice(-2), hist: hist, valor: valor }); }
+  var cresc = 1 + idx * 0.04;
+  for (var d = 1; d <= 28; d += 3) {
+    add(d, 'CIELO VENDAS CARTAO', entre(2800, 4200) * cresc);
+    add(d + 1, 'PIX RECEBIDO CLIENTE', entre(600, 1400) * cresc);
   }
-  return out;
+  add(5, 'PAG BOLETO DISTRIB TRIGO SUL LTDA', -entre(9000, 11000) * cresc);
+  add(12, 'PAG BOLETO LATICINIOS SERRA IND', -entre(4500, 6000) * cresc);
+  add(19, 'PAG BOLETO ATACADAO EMBALAGENS', -entre(1200, 1800));
+  add(5, 'PAGTO SALARIO FUNCIONARIOS', -14800);
+  add(7, 'FGTS', -1184);
+  add(20, 'DAS SIMPLES NACIONAL', -entre(3200, 3900) * cresc);
+  add(10, 'ALUGUEL LOJA', -6500);
+  add(15, 'ENEL ENERGIA', -entre(2100, 2900));
+  add(15, 'SABESP AGUA', -entre(380, 520));
+  add(18, 'VIVO INTERNET', -199.9);
+  add(10, 'HONORARIOS CONTABEIS', -1200);
+  add(2, 'TARIFA PACOTE DE SERVICOS', -89.9);
+  add(25, 'JUROS CHEQUE ESPECIAL', -entre(150, 420));
+  add(28, 'PARCELA CAPITAL DE GIRO', -3150);
+  add(28, 'RETIRADA SOCIOS PRO LABORE', idx === 3 ? -16000 : -9000);
+  add(22, 'PIX ENVIADO MANUTENCAO FORNO JOSE', -entre(300, 900));
+  return l;
 }
 
-function chave(comp, n) {
-  var base = '35' + comp.slice(2, 4) + comp.slice(5, 7) + CNPJ + '65' + '001' +
-    String(n).padStart(9, '0') + '1' + String(n).padStart(8, '0');
-  return base + String(n % 10); // DV fictício
-}
-
-function det(i, p, qtd) {
-  var v = (p.preco * qtd).toFixed(2);
-  return '<det nItem="' + i + '"><prod><cProd>' + p.cod + '</cProd><cEAN>SEM GTIN</cEAN><xProd>' + p.desc +
-    '</xProd><NCM>' + p.ncm + '</NCM><CFOP>' + p.cfop + '</CFOP><uCom>UN</uCom><qCom>' + qtd +
-    '</qCom><vUnCom>' + p.preco.toFixed(2) + '</vUnCom><vProd>' + v + '</vProd><indTot>1</indTot></prod>' +
-    '<imposto><ICMS><ICMSSN' + p.csosn + '><orig>0</orig><CSOSN>' + p.csosn + '</CSOSN></ICMSSN' + p.csosn +
-    '></ICMS><PIS><PISOutr><CST>49</CST><vBC>0.00</vBC><pPIS>0.00</pPIS><vPIS>0.00</vPIS></PISOutr></PIS>' +
-    '<COFINS><COFINSOutr><CST>49</CST><vBC>0.00</vBC><pCOFINS>0.00</pCOFINS><vCOFINS>0.00</vCOFINS></COFINSOutr></COFINS>' +
-    '</imposto></det>';
-}
-
-function nota(comp, n, itens) {
-  var ch = chave(comp, n);
-  return '<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">' +
-    '<NFe><infNFe Id="NFe' + ch + '" versao="4.00"><ide><cUF>35</cUF><mod>65</mod><serie>1</serie><nNF>' + n +
-    '</nNF><dhEmi>' + comp + '-15T10:00:00-03:00</dhEmi><tpNF>1</tpNF></ide>' +
-    '<emit><CNPJ>' + CNPJ + '</CNPJ><xNome>FARMACIA EXEMPLO LTDA</xNome><CRT>1</CRT></emit>' +
-    itens.join('') + '</infNFe></NFe></nfeProc>';
+function ofx(lancs, saldo) {
+  var cab = 'OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\n\n<OFX>\n<BANKMSGSRSV1><STMTTRNRS><STMTRS>\n' +
+    '<CURDEF>BRL\n<BANKACCTFROM><BANKID>0341<ACCTID>12345-6</BANKACCTFROM>\n<BANKTRANLIST>\n';
+  var corpo = lancs.map(function (l, i) {
+    return '<STMTTRN>\n<TRNTYPE>' + (l.valor < 0 ? 'DEBIT' : 'CREDIT') + '\n<DTPOSTED>' + l.data.replace(/-/g, '') +
+      '120000[-3:BRT]\n<TRNAMT>' + l.valor.toFixed(2) + '\n<FITID>' + l.data.replace(/-/g, '') + String(i).padStart(4, '0') +
+      '\n<MEMO>' + l.hist + '\n</STMTTRN>';
+  }).join('\n');
+  return cab + corpo + '\n</BANKTRANLIST>\n<LEDGERBAL><BALAMT>' + saldo.toFixed(2) +
+    '<DTASOF>20260930</LEDGERBAL>\n</STMTRS></STMTTRNRS></BANKMSGSRSV1>\n</OFX>\n';
 }
 
 fs.mkdirSync(DESTINO, { recursive: true });
 fs.readdirSync(DESTINO).forEach(function (f) { fs.unlinkSync(path.join(DESTINO, f)); });
 
-var n = 0;
-competencias().forEach(function (comp, idx) {
-  var fator = 1 + idx * 0.03; // faturamento crescente
-  for (var k = 0; k < 3; k++) {
-    n++;
-    var itens = PRODUTOS.map(function (p, i) {
-      return det(i + 1, p, Math.round((40 + 13 * ((i + k) % 5)) * fator));
-    });
-    fs.writeFileSync(path.join(DESTINO, 'NFCe-' + n + '.xml'), nota(comp, n, itens));
-  }
+var todos = [];
+MESES.forEach(function (comp, i) {
+  var l = lancamentosDoMes(comp, i);
+  l.forEach(function (x) { x.valor = Math.round(x.valor * 100) / 100; });
+  l.sort(function (a, b) { return a.data < b.data ? -1 : 1; });
+  todos = todos.concat(l);
 });
+var saldo = 95000 + todos.reduce(function (s, l) { return s + l.valor; }, 0);
+fs.writeFileSync(path.join(DESTINO, 'itau-cc-12345-6.ofx'), ofx(todos, saldo));
 
-// Um cancelamento para demonstrar a exclusão
-fs.writeFileSync(path.join(DESTINO, 'cancelamento-NFCe-' + n + '.xml'),
-  '<?xml version="1.0" encoding="UTF-8"?><procEventoNFe versao="1.00"><evento><infEvento Id="ID110111' +
-  chave(competencias().slice(-1)[0], n) + '01"><chNFe>' + chave(competencias().slice(-1)[0], n) +
-  '</chNFe><tpEvento>110111</tpEvento></infEvento></evento></procEventoNFe>');
+// Segunda conta em CSV (formato brasileiro), com maquininha de outra bandeira
+var csv = ['Data;Histórico;Valor'];
+MESES.forEach(function (comp) {
+  for (var d = 2; d <= 28; d += 7) csv.push(d + '/' + comp.slice(5, 7) + '/' + comp.slice(0, 4) + ';STONE PAGAMENTOS;' +
+    entre(1500, 2500).toFixed(2).replace('.', ','));
+  csv.push('15/' + comp.slice(5, 7) + '/' + comp.slice(0, 4) + ';TARIFA MANUTENCAO CONTA;-45,00');
+});
+fs.writeFileSync(path.join(DESTINO, 'banco-digital.csv'), '﻿' + csv.join('\r\n'));
 
-console.log(n + ' NFC-e + 1 cancelamento gerados em ' + DESTINO);
+console.log('Extratos gerados em ' + DESTINO);

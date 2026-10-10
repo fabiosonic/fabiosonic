@@ -1,59 +1,56 @@
-# Playbook Comercial: Recuperação de Créditos do Simples Nacional
+# Playbook Comercial: BPO Financeiro
 
-## Público ideal (ordem de prioridade)
+## Cliente ideal
 
-1. Farmácias e drogarias (medicamentos + higiene, com crédito alto)
-2. Perfumarias e lojas de cosméticos
-3. Autopeças, oficinas com venda de peças, lojas de pneus
-4. Distribuidoras de bebidas, conveniências, mercados e padarias (água, refrigerante, cerveja)
-5. Postos de combustíveis (no Simples)
-6. Qualquer comércio que venda mercadoria com ICMS-ST (CSOSN 500)
+- Faturamento entre R$ 40 mil e R$ 500 mil por mês (comércio, serviços, alimentação, saúde, construção)
+- O sócio faz o financeiro sozinho, "no celular", e mistura contas pessoais com as da empresa
+- Reclama de falta de caixa mesmo vendendo bem
+- Tem empréstimo ou cheque especial recorrente
 
-**Desqualifique** quem fatura acima do limite do Simples, quem não é do Anexo I e quem já segregava corretamente.
+**Sinais de que é hora de oferecer:** atraso no DAS ou na folha, pedido de "adiantar" a distribuição de lucros,
+cliente pergunta "quanto eu posso tirar?", extratos chegando bagunçados todo mês.
 
 ## Funil
 
 ```
-Carteira / indicação  →  Pedido dos XMLs  →  Radar (diagnóstico)  →  Reunião com relatório  →  Contrato de êxito  →  Execução  →  Upsell
+Carteira / indicação → Diagnóstico financeiro (6 meses de extratos no Painel) → Reunião de resultado → Proposta BPO → Implantação → Relatório mensal
 ```
 
-Meta de conversão de referência: 10 diagnósticos → 6 reuniões → 4 contratos.
+Meta de referência: 10 diagnósticos → 7 reuniões → 3 a 4 contratos.
 
 ## Scripts
 
 ### WhatsApp para cliente da carteira
 
-> Olá, {nome}! Revisando a parte fiscal da {empresa}, encontramos indícios de que, nos últimos anos,
-> parte dos impostos foi paga a maior no Simples, em produtos que já têm o PIS/COFINS e/ou o ICMS
-> recolhidos pelo fabricante. Fizemos uma estimativa preliminar e queremos te apresentar em 20 minutos.
-> Você só paga se o valor for efetivamente recuperado. Pode ser {dia} às {hora}?
+> Olá, {nome}! Estamos lançando no escritório um serviço de gestão financeira e queria começar pelos clientes mais
+> próximos. Com os extratos bancários dos últimos 6 meses, a gente mostra quanto a {empresa} realmente lucrou,
+> para onde está indo o dinheiro e quanto você precisa vender por mês para fechar no azul. Leva 20 minutos para
+> apresentar. Posso te mandar a lista do que preciso?
 
-### WhatsApp para prospect (não cliente)
+### Pedido dos extratos
 
-> Olá, {nome}, tudo bem? Sou {seu nome}, contador(a) da {escritório}. Fazemos um diagnóstico gratuito para
-> {farmácias/autopeças/...} no Simples Nacional, que identifica impostos pagos a maior nos últimos 5 anos
-> (PIS/COFINS monofásico e ICMS-ST). O processamento é sigiloso e você só paga sobre o que recuperar.
-> Posso te explicar como funciona?
+> Para o diagnóstico, preciso dos extratos de **todas as contas da empresa** dos últimos 6 meses em **OFX** (no internet banking
+> costuma aparecer como "Exportar → OFX/Money") ou em planilha. Também vale o extrato das maquininhas, se tiver
+> conta separada. Os arquivos são processados aqui no escritório e não vão para nenhum sistema na internet.
 
-### Reunião (20 minutos)
+### Reunião de resultado (20 minutos)
 
-1. **Contexto (2 min):** "Alguns produtos já têm imposto recolhido pela indústria. No Simples, a receita
-   deles precisa ser informada separadamente; quando não é, o imposto é pago duas vezes."
-2. **Números (5 min):** mostre o relatório do Radar, com o crédito total, os meses e os principais produtos.
-3. **Como funciona (5 min):** retificação do PGDAS-D, pedido de restituição/compensação, prazos.
-4. **Proposta (5 min):** X% do valor efetivamente restituído ou compensado. Sem valor recuperado, não há cobrança.
-5. **Fechamento (3 min):** "Começamos já, porque a cada mês que passa um mês antigo prescreve."
+1. **Números (8 min):** mostre o DRE mês a mês, o resultado operacional e a geração de caixa.
+2. **Alertas (5 min):** retiradas maiores que o lucro, juros e tarifas altos, mês no prejuízo, despesas sem controle.
+3. **Ponto de equilíbrio (2 min):** "Você precisa vender R$ X por mês só para empatar. Hoje vende R$ Y."
+4. **Proposta (5 min):** "Todo mês você recebe este relatório pronto, e a gente cuida das contas a pagar e a receber.
+   Você só aprova os pagamentos no banco." Apresente o plano adequado ao volume.
 
 ### Objeções
 
 | Objeção | Resposta |
 |---------|----------|
-| "Isso dá problema com a Receita?" | É um direito previsto na LC 123/2006, feito pelo procedimento oficial do Portal do Simples. Não é planejamento agressivo nem tese judicial. |
-| "Meu contador não fazia isso?" | (Cliente de outro escritório) Não critique o colega: "É um ponto técnico que muitas vezes passa; o importante é que dá para corrigir." |
-| "Por que só agora?" (cliente seu) | Seja transparente: "Implantamos uma ferramenta de auditoria eletrônica de XML e passamos a revisar toda a carteira." Corrija a segregação imediatamente. |
-| "20% é caro." | "Sem o trabalho, o valor é zero e continua prescrevendo. Você só paga sobre o que entrar." |
-| "E se a Receita negar?" | "Aí você não paga nada. O risco do trabalho é nosso." |
+| "Eu mesmo faço." | "Você faz os pagamentos. O que falta é o resultado: quanto sobrou, onde dá para cortar, quanto pode retirar. É isso que entregamos." |
+| "Está caro." | "Compare com o que apareceu no diagnóstico: só em juros e tarifas foram R$ X no semestre. O serviço se paga com o que a gente organiza." |
+| "Tenho medo de dar acesso ao banco." | "Você não dá poder de pagamento. Nós agendamos e você aprova cada pagamento no seu celular." |
+| "Já tenho um sistema financeiro." | "Ótimo, usamos o seu. O sistema não alimenta a si mesmo nem interpreta os números: essa é a nossa parte." |
+| "Vou pensar." | "Combinado. Que tal começarmos pelo plano Essencial por 3 meses? Se não fizer diferença, você cancela." |
 
 ## Indicadores semanais
 
-- Diagnósticos rodados · Reuniões feitas · Contratos assinados · R$ em pedidos protocolados · R$ efetivamente recebidos
+Diagnósticos feitos · Reuniões · Propostas enviadas · Contratos assinados · Receita recorrente total · Cancelamentos
