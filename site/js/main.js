@@ -54,7 +54,7 @@
     var items = [];
     if (C.whatsapp && C.telefone) items.push('<li><a href="' + waUrl("Olá! Vim pelo site e quero falar com um contador.") + '" target="_blank" rel="noopener">' + ICON.wa + '<span><small>WhatsApp</small>' + C.telefone + "</span></a></li>");
     if (C.email) items.push('<li><a href="mailto:' + C.email + '">' + ICON.mail + "<span><small>E-mail</small>" + C.email + "</span></a></li>");
-    if (C.endereco) items.push("<li>" + (C.mapa ? '<a href="' + C.mapa + '" target="_blank" rel="noopener">' : "<span>") + ICON.pin + "<span><small>Endereço</small>" + C.endereco + "</span>" + (C.mapa ? "</a>" : "</span>") + "</li>");
+    if (C.endereco) items.push("<li>" + (C.mapa ? '<a href="' + C.mapa + '" target="_blank" rel="noopener">' : "<span>") + ICON.pin + "<span><small>Sede</small>" + C.endereco + "</span>" + (C.mapa ? "</a>" : "</span>") + "</li>");
     if (C.areaDoCliente) items.push('<li><a href="' + C.areaDoCliente + '" target="_blank" rel="noopener">' + ICON.app + "<span><small>Clientes</small>Área do cliente</span></a></li>");
     list.innerHTML = items.join("");
   }

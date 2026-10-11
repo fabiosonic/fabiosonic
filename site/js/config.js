@@ -9,6 +9,7 @@ window.SITE_CONFIG = {
   nomeCurto: "Moraes & Oliveira",
   fundacao: 2015,
 
+  // Sede do escritório. O atendimento é nacional.
   cidade: "Itaboraí – RJ",
 
   // Somente dígitos, com DDI e DDD.
