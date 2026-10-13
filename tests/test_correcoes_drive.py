@@ -42,7 +42,10 @@ def test_chamadas_com_novas_tentativas():
     c = GoogleDriveClient("", servico=_Servico())
     list(c.listar_arquivos("raiz_123"))
     c.garantir_pasta("2026", "raiz_123")
-    assert CHAMADAS and all(n >= 3 for n in CHAMADAS)
+    # chamadas: listar pasta, procurar subpasta (leituras, com retry) e criar (sem retry: não é idempotente)
+    leituras, criacao = CHAMADAS[:-1], CHAMADAS[-1]
+    assert leituras and all(n >= 3 for n in leituras)
+    assert criacao == 0
 
 
 def test_falha_de_download_vira_erro_leitura():
