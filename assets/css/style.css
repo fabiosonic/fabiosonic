@@ -733,3 +733,5 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: #D64545;
 .c-dest { border-left: 4px solid #D97706; background: #FFF8EB; padding: 2px 14px 6px; border-radius: 10px; margin: 8px 0; }
 .c-dest p { font-weight: 600; }
 .c-badge { font: 700 .66rem var(--font-body); text-transform: uppercase; letter-spacing: .08em; background: #B45309; color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; }
+.contact-form .field.check label { display: block; }
+.hero h1 { font-size: clamp(2.1rem, 4vw, 3.3rem); }

@@ -59,11 +59,8 @@
         navLinks.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
       });
     }, { rootMargin: '-45% 0px -50% 0px' });
-    navLinks.forEach(function (a) {
-      var h = a.getAttribute('href') || '';
-      if (h.charAt(0) !== '#' || h.length < 2) return; // links para outras páginas não são observados
-      var s = $(h); if (s) secObs.observe(s);
-    });
+    // observa todas as seções: se a seção visível não tem link no menu, nenhum item fica ativo
+    $$('main section[id]').forEach(function (s) { secObs.observe(s); });
   }
 
   /* ---------- Revelação na rolagem (escalonada) ---------- */
