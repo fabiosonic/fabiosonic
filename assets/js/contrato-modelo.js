@@ -1,6 +1,6 @@
 /* Contrato-modelo M&O Contábil — Condições Gerais. Gerado a partir de fonte única; ver docs/contrato-modelo.md e docs/contrato-notas-juridicas.md. Modelo sujeito a revisão por advogado. */
 window.MOContrato = {
-  "versao": "1.1",
+  "versao": "1.2",
   "dataVersao": "13/10/2026",
   "destaques": [7, 10, 11, 14, 16],
   "titulo": "Contrato de Prestação de Serviços Contábeis — Condições Gerais",
@@ -19,7 +19,7 @@ window.MOContrato = {
         "1.2 Plataforma: ambiente digital da CONTRATADA, acessado com usuário e senha pessoais, destinado ao envio de Informações e Documentos, à troca de mensagens e à disponibilização de guias, relatórios e demonstrações. O nome e o endereço eletrônico da Plataforma constam do Anexo I e das instruções de acesso enviadas ao CONTRATANTE.",
         "1.3 Informações: todos os dados sobre as operações, o patrimônio, os sócios, os empregados e as obrigações do CONTRATANTE, preenchidos ou declarados na Plataforma, inclusive por formulários e questionários.",
         "1.4 Documentos: notas fiscais emitidas e recebidas, extratos bancários e de meios de pagamento, contratos, recibos, comprovantes de pagamento, folhas de ponto, atestados, notificações de órgãos públicos e quaisquer outros arquivos necessários aos Serviços.",
-        "1.5 Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE: Abertura de empresa; Essencial (Simples Nacional, sem empregados); Empresa com equipe (Simples Nacional, com departamento pessoal); ou Empresa em crescimento (Lucro Presumido).",
+        "1.5 Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE conforme o porte e a fase da empresa: Começando; MEI; Microempresa; Empresa de Pequeno Porte; ou Empresa em crescimento (Lucro Presumido ou Lucro Real).",
         "1.6 Proposta ou Anexo I: Proposta Comercial enviada por escrito pela CONTRATADA, que define o Pacote, os serviços complementares, os honorários, a forma e as condições de pagamento, o índice de reajuste e a data de início.",
         "1.7 Serviços: as atividades descritas no Pacote e no Anexo I, executadas pela CONTRATADA.",
         "1.8 Competência: o mês a que se referem as operações e os fatos registrados ou apurados.",
@@ -206,7 +206,7 @@ window.MOContrato = {
       "itens": [
         "15.1 O Contrato vigora a partir do aceite do Anexo I, pelo prazo indicado no Anexo I [sugestão: prazo indeterminado], com início dos Serviços na data ali prevista.",
         "15.2 Se o Anexo I fixar prazo determinado [ex.: 12 (doze) meses], o Contrato será renovado automaticamente por iguais períodos, salvo comunicação contrária de qualquer das partes com o aviso prévio da Cláusula 16.2, respeitado o limite do art. 598 do Código Civil para cada período contratado.",
-        "15.3 O Pacote Abertura de empresa encerra-se com a conclusão dos atos previstos no Anexo I, salvo se contratado em conjunto com Pacote mensal, caso em que este prossegue."
+        "15.3 O Pacote Começando abrange os atos de abertura e o acompanhamento dos primeiros 12 (doze) meses de atividade, contados do início dos Serviços. Ao fim desse período, ou antes se o porte da empresa mudar, a CONTRATADA apresentará por escrito nova Proposta com o Pacote compatível com o porte, que só produzirá efeitos com o aceite do CONTRATANTE."
       ]
     },
     {
@@ -352,10 +352,11 @@ window.MOContrato = {
         "CONTRATANTE: {{CONTRATANTE_NOME}} — {{CONTRATANTE_DOC}}.",
         "Pacote contratado: {{PACOTE}}.",
         "Serviços complementares contratados: {{COMPLEMENTARES}}.",
-        "Escopo de referência — Abertura de empresa: consulta de viabilidade e definição de CNAE; escolha da natureza jurídica e do regime tributário; registro na Junta Comercial e CNPJ; inscrições municipal e, se aplicável, estadual; orientação sobre alvarás e licenças. Taxas de órgãos públicos são pagas à parte.",
-        "Escopo de referência — Essencial (Simples Nacional, sem empregados): escrituração contábil e demonstrações; apuração mensal do Simples Nacional e emissão do DAS; obrigações acessórias do regime; pró-labore dos sócios; acompanhamento do Fator R, quando aplicável; relatórios gerenciais e atendimento digital.",
-        "Escopo de referência — Empresa com equipe (Simples Nacional, com empregados): tudo do Pacote Essencial; admissões, folha mensal e holerites; férias, 13º salário e rescisões; eSocial, FGTS e encargos trabalhistas; orientação sobre rotinas de departamento pessoal.",
-        "Escopo de referência — Empresa em crescimento (Lucro Presumido): escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS e Cofins e dos tributos estaduais ou municipais conforme a atividade; controle de retenções na fonte; obrigações acessórias federais, estaduais e municipais; departamento pessoal, se houver equipe; revisão periódica do enquadramento.",
+        "Escopo de referência — Começando: escolha da natureza jurídica e do regime tributário; registro na Junta Comercial ou no cartório, CNPJ e inscrições; orientação sobre alvarás, licenças e certificado digital; mapa das obrigações do primeiro ano; acompanhamento contábil e fiscal nos primeiros meses; reunião de revisão ao completar 12 meses.",
+        "Escopo de referência — MEI: acompanhamento da guia mensal (DAS-MEI); declaração anual do MEI (DASN-SIMEI); controle do faturamento com alerta de proximidade do limite; orientação na emissão de notas fiscais; orientação sobre a contratação de empregado; planejamento da passagem para microempresa.",
+        "Escopo de referência — Microempresa: escrituração contábil e demonstrações; apuração dos tributos e emissão das guias; obrigações acessórias do regime; pró-labore dos sócios e acompanhamento do Fator R, quando aplicável; folha de pagamento, quando houver colaboradores; relatório mensal com os principais números.",
+        "Escopo de referência — Empresa de Pequeno Porte: tudo do pacote Microempresa; departamento pessoal completo e eSocial; conciliação bancária; relatórios gerenciais: resultado, margens e fluxo de caixa; revisão anual do regime tributário, com estudo documentado; reuniões periódicas com o contador.",
+        "Escopo de referência — Empresa em crescimento: escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS e Cofins no regime adotado e dos tributos estaduais ou municipais; controle de retenções na fonte; obrigações acessórias do regime (como ECD, ECF e EFD-Contribuições); departamento pessoal; planejamento tributário documentado e reuniões gerenciais.",
         "Adaptações e exclusões específicas do escopo: [a preencher pelo escritório].",
         "Atividades a cargo do CONTRATANTE além da Cláusula 6: [a preencher pelo escritório, se houver].",
         "Parâmetros considerados na Proposta (faturamento, atividade, volume de notas, número de sócios, número de empregados, movimentações, retenções, município): [a preencher pelo escritório].",

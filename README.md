@@ -43,6 +43,7 @@ node scripts/gerar-contrato.mjs  # regenera contrato/condicoes-gerais.html após
 | `docs/benchmark-contabilidade-digital.md` | Engenharia reversa de 22 sites de contabilidade digital |
 | `docs/seo-relatorio.md` | Relatório de SEO: palavras-chave por página e próximos passos |
 | `docs/benchmark-pacotes.md` | Estrutura de pacotes de 10 empresas de contabilidade digital (sem preços) |
+| `docs/benchmark-pacotes-porte.md` | Estudo de pacotes de contabilidades online por porte e fase da empresa (sem preços) |
 | `assets/img/fabio-ilustracao.webp` | Personagem ilustrado do Fábio (contador responsável), sempre identificado como ilustração |
 
 Todas as páginas com afirmação tributária citam a norma, trazem "Revisado em 13/10/2026" e a ressalva "Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura societária."
@@ -124,3 +125,9 @@ Detalhes em `docs/contrato-notas-juridicas.md`, seção 5.
 - `R$` no index: aparece apenas nos rótulos dos campos das calculadoras, como unidade de entrada. Não há preço nem honorários no site.
 - `R$` em `porte/` e no llms.txt: apenas os limites de receita bruta da LC 123/2006 (MEI, ME e EPP), com o artigo citado.
 - Nenhuma ocorrência de grátis, gratuito, desconto, promoção, melhor, nº 1, número 1, garant, econom, últimas vagas ou Franklin em `.html` e `.txt`.
+
+### Pacotes por porte (13/10/2026)
+
+- [ ] O Fábio deve validar o escopo dos 5 pacotes (Começando, MEI, Microempresa, Empresa de Pequeno Porte, Empresa em crescimento) e os gatilhos de "Quando mudar de pacote".
+- [ ] Pacote Começando: definir como o acompanhamento dos 12 primeiros meses entra na proposta (Cláusula 15.3 do contrato, versão 1.2).
+- [ ] Rever os limites de porte (LC 123/2006) a cada publicação: MEI R$ 81 mil, ME R$ 360 mil, EPP R$ 4,8 milhões.

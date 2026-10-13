@@ -94,3 +94,16 @@ ${corpo}
 mkdirSync(raiz + 'contrato', { recursive: true });
 writeFileSync(raiz + 'contrato/condicoes-gerais.html', html);
 console.log(`contrato/condicoes-gerais.html gerado: ${M.clausulas.length} cláusulas, ${M.anexos.length} anexos, versão ${M.versao}`);
+
+// docs/contrato-modelo.md — espelho legível do mesmo modelo (fonte única: assets/js/contrato-modelo.js)
+const md = [
+  `# ${M.titulo}`, '', `**Versão ${M.versao} — ${M.dataVersao}**`, '',
+  '> Gerado automaticamente por `node scripts/gerar-contrato.mjs` a partir de `assets/js/contrato-modelo.js` — não edite este arquivo à mão. Os textos entre colchetes [ ] são valores sugeridos que o escritório deve definir (ver `docs/contrato-notas-juridicas.md`). Os campos `{{...}}` são preenchidos automaticamente no aceite. Este modelo deve ser revisado por advogado inscrito na OAB antes do uso.', '',
+  (M.destaques || []).length ? `Cláusulas em destaque (CDC, art. 54, § 4º): ${M.destaques.join(', ')}.\n` : '',
+  '## Partes e preâmbulo', '', ...M.preambulo.flatMap((p) => [p, '']),
+  ...M.clausulas.flatMap((c) => [`## Cláusula ${c.numero} — ${c.titulo}${(M.destaques || []).includes(c.numero) ? ' (destaque)' : ''}`, '', ...c.itens.flatMap((i) => [i.replace(/^(\d+\.\d+)\s/, '**$1** '), '']) ]),
+  ...M.anexos.flatMap((a) => [`## ${a.titulo}`, '', ...a.itens.map((i) => `- ${i}`), '']),
+  '## Fechamento', '', ...M.fechamento.flatMap((p) => [p, '']),
+].join('\n');
+writeFileSync(raiz + 'docs/contrato-modelo.md', md);
+console.log('docs/contrato-modelo.md gerado');

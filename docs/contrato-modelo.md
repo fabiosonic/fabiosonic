@@ -1,8 +1,10 @@
 # Contrato de Prestação de Serviços Contábeis — Condições Gerais
 
-**Versão 1.1 — 13/10/2026**
+**Versão 1.2 — 13/10/2026**
 
-> Modelo para aceite eletrônico no site. Os textos entre colchetes [ ] são valores sugeridos que o escritório deve definir (ver `docs/contrato-notas-juridicas.md`). Os campos `{{...}}` são preenchidos automaticamente no aceite. Este modelo deve ser revisado por advogado inscrito na OAB antes do uso.
+> Gerado automaticamente por `node scripts/gerar-contrato.mjs` a partir de `assets/js/contrato-modelo.js` — não edite este arquivo à mão. Os textos entre colchetes [ ] são valores sugeridos que o escritório deve definir (ver `docs/contrato-notas-juridicas.md`). Os campos `{{...}}` são preenchidos automaticamente no aceite. Este modelo deve ser revisado por advogado inscrito na OAB antes do uso.
+
+Cláusulas em destaque (CDC, art. 54, § 4º): 7, 10, 11, 14, 16.
 
 ## Partes e preâmbulo
 
@@ -24,7 +26,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 **1.4** Documentos: notas fiscais emitidas e recebidas, extratos bancários e de meios de pagamento, contratos, recibos, comprovantes de pagamento, folhas de ponto, atestados, notificações de órgãos públicos e quaisquer outros arquivos necessários aos Serviços.
 
-**1.5** Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE: Abertura de empresa; Essencial (Simples Nacional, sem empregados); Empresa com equipe (Simples Nacional, com departamento pessoal); ou Empresa em crescimento (Lucro Presumido).
+**1.5** Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE conforme o porte e a fase da empresa: Começando; MEI; Microempresa; Empresa de Pequeno Porte; ou Empresa em crescimento (Lucro Presumido ou Lucro Real).
 
 **1.6** Proposta ou Anexo I: Proposta Comercial enviada por escrito pela CONTRATADA, que define o Pacote, os serviços complementares, os honorários, a forma e as condições de pagamento, o índice de reajuste e a data de início.
 
@@ -112,7 +114,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 **6.8** Outras atividades indicadas no Anexo I.
 
-## Cláusula 7 — Das obrigações do CONTRATANTE
+## Cláusula 7 — Das obrigações do CONTRATANTE (destaque)
 
 **7.1** Enviar todas as Informações e Documentos exclusivamente pela Plataforma, nos Prazos de Envio do Anexo II. Envio por outro meio somente vale nas hipóteses da Cláusula 9.5 ou quando a CONTRATADA o autorizar por escrito.
 
@@ -186,7 +188,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 **9.8** A CONTRATADA pode substituir ou atualizar a Plataforma, mantendo funcionalidades equivalentes e comunicando o CONTRATANTE com antecedência mínima de [15 (quinze)] dias.
 
-## Cláusula 10 — Dos prazos de envio e de entrega
+## Cláusula 10 — Dos prazos de envio e de entrega (destaque)
 
 **10.1** Os Prazos de Envio e a rotina mensal, anual e eventual constam do Anexo II.
 
@@ -196,7 +198,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 **10.4** Retificações motivadas por Informações ou Documentos enviados fora do prazo, incompletos ou incorretos podem ser cobradas como serviço adicional, conforme valores informados previamente pela CONTRATADA.
 
-## Cláusula 11 — Da responsabilidade das partes e de seus limites
+## Cláusula 11 — Da responsabilidade das partes e de seus limites (destaque)
 
 **11.1** A escrituração, as apurações, as guias e as declarações são elaboradas com base nas Informações e Documentos fornecidos pelo CONTRATANTE na Plataforma. A CONTRATADA não é obrigada a auditar nem a verificar a autenticidade desses Documentos, mas deve comunicar inconsistências que identificar no curso do trabalho.
 
@@ -238,7 +240,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 **13.6** A revisão de honorários por mudança de perfil (Cláusula 4.5) depende de nova Proposta. Se o CONTRATANTE não a aceitar, qualquer das partes pode encerrar o Contrato na forma da Cláusula 16.
 
-## Cláusula 14 — Da inadimplência
+## Cláusula 14 — Da inadimplência (destaque)
 
 **14.1** O atraso no pagamento dos honorários sujeita o valor devido a: (a) multa de [2% (dois por cento)]; (b) juros de mora pela taxa legal do art. 406 do Código Civil, calculados por dia de atraso; e (c) atualização monetária pelo índice do Anexo I ou, na falta, pelo IPCA, conforme o art. 389, parágrafo único, do Código Civil.
 
@@ -258,9 +260,9 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 **15.2** Se o Anexo I fixar prazo determinado [ex.: 12 (doze) meses], o Contrato será renovado automaticamente por iguais períodos, salvo comunicação contrária de qualquer das partes com o aviso prévio da Cláusula 16.2, respeitado o limite do art. 598 do Código Civil para cada período contratado.
 
-**15.3** O Pacote Abertura de empresa encerra-se com a conclusão dos atos previstos no Anexo I, salvo se contratado em conjunto com Pacote mensal, caso em que este prossegue.
+**15.3** O Pacote Começando abrange os atos de abertura e o acompanhamento dos primeiros 12 (doze) meses de atividade, contados do início dos Serviços. Ao fim desse período, ou antes se o porte da empresa mudar, a CONTRATADA apresentará por escrito nova Proposta com o Pacote compatível com o porte, que só produzirá efeitos com o aceite do CONTRATANTE.
 
-## Cláusula 16 — Da rescisão
+## Cláusula 16 — Da rescisão (destaque)
 
 **16.1** Qualquer das partes pode encerrar o Contrato sem justa causa, por comunicação escrita pela Plataforma ou pelo e-mail oficial, sem multa, observado o aviso prévio desta cláusula.
 
@@ -412,10 +414,11 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 - CONTRATANTE: {{CONTRATANTE_NOME}} — {{CONTRATANTE_DOC}}.
 - Pacote contratado: {{PACOTE}}.
 - Serviços complementares contratados: {{COMPLEMENTARES}}.
-- Escopo de referência — Abertura de empresa: consulta de viabilidade e definição de CNAE; escolha da natureza jurídica e do regime tributário; registro na Junta Comercial e CNPJ; inscrições municipal e, se aplicável, estadual; orientação sobre alvarás e licenças. Taxas de órgãos públicos são pagas à parte.
-- Escopo de referência — Essencial (Simples Nacional, sem empregados): escrituração contábil e demonstrações; apuração mensal do Simples Nacional e emissão do DAS; obrigações acessórias do regime; pró-labore dos sócios; acompanhamento do Fator R, quando aplicável; relatórios gerenciais e atendimento digital.
-- Escopo de referência — Empresa com equipe (Simples Nacional, com empregados): tudo do Pacote Essencial; admissões, folha mensal e holerites; férias, 13º salário e rescisões; eSocial, FGTS e encargos trabalhistas; orientação sobre rotinas de departamento pessoal.
-- Escopo de referência — Empresa em crescimento (Lucro Presumido): escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS e Cofins e dos tributos estaduais ou municipais conforme a atividade; controle de retenções na fonte; obrigações acessórias federais, estaduais e municipais; departamento pessoal, se houver equipe; revisão periódica do enquadramento.
+- Escopo de referência — Começando: escolha da natureza jurídica e do regime tributário; registro na Junta Comercial ou no cartório, CNPJ e inscrições; orientação sobre alvarás, licenças e certificado digital; mapa das obrigações do primeiro ano; acompanhamento contábil e fiscal nos primeiros meses; reunião de revisão ao completar 12 meses.
+- Escopo de referência — MEI: acompanhamento da guia mensal (DAS-MEI); declaração anual do MEI (DASN-SIMEI); controle do faturamento com alerta de proximidade do limite; orientação na emissão de notas fiscais; orientação sobre a contratação de empregado; planejamento da passagem para microempresa.
+- Escopo de referência — Microempresa: escrituração contábil e demonstrações; apuração dos tributos e emissão das guias; obrigações acessórias do regime; pró-labore dos sócios e acompanhamento do Fator R, quando aplicável; folha de pagamento, quando houver colaboradores; relatório mensal com os principais números.
+- Escopo de referência — Empresa de Pequeno Porte: tudo do pacote Microempresa; departamento pessoal completo e eSocial; conciliação bancária; relatórios gerenciais: resultado, margens e fluxo de caixa; revisão anual do regime tributário, com estudo documentado; reuniões periódicas com o contador.
+- Escopo de referência — Empresa em crescimento: escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS e Cofins no regime adotado e dos tributos estaduais ou municipais; controle de retenções na fonte; obrigações acessórias do regime (como ECD, ECF e EFD-Contribuições); departamento pessoal; planejamento tributário documentado e reuniões gerenciais.
 - Adaptações e exclusões específicas do escopo: [a preencher pelo escritório].
 - Atividades a cargo do CONTRATANTE além da Cláusula 6: [a preencher pelo escritório, se houver].
 - Parâmetros considerados na Proposta (faturamento, atividade, volume de notas, número de sócios, número de empregados, movimentações, retenções, município): [a preencher pelo escritório].
@@ -462,7 +465,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 - Tem poderes para representar o CONTRATANTE neste ato e assinará digitalmente o PDF do Contrato pelo gov.br (conta nível prata ou ouro) ou com certificado ICP-Brasil, no prazo da Cláusula 24.6.
 - Aceite eletrônico dado {{DATA_ACEITE}}.
 
-## Aceite eletrônico
+## Fechamento
 
 Ao marcar a opção de concordância e confirmar o aceite, {{REPRESENTANTE_NOME}}, CPF {{REPRESENTANTE_CPF}}, em nome de {{CONTRATANTE_NOME}}, declara que leu integralmente e aceita estas Condições Gerais, versão 1.1 de 13/10/2026, e os Anexos II e III.
 

@@ -816,3 +816,13 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: #D64545;
   .fc-1 { left: -6px; bottom: -30px; }
   .fc-2 { top: -22px; }
 }
+
+/* Pacotes por porte: 5 cartões (3 + 2 centralizados) */
+.pkg-grid-5 { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+.pkg-grid-5 .pkg { flex: 0 1 calc((100% - 40px) / 3); min-width: 280px; }
+.pkg-next { font-size: .84rem; color: var(--ink-soft); margin: 8px 0 0; }
+.pkg-featured .pkg-next { color: rgba(255, 255, 255, .78); }
+.pkg-featured .pkg-next b { color: #fff; }
+.pkg-var { margin-bottom: 0; }
+@media (max-width: 1080px) { .pkg-grid-5 .pkg { flex-basis: calc((100% - 20px) / 2); } }
+@media (max-width: 720px) { .pkg-grid-5 .pkg { flex-basis: 100%; min-width: 0; } }

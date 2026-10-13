@@ -70,4 +70,4 @@ Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura s
 - Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura societária.
 
 ## Pacotes de serviços
-- [Pacotes e contratação](https://moraeseoliveiracontabil.com.br/#pacotes): Abertura de empresa; Essencial (Simples Nacional, sem funcionários); Empresa com equipe (Simples com departamento pessoal); Empresa em crescimento (Lucro Presumido, para empresas que saíram ou vão sair do Simples Nacional). Honorários somente em proposta escrita, formalizada em contrato (Resolução CFC 1.590/2020). Pagamento por Pix ou cartão de crédito.
+- [Pacotes e contratação](https://moraeseoliveiracontabil.com.br/#pacotes): Começando (abertura e primeiro ano); MEI (até R$ 81 mil por ano); Microempresa (até R$ 360 mil por ano); Empresa de Pequeno Porte (de R$ 360 mil a R$ 4,8 milhões por ano); Empresa em crescimento (Lucro Presumido ou Real). Honorários somente em proposta escrita, formalizada em contrato (Resolução CFC 1.590/2020). Pagamento por Pix ou cartão de crédito.
