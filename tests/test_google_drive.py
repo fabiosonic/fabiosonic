@@ -20,7 +20,7 @@ class _Req:
     def __init__(self, r):
         self.r = r
 
-    def execute(self):
+    def execute(self, num_retries=0):
         return self.r
 
 

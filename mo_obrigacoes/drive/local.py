@@ -32,6 +32,8 @@ class LocalDriveClient(DriveClient):
         for f in sorted(base.rglob("*")):
             if not f.is_file() or f.name.startswith((".", "~$")):
                 continue
+            if f.is_symlink():
+                continue
             st = f.stat()
             modificado = datetime.fromtimestamp(st.st_mtime)
             if modificado_apos and modificado <= modificado_apos:

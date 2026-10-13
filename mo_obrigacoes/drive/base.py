@@ -28,6 +28,10 @@ class ArquivoDrive:
     enviado_por: str = ""
 
 
+class ErroLeitura(Exception):
+    """Falha (possivelmente temporária) ao baixar o arquivo: o monitor deve tentar de novo na próxima varredura."""
+
+
 class DriveClient(ABC):
     @abstractmethod
     def listar_arquivos(self, pasta_id: str, modificado_apos: datetime | None = None) -> Iterator[ArquivoDrive]:
@@ -48,7 +52,7 @@ class DriveClient(ABC):
             dados = self.baixar(arquivo)
         except Exception as exc:  # noqa: BLE001
             log.warning("Falha ao baixar %s: %s", arquivo.nome, exc)
-            return ""
+            raise ErroLeitura(f"falha ao baixar '{arquivo.nome}': {exc}") from exc
         return extrair_texto(dados, arquivo.nome, arquivo.mime_type)
 
 

@@ -11,9 +11,11 @@ Configuração (ver docs/implantacao.md):
 from __future__ import annotations
 
 import io
+import re
 from collections import deque
 from datetime import datetime
 from typing import Iterator
+from zoneinfo import ZoneInfo
 
 from .base import ArquivoDrive, DriveClient
 
@@ -23,6 +25,18 @@ EXPORTACOES = {
     "application/vnd.google-apps.document": "text/plain",
     "application/vnd.google-apps.spreadsheet": "text/csv",
 }
+FUSO_ESCRITORIO = ZoneInfo("America/Sao_Paulo")
+TENTATIVAS = 5  # novas tentativas com espera exponencial em 429/5xx (googleapiclient)
+_RE_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def validar_id(valor: str) -> str:
+    """IDs do Drive têm só letras, números, '_' e '-'. Impede injeção na query (q=...)."""
+    if not _RE_ID.fullmatch(valor or ""):
+        raise ValueError(f"ID de pasta do Drive inválido: {valor!r}")
+    return valor
+
+
 CAMPOS = (
     "nextPageToken, files(id, name, mimeType, size, md5Checksum, createdTime, modifiedTime, "
     "webViewLink, lastModifyingUser(emailAddress, displayName), owners(emailAddress))"
@@ -32,7 +46,8 @@ CAMPOS = (
 def _dt(valor: str | None) -> datetime | None:
     if not valor:
         return None
-    return datetime.fromisoformat(valor.replace("Z", "+00:00")).replace(tzinfo=None)
+    # converte para o horário de Brasília (sem tzinfo): a data de entrega é comparada com o vencimento local
+    return datetime.fromisoformat(valor.replace("Z", "+00:00")).astimezone(FUSO_ESCRITORIO).replace(tzinfo=None)
 
 
 class GoogleDriveClient(DriveClient):
@@ -53,13 +68,13 @@ class GoogleDriveClient(DriveClient):
         token = None
         while True:
             resp = self.servico.files().list(
-                q=f"'{pasta_id}' in parents and trashed = false",
+                q=f"'{validar_id(pasta_id)}' in parents and trashed = false",
                 fields=CAMPOS,
                 pageSize=1000,
                 pageToken=token,
                 supportsAllDrives=True,
                 includeItemsFromAllDrives=True,
-            ).execute()
+            ).execute(num_retries=TENTATIVAS)
             yield from resp.get("files", [])
             token = resp.get("nextPageToken")
             if not token:
@@ -111,22 +126,22 @@ class GoogleDriveClient(DriveClient):
         down = MediaIoBaseDownload(buf, req)
         concluido = False
         while not concluido:
-            _, concluido = down.next_chunk()
+            _, concluido = down.next_chunk(num_retries=TENTATIVAS)
         return buf.getvalue()
 
     def garantir_pasta(self, nome: str, pai_id: str) -> str:
         nome_q = nome.replace("\\", "\\\\").replace("'", "\\'")
         resp = self.servico.files().list(
-            q=f"'{pai_id}' in parents and name = '{nome_q}' and mimeType = '{PASTA}' and trashed = false",
+            q=f"'{validar_id(pai_id)}' in parents and name = '{nome_q}' and mimeType = '{PASTA}' and trashed = false",
             fields="files(id)",
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=TENTATIVAS)
         if resp.get("files"):
             return resp["files"][0]["id"]
         criada = self.servico.files().create(
             body={"name": nome, "mimeType": PASTA, "parents": [pai_id]},
             fields="id",
             supportsAllDrives=True,
-        ).execute()
+        ).execute()  # sem retry: create não é idempotente (evita pasta duplicada)
         return criada["id"]
