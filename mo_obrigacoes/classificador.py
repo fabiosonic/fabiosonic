@@ -85,15 +85,29 @@ _RE_ROTULO = re.compile(
     re.IGNORECASE,
 )
 _RE_ROTULO_DATA = re.compile(
-    r"(?:per[ií]odo de apura[cç][aã]o|compet[eê]ncia)\s*[:\-]?\s*\d{1,2}/(\d{1,2})/(\d{4})", re.IGNORECASE
-)
-_RE_ANO_CALENDARIO = re.compile(r"(?:ano[- ]calend[aá]rio|exerc[ií]cio|ano[- ]base)\s*[:\-]?\s*(\d{4})", re.IGNORECASE)
-_RE_MES_ANO = re.compile(r"(?<!\d)(0?[1-9]|1[0-2])\s*[/\-_. ]\s*(20\d{2})(?!\d)")
-_RE_ANO_MES = re.compile(r"(?<!\d)(20\d{2})\s*[/\-_. ]?\s*(0[1-9]|1[0-2])(?!\d)")
-_RE_MES_EXTENSO = re.compile(
-    r"\b(" + "|".join(sorted(MESES, key=len, reverse=True)) + r")\b\s*(?:de\s*|/|-|_|\.)?\s*(20\d{2})",
+    r"(?:per[ií]odo de apura[cç][aã]o|compet[eê]ncia|per[ií]odo|refer[eê]ncia)\s*[:\-]?\s*\d{1,2}/(\d{1,2})/(\d{4})",
     re.IGNORECASE,
 )
+_RE_ANO_CALENDARIO = re.compile(r"(?:ano[- ]calend[aá]rio|ano[- ]base)\s*[:\-]?\s*(\d{4})", re.IGNORECASE)
+_RE_EXERCICIO = re.compile(r"exerc[ií]cio\s*[:\-]?\s*(\d{4})", re.IGNORECASE)
+_RE_XML_DATA = re.compile(r"<(?:dhEmi|dEmi|dhCompet|dCompet)>\s*(\d{4})-(\d{2})")
+_RE_MES_ANO = re.compile(r"(?<![\d/.\-])(0?[1-9]|1[0-2])\s*[/\-_. ]\s*(20\d{2})(?!\d)")
+_RE_ANO_MES = re.compile(r"(?<![\d/])(20\d{2})[/\-_.]?(0[1-9]|1[0-2])(?!\d)")
+_MESES_COMPLETOS = [m for m in MESES if len(m) > 3]
+_MESES_ABREV = [m for m in MESES if len(m) == 3]
+_RE_MES_EXTENSO = re.compile(
+    r"\b(" + "|".join(sorted(_MESES_COMPLETOS, key=len, reverse=True)) + r")\b\s*(?:de\s*|/|-|_|\.)?\s*(20\d{2})"
+    r"|\b(" + "|".join(_MESES_ABREV) + r")\s*[/\-_.]\s*(20\d{2})",
+    re.IGNORECASE,
+)
+
+
+def _mes_extenso(m: re.Match) -> tuple[int, int]:
+    """(ano, mes) de um match de _RE_MES_EXTENSO (nome completo ou abreviado)."""
+    nome = m.group(1) or m.group(3)
+    ano = m.group(2) or m.group(4)
+    return int(ano), MESES[nome.lower()]
+
 _RE_TRIMESTRE = re.compile(r"(?<!\d)([1-4])\s*[ºo°]?\s*(?:tri(?:mestre)?|T)\s*[/\-_ ]?\s*(?:de\s*)?(20\d{2})", re.IGNORECASE)
 
 
@@ -109,9 +123,14 @@ def extrair_competencia(texto: str, periodicidade: str = "mensal") -> str | None
         return None
     t = sem_acento(texto)
     if periodicidade == "anual":
-        m = _RE_ANO_CALENDARIO.search(t)
+        m = _RE_ANO_CALENDARIO.search(t) or _RE_EXERCICIO.search(t)
         if m:
             return _valida(int(m.group(1)), 12)
+    m = _RE_XML_DATA.search(t)
+    if m:
+        c = _valida(int(m.group(1)), int(m.group(2)))
+        if c:
+            return _ajustar(c, periodicidade)
     if periodicidade == "trimestral":
         m = _RE_TRIMESTRE.search(t)
         if m:
@@ -124,7 +143,7 @@ def extrair_competencia(texto: str, periodicidade: str = "mensal") -> str | None
                 return _ajustar(c, periodicidade)
     m = _RE_MES_EXTENSO.search(t)
     if m:
-        c = _valida(int(m.group(2)), MESES[m.group(1).lower()])
+        c = _valida(*_mes_extenso(m))
         if c:
             return _ajustar(c, periodicidade)
     m = _RE_MES_ANO.search(t)
@@ -164,9 +183,9 @@ def competencia_por_caminho(caminho: str, periodicidade: str = "mensal") -> str 
                 m = re.match(r"\s*(0?[1-9]|1[0-2])(?!\d)", partes[i + 1])
                 if m:
                     return _ajustar(competencia_str(ano, int(m.group(1))), periodicidade)
-                m = _RE_MES_EXTENSO.search(partes[i + 1] + f" {ano}")
+                m = _RE_MES_EXTENSO.search(partes[i + 1] + f"/{ano}")
                 if m:
-                    return _ajustar(competencia_str(ano, MESES[m.group(1).lower()]), periodicidade)
+                    return _ajustar(competencia_str(*_mes_extenso(m)), periodicidade)
     if ano and periodicidade == "anual":
         return competencia_str(ano, 12)
     return None
@@ -247,8 +266,10 @@ def pontuar(regra: Regra, nome: str, texto: str, caminho: str) -> tuple[int, lis
         elif texto.strip() and (conteudo or obrig):
             # há texto legível e ele não confirma a obrigação: o nome sozinho não basta
             pontos += 35
+        elif extrair_competencia(nome, regra.periodicidade) or competencia_por_caminho(caminho, regra.periodicidade):
+            pontos += 50  # PDF digitalizado (imagem) ou sem texto: vale o nome, se a competência vier do nome ou da pasta
         else:
-            pontos += 50  # PDF digitalizado (imagem) ou formato sem texto: vale o nome
+            pontos += 35  # sem texto e sem competência ("Comprovante das despesas.pdf" solto): só sugere
         motivos.append("nome do arquivo")
 
     pastas = rec.get("pastas", [])
