@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from .calendario import formatar_competencia
+from .config import get_config
 from .models import (
     DEPARTAMENTOS,
     STATUS_DISPENSADA,
@@ -56,25 +57,33 @@ def indicadores(tarefas: list[Tarefa], hoje: date | None = None, dias_alerta: in
     }
 
 
-def por_grupo(tarefas: list[Tarefa], chave, hoje: date | None = None) -> list[tuple[str, dict]]:
+def por_grupo(tarefas: list[Tarefa], chave, hoje: date | None = None, dias_alerta: int = 3) -> list[tuple[str, dict]]:
     grupos: dict[str, list[Tarefa]] = defaultdict(list)
     for t in tarefas:
         grupos[chave(t)].append(t)
-    return sorted(((k, indicadores(v, hoje)) for k, v in grupos.items()), key=lambda x: x[0])
+    return sorted(((k, indicadores(v, hoje, dias_alerta)) for k, v in grupos.items()), key=lambda x: x[0])
 
 
 def resumo_competencia(sessao: Session, competencia: str, hoje: date | None = None) -> dict:
     tarefas = _tarefas(sessao, competencia)
+    dias = get_config().dias_alerta_vencimento
     return {
-        "geral": indicadores(tarefas, hoje),
-        "departamentos": por_grupo(tarefas, lambda t: DEPARTAMENTOS.get(t.obrigacao.departamento, "?"), hoje),
-        "obrigacoes": por_grupo(tarefas, lambda t: t.obrigacao.nome, hoje),
-        "empresas": por_grupo(tarefas, lambda t: f"{t.empresa.codigo} - {t.empresa.nome_exibicao}", hoje),
+        "geral": indicadores(tarefas, hoje, dias),
+        "departamentos": por_grupo(tarefas, lambda t: DEPARTAMENTOS.get(t.obrigacao.departamento, "?"), hoje, dias),
+        "obrigacoes": por_grupo(tarefas, lambda t: t.obrigacao.nome, hoje, dias),
+        "empresas": por_grupo(tarefas, lambda t: f"{t.empresa.codigo} - {t.empresa.nome_exibicao}", hoje, dias),
         "responsaveis": por_grupo(
             [t for t in tarefas if t.obrigacao.tipo == "entrega"],
             lambda t: (r.nome if (r := t.empresa.responsavel_do(t.obrigacao.departamento)) else "Sem responsável"),
-            hoje),
+            hoje, dias),
     }
+
+
+def _celula_segura(valor):
+    """Evita injeção de fórmula no Excel: texto que começa com =, +, - ou @ vira texto literal."""
+    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@"):
+        return "'" + valor
+    return valor
 
 
 def exportar_csv(tarefas: list[Tarefa]) -> str:
@@ -83,12 +92,12 @@ def exportar_csv(tarefas: list[Tarefa]) -> str:
     w.writerow(["Código", "Empresa", "CNPJ", "Regime", "Departamento", "Obrigação", "Competência",
                 "Vencimento", "Situação", "Data da entrega", "Origem da baixa", "Comprovantes", "Observação"])
     for t in sorted(tarefas, key=lambda x: (x.empresa.codigo, x.vencimento)):
-        w.writerow([
+        w.writerow([_celula_segura(c) for c in [
             t.empresa.codigo, t.empresa.razao_social, t.empresa.cnpj_formatado, t.empresa.regime,
             DEPARTAMENTOS.get(t.obrigacao.departamento, ""), t.obrigacao.nome,
             formatar_competencia(t.competencia, t.obrigacao.periodicidade), t.vencimento.strftime("%d/%m/%Y"),
             STATUS_LABELS.get(t.status, t.status),
             t.data_entrega.strftime("%d/%m/%Y %H:%M") if t.data_entrega else "",
             t.origem_baixa, " | ".join(d.link for d in t.documentos), t.observacao,
-        ])
+        ]])
     return "﻿" + buf.getvalue()  # BOM para o Excel abrir acentos corretamente

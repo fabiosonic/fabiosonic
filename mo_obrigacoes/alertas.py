@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import smtplib
+import ssl
 import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -58,15 +59,25 @@ class Notificador:
         em["Subject"] = msg.assunto
         em.set_content("Este e-mail requer um leitor compatível com HTML.")
         em.add_alternative(msg.html, subtype="html")
-        with smtplib.SMTP(self.cfg.smtp_host, self.cfg.smtp_port, timeout=30) as s:
-            s.starttls()
-            if self.cfg.smtp_user:
-                s.login(self.cfg.smtp_user, self.cfg.smtp_password)
-            s.send_message(em)
+        try:
+            with smtplib.SMTP(self.cfg.smtp_host, self.cfg.smtp_port, timeout=30) as s:
+                s.starttls(context=ssl.create_default_context())  # valida o certificado do servidor SMTP
+                if self.cfg.smtp_user:
+                    s.login(self.cfg.smtp_user, self.cfg.smtp_password)
+                s.send_message(em)
+        except (smtplib.SMTPException, OSError) as exc:
+            # um endereço ruim não pode derrubar a rotina inteira (e fazê-la reenviar tudo a cada ciclo)
+            log.warning("Falha ao enviar e-mail para %s: %s", destinatarios, exc)
+            self.enviadas.remove(msg)
+            return False
         return True
 
     def webhook(self, evento: str, dados: dict) -> bool:
         if not self.cfg.webhook_url or self.simular:
+            return False
+        if not self.cfg.webhook_url.startswith("https://"):
+            # o corpo leva CNPJ e WhatsApp de clientes: nunca enviar em texto puro
+            log.warning("Webhook recusado: a URL precisa começar com https://")
             return False
         corpo = json.dumps({"evento": evento, **dados}, default=str).encode()
         req = urllib.request.Request(self.cfg.webhook_url, data=corpo, headers={"Content-Type": "application/json"})

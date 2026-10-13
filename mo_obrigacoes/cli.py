@@ -22,7 +22,7 @@ from sqlalchemy import select
 
 from .agenda import gerar_agenda
 from .alertas import executar_alertas
-from .calendario import competencia_anterior, competencia_str
+from .calendario import competencia_anterior, competencia_str, somar_meses
 from .catalogo import sincronizar_catalogo
 from .classificador import so_digitos
 from .config import get_config
@@ -105,15 +105,20 @@ def cmd_worker(args) -> None:
         agora = datetime.now()
         try:
             with sessao() as s:
-                # agenda da competência anterior (fechamento) e da corrente (documentos do próprio mês)
-                gerar_agenda(s, competencia_anterior(agora.date()))
-                gerar_agenda(s, competencia_str(agora.year, agora.month))
+                # anterior (fechamento), corrente e próxima: obrigações anuais da competência 12 com prazo
+                # em novembro/dezembro (13º salário, DCTFWeb anual) precisam existir com antecedência
+                for deslocamento in (-1, 0, 1):
+                    ano, mes = somar_meses(agora.year, agora.month, deslocamento)
+                    gerar_agenda(s, competencia_str(ano, mes))
             cmd_sync(argparse.Namespace(completo=False))
-            if agora.hour >= args.hora_alertas and ultimo_alerta != agora.date():
-                cmd_alertas(None)
-                ultimo_alerta = agora.date()
         except Exception:  # noqa: BLE001
-            log.exception("Falha no ciclo do worker")
+            log.exception("Falha na agenda/sincronização do worker")
+        if agora.hour >= args.hora_alertas and ultimo_alerta != agora.date():
+            ultimo_alerta = agora.date()  # marca ANTES: uma falha não pode reenviar e-mails a cada ciclo
+            try:
+                cmd_alertas(None)
+            except Exception:  # noqa: BLE001
+                log.exception("Falha ao enviar alertas (não será repetido hoje)")
         if args.uma_vez:
             break
         time.sleep(cfg.sync_interval_minutes * 60)
