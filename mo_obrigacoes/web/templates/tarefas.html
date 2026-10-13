@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% from "_macros.html" import situacao %}
+{% block titulo %}Agenda{% endblock %}
+{% block conteudo %}
+<h1>Agenda de obrigações</h1>
+<form method="get" class="filtros">
+<label>Competência<select name="competencia"><option value="">Todas</option>{% for c in comps %}<option value="{{ c }}" {{ 'selected' if filtro.competencia == c }}>{{ formatar_competencia(c) }}</option>{% endfor %}</select></label>
+<label>Situação<select name="situacao"><option value="">Todas</option><option value="atrasada" {{ 'selected' if filtro.situacao=='atrasada' }}>Atrasadas</option><option value="a_vencer" {{ 'selected' if filtro.situacao=='a_vencer' }}>A vencer</option></select></label>
+<label>Status<select name="status"><option value="">Todos</option>{% for k, v in STATUS_LABELS.items() %}<option value="{{ k }}" {{ 'selected' if filtro.status==k }}>{{ v }}</option>{% endfor %}</select></label>
+<label>Departamento<select name="departamento"><option value="">Todos</option>{% for k, v in DEPARTAMENTOS.items() %}<option value="{{ k }}" {{ 'selected' if filtro.departamento==k }}>{{ v }}</option>{% endfor %}</select></label>
+<label>Obrigação<select name="obrigacao"><option value="">Todas</option>{% for o in obrigs %}<option value="{{ o.codigo }}" {{ 'selected' if filtro.obrigacao==o.codigo }}>{{ o.nome }}</option>{% endfor %}</select></label>
+<input type="hidden" name="empresa_id" value="{{ filtro.empresa_id }}">
+<button class="sec">Filtrar</button>
+<a class="btn sec" href="/relatorios/csv?competencia={{ filtro.competencia }}">Exportar CSV</a></form>
+<div class="painel"><table><tr><th>Vencimento</th><th>Empresa</th><th>Obrigação</th><th>Comp.</th><th>Situação</th><th>Entrega / comprovante</th><th>Ações</th></tr>
+{% for t in tarefas %}<tr><td>{{ t.vencimento.strftime('%d/%m/%Y') }}</td><td><a href="/empresas/{{ t.empresa.id }}">{{ t.empresa.codigo }}</a> <span class="muted">{{ t.empresa.nome_exibicao }}</span></td>
+<td>{{ t.obrigacao.nome }}<div class="muted">{{ DEPARTAMENTOS.get(t.obrigacao.departamento) }}</div></td><td>{{ formatar_competencia(t.competencia, t.obrigacao.periodicidade) }}</td><td>{{ situacao(t, hoje) }}</td>
+<td class="muted">{% if t.data_entrega %}{{ t.data_entrega.strftime('%d/%m/%Y') }} ({{ t.origem_baixa }}){% endif %}
+{% for d in t.documentos %}<br><a href="{{ d.link }}" target="_blank">{{ d.nome }}</a>{% endfor %}{% if t.observacao %}<br><i>{{ t.observacao }}</i>{% endif %}</td>
+<td><form class="inline" method="post" action="/tarefas/{{ t.id }}/acao"><input type="hidden" name="voltar" value="{{ request.url.path }}?{{ request.url.query }}">
+{% if t.status == 'pendente' %}<input name="observacao" placeholder="obs./justificativa" size="12">
+<button class="peq" name="acao" value="baixa">Baixar</button><button class="peq sec" name="acao" value="dispensar">Dispensar</button>
+{% else %}<button class="peq sec" name="acao" value="reabrir">Reabrir</button>{% endif %}</form></td></tr>
+{% else %}<tr><td colspan="7" class="muted">Nenhuma tarefa encontrada com esses filtros.</td></tr>{% endfor %}</table></div>
+{% endblock %}

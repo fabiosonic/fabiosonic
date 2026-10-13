@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% from "_macros.html" import sitdoc %}
+{% block titulo %}Documentos{% endblock %}
+{% block conteudo %}
+<h1>Documentos do Google Drive</h1>
+<div class="acoes">{% for k, rot in [('revisar','Para revisar'),('classificado','Identificados'),('manual','Classificados manualmente'),('divergente','CNPJ divergente'),('','Todos')] %}
+<a class="btn {{ '' if situacao == k else 'sec' }}" href="/documentos?situacao={{ k }}">{{ rot }}</a>{% endfor %}</div>
+<p class="muted">Documentos que o robô não conseguiu identificar com segurança. Ao classificar, a tarefa correspondente recebe baixa e o padrão fica registrado na auditoria.</p>
+<div class="painel"><table><tr><th>Arquivo</th><th>Empresa</th><th>Leitura automática</th><th>Situação</th><th>Classificar</th></tr>
+{% for d in docs %}<tr><td><a href="{{ d.link }}" target="_blank">{{ d.nome }}</a><div class="muted">{{ d.caminho }}</div><div class="muted">{{ d.enviado_por }}</div></td>
+<td>{% if d.empresa %}<a href="/empresas/{{ d.empresa.id }}">{{ d.empresa.codigo }}</a>{% endif %}</td>
+<td class="muted">{{ d.obrigacao_codigo or '?' }} {{ d.competencia }} ({{ d.confianca }}%)
+{% if d.detalhes.get('candidatos') %}<br>candidatos: {% for c, p in d.detalhes['candidatos'] %}{{ c }} {{ p }}%{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+{% if not d.detalhes.get('texto_extraido') %}<br>sem texto (PDF digitalizado?){% endif %}
+{% if d.cnpjs_encontrados %}<br>CNPJs: {{ d.cnpjs_encontrados|join(', ') }}{% endif %}</td>
+<td>{{ sitdoc(d.situacao) }}{% if d.detalhes.get('empresa_sugerida') %}<div class="muted">pertence a {{ d.detalhes['empresa_sugerida'] }} — mova o arquivo para a pasta correta</div>{% endif %}</td>
+<td>{% if d.situacao != 'divergente' %}<form method="post" action="/documentos/{{ d.id }}/classificar">
+<select name="codigo">{% for o in obrigs %}<option value="{{ o.codigo }}" {{ 'selected' if o.codigo == d.obrigacao_codigo }}>{{ o.nome }}</option>{% endfor %}</select>
+<input name="competencia" size="7" value="{{ d.competencia or comp_padrao }}" pattern="\d{4}-\d{2}" title="AAAA-MM">
+<button class="peq">OK</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Nada aqui. 👍</td></tr>{% endfor %}</table></div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block titulo %}Obrigações{% endblock %}
+{% block conteudo %}
+<h1>Catálogo de obrigações monitoradas</h1>
+<p class="muted">Prazos conforme a legislação vigente. Prazos estaduais e municipais podem ser ajustados por empresa (cadastro → exceções).</p>
+<div class="painel"><table><tr><th>Obrigação</th><th>Departamento</th><th>Periodicidade</th><th>Prazo</th><th>Aplica-se a</th><th>Base legal / penalidade</th></tr>
+{% for o in obrigacoes %}{% set r = o.regra_vencimento %}<tr><td><b>{{ o.nome }}</b><div class="muted">{{ o.codigo }}{{ ' · enviado pelo cliente' if o.tipo == 'recebimento' }}</div></td>
+<td>{{ DEPARTAMENTOS.get(o.departamento) }}</td><td>{{ o.periodicidade }}</td>
+<td>{% if r.tipo == 'ultimo_dia_util' %}último dia útil{% elif r.tipo == 'dia_util' %}{{ r.n }}º dia útil{% else %}dia {{ r.dia }}{{ ' (antecipa)' if r.get('ajuste','antecipa') == 'antecipa' else ' (prorroga)' if r.get('ajuste') == 'posterga' else '' }}{% endif %}
+{% if r.get('mes') %} de {{ ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][r.mes-1] }} do ano seguinte{% elif r.get('meses_apos', 1) == 0 %} do próprio mês{% elif r.get('meses_apos', 1) == 2 %} do 2º mês seguinte{% else %} do mês seguinte{% endif %}</td>
+<td class="muted">{% set a = o.aplicabilidade %}{% if a.get('qualquer') %}{% for x in a.qualquer %}{{ x.get('regimes', ['todos'])|join('/') }}{% if x.get('exige_algum') %} c/ {{ x.exige_algum|join(' ou ') }}{% endif %}{{ '; ' if not loop.last }}{% endfor %}{% else %}{{ a.get('regimes', ['todos'])|join('/') }}{% if a.get('exige') %} · exige {{ a.exige|join(', ') }}{% endif %}{% if a.get('exige_algum') %} · {{ a.exige_algum|join(' ou ') }}{% endif %}{% endif %}</td>
+<td class="muted">{{ o.base_legal }}{% if o.multa_referencia %}<br><i>{{ o.multa_referencia }}</i>{% endif %}</td></tr>{% endfor %}</table></div>
+{% endblock %}

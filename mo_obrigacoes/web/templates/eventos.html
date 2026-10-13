@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block titulo %}Auditoria{% endblock %}
+{% block conteudo %}
+<h1>Trilha de auditoria</h1>
+<div class="painel"><table><tr><th>Momento (UTC)</th><th>Tipo</th><th>Usuário</th><th>Mensagem</th></tr>
+{% for e in eventos %}<tr><td>{{ e.momento.strftime('%d/%m/%Y %H:%M:%S') }}</td><td><code>{{ e.tipo }}</code></td><td>{{ e.usuario }}</td>
+<td>{% if e.empresa_id %}<a href="/empresas/{{ e.empresa_id }}">#{{ e.empresa_id }}</a> {% endif %}{{ e.mensagem }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

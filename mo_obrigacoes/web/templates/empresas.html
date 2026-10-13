@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block titulo %}Empresas{% endblock %}
+{% block conteudo %}
+<h1>Empresas da carteira</h1>
+<div class="filtros"><form method="get" class="filtros"><input name="q" value="{{ q }}" placeholder="Buscar por código, nome ou CNPJ"><button class="sec">Buscar</button></form>
+<a class="btn" href="/empresas/nova">+ Nova empresa</a></div>
+<div class="painel"><table><tr><th>Código</th><th>Razão social</th><th>CNPJ</th><th>Regime</th><th>Responsáveis</th><th>Drive</th><th class="direita">Atrasadas</th></tr>
+{% for e in empresas %}<tr{% if not e.ativa %} style="opacity:.5"{% endif %}><td>{{ e.codigo }}</td><td><a href="/empresas/{{ e.id }}">{{ e.razao_social }}</a>{% if e.nome_fantasia %}<div class="muted">{{ e.nome_fantasia }}</div>{% endif %}</td>
+<td>{{ e.cnpj_formatado }}</td><td>{{ REGIMES.get(e.regime, e.regime) }}</td>
+<td class="muted">{% if e.resp_fiscal %}F: {{ e.resp_fiscal.nome }}<br>{% endif %}{% if e.resp_contabil %}C: {{ e.resp_contabil.nome }}<br>{% endif %}{% if e.resp_pessoal %}DP: {{ e.resp_pessoal.nome }}{% endif %}</td>
+<td>{% if e.drive_folder_id %}<span class="tag entregue">vinculado</span>{% else %}<span class="tag atrasada">sem pasta</span>{% endif %}</td>
+<td class="direita">{% if atrasos.get(e.id) %}<a class="tag atrasada" href="/tarefas?empresa_id={{ e.id }}&situacao=atrasada">{{ atrasos[e.id] }}</a>{% else %}0{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">Nenhuma empresa cadastrada.</td></tr>{% endfor %}</table></div>
+{% endblock %}

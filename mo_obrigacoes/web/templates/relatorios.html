@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import tabela_kpi %}
+{% block titulo %}Relatórios{% endblock %}
+{% block conteudo %}
+<div class="navcomp"><a class="btn sec" href="/relatorios?competencia={{ ant }}">◀</a><h1 style="margin:0">Relatórios · {{ formatar_competencia(comp) }}</h1>
+<a class="btn sec" href="/relatorios?competencia={{ prox }}">▶</a><a class="btn" href="/relatorios/csv?competencia={{ comp }}">Exportar CSV (Excel)</a></div>
+{% set g = r.geral %}
+<div class="cards"><div class="card"><div class="n">{{ g.total }}</div><div class="l">Tarefas</div></div>
+<div class="card verde"><div class="n">{{ g.no_prazo }}</div><div class="l">No prazo</div></div>
+<div class="card laranja"><div class="n">{{ g.com_atraso }}</div><div class="l">Entregues com atraso</div></div>
+<div class="card"><div class="n">{{ g.dispensadas }}</div><div class="l">Dispensadas</div></div>
+<div class="card vermelho"><div class="n">{{ g.atrasadas }}</div><div class="l">Em atraso</div></div>
+<div class="card verde"><div class="n">{{ g.pontualidade_pct }}%</div><div class="l">Pontualidade</div></div></div>
+<div class="painel"><h2 style="margin-top:0">Por responsável</h2>{{ tabela_kpi(r.responsaveis, 'Responsável') }}</div>
+<div class="painel"><h2 style="margin-top:0">Por obrigação</h2>{{ tabela_kpi(r.obrigacoes, 'Obrigação') }}</div>
+<div class="painel"><h2 style="margin-top:0">Por empresa</h2>{{ tabela_kpi(r.empresas, 'Empresa') }}</div>
+{% endblock %}

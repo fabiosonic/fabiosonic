@@ -1,0 +1,17 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block titulo %}Painel{% endblock %} · {{ escritorio }}</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<header><div class="marca">{{ escritorio }}<small>Monitor de Obrigações e Documentos</small></div>
+<nav>{% set p = request.url.path %}
+<a href="/" class="{{ 'ativo' if p == '/' }}">Painel</a>
+<a href="/tarefas" class="{{ 'ativo' if p.startswith('/tarefas') }}">Agenda</a>
+<a href="/documentos" class="{{ 'ativo' if p.startswith('/documentos') }}">Documentos</a>
+<a href="/empresas" class="{{ 'ativo' if p.startswith('/empresas') }}">Empresas</a>
+<a href="/relatorios" class="{{ 'ativo' if p.startswith('/relatorios') }}">Relatórios</a>
+<a href="/obrigacoes" class="{{ 'ativo' if p.startswith('/obrigacoes') }}">Obrigações</a>
+<a href="/responsaveis" class="{{ 'ativo' if p.startswith('/responsaveis') }}">Equipe</a>
+<a href="/eventos" class="{{ 'ativo' if p.startswith('/eventos') }}">Auditoria</a></nav></header>
+<main>
+{% if sem_senha %}<div class="aviso alerta">Modo desenvolvimento: defina <code>MO_ADMIN_PASSWORD</code> para proteger o painel.</div>{% endif %}
+{% if msg %}<div class="aviso">{{ msg }}</div>{% endif %}
+{% block conteudo %}{% endblock %}
+</main></body></html>

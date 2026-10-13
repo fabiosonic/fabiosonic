@@ -1,0 +1,43 @@
+:root{--azul:#1d3557;--azul2:#2b5c8a;--fundo:#f4f6f9;--borda:#dde3ea;--texto:#1f2933;--cinza:#667085;
+--verde:#067647;--verde-bg:#dcfae6;--vermelho:#b42318;--vermelho-bg:#fee4e2;--laranja:#b54708;--laranja-bg:#fef0c7;
+--azul-bg:#e0eaff;--cinza-bg:#eef2f6}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 "Segoe UI",Roboto,Arial,sans-serif;background:var(--fundo);color:var(--texto)}
+a{color:var(--azul2);text-decoration:none}a:hover{text-decoration:underline}
+header{background:var(--azul);color:#fff;padding:0 20px;display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+header .marca{font-weight:700;padding:14px 0;font-size:16px}header .marca small{display:block;font-weight:400;opacity:.75;font-size:11px}
+header nav a{color:#dbe7f5;padding:16px 10px;display:inline-block}header nav a:hover,header nav a.ativo{color:#fff;background:rgba(255,255,255,.08);text-decoration:none}
+main{padding:20px;max-width:1400px;margin:0 auto}
+h1{font-size:22px;margin:4px 0 16px}h2{font-size:17px;margin:24px 0 10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.card{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:14px}
+.card .n{font-size:26px;font-weight:700}.card .l{color:var(--cinza);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+.card.vermelho .n{color:var(--vermelho)}.card.verde .n{color:var(--verde)}.card.laranja .n{color:var(--laranja)}
+.painel{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:14px;margin-bottom:16px;overflow-x:auto}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse}th,td{padding:7px 8px;border-bottom:1px solid var(--borda);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--cinza);text-transform:uppercase;background:#fafbfc}
+tr:hover td{background:#fafcff}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.entregue{background:var(--verde-bg);color:var(--verde)}.entregue_atraso{background:var(--laranja-bg);color:var(--laranja)}
+.atrasada{background:var(--vermelho-bg);color:var(--vermelho)}.vence_hoje,.a_vencer{background:var(--laranja-bg);color:var(--laranja)}
+.no_prazo{background:var(--azul-bg);color:var(--azul2)}.dispensada{background:var(--cinza-bg);color:var(--cinza)}
+.classificado,.manual{background:var(--verde-bg);color:var(--verde)}.nao_identificado,.sem_tarefa{background:var(--laranja-bg);color:var(--laranja)}
+.divergente{background:var(--vermelho-bg);color:var(--vermelho)}
+.barra{height:8px;background:var(--cinza-bg);border-radius:4px;overflow:hidden;min-width:80px}.barra span{display:block;height:100%;background:var(--verde)}
+form.inline{display:inline}
+input,select,textarea{font:inherit;padding:6px 8px;border:1px solid var(--borda);border-radius:6px;background:#fff}
+button,.btn{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--azul2);background:var(--azul2);color:#fff;cursor:pointer;display:inline-block}
+button.sec,.btn.sec{background:#fff;color:var(--azul2)}button.peq{padding:2px 8px;font-size:12px}
+button:hover,.btn:hover{filter:brightness(1.08);text-decoration:none}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px}.filtros label{font-size:12px;color:var(--cinza);display:flex;flex-direction:column;gap:2px}
+.aviso{padding:10px 14px;border-radius:8px;margin-bottom:14px;background:var(--azul-bg);color:var(--azul)}
+.aviso.alerta{background:var(--laranja-bg);color:var(--laranja)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.form-grid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--cinza)}
+.chk{display:flex;gap:6px;align-items:center;color:var(--texto)!important;flex-direction:row!important}
+.muted{color:var(--cinza);font-size:12px}.direita{text-align:right}.centro{text-align:center}
+.matriz td,.matriz th{text-align:center;font-size:12px}.matriz td:first-child,.matriz th:first-child{text-align:left}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.navcomp{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+details summary{cursor:pointer;color:var(--azul2)}
+code{background:var(--cinza-bg);padding:1px 4px;border-radius:4px;font-size:12px}

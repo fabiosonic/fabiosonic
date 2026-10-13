@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+*.db
+*.sqlite3
+credenciais/
+service-account*.json
+.pytest_cache/
+dados/

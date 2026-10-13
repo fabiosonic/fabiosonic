@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% from "_macros.html" import situacao, sitdoc, tabela_kpi %}
+{% block titulo %}Painel{% endblock %}
+{% block conteudo %}
+<div class="navcomp"><a class="btn sec" href="/?competencia={{ ant }}">◀</a>
+<h1 style="margin:0">Competência {{ formatar_competencia(comp) }}</h1><a class="btn sec" href="/?competencia={{ prox }}">▶</a></div>
+<div class="acoes">
+<form class="inline" method="post" action="/acoes/agenda"><input type="hidden" name="competencia" value="{{ comp }}"><button>Gerar agenda de {{ formatar_competencia(comp) }}</button></form>
+<form class="inline" method="post" action="/acoes/sincronizar"><button class="sec">Verificar Google Drive agora</button></form>
+<form class="inline" method="post" action="/acoes/alertas"><button class="sec">Enviar alertas</button></form>
+<span class="muted" style="align-self:center">Última varredura do Drive: {{ ultima_sync.strftime('%d/%m/%Y %H:%M') ~ ' UTC' if ultima_sync else 'nunca' }}</span>
+</div>
+{% set g = r.geral %}
+<div class="cards">
+<div class="card"><div class="n">{{ g.total }}</div><div class="l">Tarefas na competência</div></div>
+<div class="card verde"><div class="n">{{ g.entregues }}</div><div class="l">Entregues</div></div>
+<div class="card verde"><div class="n">{{ g.pontualidade_pct }}%</div><div class="l">Pontualidade</div></div>
+<div class="card"><div class="n">{{ g.conclusao_pct }}%</div><div class="l">Conclusão</div></div>
+<div class="card laranja"><div class="n">{{ g.a_vencer }}</div><div class="l">Vencem em {{ dias_alerta }} dias</div></div>
+<div class="card vermelho"><div class="n"><a href="/tarefas?competencia={{ comp }}&situacao=atrasada" style="color:inherit">{{ g.atrasadas }}</a></div><div class="l">Atrasadas</div></div>
+<div class="card laranja"><div class="n"><a href="/documentos" style="color:inherit">{{ revisar }}</a></div><div class="l">Documentos p/ revisar</div></div>
+</div>
+<div class="painel"><h2 style="margin-top:0">Atenção imediata (todas as competências)</h2>
+{% if criticas %}<table><tr><th>Vencimento</th><th>Empresa</th><th>Obrigação</th><th>Competência</th><th>Situação</th></tr>
+{% for t in criticas %}<tr><td>{{ t.vencimento.strftime('%d/%m/%Y') }}</td><td><a href="/empresas/{{ t.empresa.id }}">{{ t.empresa.codigo }} - {{ t.empresa.nome_exibicao }}</a></td>
+<td>{{ t.obrigacao.nome }}</td><td>{{ formatar_competencia(t.competencia, t.obrigacao.periodicidade) }}</td><td>{{ situacao(t, hoje) }}</td></tr>{% endfor %}</table>
+{% else %}<p class="muted">Nenhuma obrigação atrasada ou vencendo nos próximos dias. 🎉</p>{% endif %}</div>
+<div class="grid2">
+<div class="painel"><h2 style="margin-top:0">Por departamento</h2>{{ tabela_kpi(r.departamentos, 'Departamento') }}</div>
+<div class="painel"><h2 style="margin-top:0">Por responsável</h2>{{ tabela_kpi(r.responsaveis, 'Responsável') }}</div>
+</div>
+<div class="painel"><h2 style="margin-top:0">Últimos documentos detectados no Drive</h2>
+<table><tr><th>Arquivo</th><th>Empresa</th><th>Identificado como</th><th>Competência</th><th>Situação</th></tr>
+{% for d in ultimos %}<tr><td><a href="{{ d.link }}" target="_blank">{{ d.nome }}</a><div class="muted">{{ d.caminho }}</div></td>
+<td>{{ d.empresa.codigo if d.empresa else '-' }}</td><td>{{ d.obrigacao_codigo or '-' }} <span class="muted">{{ d.confianca }}%</span></td><td>{{ d.competencia }}</td><td>{{ sitdoc(d.situacao) }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Nenhum documento processado ainda.</td></tr>{% endfor %}</table></div>
+{% endblock %}

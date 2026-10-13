@@ -1,0 +1,17 @@
+{% macro situacao(t, hoje) -%}
+{%- set s = t.situacao(hoje) -%}
+{%- set rot = {'pendente':'Pendente','entregue':'Entregue','entregue_atraso':'Entregue c/ atraso','dispensada':'Dispensada','atrasada':'Atrasada','vence_hoje':'Vence hoje','a_vencer':'A vencer','no_prazo':'No prazo'} -%}
+<span class="tag {{ s }}">{{ rot.get(s, s) }}</span>
+{%- endmacro %}
+{% macro sitdoc(s) -%}
+{%- set rot = {'classificado':'Identificado','manual':'Classificado manualmente','nao_identificado':'Não identificado','divergente':'CNPJ de outra empresa','sem_tarefa':'Fora do perfil'} -%}
+<span class="tag {{ s }}">{{ rot.get(s, s) }}</span>
+{%- endmacro %}
+{% macro barra(pct) -%}<div class="barra" title="{{ pct }}%"><span style="width:{{ pct }}%"></span></div>{%- endmacro %}
+{% macro tabela_kpi(linhas, titulo) -%}
+<table><tr><th>{{ titulo }}</th><th class="direita">Total</th><th class="direita">Entregues</th><th class="direita">Atrasadas</th><th class="direita">Pendentes</th><th>Conclusão</th><th class="direita">Pontualidade</th></tr>
+{% for nome, k in linhas %}<tr><td>{{ nome }}</td><td class="direita">{{ k.total }}</td><td class="direita">{{ k.entregues }}</td>
+<td class="direita">{% if k.atrasadas %}<b style="color:var(--vermelho)">{{ k.atrasadas }}</b>{% else %}0{% endif %}</td>
+<td class="direita">{{ k.pendentes }}</td><td>{{ barra(k.conclusao_pct) }} <span class="muted">{{ k.conclusao_pct }}%</span></td><td class="direita">{{ k.pontualidade_pct }}%</td></tr>{% endfor %}
+</table>
+{%- endmacro %}

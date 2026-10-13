@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% block titulo %}{{ 'Editar' if emp else 'Nova' }} empresa{% endblock %}
+{% block conteudo %}
+<h1>{{ 'Editar ' ~ emp.razao_social if emp else 'Nova empresa' }}</h1>
+<form method="post" action="/empresas/salvar">{% if emp %}<input type="hidden" name="id" value="{{ emp.id }}">{% endif %}
+<div class="painel"><h2 style="margin-top:0">Identificação</h2><div class="form-grid">
+<label>Código interno<input name="codigo" required value="{{ emp.codigo if emp else '' }}"></label>
+<label>CNPJ (ou CPF)<input name="cnpj" required value="{{ emp.cnpj_formatado if emp else '' }}"></label>
+<label>Razão social<input name="razao_social" required value="{{ emp.razao_social if emp else '' }}"></label>
+<label>Nome fantasia<input name="nome_fantasia" value="{{ emp.nome_fantasia if emp else '' }}"></label>
+<label>Regime tributário<select name="regime">{% for k, v in REGIMES.items() %}<option value="{{ k }}" {{ 'selected' if emp and emp.regime == k }}>{{ v }}</option>{% endfor %}</select></label>
+<label>UF<input name="uf" maxlength="2" value="{{ emp.uf if emp else '' }}"></label>
+<label>Município<input name="municipio" value="{{ emp.municipio if emp else '' }}"></label>
+<label class="chk"><input type="checkbox" name="ativa" {{ 'checked' if not emp or emp.ativa }}> Empresa ativa</label>
+</div></div>
+<div class="painel"><h2 style="margin-top:0">Perfil (define quais obrigações entram na agenda)</h2><div class="form-grid">
+{% for flag, rotulo in flags %}<label class="chk"><input type="checkbox" name="{{ flag }}" {{ 'checked' if (emp and emp[flag]) or (not emp and flag in ['servicos','possui_prolabore']) }}> {{ rotulo }}</label>{% endfor %}
+</div></div>
+<div class="painel"><h2 style="margin-top:0">Google Drive, contato e responsáveis</h2><div class="form-grid">
+<label>Pasta da empresa no Drive (URL ou ID)<input name="drive_folder_id" value="{{ emp.drive_folder_id if emp else '' }}" placeholder="https://drive.google.com/drive/folders/..."></label>
+<label>E-mail do cliente (cobranças)<input type="email" name="email_cliente" value="{{ emp.email_cliente if emp else '' }}"></label>
+<label>WhatsApp do cliente<input name="whatsapp_cliente" value="{{ emp.whatsapp_cliente if emp else '' }}"></label>
+{% for campo, rot in [('resp_fiscal_id','Responsável fiscal'),('resp_contabil_id','Responsável contábil'),('resp_pessoal_id','Responsável DP')] %}
+<label>{{ rot }}<select name="{{ campo }}"><option value="">—</option>{% for r in responsaveis %}<option value="{{ r.id }}" {{ 'selected' if emp and emp[campo] == r.id }}>{{ r.nome }} ({{ r.departamento }})</option>{% endfor %}</select></label>{% endfor %}
+</div></div>
+<div class="painel"><h2 style="margin-top:0">Exceções por obrigação</h2>
+<p class="muted">Use para prazos estaduais/municipais diferentes (ICMS, ISS, EFD ICMS/IPI) ou para incluir/excluir uma obrigação desta empresa.</p>
+<table><tr><th>Obrigação</th><th>Aplicável pelo perfil?</th><th>Regra</th><th>Dia de vencimento próprio</th></tr>
+{% for o in obrigacoes %}{% set p = (emp.personalizacoes or {}).get(o.codigo, {}) if emp else {} %}
+<tr><td>{{ o.nome }} <span class="muted">{{ o.codigo }}</span></td><td>{% if emp %}{{ 'Sim' if aplicaveis[o.codigo] else 'Não' }}{% else %}—{% endif %}</td>
+<td><select name="pers_{{ o.codigo }}"><option value="">Automática (perfil)</option><option value="incluir" {{ 'selected' if p.get('incluir') }}>Sempre incluir</option><option value="ignorar" {{ 'selected' if p.get('ignorar') }}>Nunca incluir</option></select></td>
+<td><input name="dia_{{ o.codigo }}" size="3" value="{{ p.get('dia', '') }}" placeholder="padrão"></td></tr>{% endfor %}</table></div>
+<button>Salvar</button> <a class="btn sec" href="{{ '/empresas/' ~ emp.id if emp else '/empresas' }}">Cancelar</a>
+</form>
+{% endblock %}

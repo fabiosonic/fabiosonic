@@ -1,0 +1,2 @@
+codigo;razao_social;nome_fantasia;cnpj;regime;uf;municipio;comercio;industria;servicos;possui_funcionarios;possui_prolabore;retem_tributos;area_saude;atividade_imobiliaria;email_cliente;whatsapp_cliente;drive_folder_id
+0001;PADARIA BOM PAO LTDA;Padaria Bom Pão;11.222.333/0001-81;SIMPLES;SP;Campinas;sim;nao;nao;sim;sim;nao;nao;nao;financeiro@padaria.com.br;5519999990000;COLE_O_ID_DA_PASTA_AQUI

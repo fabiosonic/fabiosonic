@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_macros.html" import situacao, sitdoc %}
+{% block titulo %}{{ emp.codigo }}{% endblock %}
+{% block conteudo %}
+<h1>{{ emp.codigo }} · {{ emp.razao_social }}</h1>
+<p class="muted">{{ emp.cnpj_formatado }} · {{ REGIMES.get(emp.regime) }} · {{ emp.municipio }}{{ '/' ~ emp.uf if emp.uf }}
+{% if emp.drive_folder_id and not emp.drive_folder_id.startswith('local') and '/' not in emp.drive_folder_id %} · <a target="_blank" href="https://drive.google.com/drive/folders/{{ emp.drive_folder_id }}">Abrir pasta no Drive</a>{% endif %}</p>
+<div class="acoes"><a class="btn" href="/empresas/{{ emp.id }}/editar">Editar cadastro</a>
+<form class="inline" method="post" action="/empresas/{{ emp.id }}/sincronizar"><button class="sec">Reprocessar pasta do Drive</button></form>
+<form class="inline" method="post" action="/empresas/{{ emp.id }}/criar-pastas"><input name="ano" size="5" value="{{ hoje.year }}"><button class="sec">Criar estrutura de pastas</button></form>
+<a class="btn sec" href="/tarefas?empresa_id={{ emp.id }}">Ver agenda completa</a></div>
+<div class="cards"><div class="card"><div class="n">{{ kpi.total }}</div><div class="l">Tarefas</div></div>
+<div class="card verde"><div class="n">{{ kpi.pontualidade_pct }}%</div><div class="l">Pontualidade</div></div>
+<div class="card vermelho"><div class="n">{{ kpi.atrasadas }}</div><div class="l">Atrasadas</div></div>
+<div class="card"><div class="n">{{ estado.ultima_varredura.strftime('%d/%m %H:%M') if estado and estado.ultima_varredura else '—' }}</div><div class="l">Última varredura</div></div></div>
+{% if estado and estado.ultimo_erro %}<div class="aviso alerta">Erro na última varredura: {{ estado.ultimo_erro }}</div>{% endif %}
+<div class="painel"><h2 style="margin-top:0">Matriz de obrigações × competências</h2>
+{% if comps %}<table class="matriz"><tr><th>Obrigação</th>{% for c in comps %}<th>{{ formatar_competencia(c) }}</th>{% endfor %}</tr>
+{% for o in obrigacoes %}<tr><td>{{ o.nome }}</td>{% for c in comps %}{% set t = grade.get((o.id, c)) %}
+<td>{% if t %}<span title="Vence {{ t.vencimento.strftime('%d/%m/%Y') }}">{{ situacao(t, hoje) }}</span>{% for d in t.documentos %} <a href="{{ d.link }}" target="_blank" title="{{ d.nome }}">📄</a>{% endfor %}{% else %}<span class="muted">·</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}</table>
+{% else %}<p class="muted">Sem agenda gerada. Use "Gerar agenda" no painel.</p>{% endif %}</div>
+<div class="painel"><h2 style="margin-top:0">Documentos no Drive</h2>
+<table><tr><th>Arquivo</th><th>Identificado como</th><th>Competência</th><th>Enviado por</th><th>Situação</th></tr>
+{% for d in docs %}<tr><td><a href="{{ d.link }}" target="_blank">{{ d.nome }}</a><div class="muted">{{ d.caminho }}</div></td><td>{{ d.obrigacao_codigo or '-' }} <span class="muted">{{ d.confianca }}%</span></td>
+<td>{{ d.competencia }}</td><td class="muted">{{ d.enviado_por }}</td><td>{{ sitdoc(d.situacao) }}{% if d.detalhes.get('empresa_sugerida') %}<div class="muted">pertence a {{ d.detalhes['empresa_sugerida'] }}</div>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Nenhum documento encontrado.</td></tr>{% endfor %}</table></div>
+{% endblock %}
