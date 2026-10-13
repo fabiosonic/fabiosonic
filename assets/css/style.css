@@ -56,7 +56,7 @@ p { margin: 0 0 1em; }
 
 .container { width: min(1200px, 100% - 32px); margin-inline: auto; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.skip-link { position: absolute; left: 16px; top: -60px; background: var(--cyan-500); color: #fff; padding: 10px 16px; border-radius: 8px; z-index: 200; }
+.skip-link { position: absolute; left: 16px; top: -60px; background: var(--blue-700); color: #fff; padding: 10px 16px; border-radius: 8px; z-index: 200; }
 .skip-link:focus { top: 12px; }
 :focus-visible { outline: 3px solid var(--cyan-500); outline-offset: 3px; border-radius: 6px; }
 
@@ -246,7 +246,8 @@ p { margin: 0 0 1em; }
 .section-sub { color: var(--ink-soft); font-size: 1.08rem; }
 .note { font-size: .85rem; color: var(--ink-soft); margin-top: 28px; }
 .note.center { text-align: center; }
-.note.light { color: rgba(255, 255, 255, .6); }
+.note.light { color: rgba(255, 255, 255, .82); }
+.note.light a { color: var(--cyan-300); }
 
 /* Dores */
 .pain-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--line); }
@@ -539,3 +540,10 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: #D64545;
   body.print-checklist .checklist { box-shadow: none; }
   .js .reveal { opacity: 1 !important; transform: none !important; }
 }
+
+/* Links internos de SEO (index): cartões de segmento clicáveis e link do checklist */
+.seg h3 a.seg-link { color: #fff; text-decoration: none; }
+.seg h3 a.seg-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 1; }
+.seg h3 a.seg-link:hover, .seg h3 a.seg-link:focus-visible { text-decoration: underline; }
+.seg:focus-within { outline: 3px solid var(--cyan-300); outline-offset: 3px; }
+.ck-guide { margin: 0 0 16px; }
