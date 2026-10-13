@@ -13,9 +13,12 @@ const FRASE_LEGAL = 'Conteúdo informativo. Cada caso depende de atividade, fatu
 const REVISAO = 'revisado em 13/10/2026';
 const IGNORAR_DIRS = new Set(['node_modules', '.git', 'docs']);
 const EXCLUIR_SCAN_DIRS = new Set(['docs', 'scripts', 'node_modules', '.git']);
-const REGEX_PROIBIDAS = /grátis|gratuit|desconto|promoç|melhor|nº 1|número 1|garant|econom|últimas vagas|franklin|líder/i;
+const REGEX_PROIBIDAS = /grátis|gratuit|desconto|promoç|melhor|nº 1(?![\d.])|número 1(?![\d.])|garant|econom|últimas vagas|franklin|líder/i;
 const SEM_CANONICAL_OBRIGATORIO = new Set(['404.html', 'links.html']);
 const SEM_CTA_WHATSAPP = new Set(['index.html', 'links.html', 'politica-de-privacidade.html']);
+// Documentos jurídicos (contrato): não são peças informativas nem de captação —
+// isentos da nota legal tributária (6) e do CTA de WhatsApp (7).
+const DOCUMENTO_JURIDICO = (rel) => rel.startsWith('contrato/');
 const NAO_INDEXAR_NO_SITEMAP = new Set(['links.html', '404.html']);
 
 const erros = [];
@@ -199,7 +202,7 @@ for (const arq of paginas) {
   // (6) Nota legal em páginas com conteúdo tributário
   const minusc = html.toLowerCase();
   const tributario = ['lc 123', 'lc 214', 'ec 132', 'simples nacional', 'tribut'].some((k) => minusc.includes(k));
-  if (tributario) {
+  if (tributario && !DOCUMENTO_JURIDICO(rel)) {
     const faltas = [];
     if (!minusc.includes(FRASE_LEGAL.toLowerCase())) faltas.push(`frase exata "${FRASE_LEGAL}"`);
     if (!minusc.includes(REVISAO)) faltas.push(`"${REVISAO}"`);
@@ -210,7 +213,7 @@ for (const arq of paginas) {
   }
 
   // (7) CTA de WhatsApp em páginas novas
-  if (!SEM_CTA_WHATSAPP.has(rel)) {
+  if (!SEM_CTA_WHATSAPP.has(rel) && !DOCUMENTO_JURIDICO(rel)) {
     const anchors = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
     const ok = anchors.some((m) => {
       const a = atributos(`<a ${m[1]}>`);

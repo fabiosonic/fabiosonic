@@ -367,12 +367,120 @@
     });
   });
 
-  /* ---------- Contratação em etapas → WhatsApp ---------- */
+  /* ---------- Contratação em etapas + contrato assinado no ato ---------- */
   if (hire) {
+    var U = window.MOContratoUtil, MODELO = window.MOContrato;
     var steps = $$('.hire-step', hire);
     var cur = 0;
-    var hStatus = $('.form-status', hire);
+    // Status do formulário (filho direto); o do dialog vem antes no DOM e não pode ser capturado aqui.
+    var hStatus = $(':scope > .form-status', hire);
     var bar = $('.hire-bar i', hire), cnt = $('.hire-count', hire);
+    var box = $('[data-contract-box]', hire);
+    var aceite = $('#h-aceite'), assinatura = hire.elements.assinatura;
+    var hashEl = $('[data-contract-hash]', hire), verEl = $('[data-contract-version]', hire);
+    var receipt = $('[data-contract-receipt]', hire);
+    var dlg = $('[data-contract-dialog]', hire), signBtn = $('[data-contract-sign]', hire);
+    var dStatus = $('[data-dialog-status]', hire), signState = $('[data-sign-state]', hire);
+    var readBar = $('[data-read-bar]', hire), readPct = $('[data-read-pct]', hire);
+    var leuAteOFim = false, contratoAtual = null, textoAtual = '', hashAtual = '', assinado = false;
+
+    function val(n) { var el = $('[name="' + n + '"]:checked', hire); return el ? el.value : ''; }
+    function extras() { return $$('input[name="extras"]:checked', hire).map(function (c) { return c.value; }); }
+    function dadosContrato() {
+      var f = hire.elements;
+      var emConst = f.constituicao.checked;
+      var doc = f.documento.value.trim();
+      var docFmt = emConst && !doc ? 'empresa em constituição' : (U.soDigitos(doc).length === 11 && !/[A-Za-z]/.test(doc) ? 'CPF ' + U.formataCPF(doc) : 'CNPJ ' + U.formataCNPJ(doc)) + (emConst ? ' (empresa em constituição)' : '');
+      return {
+        CONTRATANTE_NOME: f.contratante.value.trim(),
+        CONTRATANTE_DOC: docFmt,
+        REPRESENTANTE_NOME: f.nome.value.trim(),
+        REPRESENTANTE_CPF: U.formataCPF(f.cpf.value),
+        CONTRATANTE_EMAIL: f.email.value.trim(),
+        CONTRATANTE_MUNICIPIO: f.municipio.value.trim(),
+        PACOTE: val('pacote'),
+        COMPLEMENTARES: extras().join(', ') || 'nenhum',
+        PAGAMENTO: val('pagamento'),
+        DATA_ACEITE: 'na data e hora indicadas no comprovante de aceite eletrônico'
+      };
+    }
+
+    function escapa(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function contratoHTML(c) {
+      var h = '<h3>' + escapa(c.titulo) + '</h3><p class="c-ver">Versão ' + escapa(c.versao) + ' de ' + escapa(c.dataVersao) + '</p>';
+      var dest = c.destaques || [];
+      if (dest.length) {
+        h += '<div class="c-alert" role="note"><b>Pontos de atenção — cláusulas que limitam direitos ou atribuem responsabilidades a você</b><ul>' +
+          c.clausulas.filter(function (cl) { return dest.indexOf(cl.numero) !== -1; }).map(function (cl) {
+            return '<li><a href="#c-cl-' + cl.numero + '">Cláusula ' + cl.numero + ' — ' + escapa(cl.titulo) + '</a></li>';
+          }).join('') + '</ul></div>';
+      }
+      c.preambulo.forEach(function (p) { h += '<p>' + escapa(p) + '</p>'; });
+      c.clausulas.forEach(function (cl) {
+        var dz = (c.destaques || []).indexOf(cl.numero) !== -1;
+        h += (dz ? '<div class="c-dest">' : '') + '<h4 id="c-cl-' + cl.numero + '">Cláusula ' + cl.numero + ' — ' + escapa(cl.titulo) + (dz ? ' <span class="c-badge">atenção</span>' : '') + '</h4>';
+        cl.itens.forEach(function (i) { h += '<p>' + escapa(i) + '</p>'; });
+        if (dz) h += '</div>';
+      });
+      c.anexos.forEach(function (a) {
+        h += '<h4>' + escapa(a.titulo) + '</h4>';
+        a.itens.forEach(function (i) { h += '<p>' + escapa(i) + '</p>'; });
+      });
+      c.fechamento.forEach(function (p) { h += '<p>' + escapa(p) + '</p>'; });
+      return h.replace(/\[a preencher\]/g, '<mark>[a preencher]</mark>');
+    }
+
+    function renderContrato() {
+      if (!U || !MODELO) { box.innerHTML = '<p>Não foi possível carregar o contrato. <a href="contrato/condicoes-gerais.html">Abra as condições gerais</a> ou fale conosco pelo WhatsApp.</p>'; return; }
+      var novo = U.montaContrato(MODELO, dadosContrato());
+      var novoTexto = U.textoCanonico(novo);
+      if (novoTexto === textoAtual) return; // mesmo texto: mantém o progresso de leitura
+      contratoAtual = novo; textoAtual = novoTexto;
+      box.innerHTML = contratoHTML(contratoAtual);
+      readBar.style.width = '0'; readPct.textContent = '0% lido'; signBtn.disabled = true; dlg.classList.remove('read');
+      box.scrollTop = 0;
+      verEl.textContent = MODELO.versao + ' de ' + MODELO.dataVersao;
+      leuAteOFim = false; aceite.checked = false; aceite.disabled = true; assinatura.disabled = true;
+      $('[data-scroll-hint]', hire).hidden = false;
+      hashEl.textContent = 'calculando…';
+      U.sha256(textoAtual).then(function (h) { hashAtual = h; hashEl.textContent = h; });
+    }
+    function progressoLeitura() {
+      var max = box.scrollHeight - box.clientHeight;
+      var pct = max <= 0 ? 100 : Math.min(100, Math.round(box.scrollTop / max * 100));
+      if (!leuAteOFim) {
+        readBar.style.width = pct + '%';
+        readPct.textContent = pct + '% lido';
+      }
+      if (!leuAteOFim && box.scrollTop + box.clientHeight >= box.scrollHeight - 8) {
+        leuAteOFim = true; aceite.disabled = false; assinatura.disabled = false; signBtn.disabled = false; dlg.classList.add('read');
+        readBar.style.width = '100%'; readPct.textContent = '100% lido';
+        $('[data-scroll-hint]', hire).hidden = true;
+      }
+    }
+    box.addEventListener('scroll', progressoLeitura, { passive: true });
+    box.addEventListener('click', function (e) {
+      var l = e.target.closest('a[href^="#c-cl-"]');
+      if (!l) return;
+      e.preventDefault();
+      var alvo = box.querySelector(l.getAttribute('href'));
+      if (alvo) box.scrollTop = alvo.offsetTop - box.offsetTop - 8;
+    });
+    [aceite, assinatura].forEach(function (el) { el.addEventListener('input', function () { dStatus.textContent = ''; el.removeAttribute('aria-invalid'); }); });
+
+    function abrirContrato() {
+      if (assinado) return;
+      renderContrato();
+      dStatus.textContent = ''; dStatus.className = 'form-status';
+      if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else { dlg.setAttribute('open', ''); }
+      requestAnimationFrame(function () { progressoLeitura(); box.focus(); });
+    }
+    function fecharContrato() { if (dlg.open) { dlg.close ? dlg.close() : dlg.removeAttribute('open'); } $('[data-contract-open]', hire).focus(); }
+    // Esc (fechamento nativo do dialog) também devolve o foco ao botão que o abriu.
+    dlg.addEventListener('close', function () { if (!assinado) $('[data-contract-open]', hire).focus(); });
+    $('[data-contract-open]', hire).addEventListener('click', abrirContrato);
+    $$('[data-contract-close]', hire).forEach(function (b) { b.addEventListener('click', fecharContrato); });
+
     function show(i) {
       cur = i;
       steps.forEach(function (s, k) { s.classList.toggle('active', k === i); });
@@ -381,9 +489,12 @@
       bar.style.width = ((i + 1) / steps.length * 100) + '%';
       cnt.textContent = 'Etapa ' + (i + 1) + ' de ' + steps.length;
       hStatus.textContent = ''; hStatus.className = 'form-status';
+      if (steps[i].getAttribute('data-step') === '5') abrirContrato();
     }
+    function marca(el) { el.setAttribute('aria-invalid', 'true'); return el; }
+    function normaliza(t) { return t.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR'); }
     function validStep(i) {
-      var s = steps[i], first = null;
+      var s = steps[i], first = null, msg = 'Preencha os campos desta etapa para continuar.';
       s.removeAttribute('aria-invalid');
       $$('[aria-invalid]', s).forEach(function (el) { el.removeAttribute('aria-invalid'); });
       var radios = {};
@@ -392,48 +503,121 @@
         if (!$$('input[name="' + n + '"]', s).some(function (r) { return r.checked; })) { s.setAttribute('aria-invalid', 'true'); first = first || $('input[name="' + n + '"]', s); }
       });
       $$('select[required], input[required]:not([type="radio"]):not([type="checkbox"])', s).forEach(function (el) {
-        if (!el.value.trim()) { el.setAttribute('aria-invalid', 'true'); first = first || el; }
+        if (el.disabled) return;
+        if (el.name === 'documento' && hire.elements.constituicao.checked && !el.value.trim()) return;
+        if (!el.value.trim()) first = first || marca(el);
       });
-      $$('input[required][type="checkbox"]', s).forEach(function (el) {
-        if (!el.checked) { el.setAttribute('aria-invalid', 'true'); first = first || el; }
-      });
+      $$('input[required][type="checkbox"]', s).forEach(function (el) { if (!el.checked && !el.disabled) first = first || marca(el); });
+      if (!first && s.getAttribute('data-step') === '4') {
+        var f = hire.elements, doc = f.documento.value.trim();
+        if (doc && !(U.validaCNPJ(doc) || (!/[A-Za-z]/.test(doc) && U.validaCPF(doc)))) { first = marca(f.documento); msg = 'CNPJ ou CPF do contratante inválido. Confira os dígitos.'; }
+        else if (!U.validaCPF(f.cpf.value)) { first = marca(f.cpf); msg = 'CPF do representante inválido. Confira os dígitos.'; }
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.value.trim())) { first = marca(f.email); msg = 'Informe um e-mail válido.'; }
+      }
+      if (!first && s.getAttribute('data-step') === '5') {
+        if (!leuAteOFim) { first = box; msg = 'Role o contrato até o final antes de assinar.'; }
+        else if (!aceite.checked) { first = marca(aceite); msg = 'Marque o aceite das Condições Gerais.'; }
+        else if (normaliza(assinatura.value) !== normaliza(hire.elements.nome.value)) { first = marca(assinatura); msg = 'O nome digitado deve ser igual ao nome do representante informado na etapa anterior.'; }
+        else if (!hashAtual) { first = box; msg = 'Aguarde o cálculo do código de integridade e tente novamente.'; }
+      }
       if (first) {
-        hStatus.className = 'form-status error';
-        hStatus.textContent = 'Preencha os campos desta etapa para continuar.';
-        first.focus();
-        return false;
+        var alvo = (dlg.open && s.getAttribute('data-step') === '5') ? dStatus : hStatus;
+        alvo.className = 'form-status error'; alvo.textContent = msg; first.focus(); return false;
       }
       return true;
     }
-    $('[data-hire-next]', hire).addEventListener('click', function () { if (validStep(cur)) { show(cur + 1); steps[cur].querySelector('input, select').focus(); } });
+    $('[data-hire-next]', hire).addEventListener('click', function () {
+      if (validStep(cur)) { show(cur + 1); var el = steps[cur].querySelector('input:not([disabled]), select, [data-contract-box]'); if (el) el.focus(); }
+    });
     $('[data-hire-prev]', hire).addEventListener('click', function () { if (cur > 0) show(cur - 1); });
     hire.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.type !== 'submit' && !hire.classList.contains('last')) { e.preventDefault(); $('[data-hire-next]', hire).click(); }
     });
+
+    function dataHora(d) {
+      var p = function (n) { return ('0' + n).slice(-2); };
+      var off = -d.getTimezoneOffset(), sinal = off >= 0 ? '+' : '-';
+      return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) +
+        ' (UTC' + sinal + p(Math.floor(Math.abs(off) / 60)) + ':' + p(Math.abs(off) % 60) + ')';
+    }
+
     hire.addEventListener('submit', function (e) {
       e.preventDefault();
-      for (var i = 0; i < steps.length; i++) { if (!validStep(i)) { show(i); validStep(i); return; } }
-      var f = hire.elements;
-      var val = function (n) { var el = $('[name="' + n + '"]:checked', hire); return el ? el.value : ''; };
-      var extras = $$('input[name="extras"]:checked', hire).map(function (c) { return c.value; });
-      var txt = 'Olá! Quero receber uma proposta (site M&O Contábil DIGITAL).\n' +
-        'Pacote: ' + val('pacote') + '\n' +
-        'Atividade: ' + f.atividade.value + '\n' +
-        'Situação/regime: ' + f.regime.value + '\n' +
-        'Colaboradores: ' + f.funcionarios.value + '\n' +
-        'Notas por mês: ' + f.notas.value + '\n' +
-        'Sócios: ' + f.socios.value + '\n' +
-        (f.municipio.value.trim() ? 'Município: ' + f.municipio.value.trim() + '\n' : '') +
-        'Pagamento preferido: ' + val('pagamento') + '\n' +
-        (extras.length ? 'Complementares: ' + extras.join(', ') + '\n' : '') +
-        'Nome: ' + f.nome.value.trim() +
-        (f.empresa.value.trim() ? '\nEmpresa: ' + f.empresa.value.trim() : '');
+      if (assinado) return;
+      for (var i = 0; i < steps.length - 1; i++) { if (!validStep(i)) { fecharContrato(); show(i); validStep(i); return; } }
+      if (!dlg.open) { abrirContrato(); return; }
+      if (!validStep(steps.length - 1)) return;
+      var f = hire.elements, d = dadosContrato();
+      var quando = dataHora(new Date());
+      var registro = {
+        data: quando, versao: MODELO.versao + ' de ' + MODELO.dataVersao, hash: hashAtual,
+        assinante: d.REPRESENTANTE_NOME, cpf: d.REPRESENTANTE_CPF, contratante: d.CONTRATANTE_NOME, documento: d.CONTRATANTE_DOC
+      };
+      var txt = 'Olá! Li e aceitei no site M&O Contábil DIGITAL as Condições Gerais do contrato. Segue o registro do aceite.\n' +
+        'Pacote: ' + d.PACOTE + '\n' +
+        'Contratante: ' + d.CONTRATANTE_NOME + ' — ' + d.CONTRATANTE_DOC + '\n' +
+        'Representante: ' + d.REPRESENTANTE_NOME + ' — CPF ' + d.REPRESENTANTE_CPF + '\n' +
+        'E-mail: ' + d.CONTRATANTE_EMAIL + '\n' +
+        'Atividade: ' + f.atividade.value + ' | Regime: ' + f.regime.value + ' | Colaboradores: ' + f.funcionarios.value + ' | Notas/mês: ' + f.notas.value + ' | Sócios: ' + f.socios.value + '\n' +
+        (d.CONTRATANTE_MUNICIPIO ? 'Município: ' + d.CONTRATANTE_MUNICIPIO + '\n' : '') +
+        'Pagamento preferido: ' + d.PAGAMENTO + '\n' +
+        'Complementares: ' + d.COMPLEMENTARES + '\n' +
+        '— Aceite eletrônico —\n' +
+        'Contrato: versão ' + registro.versao + '\n' +
+        'Data/hora: ' + registro.data + '\n' +
+        'Aceite dado por: ' + registro.assinante + ' — CPF ' + registro.cpf + '\n' +
+        'Código de integridade (SHA-256): ' + registro.hash + '\n' +
+        'Vou assinar o PDF do contrato no gov.br e enviar por aqui. Aguardo a Proposta Comercial (Anexo I).';
       var url = 'https://api.whatsapp.com/send?phone=' + WHATSAPP + '&text=' + encodeURIComponent(txt);
+
+      $('[data-r-data]', receipt).textContent = registro.data;
+      $('[data-r-versao]', receipt).textContent = registro.versao;
+      $('[data-r-hash]', receipt).textContent = registro.hash;
+      $('[data-contract-wa]', receipt).href = url;
+      assinado = true;
+      fecharContrato();
+      signState.classList.add('partial'); signState.lastChild.textContent = ' Aceite registrado em ' + registro.data + ' · falta assinar com o gov.br';
+      $('[data-contract-open]', hire).hidden = true;
+      receipt.hidden = false;
+      $('.hire-nav', hire).hidden = true;
+      steps.forEach(function (s) { $$('input, select, textarea', s).forEach(function (el) { el.disabled = true; }); });
+
+      $('[data-contract-download]', receipt).onclick = function () {
+        var doc = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>' + escapa(contratoAtual.titulo) + '</title>' +
+          '<style>body{font:16px/1.6 system-ui,sans-serif;max-width:820px;margin:40px auto;padding:0 20px;color:#0B1730}h3{font-size:1.4rem}h4{margin-top:1.6em}.c-ver{color:#4E5B73}mark{background:#FFF3BF}.reg{margin-top:40px;padding:18px;border:2px solid #1863DC;border-radius:12px}code{word-break:break-all}</style></head><body>' +
+          contratoHTML(contratoAtual) +
+          '<div class="reg"><h4>Registro do aceite eletrônico</h4><p>Aceite dado por: ' + escapa(registro.assinante) + ' — CPF ' + escapa(registro.cpf) + '</p><p>Contratante: ' + escapa(registro.contratante) + ' — ' + escapa(registro.documento) + '</p><p>Data e hora: ' + escapa(registro.data) + '</p><p>Versão do contrato: ' + escapa(registro.versao) + '</p><p>Código de integridade (SHA-256 do texto acima): <code>' + escapa(registro.hash) + '</code></p></div></body></html>';
+        var blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'contrato-mo-contabil-' + registro.hash.slice(0, 8) + '.html';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+      };
+
+      var mail = 'mailto:moraes@moraeseoliveiracontabil.com.br?subject=' + encodeURIComponent('Contrato assinado gov.br — ' + d.CONTRATANTE_NOME + ' — ' + registro.hash.slice(0, 8)) +
+        '&body=' + encodeURIComponent(txt + '\n\nSegue em anexo o contrato em PDF assinado no Assinador gov.br.');
+      $('[data-contract-mail]', receipt).href = mail;
+      var pdfBtn = $('[data-contract-pdf]', receipt);
+      pdfBtn.onclick = function () {
+        if (!window.MOContratoPDF) { $('[data-contract-download]', receipt).click(); return; }
+        pdfBtn.disabled = true; pdfBtn.textContent = 'Gerando PDF…';
+        window.MOContratoPDF.gerar(contratoAtual, registro).then(function () {
+          pdfBtn.disabled = false; pdfBtn.textContent = 'Baixar o PDF novamente';
+        }, function () {
+          pdfBtn.disabled = false; pdfBtn.textContent = 'Baixar contrato em PDF';
+          hStatus.className = 'form-status error';
+          hStatus.textContent = 'Não foi possível gerar o PDF neste navegador. Baixe a via em HTML e use "Imprimir > Salvar como PDF".';
+        });
+      };
       var win = window.open(url, '_blank');
       if (win) win.opener = null;
       hStatus.className = 'form-status ok';
-      hStatus.textContent = win ? 'Abrimos o WhatsApp com a solicitação pronta — é só enviar. A proposta por escrito segue por lá.' : 'Seu navegador bloqueou a nova janela. ';
-      if (!win) { var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Clique aqui para abrir o WhatsApp.'; hStatus.appendChild(a); }
+      hStatus.textContent = win
+        ? 'Aceite registrado. Abrimos o WhatsApp com o registro pronto: toque em enviar para que ele chegue ao escritório. Depois, baixe o PDF e assine com o gov.br (passos abaixo).'
+        : 'Aceite registrado. O navegador bloqueou o WhatsApp: use o botão WhatsApp ou E-mail abaixo para enviar o registro ao escritório e siga os passos para assinar com o gov.br.';
+      receipt.setAttribute('tabindex', '-1'); receipt.focus({ preventScroll: true });
+      receipt.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
     });
     show(0);
   }

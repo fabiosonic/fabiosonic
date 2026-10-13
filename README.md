@@ -2,18 +2,19 @@
 
 Site institucional e de captação do projeto digital da **Moraes e Oliveira Contabilidade** (Itaboraí/RJ, desde 2015). Cores e logotipo seguem a identidade de moraeseoliveiracontabil.com.br.
 
-HTML, CSS e JavaScript puros, sem build e sem dependências em produção. Basta publicar a pasta em qualquer hospedagem estática.
+HTML, CSS e JavaScript puros, sem build. A única biblioteca de terceiros é o jsPDF (licença MIT), vendorizado em `assets/vendor/` e carregado só quando o cliente pede o PDF do contrato. Basta publicar a pasta em qualquer hospedagem estática.
 
 ```bash
 python3 -m http.server 8000   # http://localhost:8000
-node --test tests/*.test.js   # testes das calculadoras
+node --test tests/*.test.js   # testes das calculadoras e do contrato
+node scripts/gerar-contrato.mjs  # regenera contrato/condicoes-gerais.html após mudar o modelo
 ```
 
 ## Estrutura
 
 | Arquivo | Conteúdo |
 |---|---|
-| `index.html` | Página principal: hero, como funciona, serviços, **pacotes e contratação em 4 etapas**, plataforma, segmentos, Reforma (qualitativa, com link para o guia), ferramentas, quem somos, FAQ, contato |
+| `index.html` | Página principal: hero, como funciona, serviços, **pacotes e contratação em 5 etapas com leitura, aceite e assinatura do contrato** (`#pacotes` / `#contratar`), plataforma, segmentos, Reforma (qualitativa, com link para o guia), ferramentas, quem somos, FAQ, contato |
 | `servicos.html` | Serviços detalhados (contábil, fiscal, DP, legalização, planejamento tributário, consultoria financeira), adicionais com parceiros, FAQ |
 | `contabilidade-itaborai.html` | Página da sede em Itaboraí: endereço, como chegar (mapa por link externo), atendimento presencial e digital |
 | `atendimento-regiao-metropolitana-rj.html` | Atendimento em São Gonçalo, Niterói e Rio de Janeiro (uma seção por cidade, sem endereços fictícios) |
@@ -29,7 +30,15 @@ node --test tests/*.test.js   # testes das calculadoras
 | `llms.txt` | Resumo factual da entidade, respostas rápidas e lista de páginas para buscadores de IA |
 | `assets/css/style.css` | Tokens da marca, layout, animações, responsivo, movimento reduzido, impressão |
 | `assets/js/calculadoras.js` | Regras das calculadoras em funções puras, testadas em `tests/` |
-| `assets/js/main.js` | Interações: reveal, abas, menu, partículas, palavra rotativa, formulário |
+| `assets/js/main.js` | Interações: reveal, abas, menu, partículas, palavra rotativa, formulários; contratação em etapas com o contrato em `<dialog>` (leitura integral obrigatória, aceite, assinatura digitando o nome, comprovante, PDF, passos do Assinador gov.br, envio por WhatsApp/e-mail) |
+| `assets/js/contrato-modelo.js` | **Fonte única** do contrato (27 cláusulas + 3 anexos, campo `destaques` com as cláusulas limitativas). Mudou o texto? Altere `versao`, espelhe em `docs/contrato-modelo.md` e rode `node scripts/gerar-contrato.mjs` |
+| `assets/js/contrato.js` | Funções puras: validação de CPF e CNPJ (inclusive alfanumérico, IN RFB 2.229/2024), preenchimento, texto canônico e hash SHA-256 |
+| `assets/js/contrato-pdf.js` | Gera o PDF do contrato no navegador (fonte ≥ 12 pt, CDC art. 54, § 3º) |
+| `assets/vendor/jspdf.umd.min.js` | jsPDF (MIT), carregado sob demanda |
+| `contrato/condicoes-gerais.html` | Versão pública e estática das Condições Gerais (gerada por `scripts/gerar-contrato.mjs`) |
+| `scripts/gerar-contrato.mjs` | Gera a página pública do contrato a partir do modelo |
+| `tests/contrato.test.js` | Testes de CPF/CNPJ, preenchimento, hash e coerência do modelo (destaques × preâmbulo, sem IP/e-mail automático, sem valores) |
+| `docs/contrato-modelo.md` · `docs/contrato-notas-juridicas.md` | Texto do contrato para revisão e notas jurídicas (fontes, riscos e pendências P1–P22, D1–D9) |
 | `scripts/verificar-site.mjs` | Verificação estática: H1, title, description, canonical, JSON-LD, links internos, termos proibidos, nota legal, sitemap |
 | `docs/benchmark-contabilidade-digital.md` | Engenharia reversa de 22 sites de contabilidade digital |
 | `docs/seo-relatorio.md` | Relatório de SEO: palavras-chave por página e próximos passos |
@@ -52,7 +61,7 @@ Todas as páginas com afirmação tributária citam a norma, trazem "Revisado em
 - [ ] Usar fotos reais da equipe e do escritório, se desejado. Hoje o site usa ilustrações em CSS e o personagem ilustrado do Fábio, com legenda e texto alternativo de "ilustração".
 - [ ] Pacotes: o Fábio deve validar o escopo de cada pacote, em especial as obrigações do Lucro Presumido. Os honorários **nunca** vão para o site: só na proposta escrita (NBC PG 01).
 - [ ] Pagamento: definir no modelo de proposta e contrato as condições de Pix e do parcelamento no cartão (número de parcelas, encargos). No site fica só "com opção de parcelamento", sem "sem juros" nem número de parcelas.
-- [ ] Contrato: escolher a ferramenta de assinatura eletrônica (gov.br, Clicksign, DocuSign etc.) e manter o modelo de contrato conforme a Resolução CFC 1.590/2020.
+- [x] Contrato: assinatura definida — aceite no site + Assinador gov.br (ou ICP-Brasil). Pendências consolidadas na seção "Contrato" abaixo.
 - [ ] Se for adicionar Google Analytics ou Meta Pixel, implementar o consentimento e atualizar a política de privacidade.
 
 ### Pendências registradas pelo gestor de qualidade (13/10/2026)
@@ -74,6 +83,21 @@ Itens que **não** foram publicados como fato ou que precisam de conferência an
 - [ ] Hospedagem: configurar o servidor para devolver o status HTTP 404 com o `404.html`.
 - [ ] Antes de publicar: `node scripts/verificar-site.mjs` (0 erros) e `node --test tests/*.test.js`.
 
+### Contrato: pendências consolidadas (revisão de qualidade de 13/10/2026)
+
+Detalhes em `docs/contrato-notas-juridicas.md`, seção 5.
+
+- [x] Razão social: **MORAES E OLIVEIRA CONTABILIDADE LTDA** (sociedade limitada) — no contrato, no cabeçalho do PDF, nos rodapés e no `legalName` do JSON-LD.
+- [x] Responsável técnico: **Fábio Moraes, sócio e contador, CRC RJ-118632/O-1** — no preâmbulo e no `jobTitle` do JSON-LD.
+- [ ] **Valores entre colchetes** no contrato (prazos, multa, reajuste, aviso prévio, teto de indenização, prazos do Anexo II): P4 a P15 e D8 das notas jurídicas. Enquanto não forem definidos, aparecem entre colchetes no texto aceito.
+- [ ] **Nome e endereço da Plataforma** (Cl. 1.2 e Anexo I) — P3.
+- [ ] **Certificado da contratada**: definir se o escritório assina com e-CNPJ ou com gov.br/e-CPF do Fábio, quem confere no validador do ITI e onde a via é arquivada — D1.
+- [ ] **Anexo I (Proposta Comercial)**: criar o modelo com honorários, pagamento, reajuste, vigência e início. Honorários só nele, nunca no site (NBC PG 01).
+- [ ] **Revisão por advogado inscrito na OAB** antes do uso (P19), em especial as Cl. 11, 12, 14 e 24.
+- [ ] **Limitação do site estático** (P21): o site não tem servidor — não recebe arquivos, não registra IP, não envia e-mail e não guarda o aceite. O registro e o PDF assinado só chegam se o cliente os enviar (WhatsApp ou e-mail). O escritório deve **confirmar o recebimento** de cada aceite pelo mesmo canal e arquivar a mensagem e o PDF assinado.
+- [ ] Modelos operacionais: Carta de Responsabilidade, distrato, comunicação ao novo responsável técnico, notificação de suspensão (D6).
+- [ ] Qualquer mudança no texto: alterar `versao` em `assets/js/contrato-modelo.js`, espelhar em `docs/contrato-modelo.md` e rodar `node scripts/gerar-contrato.mjs` e os testes.
+
 ### Pendências de SEO e publicação
 
 - [ ] Google Search Console e Bing Webmaster Tools: verificar o domínio e enviar o `sitemap.xml`.
@@ -85,8 +109,9 @@ Itens que **não** foram publicados como fato ou que precisam de conferência an
 
 ### Validação do fechamento (13/10/2026)
 
-- `node --test tests/*.test.js`: 5 de 5 testes passam.
-- `node scripts/verificar-site.mjs`: 18 páginas, 0 erros (avisos apenas de `R$` nos rótulos das calculadoras).
+- `node --test tests/*.test.js`: 9 de 9 testes passam (calculadoras e contrato).
+- `node scripts/verificar-site.mjs`: 19 páginas, 0 erros. Avisos: `R$` nos rótulos das calculadoras e "garant" em sentido jurídico no contrato (ex.: "não garante funcionamento ininterrupto") — não são promessa de resultado.
+- Contratação (13/10/2026, Playwright/Chromium, 1440 px e 390 px com movimento reduzido): fluxo completo sem erro de console e sem rolagem horizontal; assinatura bloqueada antes de 100% de leitura; foco inicial no texto do contrato; Esc fecha e devolve o foco ao botão; PDF gerado com o hash e a razão social.
 - Playwright (Chromium) em 1440 px e 390 px, todas as 18 páginas: sem erro de console, sem recurso ou link interno com 404, sem âncora inexistente e sem rolagem horizontal.
 - Todos os blocos JSON-LD fazem parse.
 

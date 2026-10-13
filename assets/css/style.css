@@ -645,3 +645,91 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: #D64545;
   .hire-steps span { margin-top: 0; }
   .hire-info, .hire-form { padding: 26px 20px; }
 }
+
+/* =========================================================
+   Contrato: leitura, assinatura e comprovante
+   ========================================================= */
+.span-2 { grid-column: span 2; }
+.field-hint { font-weight: 400; color: var(--ink-soft); font-size: .78rem; }
+.opt.inline { align-self: end; padding: 12px 14px; }
+.link-light { color: var(--cyan-300); }
+.contract-box { max-height: 340px; overflow-y: auto; padding: 22px 24px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface-2); font-size: 1rem; line-height: 1.6; scroll-behavior: auto; }
+.contract-box:focus-visible { outline: 3px solid var(--cyan-500); }
+.contract-box h3 { font-size: 1.1rem; margin-bottom: .2em; }
+.contract-box h4 { font: 700 1.05rem var(--font-head); margin: 1.3em 0 .4em; color: var(--navy-800); }
+.contract-box p { margin: 0 0 .6em; color: var(--ink); }
+.contract-box .c-ver { color: var(--ink-soft); font-size: .9rem; }
+.contract-box mark { background: #FFF3BF; color: inherit; padding: 0 2px; border-radius: 3px; }
+.contract-scroll-hint { margin: 0; font-size: .85rem; color: var(--blue-700); font-weight: 600; }
+.contract-scroll-hint::before { content: "↓ "; display: inline-block; animation: bob 1.6s ease-in-out infinite; }
+.contract-hash { margin: 0; font-size: .78rem; color: var(--ink-soft); }
+.contract-hash code, .contract-receipt code { word-break: break-all; font-size: .76rem; }
+.hire-step input:disabled, .hire-step label:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.contract-receipt { border: 2px solid var(--ok); border-radius: 16px; padding: 22px; background: #F1FBF6; animation: paneIn .5s var(--ease); }
+.contract-receipt h4 { font: 800 1.1rem var(--font-head); margin: 0 0 12px; color: #127A49; }
+.contract-receipt h4::before { content: "✓ "; }
+.contract-receipt dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; font-size: .9rem; }
+.contract-receipt dt { font-weight: 700; }
+.contract-receipt dd { margin: 0; }
+.receipt-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.legal-dark-ink { font-size: .8rem; color: var(--ink-soft); margin: 0; }
+@media (max-width: 720px) {
+  .span-2 { grid-column: span 1; }
+  .contract-box { max-height: 300px; padding: 16px; }
+  .contract-receipt dl { grid-template-columns: 1fr; }
+}
+
+/* Contrato em popup (dialog modal) */
+.sign-state { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: .92rem; color: var(--ink-soft); }
+.dot-state { width: 10px; height: 10px; border-radius: 50%; background: #F5B400; box-shadow: 0 0 0 4px rgba(245, 180, 0, .18); }
+.sign-state.ok { color: #127A49; } .sign-state.ok .dot-state { background: var(--ok); box-shadow: 0 0 0 4px rgba(24, 179, 107, .18); }
+.contract-dialog { width: min(920px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 0; border: 0; border-radius: 22px; box-shadow: 0 40px 100px -20px rgba(0, 10, 31, .7); color: var(--ink); background: #fff; overflow: hidden; }
+.contract-dialog[open] { display: flex; flex-direction: column; animation: dlgIn .45s var(--ease); }
+.contract-dialog::backdrop { background: rgba(0, 10, 31, .72); backdrop-filter: blur(4px); animation: fadeIn .3s ease; }
+@keyframes dlgIn { from { opacity: 0; transform: translateY(24px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.cd-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 20px 24px 12px; background: linear-gradient(160deg, var(--navy-800), var(--navy-900)); color: #fff; }
+.cd-head h3 { margin: 0; font-size: 1.15rem; }
+.cd-sub { margin: 4px 0 0; font-size: .82rem; color: rgba(255, 255, 255, .7); }
+.cd-close { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .12); color: #fff; font-size: 1.5rem; line-height: 1; cursor: pointer; transition: background .25s; }
+.cd-close:hover { background: rgba(255, 255, 255, .25); }
+.cd-close:focus-visible { outline: 3px solid var(--cyan-300); outline-offset: 2px; }
+.cd-progress { display: flex; align-items: center; gap: 12px; padding: 10px 24px; background: var(--navy-900); }
+.cd-progress span { flex: 1; height: 6px; border-radius: 6px; background: rgba(255, 255, 255, .15); overflow: hidden; }
+.cd-progress i { display: block; height: 100%; width: 0; background: var(--grad-brand); transition: width .2s linear; }
+.cd-progress output { font-size: .78rem; font-weight: 700; color: var(--cyan-300); min-width: 64px; text-align: right; }
+.contract-dialog .contract-box { flex: 1 1 auto; min-height: 160px; max-height: none; border: 0; border-radius: 0; padding: 22px 28px; }
+.cd-foot { padding: 16px 24px 20px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; background: #fff; }
+.cd-foot .field.check label { display: block; font-weight: 500; font-size: .88rem; color: var(--ink); }
+.cd-sign { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: .9rem; }
+.cd-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cd-actions .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+@media (max-width: 720px) {
+  .contract-dialog { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; margin: 0; }
+  .contract-dialog .contract-box { padding: 16px; }
+  .cd-foot { padding: 12px 16px 16px; }
+}
+@media (max-width: 720px) {
+  .contract-dialog:not(.read) .cd-gated { display: none; }
+  .contract-dialog.read .contract-box { flex-basis: 40%; }
+}
+
+/* Assinatura gov.br */
+.govbr { margin: 6px 0 12px; padding: 18px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.govbr h5 { font: 800 1rem var(--font-head); margin: 0 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.govbr h5 span { font: 700 .7rem var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: #fff; background: #1351B4; padding: 4px 8px; border-radius: 999px; }
+.govbr-steps { margin: 0 0 12px; padding-left: 20px; display: flex; flex-direction: column; gap: 14px; font-size: .9rem; }
+.govbr-steps li { padding-left: 4px; }
+.govbr-steps .btn { margin-top: 8px; display: inline-flex; }
+.govbr-send { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.btn-govbr { --bg: #1351B4; --fg: #fff; }
+.btn-govbr:hover { --bg: #0C326F; }
+.sign-state:not(.ok) .dot-state { animation: pulse 2s infinite; }
+.sign-state.partial { color: var(--blue-700); } .sign-state.partial .dot-state { background: var(--blue-600); box-shadow: 0 0 0 4px rgba(24, 99, 220, .18); animation: none; }
+.c-alert { margin: 10px 0 18px; padding: 14px 16px; border-radius: 12px; background: #FFF8EB; border: 1.5px solid #F2B24C; }
+.c-alert b { display: block; color: #92400E; margin-bottom: 6px; }
+.c-alert ul { margin: 0; padding-left: 18px; }
+.c-alert a { color: #92400E; font-weight: 600; }
+.c-dest { border-left: 4px solid #D97706; background: #FFF8EB; padding: 2px 14px 6px; border-radius: 10px; margin: 8px 0; }
+.c-dest p { font-weight: 600; }
+.c-badge { font: 700 .66rem var(--font-body); text-transform: uppercase; letter-spacing: .08em; background: #B45309; color: #fff; padding: 2px 7px; border-radius: 999px; vertical-align: middle; }
