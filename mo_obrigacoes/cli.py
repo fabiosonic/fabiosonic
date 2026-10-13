@@ -40,6 +40,13 @@ def cmd_init(_args) -> None:
     print(f"Banco pronto. Catálogo com {n} obrigações.")
 
 
+def _preparar_banco() -> None:
+    """Cria tabelas, aplica migrações e carrega o catálogo atual (vigência, regras novas)."""
+    criar_tabelas()
+    with sessao() as s:
+        sincronizar_catalogo(s)
+
+
 def _bool(v: str) -> bool:
     return str(v).strip().lower() in {"1", "s", "sim", "x", "true", "yes"}
 
@@ -47,7 +54,7 @@ def _bool(v: str) -> bool:
 def cmd_importar(args) -> None:
     """CSV (separador ;) com colunas: codigo;razao_social;cnpj;regime;uf;municipio;comercio;industria;servicos;
     possui_funcionarios;possui_prolabore;retem_tributos;email_cliente;drive_folder_id"""
-    criar_tabelas()
+    _preparar_banco()
     novos = atualizados = 0
     with sessao() as s, open(args.arquivo, encoding="utf-8-sig") as f:
         for linha in csv.DictReader(f, delimiter=";"):
@@ -74,7 +81,7 @@ def cmd_importar(args) -> None:
 
 
 def cmd_agenda(args) -> None:
-    criar_tabelas()
+    _preparar_banco()
     with sessao() as s:
         r = gerar_agenda(s, args.competencia or competencia_anterior())
     print(f"Agenda {r['competencia']}: {r['tarefas_criadas']} tarefa(s) criada(s) para {r['empresas']} empresa(s).")
@@ -84,14 +91,14 @@ def cmd_sync(args) -> None:
     from .drive import criar_cliente
     from .monitor import Monitor
 
-    criar_tabelas()
+    _preparar_banco()
     with sessao() as s:
         r = Monitor(s, criar_cliente()).sincronizar(completo=args.completo)
     print(r.as_dict())
 
 
 def cmd_alertas(_args) -> None:
-    criar_tabelas()
+    _preparar_banco()
     with sessao() as s:
         print(executar_alertas(s))
 
@@ -99,7 +106,7 @@ def cmd_alertas(_args) -> None:
 def cmd_worker(args) -> None:
     """Loop simples: varre o Drive a cada N minutos, gera a agenda e envia alertas 1x ao dia (7h)."""
     cfg = get_config()
-    criar_tabelas()
+    _preparar_banco()
     ultimo_alerta: date | None = None
     while True:
         agora = datetime.now()

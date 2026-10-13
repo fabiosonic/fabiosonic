@@ -93,3 +93,14 @@ Também dá para usar o cron com `sync` a cada 15 minutos e `alertas` às 7h.
 - A conta de serviço pode ficar como **leitora**. Revogue o acesso dela retirando o compartilhamento da pasta.
 - Faça backup diário de `dados/` (SQLite) ou use PostgreSQL gerenciado.
 - A trilha de auditoria (`/eventos`) registra quem baixou, dispensou ou reabriu cada tarefa.
+
+## 8. Checklist de produção (exigido pela verificação de qualidade)
+
+1. Defina `MO_ADMIN_PASSWORD`. Sem senha, o painel só responde na própria máquina (`127.0.0.1`).
+2. Publique o painel **somente com HTTPS**, atrás de um proxy reverso que **repasse o cabeçalho `Host`**
+   (nginx: `proxy_set_header Host $host;`). Sem isso, a proteção contra CSRF bloqueia os formulários.
+3. Ao atualizar de uma versão anterior, rode `python -m mo_obrigacoes init` e, uma vez, `python -m mo_obrigacoes sync --completo`.
+   Em seguida, revise em **Auditoria** os eventos `reabertura_automatica` e `documento_removido`: são baixas antigas cujo
+   comprovante foi movido ou apagado do Drive.
+4. Após a atualização, a primeira varredura reprocessa uma vez os documentos do Google Drive (as datas passaram a ser no
+   horário de Brasília). Isso não altera as tarefas já concluídas.
