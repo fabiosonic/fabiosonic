@@ -1,10 +1,12 @@
 """Painel web (FastAPI + Jinja2)."""
 from __future__ import annotations
 
+import re
 import secrets
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote, urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -12,7 +14,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .. import agenda as agenda_mod
 from ..alertas import executar_alertas
@@ -59,10 +61,31 @@ FLAGS_EMPRESA = [
 ]
 
 
-def usuario_atual(cred: HTTPBasicCredentials | None = Depends(seguranca)) -> str:
+RE_COMPETENCIA = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
+RE_ID_DRIVE = re.compile(r"[A-Za-z0-9_-]{10,}")
+HOSTS_LOCAIS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def _verificar_origem(request: Request) -> None:
+    """Proteção CSRF: o navegador reenvia o login HTTP Basic em formulários vindos de outros sites.
+    POST só é aceito se Origin (ou, na falta dele, Referer) for o próprio painel."""
+    if request.method != "POST":
+        return
+    origem = request.headers.get("origin") or request.headers.get("referer")
+    if not origem:
+        return  # clientes que não são navegadores (curl, scripts)
+    if urlsplit(origem).netloc != request.headers.get("host", ""):
+        raise HTTPException(403, "Requisição de outra origem bloqueada")
+
+
+def usuario_atual(request: Request, cred: HTTPBasicCredentials | None = Depends(seguranca)) -> str:
     cfg = get_config()
+    _verificar_origem(request)
     if not cfg.admin_password:
-        return "admin"  # modo desenvolvimento: defina MO_ADMIN_PASSWORD em produção
+        # sem senha só funciona na própria máquina (modo desenvolvimento/demonstração)
+        if request.client is not None and request.client.host in HOSTS_LOCAIS:
+            return "admin"
+        raise HTTPException(503, "Painel bloqueado: defina MO_ADMIN_PASSWORD no .env")
     if cred is None or not (
         secrets.compare_digest(cred.username.encode(), cfg.admin_user.encode())
         and secrets.compare_digest(cred.password.encode(), cfg.admin_password.encode())
@@ -83,8 +106,12 @@ def get_db():
         s.close()
 
 
+def _competencia_valida(valor: str | None) -> bool:
+    return bool(valor) and RE_COMPETENCIA.fullmatch(valor) is not None
+
+
 def _competencia(valor: str | None) -> str:
-    if valor and len(valor) == 7 and valor[4] == "-":
+    if _competencia_valida(valor):
         return valor
     return competencia_anterior()
 
@@ -105,10 +132,16 @@ def _render(request: Request, nome: str, **ctx):
     return templates.TemplateResponse(request, nome, ctx)
 
 
-def _voltar(url: str, msg: str) -> RedirectResponse:
-    sep = "&" if "?" in url else "?"
-    from urllib.parse import quote
+def _destino_seguro(url: str, padrao: str = "/") -> str:
+    """Só aceita caminho interno ("/tarefas?..."). Bloqueia "//site", "/\\site", "https://site" (open redirect)."""
+    if not url or not url.startswith("/") or url.startswith("//") or url.startswith("/\\"):
+        return padrao
+    return url
 
+
+def _voltar(url: str, msg: str) -> RedirectResponse:
+    url = _destino_seguro(url)
+    sep = "&" if "?" in url else "?"
     return RedirectResponse(f"{url}{sep}msg={quote(msg)}", status_code=303)
 
 
@@ -121,7 +154,8 @@ def criar_app() -> FastAPI:
             sess.commit()
         yield
 
-    app = FastAPI(title="Moraes e Oliveira - Monitor de Obrigações", docs_url="/api/docs", lifespan=ciclo_de_vida)
+    app = FastAPI(title="Moraes e Oliveira - Monitor de Obrigações", docs_url=None, redoc_url=None,
+                  openapi_url=None, lifespan=ciclo_de_vida)
     app.mount("/static", StaticFiles(directory=str(AQUI / "static")), name="static")
 
     @app.get("/saude")
@@ -183,8 +217,10 @@ def criar_app() -> FastAPI:
     @app.post("/empresas/salvar")
     async def empresa_salvar(request: Request, db: Session = Depends(get_db), usuario: str = Depends(usuario_atual)):
         f = await request.form()
-        emp_id = f.get("id")
-        emp = db.get(Empresa, int(emp_id)) if emp_id else Empresa()
+        emp_id = f.get("id", "")
+        if emp_id and not emp_id.isdigit():
+            raise HTTPException(400, "id inválido")
+        emp = (db.get(Empresa, int(emp_id)) or _404()) if emp_id else Empresa()
         cnpj = so_digitos(f.get("cnpj", ""))
         if not (cnpj_valido(cnpj) or cpf_valido(cnpj)):
             return _voltar(f"/empresas/{emp_id}/editar" if emp_id else "/empresas/nova", "CNPJ/CPF inválido")
@@ -193,6 +229,13 @@ def criar_app() -> FastAPI:
         if duplicada is not None and duplicada.id != emp.id:
             return _voltar(f"/empresas/{emp_id}/editar" if emp_id else "/empresas/nova",
                            f"Já existe a empresa {duplicada.codigo} com este código ou CNPJ")
+        # validações antes de qualquer alteração: get_db faz commit mesmo quando a rota retorna cedo
+        pasta = extrair_id_pasta(f.get("drive_folder_id", ""))
+        if pasta and get_config().drive_backend == "google" and not RE_ID_DRIVE.fullmatch(pasta):
+            return _voltar(f"/empresas/{emp_id}/editar" if emp_id else "/empresas/nova",
+                           "Pasta do Drive inválida: cole a URL da pasta ou o ID")
+        if f.get("regime", "SIMPLES") not in REGIMES:
+            return _voltar(f"/empresas/{emp_id}/editar" if emp_id else "/empresas/nova", "Regime inválido")
         emp.codigo = codigo
         emp.razao_social = f.get("razao_social", "").strip().upper()
         emp.nome_fantasia = f.get("nome_fantasia", "").strip()
@@ -202,16 +245,18 @@ def criar_app() -> FastAPI:
         emp.municipio = f.get("municipio", "").strip()
         emp.email_cliente = f.get("email_cliente", "").strip()
         emp.whatsapp_cliente = f.get("whatsapp_cliente", "").strip()
-        emp.drive_folder_id = extrair_id_pasta(f.get("drive_folder_id", ""))
+        emp.drive_folder_id = pasta
         emp.ativa = f.get("ativa") == "on"
         for flag, _ in FLAGS_EMPRESA:
             setattr(emp, flag, f.get(flag) == "on")
         for campo in ("resp_fiscal_id", "resp_contabil_id", "resp_pessoal_id"):
             v = f.get(campo)
-            setattr(emp, campo, int(v) if v else None)
+            setattr(emp, campo, int(v) if v and v.isdigit() else None)
+        anteriores = emp.personalizacoes or {}
         pers = {}
         for o in db.scalars(select(Obrigacao)):
-            regra = {}
+            # preserva chaves que o formulário não mostra ("ajuste", "regra")
+            regra = {k: v for k, v in anteriores.get(o.codigo, {}).items() if k not in ("ignorar", "incluir", "dia")}
             modo = f.get(f"pers_{o.codigo}", "")
             if modo == "ignorar":
                 regra["ignorar"] = True
@@ -235,7 +280,7 @@ def criar_app() -> FastAPI:
     def empresa_detalhe(empresa_id: int, request: Request, db: Session = Depends(get_db),
                         usuario: str = Depends(usuario_atual)):
         emp = db.get(Empresa, empresa_id) or _404()
-        tarefas = list(db.scalars(select(Tarefa).options(joinedload(Tarefa.obrigacao))
+        tarefas = list(db.scalars(select(Tarefa).options(joinedload(Tarefa.obrigacao), selectinload(Tarefa.documentos))
                                   .where(Tarefa.empresa_id == emp.id)
                                   .order_by(Tarefa.competencia.desc(), Tarefa.vencimento)).unique())
         comps = sorted({t.competencia for t in tarefas}, reverse=True)[:12]
@@ -310,9 +355,14 @@ def criar_app() -> FastAPI:
                     voltar: str = Form("/tarefas"), db: Session = Depends(get_db),
                     usuario: str = Depends(usuario_atual)):
         t = db.get(Tarefa, tarefa_id) or _404()
+        voltar = _destino_seguro(voltar, "/tarefas")
         if acao == "baixa":
-            dar_baixa(db, t, datetime.now(), "manual", usuario, observacao)
-            msg = "Baixa manual registrada"
+            ok = dar_baixa(db, t, datetime.now(), "manual", usuario, observacao)
+            msg = "Baixa manual registrada" if ok else "A tarefa já estava concluída"
+        elif acao == "dispensar" and t.status != STATUS_PENDENTE:
+            msg = "Só é possível dispensar tarefa pendente"
+        elif acao == "reabrir" and t.status == STATUS_PENDENTE:
+            msg = "A tarefa já está pendente"
         elif acao == "dispensar":
             if not observacao.strip():
                 return _voltar(voltar, "Informe a justificativa para dispensar (ex.: sem movimento)")
@@ -326,8 +376,6 @@ def criar_app() -> FastAPI:
             msg = "Tarefa reaberta"
         else:
             raise HTTPException(400, "ação inválida")
-        if not voltar.startswith("/"):
-            voltar = "/tarefas"
         return _voltar(voltar, msg)
 
     # ------------------------------------------------------------- Documentos
@@ -348,8 +396,9 @@ def criar_app() -> FastAPI:
     def documento_classificar(doc_id: int, codigo: str = Form(...), competencia: str = Form(...),
                               db: Session = Depends(get_db), usuario: str = Depends(usuario_atual)):
         doc = db.get(Documento, doc_id) or _404()
+        if not _competencia_valida(competencia):
+            return _voltar("/documentos", "Competência inválida: use AAAA-MM (ex.: 2026-09)")
         try:
-            parse_competencia(competencia)
             classificar_manual(db, doc, codigo, competencia, usuario)
         except (ValueError, IndexError) as exc:
             return _voltar("/documentos", f"Erro: {exc}")
@@ -405,6 +454,8 @@ def criar_app() -> FastAPI:
     # ------------------------------------------------------------- Ações
     @app.post("/acoes/agenda")
     def acao_agenda(competencia: str = Form(...), db: Session = Depends(get_db), usuario: str = Depends(usuario_atual)):
+        if not _competencia_valida(competencia):
+            return _voltar("/", "Competência inválida: use AAAA-MM")
         r = agenda_mod.gerar_agenda(db, _competencia(competencia), usuario=usuario)
         return _voltar(f"/?competencia={r['competencia']}", f"Agenda {r['competencia']}: {r['tarefas_criadas']} tarefa(s) criada(s)")
 

@@ -5,7 +5,7 @@
 <p class="muted">{{ emp.cnpj_formatado }} · {{ REGIMES.get(emp.regime) }} · {{ emp.municipio }}{{ '/' ~ emp.uf if emp.uf }}
 {% if emp.drive_folder_id and not emp.drive_folder_id.startswith('local') and '/' not in emp.drive_folder_id %} · <a target="_blank" href="https://drive.google.com/drive/folders/{{ emp.drive_folder_id }}">Abrir pasta no Drive</a>{% endif %}</p>
 <div class="acoes"><a class="btn" href="/empresas/{{ emp.id }}/editar">Editar cadastro</a>
-<form class="inline" method="post" action="/empresas/{{ emp.id }}/sincronizar"><button class="sec">Reprocessar pasta do Drive</button></form>
+<form class="inline" method="post" action="/empresas/{{ emp.id }}/sincronizar" onsubmit="return confirm('Reprocessar todos os arquivos da pasta desta empresa? Pode levar alguns minutos.')"><button class="sec">Reprocessar pasta do Drive</button></form>
 <form class="inline" method="post" action="/empresas/{{ emp.id }}/criar-pastas"><input name="ano" size="5" value="{{ hoje.year }}"><button class="sec">Criar estrutura de pastas</button></form>
 <a class="btn sec" href="/tarefas?empresa_id={{ emp.id }}">Ver agenda completa</a></div>
 <div class="cards"><div class="card"><div class="n">{{ kpi.total }}</div><div class="l">Tarefas</div></div>

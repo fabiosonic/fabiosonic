@@ -6,7 +6,7 @@
 <div class="acoes">
 <form class="inline" method="post" action="/acoes/agenda"><input type="hidden" name="competencia" value="{{ comp }}"><button>Gerar agenda de {{ formatar_competencia(comp) }}</button></form>
 <form class="inline" method="post" action="/acoes/sincronizar"><button class="sec">Verificar Google Drive agora</button></form>
-<form class="inline" method="post" action="/acoes/alertas"><button class="sec">Enviar alertas</button></form>
+<form class="inline" method="post" action="/acoes/alertas" onsubmit="return confirm('Enviar agora os e-mails de alerta para a equipe e as cobranças aos clientes?')"><button class="sec">Enviar alertas</button></form>
 <span class="muted" style="align-self:center">Última varredura do Drive: {{ ultima_sync.strftime('%d/%m/%Y %H:%M') ~ ' UTC' if ultima_sync else 'nunca' }}</span>
 </div>
 {% set g = r.geral %}
