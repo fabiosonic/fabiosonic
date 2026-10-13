@@ -356,6 +356,88 @@
     });
   });
 
+  /* ---------- Pacotes: botão "Contratar" pré-seleciona no formulário ---------- */
+  var hire = $('#form-contratacao');
+  $$('[data-pacote]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      if (!hire) return;
+      var r = $$('input[name="pacote"]', hire).filter(function (i) { return i.value === a.getAttribute('data-pacote'); })[0];
+      if (r) { r.checked = true; }
+      hire.classList.remove('pkg-pulse'); void hire.offsetWidth; hire.classList.add('pkg-pulse');
+    });
+  });
+
+  /* ---------- Contratação em etapas → WhatsApp ---------- */
+  if (hire) {
+    var steps = $$('.hire-step', hire);
+    var cur = 0;
+    var hStatus = $('.form-status', hire);
+    var bar = $('.hire-bar i', hire), cnt = $('.hire-count', hire);
+    function show(i) {
+      cur = i;
+      steps.forEach(function (s, k) { s.classList.toggle('active', k === i); });
+      hire.classList.toggle('first', i === 0);
+      hire.classList.toggle('last', i === steps.length - 1);
+      bar.style.width = ((i + 1) / steps.length * 100) + '%';
+      cnt.textContent = 'Etapa ' + (i + 1) + ' de ' + steps.length;
+      hStatus.textContent = ''; hStatus.className = 'form-status';
+    }
+    function validStep(i) {
+      var s = steps[i], first = null;
+      s.removeAttribute('aria-invalid');
+      $$('[aria-invalid]', s).forEach(function (el) { el.removeAttribute('aria-invalid'); });
+      var radios = {};
+      $$('input[required][type="radio"]', s).forEach(function (r) { radios[r.name] = true; });
+      Object.keys(radios).forEach(function (n) {
+        if (!$$('input[name="' + n + '"]', s).some(function (r) { return r.checked; })) { s.setAttribute('aria-invalid', 'true'); first = first || $('input[name="' + n + '"]', s); }
+      });
+      $$('select[required], input[required]:not([type="radio"]):not([type="checkbox"])', s).forEach(function (el) {
+        if (!el.value.trim()) { el.setAttribute('aria-invalid', 'true'); first = first || el; }
+      });
+      $$('input[required][type="checkbox"]', s).forEach(function (el) {
+        if (!el.checked) { el.setAttribute('aria-invalid', 'true'); first = first || el; }
+      });
+      if (first) {
+        hStatus.className = 'form-status error';
+        hStatus.textContent = 'Preencha os campos desta etapa para continuar.';
+        first.focus();
+        return false;
+      }
+      return true;
+    }
+    $('[data-hire-next]', hire).addEventListener('click', function () { if (validStep(cur)) { show(cur + 1); steps[cur].querySelector('input, select').focus(); } });
+    $('[data-hire-prev]', hire).addEventListener('click', function () { if (cur > 0) show(cur - 1); });
+    hire.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.type !== 'submit' && !hire.classList.contains('last')) { e.preventDefault(); $('[data-hire-next]', hire).click(); }
+    });
+    hire.addEventListener('submit', function (e) {
+      e.preventDefault();
+      for (var i = 0; i < steps.length; i++) { if (!validStep(i)) { show(i); validStep(i); return; } }
+      var f = hire.elements;
+      var val = function (n) { var el = $('[name="' + n + '"]:checked', hire); return el ? el.value : ''; };
+      var extras = $$('input[name="extras"]:checked', hire).map(function (c) { return c.value; });
+      var txt = 'Olá! Quero receber uma proposta (site M&O Contábil DIGITAL).\n' +
+        'Pacote: ' + val('pacote') + '\n' +
+        'Atividade: ' + f.atividade.value + '\n' +
+        'Situação/regime: ' + f.regime.value + '\n' +
+        'Colaboradores: ' + f.funcionarios.value + '\n' +
+        'Notas por mês: ' + f.notas.value + '\n' +
+        'Sócios: ' + f.socios.value + '\n' +
+        (f.municipio.value.trim() ? 'Município: ' + f.municipio.value.trim() + '\n' : '') +
+        'Pagamento preferido: ' + val('pagamento') + '\n' +
+        (extras.length ? 'Complementares: ' + extras.join(', ') + '\n' : '') +
+        'Nome: ' + f.nome.value.trim() +
+        (f.empresa.value.trim() ? '\nEmpresa: ' + f.empresa.value.trim() : '');
+      var url = 'https://api.whatsapp.com/send?phone=' + WHATSAPP + '&text=' + encodeURIComponent(txt);
+      var win = window.open(url, '_blank');
+      if (win) win.opener = null;
+      hStatus.className = 'form-status ok';
+      hStatus.textContent = win ? 'Abrimos o WhatsApp com a solicitação pronta — é só enviar. A proposta por escrito segue por lá.' : 'Seu navegador bloqueou a nova janela. ';
+      if (!win) { var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Clique aqui para abrir o WhatsApp.'; hStatus.appendChild(a); }
+    });
+    show(0);
+  }
+
   /* ---------- Formulário de contato → WhatsApp ---------- */
   var form = $('#form-contato');
   if (form) {

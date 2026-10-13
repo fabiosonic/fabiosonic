@@ -13,7 +13,7 @@ node --test tests/*.test.js   # testes das calculadoras
 
 | Arquivo | Conteúdo |
 |---|---|
-| `index.html` | Página principal: hero, como funciona, serviços, plataforma, segmentos, Reforma (qualitativa, com link para o guia), ferramentas, quem somos, FAQ, contato |
+| `index.html` | Página principal: hero, como funciona, serviços, **pacotes e contratação em 4 etapas**, plataforma, segmentos, Reforma (qualitativa, com link para o guia), ferramentas, quem somos, FAQ, contato |
 | `servicos.html` | Serviços detalhados (contábil, fiscal, DP, legalização, planejamento tributário, consultoria financeira), adicionais com parceiros, FAQ |
 | `contabilidade-itaborai.html` | Página da sede em Itaboraí: endereço, como chegar (mapa por link externo), atendimento presencial e digital |
 | `atendimento-regiao-metropolitana-rj.html` | Atendimento em São Gonçalo, Niterói e Rio de Janeiro (uma seção por cidade, sem endereços fictícios) |
@@ -33,6 +33,8 @@ node --test tests/*.test.js   # testes das calculadoras
 | `scripts/verificar-site.mjs` | Verificação estática: H1, title, description, canonical, JSON-LD, links internos, termos proibidos, nota legal, sitemap |
 | `docs/benchmark-contabilidade-digital.md` | Engenharia reversa de 22 sites de contabilidade digital |
 | `docs/seo-relatorio.md` | Relatório de SEO: palavras-chave por página e próximos passos |
+| `docs/benchmark-pacotes.md` | Estrutura de pacotes de 10 empresas de contabilidade digital (sem preços) |
+| `assets/img/fabio-ilustracao.webp` | Personagem ilustrado do Fábio (contador responsável), sempre identificado como ilustração |
 
 Todas as páginas com afirmação tributária citam a norma, trazem "Revisado em 13/10/2026" e a ressalva "Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura societária."
 
@@ -44,10 +46,14 @@ Todas as páginas com afirmação tributária citam a norma, trazem "Revisado em
 
 - [ ] Avaliações do Google: a nota, o total de avaliações e os depoimentos com nome foram **retirados** do index (hero, seção de depoimentos e schema) em 13/10/2026. Só voltam com autorização escrita de cada cliente (NBC PG 01, sigilo) e conferência da nota no dia da publicação.
 - [ ] Informar nome e CRC do **responsável técnico** para o rodapé.
-- [ ] Guardar a comprovação do "atendimento rápido em horário comercial" (NBC PG 01, item 13).
+- [x] "Atendimento rápido" e "contador de verdade" foram retirados (afirmação sem lastro e comparação indireta com colegas). O texto agora diz "atendimento por WhatsApp, telefone e e-mail em horário comercial".
 - [ ] Informar o nome e o link do aplicativo de documentos usado pelo escritório. O bento do site fala dele de forma genérica.
 - [ ] Revisar o cronograma da Reforma (EC 132/2023 e LC 214/2025) e a base legal do Fator R antes de cada publicação.
-- [ ] Usar fotos reais da equipe e do escritório, se desejado (hoje o site usa apenas ilustrações em CSS).
+- [ ] Usar fotos reais da equipe e do escritório, se desejado. Hoje o site usa ilustrações em CSS e o personagem ilustrado do Fábio, com legenda e texto alternativo de "ilustração".
+- [ ] Informar o **sobrenome e o CRC pessoal do Fábio** para a legenda do personagem e para o responsável técnico.
+- [ ] Pacotes: o Fábio deve validar o escopo de cada pacote, em especial as obrigações do Lucro Presumido. Os honorários **nunca** vão para o site: só na proposta escrita (NBC PG 01).
+- [ ] Pagamento: definir no modelo de proposta e contrato as condições de Pix e do parcelamento no cartão (número de parcelas, encargos). No site fica só "com opção de parcelamento", sem "sem juros" nem número de parcelas.
+- [ ] Contrato: escolher a ferramenta de assinatura eletrônica (gov.br, Clicksign, DocuSign etc.) e manter o modelo de contrato conforme a Resolução CFC 1.590/2020.
 - [ ] Se for adicionar Google Analytics ou Meta Pixel, implementar o consentimento e atualizar a política de privacidade.
 
 ### Pendências registradas pelo gestor de qualidade (13/10/2026)

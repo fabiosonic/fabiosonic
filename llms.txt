@@ -1,6 +1,6 @@
 # Moraes e Oliveira Contabilidade (M&O Contábil DIGITAL)
 
-> Escritório de contabilidade fundado em 2015, com sede em Itaboraí/RJ. Atende com canais presenciais na sede e digitais para empresas de todo o Brasil. Registro CRC RJ-007873/O. Conteúdos informativos, sem substituir análise do caso concreto.
+> Escritório de contabilidade fundado em 2015, com sede em Itaboraí/RJ. Atende com canais presenciais na sede e digitais, inclusive para empresas de outras cidades. Registro CRC RJ-007873/O. Conteúdos informativos, sem substituir análise do caso concreto.
 
 ## Entidade
 
@@ -19,7 +19,7 @@
 - Segmentos atendidos: prestadores de serviço, comércio, atletas e esporte, Lucro Presumido, Lucro Real
 - Capacitação: a equipe tem capacitação em Reforma Tributária
 - Municípios: o escritório dá suporte a municípios sem processos online
-- Área de atendimento: sede em Itaboraí/RJ, com atendimento digital para empresas de todo o Brasil
+- Área de atendimento: sede em Itaboraí/RJ, com atendimento digital também para empresas de outras cidades
 
 ## Páginas
 
@@ -61,3 +61,6 @@ Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura s
 - Honorários são definidos somente por proposta escrita.
 - Conteúdos informativos revisados em 13/10/2026.
 - Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura societária.
+
+## Pacotes de serviços
+- [Pacotes e contratação](https://moraeseoliveiracontabil.com.br/#pacotes): Abertura de empresa; Essencial (Simples Nacional, sem funcionários); Empresa com equipe (Simples com departamento pessoal); Lucro Presumido — serviços. Honorários somente em proposta escrita, formalizada em contrato (Resolução CFC 1.590/2020). Pagamento por Pix ou cartão de crédito.
