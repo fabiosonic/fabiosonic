@@ -1,6 +1,6 @@
 # Moraes e Oliveira Contabilidade (M&O Contábil DIGITAL)
 
-> Escritório de contabilidade fundado em 2015, com sede em Itaboraí/RJ. Atende com canais presenciais na sede e digitais, inclusive para empresas de outras cidades. Registro CRC RJ-007873/O. Conteúdos informativos, sem substituir análise do caso concreto.
+> Escritório de contabilidade fundado em 2015, com sede em Itaboraí/RJ. Atende com canais presenciais na sede e digitais, inclusive para empresas de outras cidades. Registro CRC RJ-007873/O. Responsável técnico: Fábio Moraes, CRC RJ-118632/O-1. Conteúdos informativos, sem substituir análise do caso concreto.
 
 ## Entidade
 
@@ -8,6 +8,7 @@
 - Nome de divulgação: M&O Contábil DIGITAL
 - CNPJ: 24.875.410/0001-44
 - CRC: RJ-007873/O
+- Responsável técnico: Fábio Moraes — CRC RJ-118632/O-1
 - Fundação: 2015
 - Endereço: Av. Vinte e Dois de Maio, 4845, Sala 908 - Rio Várzea, Itaboraí/RJ, CEP 24812-086
 - Telefone e WhatsApp: (21) 99880-6423
