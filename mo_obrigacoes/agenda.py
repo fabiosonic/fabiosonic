@@ -37,6 +37,12 @@ def obrigacao_aplicavel(empresa: Empresa, obrigacao: Obrigacao) -> bool:
 
 
 def ocorre_na_competencia(obrigacao: Obrigacao, competencia: str) -> bool:
+    desde = getattr(obrigacao, "vigente_desde", "") or ""
+    ate = getattr(obrigacao, "vigente_ate", "") or ""
+    if ate and competencia > ate:
+        return False
+    if desde and competencia < desde:
+        return False
     _, mes = parse_competencia(competencia)
     if obrigacao.periodicidade == "trimestral":
         return mes in (3, 6, 9, 12)

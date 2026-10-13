@@ -161,6 +161,9 @@ class Obrigacao(Base):
     # Regras de reconhecimento de arquivo: {"nome": [regex], "conteudo": [regex], "extensoes": [...]}
     reconhecimento: Mapped[dict] = mapped_column(JSON, default=dict)
     multa_referencia: Mapped[str] = mapped_column(String(300), default="")
+    # Vigência (AAAA-MM, inclusive). Vazio = sem limite. Ex.: PIS/COFINS termina em 2026-12 (LC 214/2025)
+    vigente_desde: Mapped[str] = mapped_column(String(7), default="")
+    vigente_ate: Mapped[str] = mapped_column(String(7), default="")
     ativa: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

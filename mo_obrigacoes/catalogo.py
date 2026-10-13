@@ -17,7 +17,7 @@ mensal foi substituída pela DCTFWeb (MIT) a partir da competência 01/2025.
 """
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from .models import TIPO_ENTREGA, TIPO_RECEBIMENTO, Obrigacao
@@ -58,7 +58,7 @@ CATALOGO: list[dict] = [
         "regra_vencimento": {"tipo": "dia_fixo", "dia": 20, "meses_apos": 1, "ajuste": "posterga"},
         "aplicabilidade": {"regimes": ["SIMPLES"]},
         "reconhecimento": {
-            "nome": [r"(^|[^a-z])das([^a-z]|$)", r"guia.{0,5}simples"],
+            "nome": [r"^das([^a-z]|$)", r"(^|[^a-z])das[ _-]*(\d|simples|sn)", r"guia.{0,5}(do.)?simples"],
             "conteudo": [r"(?<!Gerador do )Documento de Arrecada[cç][aã]o\s+do Simples Nacional"],
             "exclui": [r"Programa Gerador", r"Recibo de Entrega", r"\bMEI\b", r"SIMEI", r"Parcelamento", r"dasn", r"das.?mei", r"Extrato do Simples"],
             "pastas": ["fiscal", "guias"],
@@ -182,6 +182,7 @@ CATALOGO: list[dict] = [
         "nome": "DARF PIS/COFINS",
         "departamento": "FISCAL",
         "periodicidade": "mensal",
+        "vigente_ate": "2026-12",
         "base_legal": "MP 2.158-35/2001, art. 18, II e par. único (red. Lei 11.933/2009); extinção a partir de 01/2027 (LC 214/2025, art. 542)",
         "multa_referencia": "Multa de mora 0,33%/dia (até 20%) + Selic",
         "regra_vencimento": {"tipo": "dia_fixo", "dia": 25, "meses_apos": 1, "ajuste": "antecipa"},
@@ -212,6 +213,7 @@ CATALOGO: list[dict] = [
         "nome": "EFD-Contribuições",
         "departamento": "FISCAL",
         "periodicidade": "mensal",
+        "vigente_ate": "2026-12",
         "base_legal": "IN RFB 1.252/2012, art. 5º",
         "multa_referencia": "R$ 500,00 (Presumido/Simples/imunes) ou R$ 1.500,00 (demais) por mês-calendário (MP 2.158-35/2001, art. 57, I, red. Lei 12.766/2012)",
         "regra_vencimento": {"tipo": "dia_util", "n": 10, "meses_apos": 2},
@@ -583,8 +585,20 @@ CATALOGO: list[dict] = [
 ]
 
 
+_COLUNAS_VIGENCIA = {"vigente_desde": "VARCHAR(7)", "vigente_ate": "VARCHAR(7)"}
+
+
+def _migrar_vigencia(sessao: Session) -> None:
+    """Acrescenta as colunas de vigência em bancos SQLite criados antes delas."""
+    colunas = {c["name"] for c in inspect(sessao.get_bind()).get_columns("obrigacoes")}
+    for nome, tipo in _COLUNAS_VIGENCIA.items():
+        if colunas and nome not in colunas:
+            sessao.execute(text(f"ALTER TABLE obrigacoes ADD COLUMN {nome} {tipo} DEFAULT ''"))
+
+
 def sincronizar_catalogo(sessao: Session) -> int:
     """Insere/atualiza o catálogo padrão no banco. Retorna quantos itens foram gravados."""
+    _migrar_vigencia(sessao)
     existentes = {o.codigo: o for o in sessao.scalars(select(Obrigacao))}
     for item in CATALOGO:
         dados = {
@@ -598,6 +612,8 @@ def sincronizar_catalogo(sessao: Session) -> int:
             "aplicabilidade": item.get("aplicabilidade", {}),
             "reconhecimento": item.get("reconhecimento", {}),
             "multa_referencia": item.get("multa_referencia", ""),
+            "vigente_desde": item.get("vigente_desde", ""),
+            "vigente_ate": item.get("vigente_ate", ""),
         }
         obj = existentes.get(item["codigo"])
         if obj is None:
