@@ -152,6 +152,27 @@
     });
   }
 
+  /* ---------- Gráfico do painel: dica por mês (hover/foco) ---------- */
+  var dchart = $('.dash-chart');
+  if (dchart) {
+    var tip = $('.dc-tip', dchart);
+    $$('.dchart .col', dchart).forEach(function (g) {
+      function mostra() {
+        $$('.dchart .col', dchart).forEach(function (o) { o.classList.toggle('dim', o !== g); });
+        $('.t-mes', tip).textContent = g.getAttribute('data-mes');
+        $('.t-rec', tip).textContent = g.getAttribute('data-rec') + ' mil';
+        $('.t-desp', tip).textContent = g.getAttribute('data-desp') + ' mil';
+        tip.hidden = false;
+        var gr = g.getBoundingClientRect(), cr = dchart.getBoundingClientRect();
+        var x = gr.left - cr.left + gr.width / 2;
+        tip.style.left = Math.max(70, Math.min(cr.width - 70, x)) + 'px';
+      }
+      function esconde() { tip.hidden = true; $$('.dchart .col', dchart).forEach(function (o) { o.classList.remove('dim'); }); }
+      g.addEventListener('pointerenter', mostra);
+      g.addEventListener('pointerleave', esconde);
+    });
+  }
+
   /* ---------- Rede de partículas no hero (desktop) ---------- */
   var canvas = $('#hero-canvas');
   if (canvas && !reduceMotion && window.innerWidth > 720) {
@@ -236,6 +257,7 @@
     var rt = $('.result-text', form);
     rt.textContent = msg; rt.classList.add('error');
     var main = $('.bf-main, .g-num', form); if (main) { main.textContent = '—'; main.classList.remove('neg'); }
+    var mf = $('.m-fill', form); if (mf) mf.style.width = '0';
   }
   function readFields(form, names) {
     var vals = {}, bad = null;
@@ -258,13 +280,10 @@
       if (!r.ok) return showError(form, r.erro);
       var rt = $('.result-text', form); rt.classList.remove('error');
       $('.g-num', form).textContent = C.pct(r.fator);
-      var arc = $('.g-val', form);
-      var len = arc.getTotalLength ? arc.getTotalLength() : 283;
-      arc.style.strokeDasharray = len;
-      arc.style.strokeDashoffset = len * (1 - Math.min(r.fator / 0.56, 1)); // 28% no meio do arco
-      arc.style.stroke = r.anexo === 'III' ? '#18B36B' : '#009DF6';
-      var mark = $('.g-mark', form);
-      mark.setAttribute('x1', 100); mark.setAttribute('y1', 4); mark.setAttribute('x2', 100); mark.setAttribute('y2', 30);
+      // Medidor horizontal: escala 0–50%, limite fixo em 28% (56% da largura)
+      var pos = Math.min(r.fator / 0.5, 1);
+      $('.m-fill', form).style.width = (pos * 100) + '%';
+      $('.m-fill', form).classList.toggle('over', r.fator > 0.5);
       rt.innerHTML = r.anexo === 'III'
         ? 'Fator R de <strong>' + C.pct(r.fator) + '</strong>, igual ou acima de 28%: a atividade sujeita ao Fator R tende a ser tributada pelo <strong>Anexo III</strong>.'
         : 'Fator R de <strong>' + C.pct(r.fator) + '</strong>, abaixo de 28%: a atividade sujeita ao Fator R tende a ser tributada pelo <strong>Anexo V</strong>. A folha de 12 meses necessária para atingir 28% seria de ' + C.brl(r.folhaNecessaria) + '.';
@@ -284,16 +303,16 @@
       var v = readFields(form, ['fixos', 'receita', 'variaveis']);
       var r = C.pontoEquilibrio(v.fixos, v.receita, v.variaveis);
       var fill = $('.be-fill', form), mark = $('.be-mark', form);
-      if (!r.ok) { fill.style.width = '0'; mark.style.opacity = 0; return showError(form, r.erro); }
+      if (!r.ok) { fill.style.width = '0'; mark.style.opacity = 0; $('.be-rec', form).textContent = '—'; $('.be-pe', form).textContent = '—'; return showError(form, r.erro); }
       var rt = $('.result-text', form); rt.classList.remove('error');
       $('.bf-main', form).textContent = C.brl(r.receitaEquilibrio);
       var scale = Math.max(v.receita, r.receitaEquilibrio) || 1;
       fill.style.width = (v.receita / scale * 100) + '%';
       mark.style.left = (r.receitaEquilibrio / scale * 100) + '%'; mark.style.opacity = 1;
+      $('.be-rec', form).textContent = C.brl(v.receita); $('.be-pe', form).textContent = C.brl(r.receitaEquilibrio);
       rt.innerHTML = 'Índice de margem de contribuição: <strong>' + C.pct(r.imc) + '</strong>. ' + (r.atingido
         ? 'A receita informada supera o ponto de equilíbrio em ' + C.brl(r.folga) + '.'
-        : 'Faltam <strong>' + C.brl(-r.folga) + '</strong> de receita para cobrir os custos fixos.') +
-        ' <small>(barra = receita atual; marcador = equilíbrio)</small>';
+        : 'Faltam <strong>' + C.brl(-r.folga) + '</strong> de receita para cobrir os custos fixos.');
     },
     giro: function (form) {
       var v = readFields(form, ['estoques', 'receber', 'pagar']);
