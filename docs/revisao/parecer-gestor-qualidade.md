@@ -1490,3 +1490,121 @@ def test_email_invalido_nao_derruba_alertas(s, cfg, tmp_path, monkeypatch):
     emp1 = s.scalar(select(Empresa).where(Empresa.codigo == "0001"))
     assert any(t.ultimo_alerta_em for t in s.scalars(select(Tarefa).where(Tarefa.empresa_id == emp1.id)))
 ```
+
+---
+
+# Verificação final (13/10/2026)
+
+**Escopo:** `git diff e5b3736..HEAD`, com os commits `deadc11` (C), `3c02e9e` e `b14c8cb` (E), `2373687` (A), `027e76b` (D), `b2796b5` (G, vigência) e `686ff78` (B), sobre a revisão contábil `4813cee`. Revisei o diff linha a linha contra os patches do apêndice. Rodei de novo contra o HEAD os scripts de reprodução (`r_mon`, `r_class`, `r_google`, `r_falha`, `r_web`), a suíte e a demonstração.
+
+- **Suíte:** 71 passed.
+- **Demonstração:** 12 arquivos, 10 baixas, 1 não identificado, 1 divergente, nenhum erro.
+- **Desvios aceitos:**
+  - `files().create()` ficou **sem** retry, porque não é idempotente e um retry poderia duplicar a pasta. Está correto.
+  - No Pacote A, a validação de regime e de `drive_folder_id` foi movida para antes das atribuições, porque `get_db` faz commit mesmo quando a rota retorna cedo. Melhorou o patch original.
+- **Extras do Pacote D (corretos):**
+  - o worker gera a agenda das competências anterior, atual e próxima;
+  - o CSV está protegido contra injeção de fórmula;
+  - o webhook só aceita `https://`;
+  - os indicadores usam `MO_DIAS_ALERTA_VENCIMENTO`.
+
+## Status por achado
+
+| Achado | Status | Evidência no HEAD |
+|---|---|---|
+| C1 Varredura incremental perde arquivos | **Corrigido** | Arquivo com data antiga: 1 lido, `DOC_EXTRATOS` entregue. Arquivo movido A→B: baixa em B e fila de divergentes zerada |
+| C2 Baixa permanece sem comprovante | **Corrigido** | Arquivo apagado: DAS volta a `pendente`. Conteúdo trocado: PGDAS volta a `pendente` |
+| C3 Painel sem senha aberto | **Corrigido** | Acesso de fora da máquina (`10.0.0.5`) recebe 503; na própria máquina continua funcionando |
+| C4 Loop de reenvio de e-mails | **Corrigido** | SMTP falso recusando um destinatário: as cobranças seguintes são enviadas e `ultimo_alerta_em` fica gravado. O worker marca o dia antes de enviar |
+| A1 CSRF | **Corrigido** | POST com Origin externo: 403 |
+| A2 Open redirect | **Corrigido** | `//`, `https://` e `/\` voltam para `/tarefas` |
+| A3 Falha de download | **Corrigido** | Falha 503: nenhum documento gravado. Sincronização seguinte classifica como `PGDAS_D` |
+| A4 Fuso horário | **Corrigido** | 21:30 em Brasília no dia do vencimento: `entregue` |
+| A5 Agenda inteira de competência antiga | **Corrigido** | DAS de 03/2024 cria só 1 tarefa |
+| A6 Baixa por competência palpitada | **Corrigido** | Vai para revisão, testado em `test_competencia_so_pela_data_do_arquivo_vai_para_revisao` |
+| A7 Regex de competência | **Corrigido** | Os 6 casos do relatório agora dão o resultado esperado |
+| A8 Retry na API Google | **Corrigido** | `num_retries=5` em `list` e `next_chunk`; `create` sem retry de propósito |
+| M1 Injeção na query do Drive | **Corrigido** | `validar_id` levanta `ValueError` |
+| M2 Competência inválida | **Corrigido** | 200, mensagem de erro, 0 tarefas "2026-13" ou "2026-9" |
+| M3 "das" preposição | **Corrigido** | Pelo classificador (pontuação só pelo nome) e pelo novo padrão de nome do DAS (`b2796b5`) |
+| M4 STARTTLS sem verificação | **Corrigido** | `ssl.create_default_context()` |
+| M5 Transação única | **Corrigido** | Commit e rollback por empresa |
+| M6 Ações ignoram status | **Corrigido** | Reproduzido: "dispensar" em tarefa entregue não altera nada |
+| M7 Personalizações apagadas, id inexistente 500 | **Corrigido** | `ajuste` preservado; id inexistente dá 404 |
+| M8 `/api/docs` público | **Corrigido** | 404 |
+| M9 Usuário único na auditoria | Pendente (evolução) | Fora do plano mecânico |
+| M10 pypdf | **Parcial** | Versão fixada em `>=6.1,<7`; sem limite de tempo na extração (opcional) |
+| M11 Varredura recursiva | Pendente (evolução) | Changes API |
+| M12 Sync dentro da requisição | Pendente (opcional) | Mitigado pelo commit por empresa |
+| B1 `arquivos_vistos` | **Corrigido** | `{A:1, B:0}` |
+| B2 N+1 | **Corrigido** | 62 → 5 queries |
+| B5 Confirmações | **Corrigido** | — |
+| B6 CSV com fórmula | **Corrigido** | — |
+| B12 Symlink | **Corrigido** | — |
+| B14 Webhook http | **Corrigido** | — |
+| B15 `dias_alerta` | **Corrigido** | — |
+| B3, B4, B7, B8, B9, B10, B11, B13 | Pendentes (opcionais) | Sem impacto em correção ou segurança |
+
+## Regressão encontrada na integração
+
+### R1. Banco antigo quebra o worker e a linha de comando: "no such column: obrigacoes.vigente_desde" (ALTO)
+- **Onde:**
+  - `mo_obrigacoes/catalogo.py:591-597`: a migração `_migrar_vigencia` só roda dentro de `sincronizar_catalogo`;
+  - `mo_obrigacoes/cli.py:50, 77, 87, 94, 102`: `cmd_importar`, `cmd_agenda`, `cmd_sync`, `cmd_alertas` e `cmd_worker` chamam só `criar_tabelas()`, que não adiciona colunas;
+  - `models.py:165-166`: as colunas novas são lidas em toda consulta de `Obrigacao`.
+- **Cenário:** produção já tem `dados/mo_obrigacoes.db` criado pela versão anterior. Depois da atualização, `docker compose up` sobe `web` e `worker` juntos.
+  - Se o worker roda antes do painel, ou se o escritório usa só o cron (`sync`/`alertas`) como sugere `implantacao.md` §5, a varredura e os alertas falham sempre com `OperationalError`.
+  - Pior: como o worker agora marca o dia antes de enviar (correção de C4), uma falha às 7h **cancela os alertas daquele dia**.
+  - Mesmo depois da migração, o worker nunca recarrega o catálogo. A vigência do PIS/COFINS e as regras novas só chegam ao banco quando o painel reinicia.
+- **Evidência (reproduzida):** criei o banco com `e5b3736` (`demo`) e rodei os comandos do HEAD. `agenda`, `sync` e `alertas` deram `sqlite3.OperationalError: no such column: obrigacoes.vigente_desde`, e o `worker --uma-vez` registrou "Falha na agenda/sincronização". Só depois de `init` voltou a funcionar.
+- **Correção (mecânica, só `mo_obrigacoes/cli.py`):**
+  1. Logo depois de `cmd_init`, acrescente:
+     ```python
+     def _preparar_banco() -> None:
+         """Cria tabelas, aplica migrações e carrega o catálogo atual (vigência, regras novas)."""
+         criar_tabelas()
+         with sessao() as s:
+             sincronizar_catalogo(s)
+     ```
+  2. Em `cmd_importar`, `cmd_agenda`, `cmd_sync`, `cmd_alertas` e `cmd_worker`, troque a linha `criar_tabelas()` por `_preparar_banco()`. `cmd_init` e `cmd_demo` ficam como estão.
+  3. Crie o teste `tests/test_migracao_cli.py`, que falha no HEAD e passa com a correção. Prototipado: a suíte vai a **72 passed**.
+     ```python
+     """Banco criado por versão anterior (sem colunas de vigência) continua funcionando pela linha de comando."""
+     from sqlalchemy import text
+
+     from mo_obrigacoes import db as dbmod
+     from mo_obrigacoes.cli import main
+     from mo_obrigacoes.models import Obrigacao
+
+
+     def test_cli_migra_banco_antigo(s, cfg):
+         s.close()
+         with dbmod.get_engine().begin() as con:
+             con.execute(text("ALTER TABLE obrigacoes DROP COLUMN vigente_desde"))
+             con.execute(text("ALTER TABLE obrigacoes DROP COLUMN vigente_ate"))
+         main(["agenda", "--competencia", "2027-01"])  # antes da correção: OperationalError no such column
+         s2 = dbmod.nova_sessao()
+         pis = s2.query(Obrigacao).filter_by(codigo="PIS_COFINS").one()
+         assert pis.vigente_ate == "2026-12"
+         s2.close()
+     ```
+
+## Outras integrações verificadas, sem defeito
+
+- **Monitor e vigência:** `tarefa_da_competencia` respeita `ocorre_na_competencia`. Um comprovante de PIS/COFINS de 2027-01 vira "sem_tarefa" (fora do perfil) e não cria tarefa. A classificação manual cria a tarefa mesmo assim, de propósito.
+- **Competência futura gerada pelo worker e alertas:** essas tarefas vencem nos meses seguintes. O resumo só pega vencimento até hoje + `MO_DIAS_ALERTA_VENCIMENTO`, e a cobrança só pega o que já venceu, então não há alerta nem cobrança antecipados.
+- **Fuso:** Drive (Brasília), baixa manual (`datetime.now()` com `TZ=America/Sao_Paulo` no Dockerfile) e Drive local (`fromtimestamp`) agora usam o mesmo referencial.
+  - Na primeira varredura depois da atualização, os documentos do Google gravados em UTC são reprocessados uma vez. É inofensivo: `dar_baixa` não altera tarefas já concluídas.
+  - Tarefas marcadas "com atraso" pelo bug antigo não são recalculadas. Se necessário, revisar manualmente as entregues entre 21h e 0h do dia do vencimento.
+- **Migração em banco novo:** `create_all` já cria as colunas e `_migrar_vigencia` não faz nada.
+
+## Veredito
+
+**Não aprovado para produção enquanto R1 não for corrigido.** É uma alteração pequena e mecânica, só em `cli.py`, mais um teste. Todos os achados Crítico e Alto do parecer estão corrigidos e confirmados por reprodução no HEAD.
+
+Corrigido R1, o sistema está **aprovado para produção**, com estas condições de implantação:
+1. `MO_ADMIN_PASSWORD` definida e painel publicado só atrás de HTTPS;
+2. proxy reverso repassando o `Host` (no nginx, `proxy_set_header Host $host`), senão a proteção CSRF bloqueia os formulários;
+3. depois de atualizar, rodar `python -m mo_obrigacoes init` e uma vez `sync --completo`, e revisar os eventos `reabertura_automatica` e `documento_removido`.
+
+Itens de evolução (M9 usuários individuais, M11 Changes API, M12 sync assíncrona) e os Baixos opcionais podem ficar para o próximo ciclo.
