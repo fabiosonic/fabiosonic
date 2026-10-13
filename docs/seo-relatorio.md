@@ -10,24 +10,25 @@ Todos os dados da empresa usados nas páginas e nos dados estruturados vêm da l
 
 ### 1.1 Arquitetura e links internos
 
-- **Menu do index:** Serviços (`servicos.html`), Segmentos (`segmentos/`) e Guias (`guias/`), além das âncoras da própria página.
-- **Rodapé de todas as páginas:** Início, Serviços, Segmentos, Guias, Contabilidade em Itaboraí, Região Metropolitana do RJ e Política de Privacidade, com o NAP completo.
+- **Posicionamento (diretriz do cliente, 13/10/2026):** o site não se vincula a nenhuma atividade específica. A organização é pelo **porte da empresa** e pela fase de quem está **começando**. A antiga pasta `segmentos/` (prestadores de serviço, comércio, atletas, Lucro Presumido/Real) saiu da navegação, do sitemap e do llms.txt e foi substituída por `porte/`.
+- **Menu do index:** Serviços (`servicos.html`), Porte da empresa (`porte/`) e Guias (`guias/`), além das âncoras da própria página.
+- **Rodapé de todas as páginas:** Início, Serviços, Porte da empresa, Guias, Contabilidade em Itaboraí, Região Metropolitana do RJ e Política de Privacidade, com o NAP completo.
 - **Seções do index com links contextuais:**
-  - os cartões de segmento passaram a ser clicáveis e levam a cada página de segmento (o cartão inteiro é a área de clique, com foco visível);
-  - "Ver todos os segmentos atendidos" e "Ver todos os serviços em detalhe";
+  - a seção "Para cada porte de empresa" (`#porte`) tem cartões clicáveis para cada fase: começando, MEI, microempresa, empresa de pequeno porte e empresas em crescimento (o cartão inteiro é a área de clique, com foco visível);
+  - "Ver todas as fases" e "Ver todos os serviços em detalhe";
   - Departamento pessoal → guia de pró-labore;
   - Legalização → guias de abertura de empresa e de MEI para ME;
   - calculadora do Fator R → guia do Fator R;
   - checklist de abertura → guia de abertura;
   - a seção da Reforma e o FAQ → guias correspondentes.
-- **Ligação entre as páginas:** cada guia tem uma área "Leia também" e links para os serviços e segmentos relacionados. Cada segmento tem "Guias relacionados". As páginas locais apontam para serviços, segmentos e guias.
+- **Ligação entre as páginas:** cada guia tem uma área "Leia também" e links para os serviços e as páginas de porte relacionadas. Cada página de porte tem "Leia também" com guias e as fases vizinhas. As páginas locais apontam para serviços, porte e guias. O breadcrumb das páginas de porte é Início › Porte da empresa › página.
 - **Breadcrumb visível** (`nav.breadcrumb` com `aria-current`) e `BreadcrumbList` em todas as páginas internas indexáveis. A Política de Privacidade passou a ter o mesmo cabeçalho, breadcrumb e rodapé das páginas novas.
 
 ### 1.2 Indexação
 
-- O `sitemap.xml` lista as **16 URLs indexáveis**, todas com `lastmod` 2026-10-13. Ficam de fora `links.html` (página de bio, `noindex`) e `404.html` (`noindex, follow`).
+- O `sitemap.xml` lista as **17 URLs indexáveis** (incluindo `porte/` e as cinco páginas de fase), todas com `lastmod` 2026-10-13. Ficam de fora `links.html` (página de bio, `noindex`) e `404.html` (`noindex, follow`).
 - O `robots.txt` libera todo o site e aponta o sitemap. As páginas `noindex` continuam rastreáveis de propósito, porque o buscador precisa ler a tag `noindex`.
-- Toda página indexável tem canonical absoluto no domínio canônico. Os diretórios usam a barra final (`/guias/`, `/segmentos/`).
+- Toda página indexável tem canonical absoluto no domínio canônico. Os diretórios usam a barra final (`/guias/`, `/porte/`).
 
 ### 1.3 Metadados por página
 
@@ -41,10 +42,10 @@ Todos os dados da empresa usados nas páginas e nos dados estruturados vêm da l
 | `AccountingService` (`@id` `/#organizacao`) | index e todas as páginas novas | O mesmo bloco em todas as páginas: endereço, telefone, e-mail, CNPJ (`taxID` e `identifier`), CRC, `foundingDate` 2015, `sameAs` com as 3 redes, `areaServed` |
 | `WebSite` (`@id` `/#site`) | index | Os artigos e a Política o referenciam por `isPartOf` |
 | `Article` com `datePublished`/`dateModified` 2026-10-13 | os 5 guias | Agora todos têm `@id`, `image`, `inLanguage` e `isPartOf`. Autor e publicador apontam para a organização, porque não há nome de pessoa verificado |
-| `Service` | servicos.html e páginas de segmento | `provider` aponta para a organização |
-| `CollectionPage` + `ItemList` | guias/ e segmentos/ | |
-| `WebPage` | páginas locais e Política | |
-| `FAQPage` | index, servicos, guias, segmentos e páginas locais | Só onde há FAQ visível. As perguntas são idênticas às dos `<summary>`, e o verificador confere isso |
+| `Service` | servicos.html | `provider` aponta para a organização |
+| `CollectionPage` + `ItemList` | guias/ e porte/ | |
+| `WebPage` | páginas locais, Política e páginas de porte (o MEI usa `Article`) | |
+| `FAQPage` | index, servicos, guias, páginas de porte e páginas locais | Só onde há FAQ visível. As perguntas são idênticas às dos `<summary>`, e o verificador confere isso |
 | `BreadcrumbList` | todas as internas indexáveis | |
 
 Não foram usados `AggregateRating`, `Review`, `openingHours`, `geo`, `priceRange` nem `Person`, porque não há dado verificado para nenhum deles.
@@ -58,7 +59,7 @@ Não foram usados `AggregateRating`, `Review`, `openingHours`, `geo`, `priceRang
 ### 1.6 Otimização para buscadores de IA (AEO/GEO)
 
 - Toda página nova abre com uma **resposta direta** (`p.answer`) logo abaixo do H1, que já é uma pergunta nos guias.
-- Os H2 dos guias e dos segmentos foram reescritos **em forma de pergunta**, mantendo os mesmos `id`. Exemplos: "Como se calcula o Fator R?", "O que é distribuição de lucros?", "Quais documentos separar?". O primeiro parágrafo de cada seção responde à pergunta.
+- Os H2 dos guias foram reescritos **em forma de pergunta**, mantendo os mesmos `id`. Exemplos: "Como se calcula o Fator R?", "O que é distribuição de lucros?", "Quais documentos separar?". O primeiro parágrafo de cada seção responde à pergunta.
 - Cada afirmação tributária traz a norma, "revisado em 13/10/2026" e a ressalva obrigatória.
 - O `/llms.txt` descreve a entidade, lista todas as páginas com um resumo e traz respostas rápidas qualitativas, com norma, data de revisão e ressalva. Os textos foram alinhados ao que está publicado nos guias.
 
@@ -79,11 +80,12 @@ Estes são termos de intenção, sem volume de busca medido (é preciso validar 
 | `servicos.html` | serviços de contabilidade | departamento pessoal, planejamento tributário, legalização de empresa, holding familiar |
 | `contabilidade-itaborai.html` | contador em Itaboraí | escritório contábil Itaboraí, abrir empresa em Itaboraí, contabilidade Rio Várzea |
 | `atendimento-regiao-metropolitana-rj.html` | contabilidade em São Gonçalo | contador em Niterói, contabilidade online no Rio de Janeiro |
-| `segmentos/` | contabilidade por segmento | contabilidade especializada |
-| `segmentos/prestadores-de-servico.html` | contabilidade para prestadores de serviço | ISS, nota fiscal de serviço, Fator R para prestador |
-| `segmentos/comercio.html` | contabilidade para comércio | contabilidade para loja, ICMS no comércio, substituição tributária |
-| `segmentos/atletas-e-esporte.html` | contabilidade para atletas | direito de imagem de atleta, contador para jogador |
-| `segmentos/lucro-presumido-e-lucro-real.html` | contabilidade Lucro Presumido | contabilidade Lucro Real, obrigações acessórias |
+| `porte/` | contabilidade por porte de empresa | porte da empresa ME EPP, limite de faturamento ME e EPP |
+| `porte/comecando.html` | contador para quem está abrindo empresa | contabilidade para empresa nova, primeiro ano da empresa |
+| `porte/mei.html` | contabilidade para MEI | contador para MEI, limite do MEI, MEI precisa de contador |
+| `porte/microempresa.html` | contabilidade para microempresa | contador para ME, o que é microempresa |
+| `porte/empresa-de-pequeno-porte.html` | contabilidade para empresa de pequeno porte | contabilidade para EPP, o que é EPP |
+| `porte/empresas-em-crescimento.html` | contabilidade para empresas em crescimento | saída do Simples Nacional, contabilidade Lucro Presumido, contabilidade Lucro Real |
 | `guias/` | guias de contabilidade para empresas | dúvidas de contabilidade |
 | `guias/fator-r.html` | Fator R Simples Nacional | como calcular o Fator R, Anexo III ou Anexo V |
 | `guias/pro-labore.html` | pró-labore e distribuição de lucros | INSS sobre pró-labore, retirada do sócio |
@@ -91,6 +93,8 @@ Estes são termos de intenção, sem volume de busca medido (é preciso validar 
 | `guias/abrir-empresa.html` | como abrir empresa | documentos para abrir empresa, abrir CNPJ |
 | `guias/reforma-tributaria.html` | reforma tributária para empresas | CBS e IBS, reforma tributária e Simples Nacional |
 | `politica-de-privacidade.html` | não se aplica (página institucional) | |
+
+Os termos locais ("contabilidade Itaboraí", "contador em Itaboraí") ficam no index e na página de Itaboraí; os termos por porte ficam nas páginas de `porte/`, sem combinar atividade. Nenhum desses termos tem posição garantida: a meta é só dar a cada página um tema claro e sem canibalização.
 
 ## 3. Próximos passos (para o escritório)
 
@@ -100,7 +104,7 @@ Estes são termos de intenção, sem volume de busca medido (é preciso validar 
 4. **Backlinks locais legítimos:** associação comercial ou CDL de Itaboraí, entidades contábeis, parceiros (os advogados da assessoria jurídica), palestras ou capacitações sobre a Reforma Tributária e imprensa local com conteúdo informativo. Não comprar links nem trocar links em massa.
 5. **Conteúdo:** publicar novos guias só depois de conferir a norma, sempre com a data de revisão e a ressalva. Atualizar `dateModified`, a data visível e o `lastmod` do sitemap a cada revisão real. Os temas pendentes estão no README (alíquotas da Reforma, limites do MEI, percentuais de presunção).
 6. **Desempenho:** depois de publicar, medir no PageSpeed Insights (Core Web Vitals de campo). Considerar hospedar as fontes Chivo e Inter localmente (`woff2` com `preload`) para tirar a dependência do Google Fonts, o que também simplifica a Política de Privacidade.
-7. **Servidor:** configurar o status HTTP 404 real para o `404.html`, fazer redirecionamento 301 de `http://` e de `www` para o domínio canônico, e definir se `/index.html` redireciona para `/`.
+7. **Servidor:** configurar o status HTTP 404 real para o `404.html`, fazer redirecionamento 301 de `http://` e de `www` para o domínio canônico, e definir se `/index.html` redireciona para `/`. Se as URLs antigas de `/segmentos/` chegaram a ser publicadas ou indexadas, redirecionar com 301 para `/porte/`.
 8. **Medição:** se for instalar Google Analytics ou Meta Pixel, implementar o consentimento antes e atualizar a Política de Privacidade (LGPD).
 9. **Validação:** antes de cada publicação, rodar `node scripts/verificar-site.mjs` e `node --test tests/*.test.js` e testar algumas URLs no Teste de Pesquisa Aprimorada do Google.
 

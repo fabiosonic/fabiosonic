@@ -1,6 +1,6 @@
 # Contrato-modelo: notas jurídicas
 
-Versão do contrato: **1.0, de 13/10/2026**
+Versão do contrato: **1.1, de 13/10/2026** (a 1.1 renomeou o pacote "Lucro Presumido — serviços" para "Empresa em crescimento (Lucro Presumido)" e tornou o escopo independente da atividade)
 Arquivos: `assets/js/contrato-modelo.js` (fonte usada pelo site) e `docs/contrato-modelo.md` (mesmo texto, para leitura).
 
 > **Aviso.** Este é um modelo técnico preparado para o escritório. Antes de publicá-lo ou de colher o primeiro aceite, ele deve ser revisado e aprovado por advogado inscrito na OAB, que também confirme a redação vigente de cada norma na data de uso. Os valores entre colchetes `[ ]` são sugestões e precisam ser decididos pelo Fábio (ver a seção 5).

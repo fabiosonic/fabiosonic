@@ -4,7 +4,7 @@
 
 ## Entidade
 
-- Razão social: Moraes e Oliveira Contabilidade
+- Razão social: Moraes e Oliveira Contabilidade Ltda
 - Nome de divulgação: M&O Contábil DIGITAL
 - CNPJ: 24.875.410/0001-44
 - CRC: RJ-007873/O
@@ -17,14 +17,14 @@
 - Redes: Instagram https://www.instagram.com/moraeseoliveira.contabilidade ; Facebook https://www.facebook.com/moraeseoliveira.cont/ ; LinkedIn https://www.linkedin.com/company/moraes-e-oliveira-contabilidade/
 - Serviços: contábil, fiscal, departamento pessoal, legalização e societário, planejamento tributário, consultoria financeira
 - Serviços adicionais, feitos com parceiros: proteção patrimonial, holding familiar, assessoria jurídica
-- Segmentos atendidos: prestadores de serviço, comércio, atletas e esporte, Lucro Presumido, Lucro Real
+- Público: empresas organizadas pelo porte (MEI, microempresa, empresa de pequeno porte e empresas em crescimento fora do Simples Nacional) e quem está começando; o site não se posiciona por atividade
 - Capacitação: a equipe tem capacitação em Reforma Tributária
 - Municípios: o escritório dá suporte a municípios sem processos online
 - Área de atendimento: sede em Itaboraí/RJ, com atendimento digital também para empresas de outras cidades
 
 ## Páginas
 
-- [Página inicial](https://moraeseoliveiracontabil.com.br/): apresentação do escritório, serviços, segmentos, ferramentas e contato
+- [Página inicial](https://moraeseoliveiracontabil.com.br/): apresentação do escritório, serviços, fases da empresa por porte, ferramentas e contato
 - [Serviços](https://moraeseoliveiracontabil.com.br/servicos.html): descrição dos serviços contábeis, fiscais, societários, tributários e adicionais
 - [Guias](https://moraeseoliveiracontabil.com.br/guias/): índice dos guias sobre contabilidade para empresas
 - [Fator R](https://moraeseoliveiracontabil.com.br/guias/fator-r.html): guia sobre o Fator R no Simples Nacional
@@ -32,14 +32,20 @@
 - [Do MEI para ME](https://moraeseoliveiracontabil.com.br/guias/mei-para-me.html): guia sobre a migração do MEI para ME
 - [Como abrir empresa](https://moraeseoliveiracontabil.com.br/guias/abrir-empresa.html): etapas e documentos para abrir uma empresa
 - [Reforma Tributária](https://moraeseoliveiracontabil.com.br/guias/reforma-tributaria.html): o que muda para empresas com a Reforma Tributária
-- [Segmentos](https://moraeseoliveiracontabil.com.br/segmentos/): segmentos atendidos pelo escritório
-- [Prestadores de serviço](https://moraeseoliveiracontabil.com.br/segmentos/prestadores-de-servico.html): contabilidade para prestadores de serviço
-- [Comércio](https://moraeseoliveiracontabil.com.br/segmentos/comercio.html): contabilidade para comércio e lojas
-- [Atletas e esporte](https://moraeseoliveiracontabil.com.br/segmentos/atletas-e-esporte.html): contabilidade para atletas e esporte
-- [Lucro Presumido e Lucro Real](https://moraeseoliveiracontabil.com.br/segmentos/lucro-presumido-e-lucro-real.html): contabilidade para empresas nesses regimes
 - [Contabilidade em Itaboraí](https://moraeseoliveiracontabil.com.br/contabilidade-itaborai.html): endereço, contato e atendimento da sede em Itaboraí/RJ
 - [Região Metropolitana do RJ](https://moraeseoliveiracontabil.com.br/atendimento-regiao-metropolitana-rj.html): atendimento a empresas de São Gonçalo, Niterói e Rio de Janeiro pelos canais digitais
 - [Política de Privacidade](https://moraeseoliveiracontabil.com.br/politica-de-privacidade.html): como o site trata dados pessoais conforme a LGPD
+
+## Para cada porte
+
+Porte definido pela receita bruta anual, conforme o texto vigente da LC 123/2006 (consultado em planalto.gov.br em 13/10/2026).
+
+- [Porte da empresa](https://moraeseoliveiracontabil.com.br/porte/): fases da empresa, limites de receita bruta e base legal
+- [Quem está começando](https://moraeseoliveiracontabil.com.br/porte/comecando.html): contabilidade para quem vai abrir empresa ou tem empresa nova
+- [MEI](https://moraeseoliveiracontabil.com.br/porte/mei.html): microempreendedor individual, receita bruta no ano-calendário anterior de até R$ 81.000,00 (LC 123/2006, art. 18-A, § 1º)
+- [Microempresa (ME)](https://moraeseoliveiracontabil.com.br/porte/microempresa.html): receita bruta anual igual ou inferior a R$ 360.000,00 (LC 123/2006, art. 3º, I)
+- [Empresa de Pequeno Porte (EPP)](https://moraeseoliveiracontabil.com.br/porte/empresa-de-pequeno-porte.html): receita bruta anual acima de R$ 360.000,00 e até R$ 4.800.000,00 (LC 123/2006, art. 3º, II)
+- [Empresas em crescimento](https://moraeseoliveiracontabil.com.br/porte/empresas-em-crescimento.html): acima do limite da EPP, fora do Simples Nacional, com Lucro Presumido ou Lucro Real avaliados caso a caso (a LC 123/2006 não define "média empresa")
 
 ## Respostas rápidas (resumo dos guias; revisado em 13/10/2026)
 
@@ -64,4 +70,4 @@ Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura s
 - Conteúdo informativo. Cada caso depende de atividade, faturamento e estrutura societária.
 
 ## Pacotes de serviços
-- [Pacotes e contratação](https://moraeseoliveiracontabil.com.br/#pacotes): Abertura de empresa; Essencial (Simples Nacional, sem funcionários); Empresa com equipe (Simples com departamento pessoal); Lucro Presumido — serviços. Honorários somente em proposta escrita, formalizada em contrato (Resolução CFC 1.590/2020). Pagamento por Pix ou cartão de crédito.
+- [Pacotes e contratação](https://moraeseoliveiracontabil.com.br/#pacotes): Abertura de empresa; Essencial (Simples Nacional, sem funcionários); Empresa com equipe (Simples com departamento pessoal); Empresa em crescimento (Lucro Presumido, para empresas que saíram ou vão sair do Simples Nacional). Honorários somente em proposta escrita, formalizada em contrato (Resolução CFC 1.590/2020). Pagamento por Pix ou cartão de crédito.

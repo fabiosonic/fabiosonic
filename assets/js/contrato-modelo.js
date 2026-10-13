@@ -1,6 +1,6 @@
 /* Contrato-modelo M&O Contábil — Condições Gerais. Gerado a partir de fonte única; ver docs/contrato-modelo.md e docs/contrato-notas-juridicas.md. Modelo sujeito a revisão por advogado. */
 window.MOContrato = {
-  "versao": "1.0",
+  "versao": "1.1",
   "dataVersao": "13/10/2026",
   "destaques": [7, 10, 11, 14, 16],
   "titulo": "Contrato de Prestação de Serviços Contábeis — Condições Gerais",
@@ -19,7 +19,7 @@ window.MOContrato = {
         "1.2 Plataforma: ambiente digital da CONTRATADA, acessado com usuário e senha pessoais, destinado ao envio de Informações e Documentos, à troca de mensagens e à disponibilização de guias, relatórios e demonstrações. O nome e o endereço eletrônico da Plataforma constam do Anexo I e das instruções de acesso enviadas ao CONTRATANTE.",
         "1.3 Informações: todos os dados sobre as operações, o patrimônio, os sócios, os empregados e as obrigações do CONTRATANTE, preenchidos ou declarados na Plataforma, inclusive por formulários e questionários.",
         "1.4 Documentos: notas fiscais emitidas e recebidas, extratos bancários e de meios de pagamento, contratos, recibos, comprovantes de pagamento, folhas de ponto, atestados, notificações de órgãos públicos e quaisquer outros arquivos necessários aos Serviços.",
-        "1.5 Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE: Abertura de empresa; Essencial (Simples Nacional, sem empregados); Empresa com equipe (Simples Nacional, com departamento pessoal); ou Lucro Presumido — serviços.",
+        "1.5 Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE: Abertura de empresa; Essencial (Simples Nacional, sem empregados); Empresa com equipe (Simples Nacional, com departamento pessoal); ou Empresa em crescimento (Lucro Presumido).",
         "1.6 Proposta ou Anexo I: Proposta Comercial enviada por escrito pela CONTRATADA, que define o Pacote, os serviços complementares, os honorários, a forma e as condições de pagamento, o índice de reajuste e a data de início.",
         "1.7 Serviços: as atividades descritas no Pacote e no Anexo I, executadas pela CONTRATADA.",
         "1.8 Competência: o mês a que se referem as operações e os fatos registrados ou apurados.",
@@ -355,7 +355,7 @@ window.MOContrato = {
         "Escopo de referência — Abertura de empresa: consulta de viabilidade e definição de CNAE; escolha da natureza jurídica e do regime tributário; registro na Junta Comercial e CNPJ; inscrições municipal e, se aplicável, estadual; orientação sobre alvarás e licenças. Taxas de órgãos públicos são pagas à parte.",
         "Escopo de referência — Essencial (Simples Nacional, sem empregados): escrituração contábil e demonstrações; apuração mensal do Simples Nacional e emissão do DAS; obrigações acessórias do regime; pró-labore dos sócios; acompanhamento do Fator R, quando aplicável; relatórios gerenciais e atendimento digital.",
         "Escopo de referência — Empresa com equipe (Simples Nacional, com empregados): tudo do Pacote Essencial; admissões, folha mensal e holerites; férias, 13º salário e rescisões; eSocial, FGTS e encargos trabalhistas; orientação sobre rotinas de departamento pessoal.",
-        "Escopo de referência — Lucro Presumido — serviços: escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS, Cofins e ISS; controle de retenções na fonte; obrigações acessórias federais e municipais; departamento pessoal, se houver equipe; revisão periódica do enquadramento.",
+        "Escopo de referência — Empresa em crescimento (Lucro Presumido): escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS e Cofins e dos tributos estaduais ou municipais conforme a atividade; controle de retenções na fonte; obrigações acessórias federais, estaduais e municipais; departamento pessoal, se houver equipe; revisão periódica do enquadramento.",
         "Adaptações e exclusões específicas do escopo: [a preencher pelo escritório].",
         "Atividades a cargo do CONTRATANTE além da Cláusula 6: [a preencher pelo escritório, se houver].",
         "Parâmetros considerados na Proposta (faturamento, atividade, volume de notas, número de sócios, número de empregados, movimentações, retenções, município): [a preencher pelo escritório].",
@@ -409,7 +409,7 @@ window.MOContrato = {
     }
   ],
   "fechamento": [
-    "Ao marcar a opção de concordância e confirmar o aceite, {{REPRESENTANTE_NOME}}, CPF {{REPRESENTANTE_CPF}}, em nome de {{CONTRATANTE_NOME}}, declara que leu integralmente e aceita estas Condições Gerais, versão 1.0 de 13/10/2026, e os Anexos II e III.",
+    "Ao marcar a opção de concordância e confirmar o aceite, {{REPRESENTANTE_NOME}}, CPF {{REPRESENTANTE_CPF}}, em nome de {{CONTRATANTE_NOME}}, declara que leu integralmente e aceita estas Condições Gerais, versão 1.1 de 13/10/2026, e os Anexos II e III.",
     "O Contrato produzirá efeitos a partir do aceite do Anexo I (Proposta Comercial), que define os honorários e as condições de pagamento.",
     "Aceite eletrônico dado {{DATA_ACEITE}}, com identificação do representante, e-mail {{CONTRATANTE_EMAIL}}, versão do texto e código de integridade (hash SHA-256), conforme o comprovante exibido ao CONTRATANTE e por ele enviado à CONTRATADA (Cláusula 24.3).",
     "Este aceite será ratificado pela assinatura digital deste documento em PDF pelas partes, por assinatura eletrônica avançada gov.br ou qualificada ICP-Brasil, conforme a Cláusula 24. Confira as assinaturas em validar.iti.gov.br.",

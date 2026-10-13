@@ -1,6 +1,6 @@
 # Contrato de Prestação de Serviços Contábeis — Condições Gerais
 
-**Versão 1.0 — 13/10/2026**
+**Versão 1.1 — 13/10/2026**
 
 > Modelo para aceite eletrônico no site. Os textos entre colchetes [ ] são valores sugeridos que o escritório deve definir (ver `docs/contrato-notas-juridicas.md`). Os campos `{{...}}` são preenchidos automaticamente no aceite. Este modelo deve ser revisado por advogado inscrito na OAB antes do uso.
 
@@ -24,7 +24,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 **1.4** Documentos: notas fiscais emitidas e recebidas, extratos bancários e de meios de pagamento, contratos, recibos, comprovantes de pagamento, folhas de ponto, atestados, notificações de órgãos públicos e quaisquer outros arquivos necessários aos Serviços.
 
-**1.5** Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE: Abertura de empresa; Essencial (Simples Nacional, sem empregados); Empresa com equipe (Simples Nacional, com departamento pessoal); ou Lucro Presumido — serviços.
+**1.5** Pacote: conjunto de serviços com escopo definido, escolhido pelo CONTRATANTE: Abertura de empresa; Essencial (Simples Nacional, sem empregados); Empresa com equipe (Simples Nacional, com departamento pessoal); ou Empresa em crescimento (Lucro Presumido).
 
 **1.6** Proposta ou Anexo I: Proposta Comercial enviada por escrito pela CONTRATADA, que define o Pacote, os serviços complementares, os honorários, a forma e as condições de pagamento, o índice de reajuste e a data de início.
 
@@ -415,7 +415,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 - Escopo de referência — Abertura de empresa: consulta de viabilidade e definição de CNAE; escolha da natureza jurídica e do regime tributário; registro na Junta Comercial e CNPJ; inscrições municipal e, se aplicável, estadual; orientação sobre alvarás e licenças. Taxas de órgãos públicos são pagas à parte.
 - Escopo de referência — Essencial (Simples Nacional, sem empregados): escrituração contábil e demonstrações; apuração mensal do Simples Nacional e emissão do DAS; obrigações acessórias do regime; pró-labore dos sócios; acompanhamento do Fator R, quando aplicável; relatórios gerenciais e atendimento digital.
 - Escopo de referência — Empresa com equipe (Simples Nacional, com empregados): tudo do Pacote Essencial; admissões, folha mensal e holerites; férias, 13º salário e rescisões; eSocial, FGTS e encargos trabalhistas; orientação sobre rotinas de departamento pessoal.
-- Escopo de referência — Lucro Presumido — serviços: escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS, Cofins e ISS; controle de retenções na fonte; obrigações acessórias federais e municipais; departamento pessoal, se houver equipe; revisão periódica do enquadramento.
+- Escopo de referência — Empresa em crescimento (Lucro Presumido): escrituração contábil e demonstrações; apuração de IRPJ, CSLL, PIS e Cofins e dos tributos estaduais ou municipais conforme a atividade; controle de retenções na fonte; obrigações acessórias federais, estaduais e municipais; departamento pessoal, se houver equipe; revisão periódica do enquadramento.
 - Adaptações e exclusões específicas do escopo: [a preencher pelo escritório].
 - Atividades a cargo do CONTRATANTE além da Cláusula 6: [a preencher pelo escritório, se houver].
 - Parâmetros considerados na Proposta (faturamento, atividade, volume de notas, número de sócios, número de empregados, movimentações, retenções, município): [a preencher pelo escritório].
@@ -464,7 +464,7 @@ Leia todas as cláusulas antes de aceitar. As cláusulas que limitam direitos ou
 
 ## Aceite eletrônico
 
-Ao marcar a opção de concordância e confirmar o aceite, {{REPRESENTANTE_NOME}}, CPF {{REPRESENTANTE_CPF}}, em nome de {{CONTRATANTE_NOME}}, declara que leu integralmente e aceita estas Condições Gerais, versão 1.0 de 13/10/2026, e os Anexos II e III.
+Ao marcar a opção de concordância e confirmar o aceite, {{REPRESENTANTE_NOME}}, CPF {{REPRESENTANTE_CPF}}, em nome de {{CONTRATANTE_NOME}}, declara que leu integralmente e aceita estas Condições Gerais, versão 1.1 de 13/10/2026, e os Anexos II e III.
 
 O Contrato produzirá efeitos a partir do aceite do Anexo I (Proposta Comercial), que define os honorários e as condições de pagamento.
 

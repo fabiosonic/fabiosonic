@@ -108,7 +108,8 @@
   if (rot && !reduceMotion) {
     var words = rot.getAttribute('data-rotator').split('|');
     var span = rot.querySelector('.gradient-text');
-    words.unshift(span.textContent);
+    // A lista pode já começar pelo texto inicial do span; evita repetir a mesma palavra.
+    if (words.indexOf(span.textContent) === -1) words.unshift(span.textContent);
     var wi = 0;
     setInterval(function () {
       if (document.hidden) return;

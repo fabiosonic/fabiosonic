@@ -14,19 +14,19 @@ node scripts/gerar-contrato.mjs  # regenera contrato/condicoes-gerais.html após
 
 | Arquivo | Conteúdo |
 |---|---|
-| `index.html` | Página principal: hero, como funciona, serviços, **pacotes e contratação em 5 etapas com leitura, aceite e assinatura do contrato** (`#pacotes` / `#contratar`), plataforma, segmentos, Reforma (qualitativa, com link para o guia), ferramentas, quem somos, FAQ, contato |
+| `index.html` | Página principal: hero, como funciona, serviços, **pacotes e contratação em 5 etapas com leitura, aceite e assinatura do contrato** (`#pacotes` / `#contratar`), plataforma, "Para cada porte de empresa" (`#porte`), Reforma (qualitativa, com link para o guia), ferramentas, quem somos, FAQ, contato |
 | `servicos.html` | Serviços detalhados (contábil, fiscal, DP, legalização, planejamento tributário, consultoria financeira), adicionais com parceiros, FAQ |
 | `contabilidade-itaborai.html` | Página da sede em Itaboraí: endereço, como chegar (mapa por link externo), atendimento presencial e digital |
 | `atendimento-regiao-metropolitana-rj.html` | Atendimento em São Gonçalo, Niterói e Rio de Janeiro (uma seção por cidade, sem endereços fictícios) |
 | `guias/index.html` | Hub de guias |
 | `guias/fator-r.html` · `guias/pro-labore.html` · `guias/mei-para-me.html` | Guias tributários (LC 123/2006 e normas citadas) |
 | `guias/abrir-empresa.html` · `guias/reforma-tributaria.html` | Abertura de empresa e Reforma Tributária (EC 132/2023, LC 214/2025) |
-| `segmentos/index.html` | Hub de segmentos |
-| `segmentos/prestadores-de-servico.html` · `comercio.html` · `atletas-e-esporte.html` · `lucro-presumido-e-lucro-real.html` | Páginas por segmento |
+| `porte/index.html` | Hub "Porte da empresa": fases e tabela porte × limite de receita bruta × base legal (LC 123/2006) |
+| `porte/comecando.html` · `mei.html` · `microempresa.html` · `empresa-de-pequeno-porte.html` · `empresas-em-crescimento.html` | Páginas por porte/fase. Limites: MEI até R$ 81.000,00 (art. 18-A, § 1º); ME até R$ 360.000,00 (art. 3º, I); EPP acima de R$ 360.000,00 até R$ 4.800.000,00 (art. 3º, II); acima disso, tratamento qualitativo (sem limite do Lucro Presumido nem alíquotas) |
 | `politica-de-privacidade.html` | Política conforme o funcionamento real do site (LGPD), com cabeçalho e rodapé padrão |
 | `links.html` | Página de links para a bio, com UTMs (noindex, fora do sitemap) |
 | `404.html` | Página de erro (noindex, fora do sitemap) |
-| `sitemap.xml` · `robots.txt` | 16 URLs indexáveis com lastmod 2026-10-13; robots aponta para o sitemap |
+| `sitemap.xml` · `robots.txt` | 17 URLs indexáveis com lastmod 2026-10-13; robots aponta para o sitemap |
 | `llms.txt` | Resumo factual da entidade, respostas rápidas e lista de páginas para buscadores de IA |
 | `assets/css/style.css` | Tokens da marca, layout, animações, responsivo, movimento reduzido, impressão |
 | `assets/js/calculadoras.js` | Regras das calculadoras em funções puras, testadas em `tests/` |
@@ -72,9 +72,12 @@ Itens que **não** foram publicados como fato ou que precisam de conferência an
 - [ ] Reforma Tributária: o index e o guia descrevem o cronograma só de forma qualitativa (início em 2026, fim previsto em 2033). Alíquotas de teste, anos intermediários e regras de compensação foram retirados até conferência no texto da EC 132/2023 (ADCT) e da LC 214/2025.
 - [ ] Fator R: limite de 28% e janela de 12 meses conferidos na LC 123/2006, art. 18, §§ 5º-J, 5º-K, 5º-M e 24 (a definição de folha com pró-labore está no § 24). Reconferir a cada publicação.
 - [ ] Pró-labore: percentual de INSS e tributação da distribuição de lucros (Lei 9.249/1995, art. 10, e alterações posteriores, como a Lei 15.270/2025) não publicados. Conferir antes de detalhar.
-- [ ] MEI: limite de faturamento e número de empregados não publicados (LC 123/2006, art. 18-A, e resolução do CGSN vigente).
+- [x] Limites de porte conferidos no texto vigente da LC 123/2006 (planalto.gov.br, 13/10/2026) e publicados em `porte/`: MEI até R$ 81.000,00 no ano-calendário anterior (art. 18-A, § 1º); ME até R$ 360.000,00 (art. 3º, I); EPP acima de R$ 360.000,00 até R$ 4.800.000,00 (art. 3º, II). Reconferir a cada publicação.
+- [ ] MEI: número de empregados e valor do DAS-MEI continuam não publicados (LC 123/2006, art. 18-A, e resolução do CGSN vigente).
 - [ ] Lucro Presumido e Lucro Real: percentuais de presunção, limite de receita e prazos de obrigações acessórias não publicados. Normas citadas: Lei 9.249/1995, Lei 9.430/1996, Lei 9.718/1998 (arts. 13 e 14), Decreto-Lei 1.598/1977, Decreto 9.580/2018 e Decreto 6.022/2007.
-- [ ] Atletas: confirmar quais dispositivos da Lei 9.615/1998 seguem em vigor após a Lei 14.597/2023 (Lei Geral do Esporte).
+- [x] Posicionamento por porte (diretriz do Fábio, 13/10/2026): o site não se vincula a nenhuma atividade. Os links para `segmentos/` foram retirados de menus, rodapés, "Leia também", sitemap, llms.txt e docs; a seção do index virou "Para cada porte de empresa" (`#porte`) e o 4º pacote virou "Empresa em crescimento" (Lucro Presumido). Contrato atualizado para a versão 1.1 (só o nome e o escopo genérico desse pacote).
+- [x] Pasta `segmentos/` removida do repositório (13/10/2026). Se as URLs `/segmentos/*` chegaram a ser publicadas ou indexadas, configurar 301 para `/porte/` no servidor.
+- [ ] Pacote "Empresa em crescimento": o Fábio deve validar o escopo genérico (IRPJ, CSLL, PIS, Cofins e tributos estaduais ou municipais conforme a atividade).
 - [ ] Abertura de empresa: conferir JUCERJA, REDESIM (Lei 11.598/2007), registro da sociedade simples em cartório e a sociedade limitada unipessoal (Lei 13.874/2019).
 - [ ] Área de atendimento: confirmar a frase "empresas de todo o Brasil" (index, llms.txt e página de Itaboraí). Nas páginas novas de serviços o texto diz "empresas de outras cidades".
 - [ ] "Quem somos" (index): confirmar a frase sobre o fundador ("depois de anos em grandes escritórios") (responsável técnico já informado: Fábio Moraes, CRC RJ-118632/O-1).
@@ -110,12 +113,14 @@ Detalhes em `docs/contrato-notas-juridicas.md`, seção 5.
 ### Validação do fechamento (13/10/2026)
 
 - `node --test tests/*.test.js`: 9 de 9 testes passam (calculadoras e contrato).
-- `node scripts/verificar-site.mjs`: 19 páginas, 0 erros. Avisos: `R$` nos rótulos das calculadoras e "garant" em sentido jurídico no contrato (ex.: "não garante funcionamento ininterrupto") — não são promessa de resultado.
+- `node scripts/verificar-site.mjs` (após a troca de segmentos por porte e a remoção de `segmentos/`): 20 páginas, 0 erros. Avisos: `R$` nos rótulos das calculadoras e nos limites de porte da LC 123/2006 em `porte/`, e "garant" em sentido jurídico no contrato (ex.: "não garante funcionamento ininterrupto") — não são promessa de resultado.
 - Contratação (13/10/2026, Playwright/Chromium, 1440 px e 390 px com movimento reduzido): fluxo completo sem erro de console e sem rolagem horizontal; assinatura bloqueada antes de 100% de leitura; foco inicial no texto do contrato; Esc fecha e devolve o foco ao botão; PDF gerado com o hash e a razão social.
 - Playwright (Chromium) em 1440 px e 390 px, todas as 18 páginas: sem erro de console, sem recurso ou link interno com 404, sem âncora inexistente e sem rolagem horizontal.
 - Todos os blocos JSON-LD fazem parse.
+- Revisão de qualidade do posicionamento por porte (13/10/2026, Playwright/Chromium, 1440 px e 390 px): index e as 6 páginas de `porte/` sem erro de console, sem rolagem horizontal, links internos com status 200 e âncoras existentes; fluxo de contratação com o pacote "Empresa em crescimento" até a abertura do contrato (versão 1.1). Em `porte/`: um H1 por página, nota legal com a norma, "Revisado em 13/10/2026" e a ressalva padrão, FAQPage igual aos `summary` visíveis.
 
 ### Ocorrências justificadas na varredura de termos
 
 - `R$` no index: aparece apenas nos rótulos dos campos das calculadoras, como unidade de entrada. Não há preço nem honorários no site.
+- `R$` em `porte/` e no llms.txt: apenas os limites de receita bruta da LC 123/2006 (MEI, ME e EPP), com o artigo citado.
 - Nenhuma ocorrência de grátis, gratuito, desconto, promoção, melhor, nº 1, número 1, garant, econom, últimas vagas ou Franklin em `.html` e `.txt`.
