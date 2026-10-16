@@ -16,7 +16,9 @@ PAGINAS.receber = async el => {
     ${tabela([
       { t: "Cliente", f: t => celNome(t.cliente_nome, esc(frase(t.descricao))) },
       { t: "Vencimento", f: t => `<span class="nw">${dt(t.vencimento)}</span><div class="sub nw">comp. ${mes(t.competencia)}</div>` },
-      { t: "Valor", n: 1, f: t => num(t.valor_cent) + (t.situacao == "atrasado" ? `<div class="sub">atualizado ${num(t.total_cent)}</div>` : t.status == "pago" ? `<div class="sub">pago ${num(t.valor_pago_cent)} em ${dt(t.data_pagamento)}</div>` : "") },
+      { t: "Valor", n: 1, f: t => num(t.valor_cent) + (t.situacao == "atrasado" ? `<div class="sub">atualizado ${num(t.total_cent)}</div>` : t.status == "pago" ? `<div class="sub">pago ${num(t.valor_pago_cent)}</div>` : "") },
+      { t: "Pagamento", fv: t => t.status == "pago" && t.data_pagamento ? dt(t.data_pagamento.slice(0, 10)) : "", f: t => t.status == "pago" && t.data_pagamento
+        ? `<span class="nw"><b>${dt(t.data_pagamento.slice(0, 10))}</b></span><div class="sub nw">${esc({ pix: "PIX", boleto: "boleto", inter: "boleto/PIX Inter", extrato: "extrato do banco", cartao: "cartão", dinheiro: "dinheiro", manual: "baixa manual" }[t.forma_pagamento] || t.forma_pagamento || "")}</div>` : "" },
       { t: "Situação", fsel: 1, fv: t => textoDe(selo(t.situacao)), f: t => selo(t.situacao) + (t.dias_atraso ? `<div class="sub">${t.dias_atraso} dia(s)</div>` : "")
         + (t.situacao == "juridico" ? `<div class="sub">no jurídico desde ${dt(t.juridico_em)}</div>${t.juridico_obs ? `<div class="sub quebra" title="${esc(t.juridico_obs)}">${esc(t.juridico_obs.slice(0, 80))}</div>` : ""}` : "")
         + (t.status == "aberto" && t.cobrar && t.boleto_situacao == "dispensado" ? `<div class="sub">cobrança sem boleto (PIX do escritório)</div>`
