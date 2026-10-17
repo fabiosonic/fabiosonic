@@ -1,0 +1,6 @@
+padrao;sentido;conta;historico;complemento
+tarifa;D;520;;Tarifa bancária {memo}
+iof;D;521;;IOF {memo}
+rende facil;C;610;;Rendimento aplicação {memo}
+re:^(DAS|SIMPLES NACIONAL);D;245;;DAS Simples Nacional {memo}
+re:\bFGTS\b;D;232;;FGTS {memo}

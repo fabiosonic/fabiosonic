@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mo-dominio"
+version = "0.1.0"
+description = "Integração Portal M&O (Moraes & Oliveira) com o Domínio Sistemas: XML fiscais, rotinas automáticas e lançamentos de extrato"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+mo-dominio = "mo_dominio.__main__:main"
+
+[tool.setuptools]
+packages = ["mo_dominio"]
