@@ -1,0 +1,47 @@
+{
+  "_comentario": "Códigos reduzidos do plano de contas da empresa no Domínio. Ajuste por empresa.",
+  "cnpj": "11.111.111/0001-11",
+  "contas_banco": {
+    "gDyriq_q39": "7"
+  },
+  "conta_transitoria": "999",
+  "conta_transferencias": "998",
+  "socios_cpf": [
+    "123.456.789-00"
+  ],
+  "documentos": {
+    "22222222000122": "1201",
+    "33333333000133": "2101"
+  },
+  "conta_clientes": "112",
+  "conta_fornecedores": "211",
+  "contas": {
+    "juros_pagos": "4301",
+    "multas_pagas": "4302",
+    "descontos_obtidos": "3301"
+  },
+  "historicos": {
+    "recebimento": "1",
+    "pagamento": "2",
+    "juros": "30",
+    "multa": "31",
+    "desconto": "32"
+  },
+  "regras": [
+    {
+      "padrao": "TARIFA",
+      "sentido": "D",
+      "conta": "4310"
+    },
+    {
+      "padrao": "IOF",
+      "sentido": "D",
+      "conta": "4311"
+    },
+    {
+      "padrao": "re:RENDIMENTO|REMUNERACAO",
+      "sentido": "C",
+      "conta": "3302"
+    }
+  ]
+}

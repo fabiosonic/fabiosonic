@@ -114,3 +114,16 @@ Não use o REA em links de clientes, em produção, nem para chamar as rotas int
 - https://staging.pagamentobancario.com.br/gui/7e23a377f1264936a19c4689c7bffa0c (exemplo público da documentação TecnoSpeed)
 - https://docs.pagamentobancario.com.br/api.json
 - https://docs.pluggy.ai/docs/webhooks · https://docs.pluggy.ai/docs/authentication
+
+## 5. Qual "REA" usar: comparação (out/2026)
+
+| Ferramenta | Estrelas (aprox.) | Serve para o alvo TecnoSpeed (SaaS web)? |
+|---|---|---|
+| **morluto/rea** (Reverse Engineer Anything) | >115 mil | **Sim.** Cobre sites, capturas HAR, JS/Electron, e também binários. É a mais bem avaliada. |
+| mrexodia/ida-pro-mcp | ~13 mil | Não. É para binários nativos e exige IDA Pro pago. |
+| LaurieWired/GhidraMCP | ~11 mil | Não. Binários nativos. |
+| bethington/ghidra-mcp | ~5,8 mil | Não. Binários nativos. |
+| kalil0321/reverse-api-engineer, Integuru | centenas | Não recomendado. A proposta é usar APIs internas sem permissão do dono, o que fere os termos da TecnoSpeed e é desnecessário, porque a API oficial é documentada. |
+
+Escolhido: **morluto/rea**, aplicado nas duas etapas do método dele: entender com evidência (este documento)
+e construir uma versão própria (pacote `mo_openfinance/`).

@@ -1,0 +1,10 @@
+{
+  "event": "transaction_deleted",
+  "data": {
+    "statement_id": "HMdZbQlgSXr4nU",
+    "transaction_ids": [
+      "d3-tarifa"
+    ],
+    "message": "Transação removida na instituição financeira de origem. Extrato encaminhado para a fila de reprocessamento."
+  }
+}

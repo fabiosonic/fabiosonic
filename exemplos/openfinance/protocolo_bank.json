@@ -1,0 +1,327 @@
+{
+  "statement": {
+    "uniqueId": "HMdZbQlgSXr4nU",
+    "dateStart": "2026-10-01",
+    "dateEnd": "2026-10-11",
+    "bankCode": "341",
+    "totalTransactions": "8",
+    "origin": "OPENFINANCE",
+    "accountHash": "gDyriq_q39",
+    "status": "SUCCESS",
+    "reason": "Extrato realizado com sucesso",
+    "type": "bank",
+    "totalCredit": 10000.0,
+    "totalDebit": 373.4
+  },
+  "transaction": {
+    "credit": [
+      {
+        "transactionId": "c1-pix-cliente",
+        "transactionType": "credit",
+        "code": "PIXTRANSFERÊNCIA",
+        "amount": "1500.00",
+        "date": "2026-10-05",
+        "sequence": "1",
+        "description": "PIX RECEBIDO CLIENTE ALFA",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "PIX Transferência",
+        "currencyCode": "BRL",
+        "paymentName": "EMPRESA EXEMPLO LTDA",
+        "paymentMethod": "PIX",
+        "paymentBarcode": null,
+        "paymentBaseAmount": null,
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": null,
+        "paymentInterestAmount": null,
+        "paymentPenaltyAmount": null,
+        "participantPayer": {
+          "name": "CLIENTE ALFA LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "22222222000122"
+          }
+        },
+        "participantReceiver": {
+          "name": "EMPRESA EXEMPLO LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          }
+        },
+        "referenceNumber": null
+      },
+      {
+        "transactionId": "c2-pix-socio",
+        "transactionType": "credit",
+        "code": "PIXTRANSFERÊNCIA",
+        "amount": "5000.00",
+        "date": "2026-10-06",
+        "sequence": "1",
+        "description": "PIX RECEBIDO JOAO SOCIO",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "PIX Transferência",
+        "currencyCode": "BRL",
+        "paymentName": "EMPRESA EXEMPLO LTDA",
+        "paymentMethod": "PIX",
+        "paymentBarcode": null,
+        "paymentBaseAmount": null,
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": null,
+        "paymentInterestAmount": null,
+        "paymentPenaltyAmount": null,
+        "participantPayer": {
+          "name": "JOAO SOCIO",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CPF",
+            "value": "123.456.789-00"
+          }
+        },
+        "participantReceiver": {
+          "name": "EMPRESA EXEMPLO LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          }
+        },
+        "referenceNumber": null
+      },
+      {
+        "transactionId": "c3-ted-propria",
+        "transactionType": "credit",
+        "code": "TRANSFER",
+        "amount": "2000.00",
+        "date": "2026-10-06",
+        "sequence": "1",
+        "description": "TED MESMA TITULARIDADE",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "Transfer",
+        "currencyCode": "BRL",
+        "paymentName": "EMPRESA EXEMPLO LTDA",
+        "paymentMethod": "TED",
+        "paymentBarcode": null,
+        "paymentBaseAmount": null,
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": null,
+        "paymentInterestAmount": null,
+        "paymentPenaltyAmount": null,
+        "participantPayer": {
+          "name": "EMPRESA EXEMPLO LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          }
+        },
+        "participantReceiver": {
+          "name": "EMPRESA EXEMPLO LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          }
+        },
+        "referenceNumber": null
+      }
+    ],
+    "debit": [
+      {
+        "transactionId": "d1-boleto-juros",
+        "transactionType": "debit",
+        "code": "SERVICES",
+        "amount": "100.00",
+        "date": "2026-10-07",
+        "sequence": "1",
+        "description": "PAGAMENTO DE BOLETO",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "Services",
+        "currencyCode": "BRL",
+        "paymentName": "FORNECEDOR BETA LTDA",
+        "paymentMethod": "BOLETO",
+        "paymentBarcode": null,
+        "paymentBaseAmount": "90.00",
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": "0.00",
+        "paymentInterestAmount": "10.00",
+        "paymentPenaltyAmount": null,
+        "participantPayer": {
+          "name": "EMPRESA EXEMPLO LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          }
+        },
+        "participantReceiver": {
+          "name": "FORNECEDOR BETA LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "33333333000133"
+          }
+        },
+        "referenceNumber": "NF 4521"
+      },
+      {
+        "transactionId": "d2-boleto-desconto",
+        "transactionType": "debit",
+        "code": "SERVICES",
+        "amount": "190.00",
+        "date": "2026-10-08",
+        "sequence": "1",
+        "description": "PAGAMENTO DE BOLETO",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "Services",
+        "currencyCode": "BRL",
+        "paymentName": "FORNECEDOR NOVO SA",
+        "paymentMethod": "BOLETO",
+        "paymentBarcode": null,
+        "paymentBaseAmount": "200.00",
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": "10.00",
+        "paymentInterestAmount": null,
+        "paymentPenaltyAmount": null,
+        "participantPayer": {
+          "name": "EMPRESA EXEMPLO LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          }
+        },
+        "participantReceiver": {
+          "name": "FORNECEDOR NOVO SA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "44444444000144"
+          }
+        },
+        "referenceNumber": null
+      },
+      {
+        "transactionId": "d3-tarifa",
+        "transactionType": "debit",
+        "code": "BANKFEES",
+        "amount": "45.90",
+        "date": "2026-10-10",
+        "sequence": "1",
+        "description": "TARIFA PACOTE DE SERVICOS",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "Bank fees",
+        "currencyCode": "BRL",
+        "paymentName": null,
+        "paymentMethod": null,
+        "paymentBarcode": null,
+        "paymentBaseAmount": null,
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": null,
+        "paymentInterestAmount": null,
+        "paymentPenaltyAmount": null,
+        "participantPayer": null,
+        "participantReceiver": null,
+        "referenceNumber": null
+      },
+      {
+        "transactionId": "d4-sem-regra",
+        "transactionType": "debit",
+        "code": "SHOPPING",
+        "amount": "37.50",
+        "date": "2026-10-11",
+        "sequence": "1",
+        "description": "COMPRA CARTAO DEBITO LOJA XYZ",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "Shopping",
+        "currencyCode": "BRL",
+        "paymentName": null,
+        "paymentMethod": "DEBIT_CARD",
+        "paymentBarcode": null,
+        "paymentBaseAmount": null,
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": null,
+        "paymentInterestAmount": null,
+        "paymentPenaltyAmount": null,
+        "participantPayer": null,
+        "participantReceiver": null,
+        "referenceNumber": null
+      }
+    ]
+  },
+  "transactionDuplicated": {
+    "credit": [
+      {
+        "transactionId": "c0-ja-importada",
+        "transactionType": "credit",
+        "code": "PIXTRANSFERÊNCIA",
+        "amount": "1500.00",
+        "date": "2026-10-05",
+        "sequence": "1",
+        "description": "PIX RECEBIDO CLIENTE ALFA",
+        "fitid": null,
+        "name": "EMPRESA EXEMPLO LTDA",
+        "category": "PIX Transferência",
+        "currencyCode": "BRL",
+        "paymentName": "EMPRESA EXEMPLO LTDA",
+        "paymentMethod": "PIX",
+        "paymentBarcode": null,
+        "paymentBaseAmount": null,
+        "paymentDigitableLine": null,
+        "paymentDiscountAmount": null,
+        "paymentInterestAmount": null,
+        "paymentPenaltyAmount": null,
+        "participantPayer": {
+          "name": "CLIENTE ALFA LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "22222222000122"
+          }
+        },
+        "participantReceiver": {
+          "name": "EMPRESA EXEMPLO LTDA",
+          "branchNumber": "0001",
+          "accountNumber": "12345",
+          "routingNumber": "341",
+          "documentNumber": {
+            "type": "CNPJ",
+            "value": "11.111.111/0001-11"
+          }
+        },
+        "referenceNumber": null
+      }
+    ],
+    "debit": []
+  }
+}
