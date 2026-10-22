@@ -1,0 +1,497 @@
+{
+ "evidence_id": "ev_e01c097037ad17dc52b53f4057df962ada853adcce85d93aa27fe85f8cc76523",
+ "subject": null,
+ "provider": {
+  "id": "rea-cdp-browser",
+  "name": "REA Chrome DevTools Protocol observation provider",
+  "version": "2"
+ },
+ "analysis_profile": null,
+ "predicate_type": "rea.web-bundle-analysis",
+ "operation": "analyze_web_bundle",
+ "parameters": {
+  "cdp_endpoint": "http://127.0.0.1:9222",
+  "allowed_origins": [],
+  "target_id": "61908E20599B2F30E9B5DC4AC2C8D3F0",
+  "observation_ms": 8000,
+  "include_accessibility_text": false,
+  "include_console_text": false,
+  "include_json_body_shapes": false,
+  "include_websocket_shapes": false,
+  "include_storage_keys": false,
+  "include_storage_fingerprints": false,
+  "include_script_sources": true,
+  "fetch_source_maps": false
+ },
+ "raw_result": null,
+ "normalized_result": {
+  "capture": {
+   "target_url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+   "scripts_observed": 28,
+   "scripts_analyzed": 28,
+   "source_artifacts": [
+    {
+     "sha256": "f9dd14aa1989821f51d5e0ffaba9fc5465d6fc4953376b7a9525b624072fba48",
+     "bytes": 64,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "5cf6bb901cf3a177bdf5170101ea3c545b94ae7e3e90a5245547d9245085cd08",
+     "bytes": 1510,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "c88ceaa62e223c885b281617d6c3485c9a8647109ec0363ceb5918746b1d8625",
+     "bytes": 8326,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "8f82761d3549c551d38a8fd5f263fe0ece727872804a426e2db046ca282118c4",
+     "bytes": 196,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "d0f383526029d4b359846000ff717b2e11b4a875be29b85c098bad254ec1080d",
+     "bytes": 71912,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "6bc96e23a1f1789601d89f075245ca622cb2a32a822c7b9498cdb8fad5dd0b72",
+     "bytes": 8306,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "96abf166b3cbb5f7df525d86fdeeeccea4af3c120b19bc26b0613530a94e8b44",
+     "bytes": 5594,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "44bb8831ff00982e0f6a5dcc89df53004adcd16af5ee37220f97887a623083ec",
+     "bytes": 1184,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "6b766f3e8feea68eeb936956180e6fef4c5894e47c18933d69efc5fa025dee5e",
+     "bytes": 1772,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "5f286af697158c7e281752a274a453733ca6cbb7bf9775e1a285092189da6f26",
+     "bytes": 932,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "beec158120e773da44878ab59a1d22ab3554f114ed29a05604927022da69cbcf",
+     "bytes": 4018,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "ac455178a92afc5b5325eb8a7f800e97345ad9d13dcc89462a7b02dd51698c74",
+     "bytes": 310,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "43781307b893556961b9978e5e53fb565a18134ff5813a58ba0487515fc55a69",
+     "bytes": 196,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "1c454b4a98cbb1a92536db45d9d141606bddaa647f83ba795f653215a77695d5",
+     "bytes": 904,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "0c25e03c17ded0ed43daf95fd1bcf86834f70cae2818f86ce61ea1f8606f77f7",
+     "bytes": 1902,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "ec8c807282b5368bdeab3fee22207d7eb96b3218a5639f66e31c9fb6e384ffb6",
+     "bytes": 71513,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "3382a4910bc0eb9d8d8b928c2b3bcb7cba10f198b65553222cda38118e8a2d95",
+     "bytes": 3250,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "14589261cb485fd44a6a804220f5b5a30ff1043bb2df9ccc6fbe715d6a834183",
+     "bytes": 179,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "1a2fae9e1f0b5eab895bdcfa55e7ed7d4a74ea84e50b633bbf1d40c22d0b10fb",
+     "bytes": 18957,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "3d108c1352a31295d3c8716e3db1a5e0bb8dd9e4eef17de46ecee2319285e56b",
+     "bytes": 341,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "1f3e33e5d09cb1026f9e6c40c4a39ef1fada589e9a149b235412895dedf5ec5f",
+     "bytes": 358,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "6ca18346b22b3b3df0889dd95c1fe259ff2f2f6a963d2284013002ab7ee869b9",
+     "bytes": 42660,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "5f002f0f10558a7c77dca12d09895ac05894e332eaa218c9ca4855842e8703cf",
+     "bytes": 3450,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "457d7eb951e8e854aebd198940815141fa8bae93c7c399b27b2cd8a3159d8d86",
+     "bytes": 899,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "321b4f657afbf8ba49518e6ab4cbad07ea967d0b4c68f71c7deed05ed09c1187",
+     "bytes": 16,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "2c461b575c190d0cff861d64e68d341fe7dc979745e81c2e9a8af06186951206",
+     "bytes": 2312,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "e84a246569e658679ebc997ecb34f2d75d607fae9850cf4c2b4234f3ace557c4",
+     "bytes": 6080,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    },
+    {
+     "sha256": "8adc92cb17980dc3731df4252b6bd3706a6dcabdab484c0306ca4013373bc017",
+     "bytes": 143,
+     "media_type": "text/javascript",
+     "charset": "utf-8",
+     "text_available": true
+    }
+   ]
+  },
+  "observations": {
+   "chunks": {
+    "nodes": [
+     {
+      "script_key": "scr_0190d557139fef3e62f55565d1bd828298071b0738c4d3fc2f87001574e73da4",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "f9dd14aa1989821f51d5e0ffaba9fc5465d6fc4953376b7a9525b624072fba48",
+      "bytes": 64
+     },
+     {
+      "script_key": "scr_03dcdb1d5020c90f01e47aad0a768e7c40c142f5b47ade182172c1cdf3c6c497",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "5cf6bb901cf3a177bdf5170101ea3c545b94ae7e3e90a5245547d9245085cd08",
+      "bytes": 1510
+     },
+     {
+      "script_key": "scr_070e4c088a4c3c7b9e4be2f599118fe199c7d61e507f954662903e4e91382f58",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/wp-content/plugins/translatepress-multilingual/assets/js/trp-frontend-language-switcher.js?ver=1792509214",
+      "artifact_sha256": "c88ceaa62e223c885b281617d6c3485c9a8647109ec0363ceb5918746b1d8625",
+      "bytes": 8326
+     },
+     {
+      "script_key": "scr_18348c30f6438c9463b859efb8a9e85196f8c0dfadee2beae021c6ecbbde8db6",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "8f82761d3549c551d38a8fd5f263fe0ece727872804a426e2db046ca282118c4",
+      "bytes": 196
+     },
+     {
+      "script_key": "scr_3da8179f2a0000965e6bc08ffe0c3abd8c85ea58dcf715ce2f4f8991001ab803",
+      "url": "https://tecnospeed.com.br/wp-content/plugins/google-site-kit/dist/assets/js/googlesitekit-consent-mode-5ef17bce870a966299fc.js",
+      "artifact_sha256": "d0f383526029d4b359846000ff717b2e11b4a875be29b85c098bad254ec1080d",
+      "bytes": 71912
+     },
+     {
+      "script_key": "scr_7069c84cc3cd62304ad34111928edf424dcc09d4863b35f1f02f4054eaf5cb6b",
+      "url": "https://tecnospeed.com.br/wp-content/plugins/google-site-kit/dist/assets/js/googlesitekit-events-provider-content-events-90bacb156ab34fa090db.js",
+      "artifact_sha256": "6bc96e23a1f1789601d89f075245ca622cb2a32a822c7b9498cdb8fad5dd0b72",
+      "bytes": 8306
+     },
+     {
+      "script_key": "scr_721edf5f363fdf9bf93a26b1eb3eda471c75f4b712d5994e564514422348c9e1",
+      "url": "https://tecnospeed.com.br/wp-content/plugins/oxygen/subplugins/breakdance-elements/dependencies-files/imagesloaded@4/imagesloaded.pkgd.min.js?bd_ver=6.0.0-beta.3",
+      "artifact_sha256": "96abf166b3cbb5f7df525d86fdeeeccea4af3c120b19bc26b0613530a94e8b44",
+      "bytes": 5594
+     },
+     {
+      "script_key": "scr_74288206efd08934965570d9a5dad32effb85888edc5d18e6afb33d8618879af",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "44bb8831ff00982e0f6a5dcc89df53004adcd16af5ee37220f97887a623083ec",
+      "bytes": 1184
+     },
+     {
+      "script_key": "scr_7cce9c79635d8745a33c3b7cba32be2265c1816631de8e4b2439095554a2df36",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "6b766f3e8feea68eeb936956180e6fef4c5894e47c18933d69efc5fa025dee5e",
+      "bytes": 1772
+     },
+     {
+      "script_key": "scr_80dcc4291d920d3297b3ed86041548ac695b71f23a248d2559ad094a9078f408",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "5f286af697158c7e281752a274a453733ca6cbb7bf9775e1a285092189da6f26",
+      "bytes": 932
+     },
+     {
+      "script_key": "scr_8653204406de4eb7a0273f2f0eca89a5fd77b74c4a559390ab0617212c6634f7",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/wp-content/plugins/oxygen/plugin/global-scripts/oxygen-utils.js?ver=1792509214",
+      "artifact_sha256": "beec158120e773da44878ab59a1d22ab3554f114ed29a05604927022da69cbcf",
+      "bytes": 4018
+     },
+     {
+      "script_key": "scr_959cc052fff7cc14876388da5d8a8f06ced88ae3b429f591f72e6a2de9730cf5",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/wp-content/plugins/stop-user-enumeration/frontend/js/frontend.js?ver=1792509214",
+      "artifact_sha256": "ac455178a92afc5b5325eb8a7f800e97345ad9d13dcc89462a7b02dd51698c74",
+      "bytes": 310
+     },
+     {
+      "script_key": "scr_9a06f91005775cd1f47c5b41e85bba1479cf4eb8f762c718e442f91b9fbcdf00",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "43781307b893556961b9978e5e53fb565a18134ff5813a58ba0487515fc55a69",
+      "bytes": 196
+     },
+     {
+      "script_key": "scr_a58b84c960940a800598328c04fdc92c0835d54b50871e411e06ca9c841d08f3",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "1c454b4a98cbb1a92536db45d9d141606bddaa647f83ba795f653215a77695d5",
+      "bytes": 904
+     },
+     {
+      "script_key": "scr_bd9646c331490747bcc8daf51c05216efe3dc5c6fdb4c6964fc5ca91f28c213e",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "0c25e03c17ded0ed43daf95fd1bcf86834f70cae2818f86ce61ea1f8606f77f7",
+      "bytes": 1902
+     },
+     {
+      "script_key": "scr_c0c8bab5364bb912257180702ecd4680811b16beaacd7c0f47f1282ef4c558e8",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/gsap@3.12.2/dist/gsap.min.js?ver=1792509218",
+      "artifact_sha256": "ec8c807282b5368bdeab3fee22207d7eb96b3218a5639f66e31c9fb6e384ffb6",
+      "bytes": 71513
+     },
+     {
+      "script_key": "scr_c2753a899395523ef2a7ffc1d05fe8a544dcd84e2f283ef45d9d87abc2bdbfb2",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/wp-content/plugins/oxygen/subplugins/breakdance-elements/dependencies-files/breakdance-faq@1/faq.js?ver=1792509218",
+      "artifact_sha256": "3382a4910bc0eb9d8d8b928c2b3bcb7cba10f198b65553222cda38118e8a2d95",
+      "bytes": 3250
+     },
+     {
+      "script_key": "scr_c43b821aa1b6f69147ea516125033007335bc23d5bd6d890e75cd9366a52d260",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "14589261cb485fd44a6a804220f5b5a30ff1043bb2df9ccc6fbe715d6a834183",
+      "bytes": 179
+     },
+     {
+      "script_key": "scr_c56d8ca51f9180788426982fd5142c19f368fd2ed1cbb4ec051d5ae5bcc9c2f3",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/wp-content/plugins/oxygen/subplugins/breakdance-elements/dependencies-files/awesome-form@1/js/form.js?ver=1792509220",
+      "artifact_sha256": "1a2fae9e1f0b5eab895bdcfa55e7ed7d4a74ea84e50b633bbf1d40c22d0b10fb",
+      "bytes": 18957
+     },
+     {
+      "script_key": "scr_c6cc990aa0446ae66f633c44faa7222f89a18604d93520e51811862d018f3c69",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "3d108c1352a31295d3c8716e3db1a5e0bb8dd9e4eef17de46ecee2319285e56b",
+      "bytes": 341
+     },
+     {
+      "script_key": "scr_cdcd1b6d0bee888bcd7a2f78899d33b82992e59d7fbd0ff9dc23269df4e93852",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "1f3e33e5d09cb1026f9e6c40c4a39ef1fada589e9a149b235412895dedf5ec5f",
+      "bytes": 358
+     },
+     {
+      "script_key": "scr_d675e06040ab45db148f970943d02539a1a1be97b377d0a7540dba4ef87a81e6",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/gsap@3.12.2/dist/ScrollTrigger.min.js?ver=1792509218",
+      "artifact_sha256": "6ca18346b22b3b3df0889dd95c1fe259ff2f2f6a963d2284013002ab7ee869b9",
+      "bytes": 42660
+     },
+     {
+      "script_key": "scr_d953631b1dfd4dfc53db109ef1d5f333bd0e09e4805af8f619d99a85d2d824f1",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "5f002f0f10558a7c77dca12d09895ac05894e332eaa218c9ca4855842e8703cf",
+      "bytes": 3450
+     },
+     {
+      "script_key": "scr_dc8f09c8c6da0488eafef884d2235e5b0534a7d57d72061664a4aa0f184a4e6a",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/wp-content/plugins/smooth-back-to-top-button/assets/js/smooth-back-to-top-button.js?ver=1792509214",
+      "artifact_sha256": "457d7eb951e8e854aebd198940815141fa8bae93c7c399b27b2cd8a3159d8d86",
+      "bytes": 899
+     },
+     {
+      "script_key": "scr_ddceb60a2e9429770489568e9131b89339fabdd411583c0dc8a6ed267dcd12f5",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "321b4f657afbf8ba49518e6ab4cbad07ea967d0b4c68f71c7deed05ed09c1187",
+      "bytes": 16
+     },
+     {
+      "script_key": "scr_ef6c0851b75ae5568efd47e36a8ebb5fbdc1b55e391aaf46c3f8c9af782817de",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "2c461b575c190d0cff861d64e68d341fe7dc979745e81c2e9a8af06186951206",
+      "bytes": 2312
+     },
+     {
+      "script_key": "scr_fd930993deb3791f6cf58d2164524ce036eb2aae8ab5d38e1309bb384631d943",
+      "url": "https://tecnospeed.com.br/wp-content/cache/min/1/wp-content/plugins/oxygen/plugin/animations/entrance/js/entrance.js?ver=1792509218",
+      "artifact_sha256": "e84a246569e658679ebc997ecb34f2d75d607fae9850cf4c2b4234f3ace557c4",
+      "bytes": 6080
+     },
+     {
+      "script_key": "scr_ff016059c2cfefb87270fa145684420bec9a065c677ff39195fdf09bf448b43d",
+      "url": "https://tecnospeed.com.br/plugbank/api-open-finance/",
+      "artifact_sha256": "8adc92cb17980dc3731df4252b6bd3706a6dcabdab484c0306ca4013373bc017",
+      "bytes": 143
+     }
+    ],
+    "edges": [
+     {
+      "from_script_key": "scr_3da8179f2a0000965e6bc08ffe0c3abd8c85ea58dcf715ce2f4f8991001ab803",
+      "kind": "require",
+      "specifier": "util",
+      "resolved_url": null,
+      "location": {
+       "script_key": "scr_3da8179f2a0000965e6bc08ffe0c3abd8c85ea58dcf715ce2f4f8991001ab803",
+       "line": 1,
+       "column": 4273
+      }
+     },
+     {
+      "from_script_key": "scr_721edf5f363fdf9bf93a26b1eb3eda471c75f4b712d5994e564514422348c9e1",
+      "kind": "require",
+      "specifier": "ev-emitter",
+      "resolved_url": null,
+      "location": {
+       "script_key": "scr_721edf5f363fdf9bf93a26b1eb3eda471c75f4b712d5994e564514422348c9e1",
+       "line": 7,
+       "column": 1128
+      }
+     }
+    ]
+   },
+   "routes": [],
+   "endpoints": [],
+   "webmcp_declarations": [],
+   "source_maps": {
+    "status": "not_requested",
+    "requested": 0,
+    "processed": 0,
+    "items": []
+   }
+  },
+  "inferences": [
+   {
+    "kind": "endpoint_candidate",
+    "value": "post_id",
+    "confidence": "low",
+    "basis": [
+     {
+      "script_key": "scr_c56d8ca51f9180788426982fd5142c19f368fd2ed1cbb4ec051d5ae5bcc9c2f3",
+      "artifact_sha256": "1a2fae9e1f0b5eab895bdcfa55e7ed7d4a74ea84e50b633bbf1d40c22d0b10fb",
+      "line": 11,
+      "column": 64,
+      "detector": "call:formData.get:unverified-network-receiver"
+     }
+    ]
+   },
+   {
+    "kind": "endpoint_candidate",
+    "value": "form_id",
+    "confidence": "low",
+    "basis": [
+     {
+      "script_key": "scr_c56d8ca51f9180788426982fd5142c19f368fd2ed1cbb4ec051d5ae5bcc9c2f3",
+      "artifact_sha256": "1a2fae9e1f0b5eab895bdcfa55e7ed7d4a74ea84e50b633bbf1d40c22d0b10fb",
+      "line": 11,
+      "column": 96,
+      "detector": "call:formData.get:unverified-network-receiver"
+     }
+    ]
+   }
+  ],
+  "unknowns": [],
+  "completeness": {
+   "status": "complete",
+   "parsed_scripts": 28,
+   "parse_failures": 0,
+   "visited_ast_nodes": 85251
+  },
+  "limitations": [
+   "Static bundle findings are observations or bounded inferences; REA does not execute captured JavaScript.",
+   "Bare string arguments of unbound HTTP-method-named calls are low-confidence endpoint candidates; form, translation, storage and other APIs can use the same syntax. URL-shaped findings still do not prove network execution.",
+   "Endpoint candidates are deduplicated by script, value and detector; basis retains only the first matching source coordinate. They are not a complete call-site inventory or a runtime occurrence count. completeness.status=\"complete\" describes examination of captured source, not a call-site census.",
+   "String-built routes and endpoints, encrypted configuration, and server-side behavior may remain unknown.",
+   "Page-declared WebMCP metadata is untrusted and is never registered or invoked as an REA tool."
+  ]
+ },
+ "confidence": "observed",
+ "authority": "external-service",
+ "environment": null,
+ "limitations": [
+  "Artifact identity is unavailable for this observation.",
+  "Static bundle findings are observations or bounded inferences; REA does not execute captured JavaScript.",
+  "Bare string arguments of unbound HTTP-method-named calls are low-confidence endpoint candidates; form, translation, storage and other APIs can use the same syntax. URL-shaped findings still do not prove network execution.",
+  "Endpoint candidates are deduplicated by script, value and detector; basis retains only the first matching source coordinate. They are not a complete call-site inventory or a runtime occurrence count. completeness.status=\"complete\" describes examination of captured source, not a call-site census.",
+  "String-built routes and endpoints, encrypted configuration, and server-side behavior may remain unknown.",
+  "Page-declared WebMCP metadata is untrusted and is never registered or invoked as an REA tool."
+ ],
+ "relationship_coverage": null,
+ "locations": [],
+ "evidence_links": []
+}
