@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}Calendário · Studio Contábil{% endblock %}
+{% block corpo %}
+<h1>Calendário editorial · {{ titulo }}</h1>
+<p><a href="/calendario?mes={{ anterior }}">← anterior</a> · <a href="/calendario">hoje</a> · <a href="/calendario?mes={{ seguinte }}">seguinte →</a></p>
+<p class="suave">Conteúdos com data planejada e, em vermelho, as obrigações fiscais de referência do mês.</p>
+<div class="cal">
+  {% for d in ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'] %}<div class="cab">{{ d }}</div>{% endfor %}
+  {% for semana in semanas %}{% for dia in semana %}
+    {% if dia == 0 %}<div class="dia vazio"></div>
+    {% else %}{% set info = por_dia[dia] %}
+    <div class="dia {{ 'hoje' if hoje and hoje.day == dia }}">
+      <strong>{{ dia }}</strong>
+      {% for o in info.obrigacoes %}<span class="item obrig" title="{{ o.dica }}">{{ o.nome }}</span>{% endfor %}
+      {% for c in info.conteudos %}<a class="item" href="/conteudos/{{ c.id }}" title="{{ ROTULOS[c.status] }}">{{ c.agendado_para.strftime('%H:%M') }} {{ perfis[c.perfil_id].nome }}: {{ c.j('dados').titulo }}</a>{% endfor %}
+    </div>
+    {% endif %}
+  {% endfor %}{% endfor %}
+</div>
+{% endblock %}

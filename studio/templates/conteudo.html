@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block titulo %}{{ dados.titulo }} · Studio Contábil{% endblock %}
+{% block corpo %}
+<p class="suave"><a href="/conteudos">Conteúdos</a> · {{ perfil.nome }} · {{ FORMATOS[c.formato] }}</p>
+<h1>{{ dados.titulo }} <span class="etiqueta st-{{ c.status }}">{{ ROTULOS[c.status] }}</span></h1>
+
+{% if alertas %}<div class="card"><h2 class="alerta">Travas: corrija antes de enviar para revisão</h2>
+  <ul>{% for a in alertas %}<li class="alerta">{{ a }}</li>{% endfor %}</ul></div>{% endif %}
+{% if c.comentario_cliente and c.status in ('ajuste_solicitado', 'rascunho') %}<div class="card"><h2>Pedido do cliente</h2><p>{{ c.comentario_cliente }}</p></div>{% endif %}
+{% if c.erro %}<div class="card"><h2 class="alerta">Erro na produção</h2><pre class="legenda">{{ c.erro }}</pre></div>{% endif %}
+
+<div class="card">
+  <h2>Próximo passo</h2>
+  {% if c.status in ('rascunho', 'ajuste_solicitado') %}
+    <p class="suave">Revise o texto, ajuste o que precisar e envie para o contador fazer a revisão técnica.</p>
+    <div class="acoes"><form method="post" action="/conteudos/{{ c.id }}/acao/enviar_revisao"><button>Enviar para revisão técnica</button></form></div>
+  {% elif c.status == 'revisao_tecnica' %}
+    <p class="suave">Confira base legal, números e prazos. A aprovação registra seu nome e CRC.
+    {% if perfil.tipo == 'cliente' %}Depois disso é gerado o link para o cliente aprovar.{% endif %}</p>
+    <div class="acoes">
+      <form method="post" action="/conteudos/{{ c.id }}/acao/aprovar_tecnico"><button class="ok">Aprovar tecnicamente{% if usuario.crc %} ({{ usuario.crc }}){% endif %}</button></form>
+      <form method="post" action="/conteudos/{{ c.id }}/acao/voltar_rascunho"><button class="sec">Devolver para ajustes</button></form>
+    </div>
+    {% if not usuario.crc %}<p class="alerta">Seu usuário não tem CRC cadastrado: a aprovação técnica será recusada.</p>{% endif %}
+  {% elif c.status == 'aguardando_cliente' %}
+    <p>Envie o link ao cliente. Ele vê a prévia, aprova ou pede ajuste, sem precisar de login. Uma rejeição trava a publicação.</p>
+    <input readonly value="{{ link_cliente }}" onclick="this.select()">
+    <div class="acoes"><a class="botao ok" href="{{ whatsapp }}" target="_blank" rel="noopener">Enviar pelo WhatsApp</a></div>
+    <p class="suave">Válido até {{ c.token_expira.strftime('%d/%m/%Y') }}.</p>
+  {% elif c.status in ('aprovado', 'erro_producao') %}
+    {% if c.formato == 'video' %}
+      <p>Custo estimado do vídeo (~{{ custo.segundos }}s): <strong>US$ {{ '%.2f' % custo.usd }}</strong> (≈ R$ {{ '%.2f' % custo.brl }}).</p>
+      {% if not perfil.avatar_liberado %}<p class="alerta">Anexe o termo de consentimento no <a href="/perfis/{{ perfil.id }}">perfil</a> para liberar o avatar.</p>{% endif %}
+    {% endif %}
+    <div class="acoes"><form method="post" action="/conteudos/{{ c.id }}/acao/produzir"><button>Produzir {{ 'vídeo' if c.formato == 'video' else 'imagens finais' }}</button></form></div>
+  {% elif c.status == 'produzindo' %}
+    <p>Produzindo... atualize a página em alguns instantes.</p>
+  {% elif c.status in ('produzido', 'agendado') %}
+    <div class="acoes">
+      <a class="botao" href="/conteudos/{{ c.id }}/pacote.zip">Baixar pacote (mídias + legenda)</a>
+      {% if c.status == 'produzido' and postiz_ativo %}
+      <form method="post" action="/conteudos/{{ c.id }}/agendar"><button class="sec">Agendar no Postiz{% if c.agendado_para %} ({{ c.agendado_para.strftime('%d/%m %H:%M') }}){% endif %}</button></form>
+      {% endif %}
+      <form method="post" action="/conteudos/{{ c.id }}/acao/publicado"><button class="ok">Marcar como publicado</button></form>
+    </div>
+  {% elif c.status == 'publicado' %}<p>Publicado. 🎉</p>{% endif %}
+</div>
+
+<div class="dupla">
+  <div>
+    <div class="card">
+      <h2>Prévia</h2>
+      {% if c.formato == 'video' %}
+        {% if arquivos %}<div class="slides">{% for a in arquivos %}<video src="/arquivo/{{ a }}" controls style="height:420px;border-radius:8px"></video>{% endfor %}</div>
+        <p class="suave">Primeiro: Instagram (com CTA). Segundo: YouTube (sem CTA).</p>
+        {% else %}<p><strong>Roteiro falado:</strong> {{ dados.texto_narrado }}</p><p class="suave">O vídeo é produzido só depois da aprovação, para não gastar créditos à toa.</p>{% endif %}
+      {% else %}
+        <div class="slides">{% for a in arquivos %}<img src="/arquivo/{{ a }}" alt="Slide {{ loop.index }}">{% endfor %}</div>
+      {% endif %}
+      <h2 style="margin-top:14px">Legenda final</h2>
+      <pre class="legenda">{{ legenda }}</pre>
+    </div>
+    {% if editavel %}
+    <form class="card" method="post" action="/conteudos/{{ c.id }}/editar">
+      <h2>Editar</h2>
+      <label>Título interno</label><input name="titulo" value="{{ dados.titulo }}">
+      <label>Gancho</label><input name="gancho" value="{{ dados.gancho }}">
+      {% if c.formato == 'video' %}
+        <label>Texto narrado (o que o avatar fala)</label><textarea name="texto_narrado" style="min-height:140px">{{ dados.texto_narrado }}</textarea>
+      {% else %}
+        <label>Slides (um bloco por slide, separados por linha em branco; 1ª linha é o título)</label>
+        <textarea name="slides" style="min-height:220px">{{ slides_txt }}</textarea>
+      {% endif %}
+      <label>Legenda</label><textarea name="legenda">{{ dados.legenda }}</textarea>
+      <label>Chamada para ação</label><input name="cta" value="{{ dados.cta }}">
+      <label>Hashtags</label><input name="hashtags" value="{{ dados.hashtags | join(' ') }}">
+      <div class="acoes"><button>Salvar alterações</button></div>
+    </form>
+    <form class="card" method="post" action="/conteudos/{{ c.id }}/regenerar">
+      <h2>Gerar outra versão</h2>
+      <input name="instrucao" placeholder="Ex.: gancho mais direto, cite o prazo, linguagem mais simples">
+      <div class="acoes"><button class="sec">Regenerar com IA</button></div>
+    </form>
+    {% endif %}
+  </div>
+  <div>
+    <div class="card">
+      <h2>Nota do conteúdo</h2>
+      {% if nota %}
+      <div class="nota-total">{{ nota.total }}<span class="suave">/100</span></div>
+      {% for e in nota.eixos %}
+        <div><strong>{{ e.nome }}</strong> <span class="suave">{{ e.nota }}/20</span></div>
+        <div class="barra-nota"><span style="width:{{ e.nota * 5 }}%"></span></div>
+        <p class="suave" style="margin-top:-4px">{{ e.comentario }}</p>
+      {% endfor %}
+      {% if nota.sugestoes %}<strong>Sugestões</strong><ul>{% for s in nota.sugestoes %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+      {% endif %}
+      <form method="post" action="/conteudos/{{ c.id }}/reavaliar"><button class="sec">Reavaliar</button></form>
+    </div>
+    <div class="card">
+      <h2>Para o revisor conferir</h2>
+      <p><strong>Base legal:</strong> {{ dados.base_legal | join('; ') or 'nenhuma citada' }}</p>
+      <ul>{% for p in dados.pontos_a_verificar %}<li>{{ p }}</li>{% endfor %}</ul>
+      {% if pauta %}<p class="suave">Pauta: {{ pauta.titulo }}{% if pauta.link %} · <a href="{{ pauta.link }}" target="_blank" rel="noopener">fonte</a>{% endif %}</p>{% endif %}
+      {% if c.revisor %}<p class="suave">Revisado por {{ c.revisor }}</p>{% endif %}
+    </div>
+    <form class="card" method="post" action="/conteudos/{{ c.id }}/data">
+      <h2>Data planejada</h2>
+      <input type="datetime-local" name="quando" value="{{ c.agendado_para.strftime('%Y-%m-%dT%H:%M') if c.agendado_para else '' }}">
+      <div class="acoes"><button class="sec">Salvar data</button></div>
+    </form>
+    {% if outros_perfis %}
+    <form class="card" method="post" action="/conteudos/{{ c.id }}/replicar">
+      <h2>Replicar para outros perfis</h2>
+      <p class="suave">Gera uma versão adaptada ao tom de cada cliente, com os mesmos fatos.</p>
+      {% for p in outros_perfis %}<label style="font-weight:400"><input type="checkbox" name="perfis" value="{{ p.id }}"> {{ p.nome }}</label>{% endfor %}
+      <div class="acoes"><button class="sec">Replicar</button></div>
+    </form>
+    {% endif %}
+    <div class="card">
+      <h2>Histórico</h2>
+      <table>{% for e in eventos %}<tr><td class="suave">{{ e.quando.strftime('%d/%m %H:%M') }}</td><td>{{ e.acao }}<br><span class="suave">{{ e.usuario }}{% if e.detalhe %} · {{ e.detalhe }}{% endif %}</span></td></tr>{% endfor %}</table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -64,14 +64,14 @@ def comando(
     return cmd
 
 
-def montar(cfg: dict, avatar: Path, texto_narrado: str, cta: str, pasta: Path) -> dict[str, Path]:
+def montar(cfg: dict, avatar: Path, texto_narrado: str, cta: str, pasta: Path, destaque: str = "#FFD60A") -> dict[str, Path]:
     """Gera <pasta>/instagram.mp4 (com CTA) e <pasta>/youtube.mp4 (sem CTA)."""
     if not midia.tem_audio(avatar):
         raise RuntimeError("O vídeo do avatar veio sem áudio.")
     esc = cfg["escritorio"]
     dur = midia.duracao(avatar)
-    legenda.gerar_ass(texto_narrado, dur, pasta / "legenda_instagram.ass", cta=cta)
-    legenda.gerar_ass(texto_narrado, dur, pasta / "legenda_youtube.ass")
+    legenda.gerar_ass(texto_narrado, dur, pasta / "legenda_instagram.ass", cta=cta, destaque=destaque)
+    legenda.gerar_ass(texto_narrado, dur, pasta / "legenda_youtube.ass", destaque=destaque)
 
     comuns = dict(
         avatar=str(avatar.resolve()),

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Entrar · Studio Contábil{% endblock %}
+{% block corpo %}
+<div class="cliente">
+  <h1>Studio Contábil</h1>
+  {% if primeiro_acesso %}
+  <div class="card">
+    <h2>Primeiro acesso: crie o administrador</h2>
+    <p class="suave">O CRC é necessário para fazer a revisão técnica dos conteúdos.</p>
+    <form method="post" action="/primeiro-acesso">
+      <label>Nome</label><input name="nome" required>
+      <label>E-mail</label><input name="email" type="email" required>
+      <label>CRC (ex.: CRC-SP 123456/O-7)</label><input name="crc">
+      <label>Senha (mín. 8 caracteres)</label><input name="senha" type="password" minlength="8" required>
+      <div class="acoes"><button>Criar e entrar</button></div>
+    </form>
+  </div>
+  {% else %}
+  <div class="card">
+    <form method="post" action="/login">
+      <label>E-mail</label><input name="email" type="email" required autofocus>
+      <label>Senha</label><input name="senha" type="password" required>
+      <div class="acoes"><button>Entrar</button></div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

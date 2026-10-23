@@ -1,0 +1,68 @@
+# Calendário fiscal de referência para gerar pautas e aparecer no calendário editorial.
+# É um PONTO DE PARTIDA: confira sempre a data oficial do ano (lei, IN, resolução),
+# feriados nacionais/municipais e regras de antecipação ou prorrogação para dia útil.
+# "dia" = dia do mês; "mes" só para obrigações anuais; "publico" orienta o tema do conteúdo.
+
+mensais:
+  - nome: "DAS - Simples Nacional e MEI"
+    dia: 20
+    publico: "empresas do Simples Nacional e MEIs"
+    dica: "Pagamento do DAS da competência anterior."
+  - nome: "FGTS Digital"
+    dia: 20
+    publico: "empresas com empregados"
+    dica: "Recolhimento do FGTS da folha do mês anterior pelo FGTS Digital."
+  - nome: "DCTFWeb e eSocial (folha)"
+    dia: 15
+    publico: "empresas com empregados ou pró-labore"
+    dica: "Fechamento da folha no eSocial e transmissão da DCTFWeb da competência anterior."
+  - nome: "DARF de INSS e IRRF (DCTFWeb)"
+    dia: 20
+    publico: "empresas com empregados ou pró-labore"
+    dica: "Pagamento do DARF gerado pela DCTFWeb."
+  - nome: "EFD-Reinf"
+    dia: 15
+    publico: "empresas que contratam serviços com retenção"
+    dica: "Envio dos eventos da EFD-Reinf da competência anterior."
+
+anuais:
+  - nome: "DEFIS - Simples Nacional"
+    mes: 3
+    dia: 31
+    publico: "empresas do Simples Nacional"
+    dica: "Declaração de Informações Socioeconômicas e Fiscais do ano anterior."
+  - nome: "Início da declaração do IRPF"
+    mes: 3
+    dia: 16
+    publico: "pessoas físicas, sócios e profissionais liberais"
+    dica: "Confira a data oficial de abertura divulgada pela Receita Federal."
+  - nome: "Prazo final do IRPF"
+    mes: 5
+    dia: 29
+    publico: "pessoas físicas, sócios e profissionais liberais"
+    dica: "Confira a data oficial divulgada pela Receita Federal para o ano."
+  - nome: "DASN-SIMEI (declaração anual do MEI)"
+    mes: 5
+    dia: 31
+    publico: "MEIs"
+    dica: "Declaração de faturamento do ano anterior do MEI."
+  - nome: "ECD - Escrituração Contábil Digital"
+    mes: 6
+    dia: 30
+    publico: "empresas do Lucro Real e Presumido obrigadas"
+    dica: "Prazo usual: último dia útil de junho. Confira o ano."
+  - nome: "ECF - Escrituração Contábil Fiscal"
+    mes: 7
+    dia: 31
+    publico: "empresas do Lucro Real e Presumido"
+    dica: "Prazo usual: último dia útil de julho. Confira o ano."
+  - nome: "13º salário - 1ª parcela"
+    mes: 11
+    dia: 30
+    publico: "empresas com empregados"
+    dica: "Pagamento da primeira parcela do 13º salário."
+  - nome: "13º salário - 2ª parcela"
+    mes: 12
+    dia: 20
+    publico: "empresas com empregados"
+    dica: "Pagamento da segunda parcela do 13º salário."

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block corpo %}
+<h1>Painel</h1>
+{% if sem_perfil %}
+<div class="card"><h2>Comece por aqui</h2>
+  <p>1. Cadastre o <a href="/perfis">perfil do escritório</a> (cole o site para preencher a marca automaticamente).<br>
+     2. Traga <a href="/pautas">pautas</a> das notícias ou do calendário fiscal.<br>
+     3. Gere o conteúdo, revise com o CRC e envie para aprovação.</p></div>
+{% endif %}
+<div class="grade">
+  {% for st, n in contagem.items() if n %}
+  <a class="card" style="text-decoration:none;color:inherit" href="/conteudos?status={{ st }}">
+    <div class="numero">{{ n }}</div><span class="etiqueta st-{{ st }}">{{ ROTULOS[st] }}</span>
+  </a>
+  {% endfor %}
+</div>
+<div class="dupla">
+  <div class="card">
+    <h2>Precisa da sua atenção</h2>
+    {% if pendentes %}
+    <table>{% for c in pendentes %}
+      <tr><td><a href="/conteudos/{{ c.id }}">{{ c.j('dados').titulo }}</a><br><span class="suave">{{ perfis[c.perfil_id].nome }} · {{ FORMATOS[c.formato] }}</span></td>
+          <td><span class="etiqueta st-{{ c.status }}">{{ ROTULOS[c.status] }}</span></td></tr>
+    {% endfor %}</table>
+    {% else %}<p class="suave">Nada pendente.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Obrigações nos próximos 30 dias</h2>
+    {% if obrigacoes %}
+    <table>{% for o in obrigacoes %}
+      <tr><td><strong>{{ o.data.strftime('%d/%m') }}</strong></td><td>{{ o.nome }}<br><span class="suave">{{ o.publico }}</span></td></tr>
+    {% endfor %}</table>
+    <p class="suave">Datas de referência do calendário interno. Confira a data oficial e as regras de dia útil.</p>
+    <form method="post" action="/pautas/fiscais"><input type="hidden" name="mes" value="{{ obrigacoes[0].data.strftime('%Y-%m') }}"><button class="sec">Transformar em pautas</button></form>
+    {% else %}<p class="suave">Nenhuma obrigação cadastrada para o período.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

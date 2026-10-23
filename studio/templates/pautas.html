@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titulo %}Pautas · Studio Contábil{% endblock %}
+{% block corpo %}
+<h1>Pautas</h1>
+<div class="grade">
+  <form class="card" method="post" action="/pautas/noticias">
+    <h2>Notícias</h2><p class="suave">Busca nos feeds configurados (Reforma Tributária, Simples, MEI, IR...).</p>
+    <button>Buscar notícias</button>
+  </form>
+  <form class="card" method="post" action="/pautas/fiscais">
+    <h2>Calendário fiscal</h2><p class="suave">Cria pautas com os vencimentos do mês.</p>
+    <div class="linha"><input type="month" name="mes" value="{{ mes }}" required><button>Gerar pautas</button></div>
+  </form>
+  <form class="card" method="post" action="/pautas/ideia">
+    <h2>Ideia livre</h2>
+    <input name="titulo" placeholder="Ex.: 5 erros que fazem o MEI ser desenquadrado" required>
+    <textarea name="resumo" placeholder="Fatos e fontes que o conteúdo deve usar (a IA não inventa o que não estiver aqui)" style="min-height:60px;margin-top:8px"></textarea>
+    <div class="acoes"><button>Adicionar</button></div>
+  </form>
+</div>
+<p>
+  Filtrar: <a href="/pautas">todas</a> · <a href="/pautas?origem=noticia">notícias</a> · <a href="/pautas?origem=fiscal">fiscais</a> · <a href="/pautas?origem=ideia">ideias</a>
+</p>
+{% if not perfis %}<div class="card alerta">Cadastre um <a href="/perfis">perfil</a> para criar conteúdos.</div>{% endif %}
+{% for pa in pautas %}
+<div class="card">
+  <span class="etiqueta">{{ {'noticia': 'Notícia', 'fiscal': 'Calendário fiscal', 'ideia': 'Ideia'}[pa.origem] }}</span>
+  {% if pa.data_ref %}<span class="suave"> · {{ pa.data_ref }}</span>{% endif %}
+  <h2 style="margin-top:8px">{{ pa.titulo }}</h2>
+  <p class="suave">{{ pa.resumo }}{% if pa.link %} · <a href="{{ pa.link }}" target="_blank" rel="noopener">fonte</a>{% endif %}</p>
+  {% if perfis %}
+  <form method="post" action="/pautas/{{ pa.id }}/criar">
+    <div class="linha">
+      <div><label>Perfil</label><select name="perfil_id">{% for p in perfis %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select></div>
+      <div><label>Formato</label><select name="formato">{% for k, v in FORMATOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div><label>Estilo</label><select name="estilo">{% for k, v in ESTILOS.items() %}<option value="{{ k }}" {{ 'selected' if k == 'noticia' }}>{{ v.split(':')[0] }}</option>{% endfor %}</select></div>
+    </div>
+    <label>Instrução extra (opcional)</label><input name="instrucao" placeholder="Ex.: foque em prestadores de serviço">
+    <div class="acoes"><button>Gerar conteúdo</button></div>
+  </form>
+  <form method="post" action="/pautas/{{ pa.id }}/arquivar" style="margin-top:6px"><button class="sec">Arquivar</button></form>
+  {% endif %}
+</div>
+{% else %}<div class="card suave">Nenhuma pauta. Busque notícias, gere o calendário fiscal ou adicione uma ideia.</div>{% endfor %}
+{% endblock %}

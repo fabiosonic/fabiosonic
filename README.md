@@ -1,4 +1,44 @@
-# Avatar Contábil
+# Studio Contábil + Avatar Contábil
+
+Este repositório tem duas partes:
+
+- **Studio Contábil** (`studio/`): aplicativo web interno do escritório que junta, num fluxo só, o melhor
+  das 28 ferramentas estudadas em `docs/pesquisa/`. O desenho completo está em [`docs/PRODUTO.md`](docs/PRODUTO.md).
+- **Avatar Contábil** (`avatar_contabil/`): o motor de vídeo com avatar (voz, avatar e montagem), usado pelo
+  Studio e também por linha de comando.
+
+## Studio Contábil
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env          # DRY_RUN=1 deixa testar tudo sem chaves de API
+python -m studio              # abre em http://localhost:8000  (--publico para acessar pela rede)
+```
+
+No primeiro acesso você cria o administrador (informe o CRC para poder fazer a revisão técnica).
+
+**O que ele faz**
+
+| Função | Inspirada em |
+|---|---|
+| Perfis (escritório e clientes) com kit de marca; **preenche tom, público, serviços e cores a partir do site** | Apaya, Marky, mLabs |
+| Lista "o que esta marca nunca diz", somada às vedações da NBC PG 01 | Apaya |
+| Pautas de **notícias**, **calendário fiscal brasileiro** (editável em `config/calendario_fiscal.yaml`) e ideias | Lately + lacuna do mercado |
+| Post, **carrossel com formatos narrativos** (Problema→Solução, Mito×Verdade, Checklist...) ou **vídeo com avatar** | GalilAI, Canva |
+| **Nota de 0 a 100 explicável** em 5 eixos (Gancho, Clareza, Valor prático, Urgência, Conformidade) | FeedHive, Opus Clip |
+| Imagens do carrossel desenhadas com cores, logo e CRC do perfil | Predis, Canva |
+| **Revisão técnica com CRC** obrigatória, registrada no histórico | lacuna do mercado |
+| **Link de aprovação para o cliente, sem login**, enviado pelo WhatsApp; pedido de ajuste trava a publicação | Metricool, mLabs, Vizard |
+| Replicar o conteúdo para outros clientes, adaptado ao tom de cada um | FeedHive, Predis |
+| Vídeo com **legenda palavra por palavra**, **dicionário de pronúncia** (`config/pronuncia.yaml`), **custo estimado** antes de gerar e **termo de consentimento** obrigatório | Submagic, Argil, HeyGen |
+| Calendário editorial com as obrigações fiscais do mês | Later, mLabs |
+| Agendamento pelo **Postiz** (opcional) ou **pacote ZIP** para postar à mão, sempre com aviso de IA e CRC na legenda | Postiz |
+
+**Para usar com IA de verdade:** `ANTHROPIC_API_KEY` no `.env` e `DRY_RUN=0`. Para vídeo, configure HeyGen e
+ElevenLabs (seção abaixo) e informe os IDs no perfil. Para agendar, ative `studio.postiz` no `config.yaml`,
+coloque `POSTIZ_API_KEY` no `.env` e preencha os canais do perfil.
+
+## Avatar Contábil (linha de comando)
 
 Pipeline que produz vídeos curtos com o **avatar de IA do contador**, a partir de notícias tributárias,
 com **aprovação humana obrigatória** antes de publicar.

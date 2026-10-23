@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Usuários · Studio Contábil{% endblock %}
+{% block corpo %}
+<h1>Usuários</h1>
+<div class="dupla">
+  <div class="card tabela"><table>
+    <tr><th>Nome</th><th>E-mail</th><th>CRC</th><th>Papel</th></tr>
+    {% for u in usuarios %}<tr><td>{{ u.nome }}</td><td>{{ u.email }}</td><td>{{ u.crc or '—' }}</td><td>{{ u.papel }}</td></tr>{% endfor %}
+  </table></div>
+  {% if usuario.papel == 'admin' %}
+  <form class="card" method="post" action="/usuarios">
+    <h2>Novo usuário</h2>
+    <label>Nome</label><input name="nome" required>
+    <label>E-mail</label><input name="email" type="email" required>
+    <label>CRC (obrigatório para revisor técnico)</label><input name="crc">
+    <label>Papel</label><select name="papel"><option value="redator">Redator</option><option value="revisor">Revisor técnico</option><option value="admin">Administrador</option></select>
+    <label>Senha inicial</label><input name="senha" type="password" minlength="8" required>
+    <div class="acoes"><button>Criar</button></div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

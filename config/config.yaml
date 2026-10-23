@@ -70,3 +70,15 @@ travas:
     - "o melhor contador"
     - "o mais barato"
     - "resultado certo"
+
+# Studio Contábil (aplicativo web em studio/)
+studio:
+  link_cliente_dias: 14              # validade do link de aprovação enviado ao cliente
+  custos:                            # para a estimativa antes de gerar o vídeo; ajuste ao seu plano
+    avatar_usd_por_minuto: 0.60      # HeyGen API, motor Avatar III (tabela pública de 19/10/2026)
+    voz_usd_por_1000_caracteres: 0.22
+    cambio_brl: 5.50
+  postiz:
+    ativo: false
+    base_url: "https://api.postiz.com/public/v1"   # self-host: https://SEU-DOMINIO/api/public/v1
+    # chave em POSTIZ_API_KEY no .env

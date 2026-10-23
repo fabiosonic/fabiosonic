@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block titulo %}Aprovação de conteúdo{% endblock %}
+{% block corpo %}
+<div class="cliente">
+{% if obrigado %}
+  <div class="card"><h1>Obrigado!</h1><p>Sua resposta foi registrada e a equipe do escritório já foi avisada.</p></div>
+{% elif not c %}
+  <div class="card"><h1>Link indisponível</h1><p>Este link expirou ou já foi respondido. Fale com o escritório para receber um novo.</p></div>
+{% else %}
+  <h1>Aprovação de conteúdo</h1>
+  <p class="suave">{{ perfil.nome }} · {{ FORMATOS[c.formato] }}{% if c.agendado_para %} · previsto para {{ c.agendado_para.strftime('%d/%m/%Y') }}{% endif %}</p>
+  <div class="card">
+    {% if c.formato == 'video' %}
+      <p><strong>Roteiro do vídeo:</strong></p><p>{{ dados.texto_narrado }}</p>
+      <p class="suave">O vídeo com avatar é produzido depois da sua aprovação.</p>
+    {% else %}
+      <div class="slides">{% for a in arquivos %}<img src="/c/{{ token }}/img/{{ loop.index0 }}" alt="Imagem {{ loop.index }}">{% endfor %}</div>
+    {% endif %}
+    <h2 style="margin-top:14px">Legenda</h2>
+    <pre class="legenda">{{ legenda }}</pre>
+    {% if c.revisor %}<p class="suave">Revisão técnica: {{ c.revisor }}</p>{% endif %}
+  </div>
+  <form class="card" method="post" action="/c/{{ token }}/responder">
+    <label>Seu nome</label><input name="nome" required>
+    <label>Comentário (obrigatório para pedir ajuste)</label><textarea name="comentario"></textarea>
+    <div class="acoes">
+      <button class="ok" name="decisao" value="aprovar">Aprovar</button>
+      <button class="perigo" name="decisao" value="ajuste">Pedir ajuste</button>
+    </div>
+  </form>
+{% endif %}
+</div>
+{% endblock %}

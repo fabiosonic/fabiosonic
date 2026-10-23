@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Studio Contábil{% endblock %}</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+{% if usuario %}
+<header><div class="barra">
+  <a class="logo" href="/">Studio Contábil</a>
+  {% set caminho = request.url.path %}
+  <nav>
+    <a href="/" class="{{ 'ativo' if caminho == '/' }}">Painel</a>
+    <a href="/pautas" class="{{ 'ativo' if caminho.startswith('/pautas') }}">Pautas</a>
+    <a href="/conteudos" class="{{ 'ativo' if caminho.startswith('/conteudos') }}">Conteúdos</a>
+    <a href="/calendario" class="{{ 'ativo' if caminho.startswith('/calendario') }}">Calendário</a>
+    <a href="/perfis" class="{{ 'ativo' if caminho.startswith('/perfis') }}">Perfis</a>
+    <a href="/usuarios" class="{{ 'ativo' if caminho.startswith('/usuarios') }}">Usuários</a>
+  </nav>
+  <span class="usuario">{{ usuario.nome }}{% if usuario.crc %} · {{ usuario.crc }}{% endif %} · <a href="/sair">sair</a></span>
+</div></header>
+{% endif %}
+<main>
+  {% if dry_run and usuario %}<div class="teste">Modo de teste (DRY_RUN=1): a IA, a voz e o avatar usam respostas de exemplo e nada é publicado.</div>{% endif %}
+  {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+  {% block corpo %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Conteúdos · Studio Contábil{% endblock %}
+{% block corpo %}
+<h1>Conteúdos</h1>
+<form class="linha card" method="get">
+  <div><label>Status</label><select name="status"><option value="">Todos</option>
+    {% for k, v in ROTULOS.items() %}<option value="{{ k }}" {{ 'selected' if k == status }}>{{ v }}</option>{% endfor %}</select></div>
+  <div><label>Perfil</label><select name="perfil"><option value="0">Todos</option>
+    {% for p in perfis.values() %}<option value="{{ p.id }}" {{ 'selected' if p.id == perfil_sel }}>{{ p.nome }}</option>{% endfor %}</select></div>
+  <div style="flex:0"><button>Filtrar</button></div>
+</form>
+<div class="card tabela">
+<table>
+  <tr><th>Conteúdo</th><th>Perfil</th><th>Formato</th><th>Nota</th><th>Status</th><th>Data</th></tr>
+  {% for c in conteudos %}{% set n = c.j('nota') %}
+  <tr>
+    <td><a href="/conteudos/{{ c.id }}">{{ c.j('dados').titulo }}</a></td>
+    <td>{{ perfis[c.perfil_id].nome }}</td>
+    <td>{{ FORMATOS[c.formato] }}</td>
+    <td>{{ n.total if n else '—' }}</td>
+    <td><span class="etiqueta st-{{ c.status }}">{{ ROTULOS[c.status] }}</span></td>
+    <td class="suave">{{ c.agendado_para.strftime('%d/%m %H:%M') if c.agendado_para else '' }}</td>
+  </tr>
+  {% else %}<tr><td colspan="6" class="suave">Nenhum conteúdo. Crie a partir de uma <a href="/pautas">pauta</a>.</td></tr>{% endfor %}
+</table>
+</div>
+{% endblock %}
