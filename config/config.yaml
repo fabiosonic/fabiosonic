@@ -73,8 +73,17 @@ travas:
 
 # Studio Contábil (aplicativo web em studio/)
 studio:
+  formatos: ["post", "carrossel"]    # acrescente "video" para ligar os vídeos com avatar
   link_cliente_dias: 14              # validade do link de aprovação enviado ao cliente
-  custos:                            # para a estimativa antes de gerar o vídeo; ajuste ao seu plano
+  # Endereço público do Studio (ex.: https://studio.seuescritorio.com.br). O Instagram baixa
+  # as imagens por ele, e o link de aprovação do cliente também usa a internet.
+  url_publica: ""
+  instagram_api: "https://graph.facebook.com/v21.0"
+  automacao:
+    ativo: false                     # true = o próprio servidor roda o piloto automático sozinho
+    hora_geracao: 7                  # a partir de que hora cria os posts do dia
+    intervalo_minutos: 5             # de quanto em quanto tempo verifica publicações agendadas
+  custos:                            # só para vídeo: estimativa antes de gerar; ajuste ao seu plano
     avatar_usd_por_minuto: 0.60      # HeyGen API, motor Avatar III (tabela pública de 19/10/2026)
     voz_usd_por_1000_caracteres: 0.22
     cambio_brl: 5.50

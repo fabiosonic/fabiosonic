@@ -32,7 +32,7 @@
   <form method="post" action="/pautas/{{ pa.id }}/criar">
     <div class="linha">
       <div><label>Perfil</label><select name="perfil_id">{% for p in perfis %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select></div>
-      <div><label>Formato</label><select name="formato">{% for k, v in FORMATOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div><label>Formato</label><select name="formato">{% for k, v in FORMATOS_ATIVOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
       <div><label>Estilo</label><select name="estilo">{% for k, v in ESTILOS.items() %}<option value="{{ k }}" {{ 'selected' if k == 'noticia' }}>{{ v.split(':')[0] }}</option>{% endfor %}</select></div>
     </div>
     <label>Instrução extra (opcional)</label><input name="instrucao" placeholder="Ex.: foque em prestadores de serviço">

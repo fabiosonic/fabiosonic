@@ -9,34 +9,73 @@ Este repositório tem duas partes:
 
 ## Studio Contábil
 
+Material para o **Instagram** (posts e carrosséis) no **piloto automático**: o sistema busca as pautas,
+escreve, desenha as artes com a marca do perfil, manda para o contador revisar e publica sozinho no horário marcado.
+
 ```bash
 pip install -r requirements.txt
-cp .env.example .env          # DRY_RUN=1 deixa testar tudo sem chaves de API
+cp .env.example .env          # DRY_RUN=1 deixa testar tudo sem chaves (a publicação é simulada)
 python -m studio              # abre em http://localhost:8000  (--publico para acessar pela rede)
 ```
 
-No primeiro acesso você cria o administrador (informe o CRC para poder fazer a revisão técnica).
+No primeiro acesso você cria o administrador (informe o CRC: ele é exigido na revisão técnica).
 
-**O que ele faz**
+### Como funciona
+
+```
+todo dia (piloto automático)                     contador                   cliente (se for perfil de cliente)
+─────────────────────────────                    ─────────                  ───────────────────────────────────
+busca notícias + calendário fiscal                revisa e aprova            recebe o link no WhatsApp
+escolhe a melhor pauta para cada dia livre  ───►  (1 clique, com CRC)  ───►  aprova pelo celular, sem senha
+escreve, dá nota 0–100, aplica as travas                                       │
+desenha o carrossel/post com a marca                                           ▼
+                                                                 imagens finais em JPEG + agendado
+                                                                 ─► publicado no Instagram na data marcada
+```
+
+- Para cada perfil, você escolhe **dias da semana, horário, formatos** (alternando carrossel e post) e com quantos
+  dias de **antecedência** os posts são criados. O tempo de antecedência existe para dar prazo à revisão.
+- Prioridade das pautas: **vencimento fiscal** da semana seguinte ao post (lembrete do DAS, FGTS, DCTFWeb, 13º...),
+  depois **notícias** com nota boa para o público do perfil, depois as **ideias** cadastradas.
+- Nada é publicado sem a aprovação técnica com CRC. Se o post não for aprovado a tempo, ele simplesmente não sai.
+- Se a publicação falhar (por exemplo, token vencido), o sistema tenta mais duas vezes e depois mostra o erro no painel.
 
 | Função | Inspirada em |
 |---|---|
 | Perfis (escritório e clientes) com kit de marca; **preenche tom, público, serviços e cores a partir do site** | Apaya, Marky, mLabs |
 | Lista "o que esta marca nunca diz", somada às vedações da NBC PG 01 | Apaya |
 | Pautas de **notícias**, **calendário fiscal brasileiro** (editável em `config/calendario_fiscal.yaml`) e ideias | Lately + lacuna do mercado |
-| Post, **carrossel com formatos narrativos** (Problema→Solução, Mito×Verdade, Checklist...) ou **vídeo com avatar** | GalilAI, Canva |
+| **Carrossel com formatos narrativos** (Problema→Solução, Mito×Verdade, Checklist...) ou post de imagem única | GalilAI, Canva |
 | **Nota de 0 a 100 explicável** em 5 eixos (Gancho, Clareza, Valor prático, Urgência, Conformidade) | FeedHive, Opus Clip |
-| Imagens do carrossel desenhadas com cores, logo e CRC do perfil | Predis, Canva |
+| **Piloto automático** por perfil, com calendário de dias e horários | Apaya, SocialBee |
 | **Revisão técnica com CRC** obrigatória, registrada no histórico | lacuna do mercado |
 | **Link de aprovação para o cliente, sem login**, enviado pelo WhatsApp; pedido de ajuste trava a publicação | Metricool, mLabs, Vizard |
 | Replicar o conteúdo para outros clientes, adaptado ao tom de cada um | FeedHive, Predis |
-| Vídeo com **legenda palavra por palavra**, **dicionário de pronúncia** (`config/pronuncia.yaml`), **custo estimado** antes de gerar e **termo de consentimento** obrigatório | Submagic, Argil, HeyGen |
+| **Publicação direta no Instagram** pela API oficial (post e carrossel), com aviso técnico e CRC na legenda | Later, Buffer |
 | Calendário editorial com as obrigações fiscais do mês | Later, mLabs |
-| Agendamento pelo **Postiz** (opcional) ou **pacote ZIP** para postar à mão, sempre com aviso de IA e CRC na legenda | Postiz |
 
-**Para usar com IA de verdade:** `ANTHROPIC_API_KEY` no `.env` e `DRY_RUN=0`. Para vídeo, configure HeyGen e
-ElevenLabs (seção abaixo) e informe os IDs no perfil. Para agendar, ative `studio.postiz` no `config.yaml`,
-coloque `POSTIZ_API_KEY` no `.env` e preencha os canais do perfil.
+### O que é preciso para usar de verdade
+
+1. **Claude:** `ANTHROPIC_API_KEY` no `.env` e `DRY_RUN=0`.
+2. **Endereço público:** o Instagram baixa as imagens pela internet e o cliente abre o link de aprovação no celular,
+   então o Studio precisa estar acessível de fora: um servidor na nuvem ou um túnel (ex.: Cloudflare Tunnel).
+   Informe o endereço em `studio.url_publica` no `config/config.yaml`.
+3. **Instagram de cada perfil** (ID da conta e token, na página do perfil):
+   - A conta precisa ser **profissional** (Comercial ou Criador de conteúdo).
+   - Crie um app em developers.facebook.com, adicione o produto **Instagram** e peça a permissão
+     `instagram_content_publish`.
+   - Gere um **token de longa duração** e copie o **ID da conta do Instagram**.
+   - Com o login do Facebook, a conta precisa estar ligada a uma Página e a API é `https://graph.facebook.com/v21.0`
+     (padrão). Com o login do Instagram, use `https://graph.instagram.com/v21.0` em `studio.instagram_api`.
+   - Enquanto o app estiver em modo de desenvolvimento, só publicam as contas cadastradas com função no app
+     (testadoras). Para muitos clientes, peça a análise do app à Meta.
+   - O token de longa duração vale cerca de 60 dias: renove e cole o novo token no perfil.
+4. **Rodar sozinho:** ponha `studio.automacao.ativo: true` (o próprio servidor verifica a cada 5 minutos e cria os
+   posts do dia a partir das 7h) ou agende `python -m studio rotina` no cron. O botão **Rodar agora** no painel faz o
+   mesmo na hora.
+
+Vídeo com avatar vem **desligado**. Para ligar, acrescente `"video"` em `studio.formatos` e configure HeyGen e
+ElevenLabs (seção abaixo). A publicação pelo Postiz (várias redes) continua disponível em `studio.postiz`.
 
 ## Avatar Contábil (linha de comando)
 

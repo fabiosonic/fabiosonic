@@ -12,10 +12,10 @@
 <div class="card">
   <h2>Próximo passo</h2>
   {% if c.status in ('rascunho', 'ajuste_solicitado') %}
-    <p class="suave">Revise o texto, ajuste o que precisar e envie para o contador fazer a revisão técnica.</p>
+    <p class="suave">Revise o texto, ajuste o que precisar e envie para o contador fazer a revisão técnica.{% if c.automatico %} Criado pelo piloto automático.{% endif %}</p>
     <div class="acoes"><form method="post" action="/conteudos/{{ c.id }}/acao/enviar_revisao"><button>Enviar para revisão técnica</button></form></div>
   {% elif c.status == 'revisao_tecnica' %}
-    <p class="suave">Confira base legal, números e prazos. A aprovação registra seu nome e CRC.
+    <p class="suave">{% if c.automatico %}Criado pelo piloto automático{% if c.agendado_para %} para {{ c.agendado_para.strftime('%d/%m às %H:%M') }}{% endif %}. {% endif %}Confira base legal, números e prazos. A aprovação registra seu nome e CRC.
     {% if perfil.tipo == 'cliente' %}Depois disso é gerado o link para o cliente aprovar.{% endif %}</p>
     <div class="acoes">
       <form method="post" action="/conteudos/{{ c.id }}/acao/aprovar_tecnico"><button class="ok">Aprovar tecnicamente{% if usuario.crc %} ({{ usuario.crc }}){% endif %}</button></form>
@@ -28,6 +28,7 @@
     <div class="acoes"><a class="botao ok" href="{{ whatsapp }}" target="_blank" rel="noopener">Enviar pelo WhatsApp</a></div>
     <p class="suave">Válido até {{ c.token_expira.strftime('%d/%m/%Y') }}.</p>
   {% elif c.status in ('aprovado', 'erro_producao') %}
+    {% if c.formato != 'video' %}<p class="suave">Gerando as imagens finais...</p>{% endif %}
     {% if c.formato == 'video' %}
       <p>Custo estimado do vídeo (~{{ custo.segundos }}s): <strong>US$ {{ '%.2f' % custo.usd }}</strong> (≈ R$ {{ '%.2f' % custo.brl }}).</p>
       {% if not perfil.avatar_liberado %}<p class="alerta">Anexe o termo de consentimento no <a href="/perfis/{{ perfil.id }}">perfil</a> para liberar o avatar.</p>{% endif %}
@@ -36,14 +37,26 @@
   {% elif c.status == 'produzindo' %}
     <p>Produzindo... atualize a página em alguns instantes.</p>
   {% elif c.status in ('produzido', 'agendado') %}
+    {% if c.status == 'agendado' %}
+      <p><strong>Publicação automática no Instagram em {{ c.agendado_para.strftime('%d/%m/%Y às %H:%M') }}.</strong></p>
+    {% elif perfil.instagram_conectado or dry_run %}
+      <p class="suave">Pronto. Defina a data planejada e agende, ou publique agora.</p>
+    {% else %}
+      <p class="suave">Pronto. Conecte o Instagram no <a href="/perfis/{{ perfil.id }}">perfil</a> para publicar automaticamente, ou baixe o pacote.</p>
+    {% endif %}
     <div class="acoes">
-      <a class="botao" href="/conteudos/{{ c.id }}/pacote.zip">Baixar pacote (mídias + legenda)</a>
+      {% if c.formato != 'video' and (perfil.instagram_conectado or dry_run) %}
+        {% if c.status == 'produzido' %}<form method="post" action="/conteudos/{{ c.id }}/agendar-instagram"><button>Agendar no Instagram{% if c.agendado_para %} ({{ c.agendado_para.strftime('%d/%m %H:%M') }}){% endif %}</button></form>
+        {% else %}<form method="post" action="/conteudos/{{ c.id }}/acao/cancelar_agendamento"><button class="sec">Cancelar agendamento</button></form>{% endif %}
+        <form method="post" action="/conteudos/{{ c.id }}/publicar-instagram"><button class="ok">Publicar agora no Instagram</button></form>
+      {% endif %}
+      <a class="botao sec" href="/conteudos/{{ c.id }}/pacote.zip">Baixar pacote (imagens + legenda)</a>
       {% if c.status == 'produzido' and postiz_ativo %}
       <form method="post" action="/conteudos/{{ c.id }}/agendar"><button class="sec">Agendar no Postiz{% if c.agendado_para %} ({{ c.agendado_para.strftime('%d/%m %H:%M') }}){% endif %}</button></form>
       {% endif %}
-      <form method="post" action="/conteudos/{{ c.id }}/acao/publicado"><button class="ok">Marcar como publicado</button></form>
+      <form method="post" action="/conteudos/{{ c.id }}/acao/publicado"><button class="sec">Já publiquei à mão</button></form>
     </div>
-  {% elif c.status == 'publicado' %}<p>Publicado. 🎉</p>{% endif %}
+  {% elif c.status == 'publicado' %}<p>Publicado{% if publicacao_info.instagram %} no Instagram em {{ publicacao_info.instagram.quando[:16].replace('T', ' às ') }}{% endif %}. 🎉</p>{% endif %}
 </div>
 
 <div class="dupla">

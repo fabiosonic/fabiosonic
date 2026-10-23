@@ -64,6 +64,15 @@ class Nota(BaseModel):
     sugestoes: List[str] = Field(description="Até 3 melhorias concretas")
 
 
+class NotaPauta(BaseModel):
+    indice: int
+    nota: int = Field(description="0 a 10")
+
+
+class Triagem(BaseModel):
+    avaliacoes: List[NotaPauta]
+
+
 class MarcaSugerida(BaseModel):
     nome: str
     tom: str = Field(description="Tom de voz em uma frase")
@@ -145,6 +154,20 @@ def avaliar(perfil: Perfil, formato: str, dados: dict) -> dict:
     return {"total": sum(e["nota"] for e in eixos), "eixos": eixos, "sugestoes": nota.sugestoes}
 
 
+def triar(perfil: Perfil, pautas: list[Pauta]) -> dict[int, int]:
+    """Nota de 0 a 10 de cada notícia para o público do perfil. Devolve {pauta.id: nota}."""
+    if config.dry_run():
+        return {p.id: 8 for p in pautas}
+    lista = "\n".join(f"[{i}] {p.titulo} — {p.resumo[:300]}" for i, p in enumerate(pautas[:60]))
+    prompt = (
+        f"{_perfil_txt(perfil)}\n\nDê uma nota de 0 a 10 para cada pauta como tema de post para o público da marca: "
+        "impacto prático no bolso ou nas obrigações, urgência e clareza. Repetidas, de opinião política ou sem efeito prático "
+        f"recebem nota baixa.\n\nPautas:\n{lista}"
+    )
+    triagem = _chamar(prompt, Triagem, "low")
+    return {pautas[a.indice].id: max(0, min(10, a.nota)) for a in triagem.avaliacoes if 0 <= a.indice < min(len(pautas), 60)}
+
+
 def marca_do_site(url: str) -> tuple[MarcaSugerida, list[str]]:
     """Lê a página pública e sugere tom, público, serviços e cores."""
     import requests
@@ -181,18 +204,23 @@ def cores_do_html(html: str, limite: int = 3) -> list[str]:
     return list(dict.fromkeys(ordem))[:limite]
 
 
+def _cortar(texto: str, limite: int) -> str:
+    """Corta no fim de uma palavra, sem deixar frase pela metade no meio de um termo."""
+    return texto if len(texto) <= limite else texto[:limite].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+
+
 def _exemplo(perfil: Perfil, pauta: Pauta, formato: str) -> ConteudoGerado:
     gancho = f"Atenção, {perfil.publico.split(',')[0].lower().rstrip('.')}: isso pode afetar você."
     slides = []
     if formato == "carrossel":
-        slides = [Slide(titulo=pauta.titulo[:60], texto=gancho)] + [
+        slides = [Slide(titulo=_cortar(pauta.titulo, 90), texto=gancho)] + [
             Slide(titulo=f"Ponto {i} (exemplo)", texto=pauta.resumo or pauta.titulo) for i in range(1, 4)
         ] + [Slide(titulo="Fale com a gente", texto=f"Dúvidas? A equipe {perfil.nome} ajuda você a analisar o seu caso.")]
     elif formato == "post":
-        slides = [Slide(titulo=pauta.titulo[:60], texto=gancho)]
+        slides = [Slide(titulo=_cortar(pauta.titulo, 90), texto=gancho)]
     narrado = f"{gancho} {pauta.titulo}. {pauta.resumo} Você já sabia disso? Conta aqui nos comentários." if formato == "video" else ""
     return ConteudoGerado(
-        titulo=pauta.titulo[:70].strip(), gancho=gancho,
+        titulo=_cortar(pauta.titulo, 70), gancho=gancho,
         legenda=f"{pauta.titulo}\n\n{pauta.resumo}".strip(),
         cta=f"Fale com a equipe {perfil.nome} para analisar o seu caso.",
         hashtags=["contabilidade", "empresas", "impostos"],

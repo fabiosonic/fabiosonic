@@ -14,13 +14,25 @@
   </a>
   {% endfor %}
 </div>
+<div class="card">
+  <div class="linha" style="align-items:center">
+    <div style="flex:3"><h2 style="margin:0">Piloto automático</h2>
+      <span class="suave">{% if perfis_auto %}Ligado para: {{ perfis_auto | join(', ') }}.{% else %}Desligado em todos os perfis (ligue na página do perfil).{% endif %}
+      {% if agendador %} Roda sozinho a cada {{ agendador.intervalo_minutos }} min e cria os posts todo dia a partir das {{ agendador.hora_geracao }}h.{% else %} O agendador está desligado (studio.automacao.ativo no config.yaml); use o botão.{% endif %}</span></div>
+    <form method="post" action="/automacao/rodar" style="flex:1;text-align:right"><button>Rodar agora</button></form>
+  </div>
+  {% if proximas %}
+  <h2 style="margin-top:14px">Próximas publicações no Instagram</h2>
+  <table>{% for c in proximas %}<tr><td><strong>{{ c.agendado_para.strftime('%d/%m %H:%M') }}</strong></td><td><a href="/conteudos/{{ c.id }}">{{ c.j('dados').titulo }}</a><br><span class="suave">{{ perfis[c.perfil_id].nome }}</span></td></tr>{% endfor %}</table>
+  {% endif %}
+</div>
 <div class="dupla">
   <div class="card">
     <h2>Precisa da sua atenção</h2>
     {% if pendentes %}
     <table>{% for c in pendentes %}
       <tr><td><a href="/conteudos/{{ c.id }}">{{ c.j('dados').titulo }}</a><br><span class="suave">{{ perfis[c.perfil_id].nome }} · {{ FORMATOS[c.formato] }}</span></td>
-          <td><span class="etiqueta st-{{ c.status }}">{{ ROTULOS[c.status] }}</span></td></tr>
+          <td><span class="etiqueta st-{{ c.status }}">{{ ROTULOS[c.status] }}</span>{% if c.agendado_para %}<br><span class="suave">para {{ c.agendado_para.strftime('%d/%m') }}</span>{% endif %}</td></tr>
     {% endfor %}</table>
     {% else %}<p class="suave">Nada pendente.</p>{% endif %}
   </div>

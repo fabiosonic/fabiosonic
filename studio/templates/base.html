@@ -23,7 +23,7 @@
 </div></header>
 {% endif %}
 <main>
-  {% if dry_run and usuario %}<div class="teste">Modo de teste (DRY_RUN=1): a IA, a voz e o avatar usam respostas de exemplo e nada é publicado.</div>{% endif %}
+  {% if dry_run and usuario %}<div class="teste">Modo de teste (DRY_RUN=1): a IA usa respostas de exemplo e as publicações no Instagram são apenas simuladas.</div>{% endif %}
   {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
   {% block corpo %}{% endblock %}
 </main>

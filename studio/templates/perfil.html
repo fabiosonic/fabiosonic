@@ -31,9 +31,36 @@
     <label>Serviços</label><textarea name="servicos">{{ p.servicos }}</textarea>
     <label>O que esta marca nunca diz (um termo por linha; soma-se às vedações da NBC PG 01)</label>
     <textarea name="nunca_dizer">{{ p.nunca_dizer }}</textarea>
-    <details><summary>Integrações</summary>
+    <h2 style="margin-top:22px">Piloto automático</h2>
+    <p class="suave">Todo dia o Studio busca pautas, cria os posts dos próximos dias e coloca na fila de revisão técnica.
+      Depois de aprovados, saem sozinhos no Instagram na data marcada.</p>
+    <label style="font-weight:600"><input type="checkbox" name="auto_ativo" value="1" {{ 'checked' if p.auto_ativo }}> Ligar piloto automático para este perfil</label>
+    <label>Dias de publicação</label>
+    <div class="linha" style="gap:14px">{% for d in DIAS_SEMANA %}
+      <label style="font-weight:400;flex:0"><input type="checkbox" name="auto_dias" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in p.dias_auto() }}> {{ d }}</label>{% endfor %}</div>
+    <div class="linha">
+      <div><label>Horário</label><input type="time" name="auto_horario" value="{{ p.auto_horario }}"></div>
+      <div><label>Criar com antecedência de (dias)</label><input type="number" name="auto_antecedencia" min="1" max="30" value="{{ p.auto_antecedencia }}"></div>
+    </div>
+    <label>Formatos (alterna entre os marcados)</label>
+    <div class="linha" style="gap:14px">
+      <label style="font-weight:400;flex:0"><input type="checkbox" name="auto_formatos" value="carrossel" {{ 'checked' if 'carrossel' in p.formatos_auto() }}> Carrossel</label>
+      <label style="font-weight:400;flex:0"><input type="checkbox" name="auto_formatos" value="post" {{ 'checked' if 'post' in p.formatos_auto() }}> Post</label>
+    </div>
+
+    <h2 style="margin-top:22px">Instagram</h2>
+    {% if p.instagram_conectado %}<p>Conectado (conta {{ p.ig_user_id }}). <label style="display:inline;font-weight:400"><input type="checkbox" name="ig_desconectar" value="1"> desconectar</label></p>
+    {% else %}<p class="suave">Conta profissional do Instagram + app da Meta com a permissão <code>instagram_content_publish</code>. Passo a passo no README.</p>{% endif %}
+    <div class="linha">
+      <div><label>ID da conta do Instagram</label><input name="ig_user_id" value="{{ p.ig_user_id }}" placeholder="17841400000000000"></div>
+      <div><label>Token de acesso {{ '(deixe vazio para manter)' if p.instagram_conectado }}</label><input name="ig_token" type="password" autocomplete="off"></div>
+    </div>
+
+    <details style="margin-top:14px"><summary>Outras integrações</summary>
+      {% if 'video' in FORMATOS_ATIVOS %}
       <label>Avatar HeyGen (ID)</label><input name="heygen_avatar_id" value="{{ p.heygen_avatar_id }}">
       <label>Voz ElevenLabs (ID)</label><input name="elevenlabs_voice_id" value="{{ p.elevenlabs_voice_id }}">
+      {% endif %}
       <label>Canais no Postiz (JSON: rede → ID da integração)</label>
       <textarea name="postiz_canais" placeholder='{"instagram": "id", "youtube": "id"}'>{{ canais }}</textarea>
     </details>
@@ -45,6 +72,7 @@
       <p class="suave">Lê a página pública e sugere tom, público, serviços e cores.</p>
       <form method="post" action="/perfis/{{ p.id }}/importar-site"><button class="sec" {{ 'disabled' if not p.site }}>Preencher a partir de {{ p.site or 'o site' }}</button></form>
     </div>
+    {% if 'video' in FORMATOS_ATIVOS %}
     <div class="card">
       <h2>Consentimento do avatar</h2>
       {% if p.avatar_liberado %}
@@ -58,6 +86,7 @@
         <div class="acoes"><button class="sec">Registrar termo</button></div>
       </form>
     </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

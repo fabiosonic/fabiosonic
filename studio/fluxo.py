@@ -104,6 +104,11 @@ def agendar(c: Conteudo) -> None:
     c.status = AGENDADO
 
 
+def desagendar(c: Conteudo) -> None:
+    _exigir(c, AGENDADO)
+    c.status = PRODUZIDO
+
+
 def marcar_publicado(c: Conteudo) -> None:
     _exigir(c, PRODUZIDO, AGENDADO)
     c.status = PUBLICADO

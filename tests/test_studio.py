@@ -4,6 +4,7 @@ import zipfile
 from io import BytesIO
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from avatar_contabil import config
@@ -17,6 +18,18 @@ def dados_temporarios(tmp_path, monkeypatch):
     db.reiniciar_engine()
     yield
     db.reiniciar_engine()
+
+
+@pytest.fixture
+def ajustar_config(tmp_path, monkeypatch):
+    """Grava uma cópia do config.yaml com as alterações e aponta o Studio para ela."""
+    def ajustar(**studio):
+        cfg = config.carregar()
+        cfg["studio"].update(studio)
+        arq = tmp_path / "config_teste.yaml"
+        arq.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+        monkeypatch.setenv("AVATAR_CONFIG", str(arq))
+    return ajustar
 
 
 @pytest.fixture
@@ -89,13 +102,11 @@ def test_fluxo_carrossel_com_aprovacao_do_cliente(cliente):
     assert anonimo.post(f"/c/{token}/responder", data={"decisao": "ajuste", "nome": "Seu Zé", "comentario": ""}).status_code == 200
     assert _status(cid) == fluxo.CLIENTE  # ajuste sem comentário é recusado
     anonimo.post(f"/c/{token}/responder", data={"decisao": "aprovar", "nome": "Seu Zé"})
-    assert _status(cid) == fluxo.APROVADO
+    assert _status(cid) == fluxo.PRODUZIDO  # aprovado pelo cliente: imagens finais geradas na hora
     assert "Link indisponível" in anonimo.get(f"/c/{token}").text  # link de uso único
 
-    cliente.post(f"/conteudos/{cid}/acao/produzir")  # TestClient roda a tarefa de fundo
-    assert _status(cid) == fluxo.PRODUZIDO
     z = zipfile.ZipFile(BytesIO(cliente.get(f"/conteudos/{cid}/pacote.zip").content))
-    assert "legenda.txt" in z.namelist() and any(n.endswith(".png") for n in z.namelist())
+    assert "legenda.txt" in z.namelist() and any(n.endswith(".jpg") for n in z.namelist())
     cliente.post(f"/conteudos/{cid}/acao/publicado")
     assert _status(cid) == fluxo.PUBLICADO
 
@@ -119,7 +130,7 @@ def test_perfil_do_escritorio_pula_cliente(cliente):
     cid = _conteudo(cliente, pid, "post")
     cliente.post(f"/conteudos/{cid}/acao/enviar_revisao")
     cliente.post(f"/conteudos/{cid}/acao/aprovar_tecnico")
-    assert _status(cid) == fluxo.APROVADO
+    assert _status(cid) == fluxo.PRODUZIDO
 
 
 def test_trava_bloqueia_envio(cliente):
@@ -143,7 +154,8 @@ def test_revisao_exige_crc(cliente):
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg não instalado")
-def test_video_exige_consentimento_e_produz(cliente):
+def test_video_exige_consentimento_e_produz(cliente, ajustar_config):
+    ajustar_config(formatos=["post", "carrossel", "video"])
     pid = _perfil(cliente, tipo="escritorio", nome="Contabilidade Exemplo")
     cid = _conteudo(cliente, pid, "video")
     assert "Custo estimado" not in cliente.get(f"/conteudos/{cid}").text
@@ -228,3 +240,205 @@ def test_rodape_do_slide_preserva_o_crc(tmp_path):
     draw.text = lambda xy, t, **kw: (textos.append(t), original(xy, t, **kw))
     carrossel._rodape(draw, perfil, "#FFFFFF", "1/5")
     assert textos[0].endswith("CRC-SP 2SP000000/O-1") and "…" in textos[0]
+
+
+# ---------- sem vídeo, piloto automático e Instagram ----------
+
+def _aprovar(cliente, cid):
+    cliente.post(f"/conteudos/{cid}/acao/enviar_revisao")
+    cliente.post(f"/conteudos/{cid}/acao/aprovar_tecnico")
+
+
+def test_video_desligado_por_padrao(cliente):
+    pid = _perfil(cliente)
+    cliente.post("/pautas/ideia", data={"titulo": "Pauta", "resumo": "Fato."})
+    html = cliente.get("/pautas").text
+    assert "Vídeo com avatar" not in html and "Carrossel" in html
+    with db.sessao() as s:
+        pauta_id = s.exec(db.select(db.Pauta)).first().id
+    cliente.post(f"/pautas/{pauta_id}/criar", data={"perfil_id": pid, "formato": "video", "estilo": "noticia"})
+    with db.sessao() as s:
+        assert s.exec(db.select(db.Conteudo)).first() is None
+    assert "Consentimento do avatar" not in cliente.get(f"/perfis/{pid}").text
+
+
+def _perfil_automatico(cliente, **extra) -> int:
+    pid = _perfil(cliente, tipo="escritorio", nome="Contabilidade Exemplo")
+    dados = {"nome": "Contabilidade Exemplo", "tipo": "escritorio", "auto_ativo": "1", "auto_horario": "09:00",
+             "auto_antecedencia": "7", "auto_dias": [str(d) for d in range(7)], "auto_formatos": ["carrossel", "post"],
+             "ig_user_id": "1784", "ig_token": "tok"}
+    dados.update(extra)
+    cliente.post(f"/perfis/{pid}", data=dados)
+    return pid
+
+
+def test_piloto_automatico_cria_posts_da_semana_sem_duplicar(cliente):
+    from studio import automacao
+
+    pid = _perfil_automatico(cliente)
+    with db.sessao() as s:
+        p = s.get(db.Perfil, pid)
+        assert p.auto_ativo and p.dias_auto() == list(range(7)) and p.instagram_conectado
+        for i in range(10):
+            s.add(db.Pauta(origem="ideia", titulo=f"Ideia {i}", resumo="Fato da fonte.", chave=f"i{i}"))
+        s.commit()
+    criados = automacao.gerar_automatico()
+    assert criados["Contabilidade Exemplo"] >= 7
+    with db.sessao() as s:
+        conts = s.exec(db.select(db.Conteudo)).all()
+    assert all(c.automatico and c.status == fluxo.REVISAO and c.agendado_para.hour == 9 for c in conts)
+    assert len({c.agendado_para.date() for c in conts}) == len(conts)  # um por dia
+    assert {c.formato for c in conts} == {"carrossel", "post"}  # alterna formatos
+    assert len({c.pauta_id for c in conts}) == len(conts)  # não repete pauta
+    assert automacao.gerar_automatico()["Contabilidade Exemplo"] == 0  # rodar de novo não duplica
+
+
+def test_prioriza_vencimento_fiscal_da_semana():
+    from datetime import datetime
+
+    from studio import automacao
+
+    quando = datetime(2026, 11, 16, 9)
+    ideia = db.Pauta(id=1, origem="ideia", titulo="Ideia")
+    longe = db.Pauta(id=2, origem="fiscal", titulo="13º", data_ref="2026-11-30")
+    perto = db.Pauta(id=3, origem="fiscal", titulo="DAS", data_ref="2026-11-20")
+    noticia_fraca = db.Pauta(id=4, origem="noticia", titulo="Fofoca")
+    escolhida = automacao.escolher_pauta(db.Perfil(nome="x"), quando, [ideia, longe, perto, noticia_fraca], {4: 3}, 7)
+    assert escolhida is perto
+    assert automacao.escolher_pauta(db.Perfil(nome="x"), quando, [ideia, noticia_fraca], {4: 3}, 7) is ideia
+
+
+def test_aprovado_vira_agendado_e_publica_no_horario(cliente, ajustar_config, monkeypatch):
+    from datetime import timedelta
+
+    from studio import automacao
+
+    ajustar_config(url_publica="https://studio.exemplo.com.br")
+    monkeypatch.setenv("DRY_RUN", "0")
+    publicados = []
+
+    class InstagramFalso:
+        def __init__(self, user_id, token, base):
+            assert (user_id, token) == ("1784", "tok")
+
+        def publicar(self, urls, legenda):
+            publicados.append((urls, legenda))
+            return "midia-123"
+
+    monkeypatch.setattr(automacao, "Instagram", InstagramFalso)
+    pid = _perfil_automatico(cliente)
+    monkeypatch.setenv("DRY_RUN", "1")  # a IA continua de exemplo
+    cid = _conteudo(cliente, pid, "carrossel")
+    amanha = (db.agora() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+    cliente.post(f"/conteudos/{cid}/data", data={"quando": amanha})
+    _aprovar(cliente, cid)
+    assert _status(cid) == fluxo.AGENDADO
+
+    with db.sessao() as s:
+        c = s.get(db.Conteudo, cid)
+        token, n = c.midia_token, len(c.j("arquivos"))
+        assert all(a.endswith(".jpg") for a in c.j("arquivos"))
+    r = TestClient(cliente.app).get(f"/m/{token}/0.jpg")  # público: o Instagram baixa sem login
+    assert r.status_code == 200 and r.content[:2] == b"\xff\xd8"
+    assert TestClient(cliente.app).get(f"/m/{'x' * 32}/0.jpg").status_code == 404
+
+    monkeypatch.setenv("DRY_RUN", "0")
+    assert automacao.publicar_vencidos() == 0  # ainda não chegou a hora
+    with db.sessao() as s:
+        c = s.get(db.Conteudo, cid)
+        c.agendado_para = db.agora() - timedelta(minutes=1)
+        s.add(c)
+        s.commit()
+    assert automacao.publicar_vencidos() == 1
+    assert _status(cid) == fluxo.PUBLICADO
+    urls, legenda = publicados[0]
+    assert urls == [f"https://studio.exemplo.com.br/m/{token}/{i}.jpg" for i in range(n)]
+    assert "Conteúdo informativo" in legenda
+
+
+def test_falha_de_publicacao_tenta_tres_vezes(cliente, ajustar_config, monkeypatch):
+    from datetime import timedelta
+
+    from studio import automacao
+
+    ajustar_config(url_publica="https://studio.exemplo.com.br")
+
+    class InstagramFora:
+        def __init__(self, *a):
+            pass
+
+        def publicar(self, urls, legenda):
+            raise RuntimeError("token expirado")
+
+    monkeypatch.setattr(automacao, "Instagram", InstagramFora)
+    pid = _perfil_automatico(cliente)
+    cid = _conteudo(cliente, pid, "post")
+    cliente.post(f"/conteudos/{cid}/data", data={"quando": (db.agora() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")})
+    _aprovar(cliente, cid)
+    with db.sessao() as s:
+        c = s.get(db.Conteudo, cid)
+        c.agendado_para = db.agora() - timedelta(minutes=1)
+        s.add(c)
+        s.commit()
+    monkeypatch.setenv("DRY_RUN", "0")
+    for _ in range(3):
+        automacao.publicar_vencidos()
+    assert _status(cid) == fluxo.ERRO
+    assert "token expirado" in cliente.get(f"/conteudos/{cid}").text
+
+
+def test_publicar_agora_em_modo_de_teste_e_cancelar_agendamento(cliente):
+    from datetime import timedelta
+
+    pid = _perfil_automatico(cliente)
+    cid = _conteudo(cliente, pid, "post")
+    cliente.post(f"/conteudos/{cid}/data", data={"quando": (db.agora() + timedelta(days=2)).strftime("%Y-%m-%dT%H:%M")})
+    _aprovar(cliente, cid)
+    assert _status(cid) == fluxo.AGENDADO
+    cliente.post(f"/conteudos/{cid}/acao/cancelar_agendamento")
+    assert _status(cid) == fluxo.PRODUZIDO
+    cliente.post(f"/conteudos/{cid}/publicar-instagram")
+    assert _status(cid) == fluxo.PUBLICADO
+
+
+def test_instagram_api_carrossel(monkeypatch):
+    from studio import instagram
+
+    chamadas = []
+
+    class Resp:
+        def __init__(self, dados):
+            self.dados, self.status_code, self.text = dados, 200, ""
+
+        def json(self):
+            return self.dados
+
+    def post(url, data, timeout):
+        chamadas.append((url.rsplit("/", 1)[-1], data))
+        return Resp({"id": f"id{len(chamadas)}"})
+
+    monkeypatch.setattr(instagram.requests, "post", post)
+    monkeypatch.setattr(instagram.requests, "get", lambda url, params, timeout: Resp({"status_code": "FINISHED"}))
+    ig = instagram.Instagram("1784", "tok", espera=0)
+    assert ig.publicar(["https://x/0.jpg", "https://x/1.jpg"], "Legenda #a") == "id4"
+    assert [c[0] for c in chamadas] == ["media", "media", "media", "media_publish"]
+    assert chamadas[0][1]["is_carousel_item"] == "true"
+    assert chamadas[2][1]["media_type"] == "CAROUSEL" and chamadas[2][1]["children"] == "id1,id2"
+    assert chamadas[3][1]["creation_id"] == "id3"
+    legenda = instagram.ajustar_legenda(" ".join(f"#t{i}" for i in range(40)))
+    assert legenda.count("#") == 30
+
+
+def test_migracao_acrescenta_colunas(tmp_path):
+    import sqlite3
+
+    config.DADOS.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(config.DADOS / "studio.db")
+    con.execute("create table perfil (id integer primary key, nome varchar not null)")
+    con.execute("insert into perfil(nome) values ('Antigo')")
+    con.commit()
+    con.close()
+    db.reiniciar_engine()
+    with db.sessao() as s:
+        p = s.get(db.Perfil, 1)
+    assert p.nome == "Antigo" and p.auto_dias == "0,2,4" and p.auto_antecedencia == 7 and not p.auto_ativo

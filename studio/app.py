@@ -7,7 +7,7 @@ import hmac
 import json
 import os
 import secrets
-import shutil
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -21,32 +21,33 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from avatar_contabil import config
 
-from . import carrossel, fluxo, ia, pautas, publicacao, travas, video
+from . import automacao, fluxo, ia, pautas, publicacao, travas, video
 from .db import Conteudo, Evento, Pauta, Perfil, Usuario, agora, registrar, select, sessao
+from .servicos import (
+    FORMATOS_TODOS, apos_aprovacao, aplicar_travas, atualizar_previa, avaliar, cfg, criar_conteudo, formatos_ativos,
+    pasta_studio, produzir_imagens, rel,
+)
 
 AQUI = Path(__file__).parent
 templates = Jinja2Templates(directory=AQUI / "templates")
 templates.env.globals.update(ROTULOS=fluxo.ROTULOS, ESTILOS=ia.ESTILOS)
 
-FORMATOS = {"post": "Post (imagem única)", "carrossel": "Carrossel", "video": "Vídeo com avatar"}
+FORMATOS = FORMATOS_TODOS
 templates.env.globals["FORMATOS"] = FORMATOS
-PUBLICAS = ("/login", "/primeiro-acesso", "/c/", "/static/")
+templates.env.globals["DIAS_SEMANA"] = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+PUBLICAS = ("/login", "/primeiro-acesso", "/c/", "/m/", "/static/")
+ACOES = {
+    "enviar_revisao": "enviado para revisão técnica",
+    "aprovar_tecnico": "aprovado tecnicamente",
+    "voltar_rascunho": "devolvido para ajustes",
+    "produzir": "produção iniciada",
+    "publicado": "publicado manualmente",
+    "cancelar_agendamento": "agendamento cancelado",
+}
 
 
 # ---------- utilidades ----------
 
-def cfg() -> dict:
-    return config.carregar()
-
-
-def pasta_studio(*partes: str) -> Path:
-    p = config.DADOS.joinpath("studio", *partes)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def rel(caminho: Path) -> str:
-    return caminho.resolve().relative_to(config.DADOS.resolve()).as_posix()
 
 
 def hash_senha(senha: str, sal: str | None = None) -> str:
@@ -77,7 +78,8 @@ def ir(url: str, msg: str = "", request: Request | None = None) -> RedirectRespo
 
 
 def pagina(request: Request, nome: str, **ctx) -> HTMLResponse:
-    ctx.update(request=request, usuario=request.state.usuario, msg=request.session.pop("msg", ""), dry_run=config.dry_run())
+    ctx.update(request=request, usuario=request.state.usuario, msg=request.session.pop("msg", ""), dry_run=config.dry_run(),
+               FORMATOS_ATIVOS=formatos_ativos())
     return templates.TemplateResponse(request, nome, ctx)
 
 
@@ -94,39 +96,6 @@ def texto_de_slides(slides: list[dict]) -> str:
     return "\n\n".join(f"{s.get('titulo', '')}\n{s.get('texto', '')}" for s in slides)
 
 
-def atualizar_previa(c: Conteudo, perfil: Perfil) -> None:
-    """Redesenha as imagens do post/carrossel para revisão e aprovação."""
-    if c.formato == "video":
-        return
-    dados = c.j("dados")
-    destino = pasta_studio("conteudos", str(c.id), "previa")
-    for antigo in destino.glob("*.png"):
-        antigo.unlink()
-    arquivos = carrossel.desenhar(perfil, dados.get("slides", []), destino, config.DADOS)
-    c.guardar("arquivos", [rel(a) for a in arquivos])
-
-
-def aplicar_travas(c: Conteudo, perfil: Perfil) -> None:
-    c.guardar("alertas", travas.validar(cfg(), perfil, c.formato, c.j("dados")))
-
-
-def avaliar(c: Conteudo, perfil: Perfil) -> None:
-    c.guardar("nota", ia.avaliar(perfil, c.formato, c.j("dados")))
-
-
-def criar_conteudo(s, perfil: Perfil, pauta: Pauta, formato: str, estilo: str, instrucao: str, usuario: str, base: dict | None = None) -> Conteudo:
-    gerado = ia.gerar(perfil, pauta, formato, estilo, instrucao, base=base)
-    c = Conteudo(perfil_id=perfil.id, pauta_id=pauta.id, formato=formato, estilo=estilo)
-    c.guardar("dados", gerado.model_dump())
-    s.add(c)
-    s.flush()
-    aplicar_travas(c, perfil)
-    avaliar(c, perfil)
-    atualizar_previa(c, perfil)
-    registrar(s, c.id, usuario, "criado", f"{FORMATOS[formato]} · {ia.ESTILOS.get(estilo, '')[:40]}" + (" (réplica)" if base else ""))
-    return c
-
-
 def dentro_de_dados(caminho: str) -> Path | None:
     alvo = (config.DADOS / caminho).resolve()
     base = (config.DADOS / "studio").resolve()
@@ -135,8 +104,14 @@ def dentro_de_dados(caminho: str) -> Path | None:
 
 # ---------- aplicativo ----------
 
+@asynccontextmanager
+async def ciclo_de_vida(app: FastAPI):
+    automacao.iniciar_agendador()  # só liga se studio.automacao.ativo for true
+    yield
+
+
 def criar_app() -> FastAPI:
-    app = FastAPI(title="Studio Contábil", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Studio Contábil", docs_url=None, redoc_url=None, lifespan=ciclo_de_vida)
 
     @app.middleware("http")
     async def exigir_login(request: Request, chamar):
@@ -197,8 +172,12 @@ def criar_app() -> FastAPI:
         proximo = (hoje.replace(day=1) + timedelta(days=32)).replace(day=1)
         obrig = [o for o in pautas.obrigacoes_do_mes(hoje.year, hoje.month) + pautas.obrigacoes_do_mes(proximo.year, proximo.month)
                  if hoje <= o.data <= hoje + timedelta(days=30)]
-        pendentes = [c for c in conteudos if c.status in (fluxo.REVISAO, fluxo.AJUSTE, fluxo.ERRO)]
-        return pagina(request, "painel.html", contagem=contagem, obrigacoes=obrig, pendentes=pendentes, perfis=perfis, sem_perfil=not perfis)
+        pendentes = sorted((c for c in conteudos if c.status in (fluxo.REVISAO, fluxo.AJUSTE, fluxo.ERRO, fluxo.RASCUNHO)),
+                           key=lambda c: c.agendado_para or datetime.max)
+        proximas = sorted((c for c in conteudos if c.status == fluxo.AGENDADO), key=lambda c: c.agendado_para)[:10]
+        auto = cfg()["studio"].get("automacao", {})
+        return pagina(request, "painel.html", contagem=contagem, obrigacoes=obrig, pendentes=pendentes, perfis=perfis, sem_perfil=not perfis,
+                      proximas=proximas, perfis_auto=[p.nome for p in perfis.values() if p.auto_ativo], agendador=auto if auto.get("ativo") else None)
 
     # ----- perfis -----
     @app.get("/perfis", response_class=HTMLResponse)
@@ -232,9 +211,23 @@ def criar_app() -> FastAPI:
         with sessao() as s:
             p = s.get(Perfil, pid)
             for campo in ("nome", "site", "instagram", "whatsapp", "crc_responsavel", "cor_primaria", "cor_secundaria",
-                          "cor_destaque", "tom", "publico", "servicos", "nunca_dizer", "heygen_avatar_id", "elevenlabs_voice_id"):
+                          "cor_destaque", "tom", "publico", "servicos", "nunca_dizer", "heygen_avatar_id", "elevenlabs_voice_id",
+                          "auto_horario", "ig_user_id"):
                 if campo in form:
                     setattr(p, campo, str(form[campo]).strip())
+            if str(form.get("ig_token", "")).strip():  # campo vazio mantém o token atual
+                p.ig_token = str(form["ig_token"]).strip()
+            if form.get("ig_desconectar"):
+                p.ig_user_id = p.ig_token = ""
+            if "auto_horario" in form:  # bloco do piloto automático presente no formulário
+                p.auto_ativo = bool(form.get("auto_ativo"))
+                p.auto_dias = ",".join(d for d in form.getlist("auto_dias") if d.isdigit())
+                p.auto_formatos = ",".join(f for f in form.getlist("auto_formatos") if f in ("post", "carrossel")) or "carrossel"
+                try:
+                    p.auto_antecedencia = max(1, min(30, int(form.get("auto_antecedencia") or 7)))
+                    datetime.strptime(p.auto_horario, "%H:%M")
+                except ValueError:
+                    return ir(f"/perfis/{pid}", "Horário (HH:MM) ou antecedência inválidos.", request)
             p.tipo = "escritorio" if form.get("tipo") == "escritorio" else "cliente"
             try:
                 canais = json.loads(str(form.get("postiz_canais") or "{}"))
@@ -338,7 +331,7 @@ def criar_app() -> FastAPI:
     @app.post("/pautas/{paid}/criar")
     def pauta_criar(request: Request, paid: int, perfil_id: int = Form(...), formato: str = Form(...),
                     estilo: str = Form("noticia"), instrucao: str = Form("")):
-        if formato not in FORMATOS:
+        if formato not in formatos_ativos():
             return ir("/pautas", "Formato inválido.", request)
         with sessao() as s:
             perfil, pauta = s.get(Perfil, perfil_id), s.get(Pauta, paid)
@@ -374,7 +367,7 @@ def criar_app() -> FastAPI:
             if not c:
                 return ir("/conteudos", "Conteúdo não encontrado.", request)
             pauta = s.get(Pauta, c.pauta_id) if c.pauta_id else None
-            eventos = s.exec(select(Evento).where(Evento.conteudo_id == cid).order_by(Evento.quando.desc())).all()
+            eventos = s.exec(select(Evento).where(Evento.conteudo_id == cid).order_by(Evento.quando.desc(), Evento.id.desc())).all()
             outros = s.exec(select(Perfil).where(Perfil.id != c.perfil_id)).all()
         dados = c.j("dados")
         link_cliente = whatsapp = ""
@@ -453,6 +446,8 @@ def criar_app() -> FastAPI:
         with sessao() as s:
             c, _ = _carregar(s, cid)
             c.agendado_para = datetime.fromisoformat(quando) if quando else None
+            if c.status == fluxo.AGENDADO and not c.agendado_para:
+                fluxo.desagendar(c)
             s.add(c)
             registrar(s, cid, request.state.usuario.nome, "data planejada", quando)
             s.commit()
@@ -461,6 +456,8 @@ def criar_app() -> FastAPI:
     @app.post("/conteudos/{cid}/acao/{acao}")
     def conteudo_acao(request: Request, cid: int, acao: str, background: BackgroundTasks):
         u = request.state.usuario
+        if acao not in ACOES:
+            return ir(f"/conteudos/{cid}", "Ação desconhecida.", request)
         with sessao() as s:
             c, perfil = _carregar(s, cid)
             try:
@@ -468,19 +465,26 @@ def criar_app() -> FastAPI:
                     fluxo.enviar_revisao(c)
                 elif acao == "aprovar_tecnico":
                     fluxo.aprovar_tecnico(c, perfil, u.nome, u.crc, cfg()["studio"]["link_cliente_dias"])
+                    registrar(s, cid, u.nome, ACOES[acao])
+                    apos_aprovacao(s, c, perfil, u.nome)
                 elif acao == "voltar_rascunho":
                     fluxo.voltar_rascunho(c)
                 elif acao == "produzir":
                     fluxo.iniciar_producao(c, perfil)
-                    background.add_task(produzir, cid, u.nome)
+                    if c.formato == "video":
+                        background.add_task(produzir, cid, u.nome)
+                    else:
+                        registrar(s, cid, u.nome, ACOES[acao])
+                        produzir_imagens(s, c, perfil, u.nome)
+                elif acao == "cancelar_agendamento":
+                    fluxo.desagendar(c)
                 elif acao == "publicado":
                     fluxo.marcar_publicado(c)
-                else:
-                    return ir(f"/conteudos/{cid}", "Ação desconhecida.", request)
             except fluxo.FluxoInvalido as e:
                 return ir(f"/conteudos/{cid}", str(e), request)
             c.atualizado_em = agora()
-            registrar(s, cid, u.nome, acao.replace("_", " "))
+            if acao not in ("aprovar_tecnico",) and not (acao == "produzir" and c.formato != "video"):
+                registrar(s, cid, u.nome, ACOES[acao])
             s.add(c)
             s.commit()
         return ir(f"/conteudos/{cid}", f"Status: {fluxo.ROTULOS[c.status]}.", request)
@@ -520,6 +524,55 @@ def criar_app() -> FastAPI:
                     request.session["msg"] = f"Falha ao replicar: {e}"
             s.commit()
         return ir("/conteudos?status=rascunho", f"{criados} versões criadas para outros perfis.", request)
+
+    @app.post("/conteudos/{cid}/agendar-instagram")
+    def conteudo_agendar_instagram(request: Request, cid: int):
+        with sessao() as s:
+            c, perfil = _carregar(s, cid)
+            if not perfil.instagram_conectado and not config.dry_run():
+                return ir(f"/conteudos/{cid}", "Conecte o Instagram no perfil antes de agendar.", request)
+            if not c.agendado_para or c.agendado_para < datetime.now():
+                return ir(f"/conteudos/{cid}", "Defina uma data planejada futura antes de agendar.", request)
+            try:
+                fluxo.agendar(c)
+            except fluxo.FluxoInvalido as e:
+                return ir(f"/conteudos/{cid}", str(e), request)
+            registrar(s, cid, request.state.usuario.nome, "publicação automática agendada", c.agendado_para.strftime("%d/%m/%Y %H:%M"))
+            s.add(c)
+            s.commit()
+        return ir(f"/conteudos/{cid}", "Agendado: será publicado no Instagram automaticamente.", request)
+
+    @app.post("/conteudos/{cid}/publicar-instagram")
+    def conteudo_publicar_instagram(request: Request, cid: int):
+        with sessao() as s:
+            c, perfil = _carregar(s, cid)
+            try:
+                midia_id = automacao.publicar(s, c, perfil, request.state.usuario.nome)
+            except Exception as e:
+                return ir(f"/conteudos/{cid}", f"Falha ao publicar: {e}", request)
+            s.add(c)
+            s.commit()
+        return ir(f"/conteudos/{cid}", f"Publicado no Instagram ({midia_id}).", request)
+
+    @app.get("/m/{token}/{n}.jpg")
+    def midia_publica(token: str, n: int):
+        """Imagens finais por URL pública: é por aqui que o Instagram baixa as fotos."""
+        with sessao() as s:
+            c = s.exec(select(Conteudo).where(Conteudo.midia_token == token)).first() if len(token) >= 20 else None
+        arquivos = c.j("arquivos") if c and c.status in (fluxo.PRODUZIDO, fluxo.AGENDADO, fluxo.PUBLICADO) else []
+        alvo = dentro_de_dados(arquivos[n]) if 0 <= n < len(arquivos) else None
+        return FileResponse(alvo, media_type="image/jpeg") if alvo else HTMLResponse("Não encontrado", 404)
+
+    @app.post("/automacao/rodar")
+    def automacao_rodar(request: Request):
+        try:
+            criados = automacao.gerar_automatico()
+            publicados = automacao.publicar_vencidos()
+        except Exception as e:
+            return ir("/", f"Falha no piloto automático: {e}", request)
+        total = sum(criados.values())
+        detalhe = ", ".join(f"{k}: {v}" for k, v in criados.items()) or "nenhum perfil com piloto automático ligado"
+        return ir("/", f"Piloto automático: {total} conteúdo(s) criado(s) ({detalhe}); {publicados} publicado(s).", request)
 
     @app.get("/conteudos/{cid}/pacote.zip")
     def conteudo_pacote(request: Request, cid: int):
@@ -562,19 +615,22 @@ def criar_app() -> FastAPI:
     @app.post("/c/{token}/responder")
     def cliente_responder(request: Request, token: str, decisao: str = Form(...), nome: str = Form(...), comentario: str = Form("")):
         with sessao() as s:
-            c, _ = _por_token(s, token)
+            c, perfil = _por_token(s, token)
             if not c:
                 return pagina(request, "cliente.html", c=None)
             try:
                 if decisao == "aprovar":
                     fluxo.cliente_aprova(c)
+                    registrar(s, c.id, f"cliente: {nome.strip()}", "aprovado pelo cliente", comentario[:500])
+                    apos_aprovacao(s, c, perfil, f"cliente: {nome.strip()}")
                 else:
                     fluxo.cliente_pede_ajuste(c, comentario)
             except fluxo.FluxoInvalido as e:
                 request.session["msg"] = str(e)
                 return ir(f"/c/{token}")
             c.atualizado_em = agora()
-            registrar(s, c.id, f"cliente: {nome.strip()}", "aprovado pelo cliente" if decisao == "aprovar" else "ajuste solicitado", comentario[:500])
+            if decisao != "aprovar":
+                registrar(s, c.id, f"cliente: {nome.strip()}", "ajuste solicitado", comentario[:500])
             s.add(c)
             s.commit()
         return pagina(request, "cliente.html", c=None, obrigado=True)
@@ -627,24 +683,19 @@ def criar_app() -> FastAPI:
 
 
 def produzir(cid: int, usuario: str) -> None:
-    """Roda em segundo plano: imagens (post/carrossel) ou voz + avatar + montagem (vídeo)."""
+    """Roda em segundo plano para vídeo (voz + avatar + montagem); imagens são produzidas na hora."""
     with sessao() as s:
         c = s.get(Conteudo, cid)
         perfil = s.get(Perfil, c.perfil_id)
         try:
-            if c.formato == "video":
+            if c.formato != "video":
+                produzir_imagens(s, c, perfil, usuario)
+            else:
                 pasta = pasta_studio("conteudos", str(cid), "video")
                 arquivos = video.produzir(cfg(), perfil, c.j("dados"), pasta)
-            else:
-                destino = pasta_studio("conteudos", str(cid), "final")
-                arquivos = []
-                for a in c.j("arquivos"):
-                    origem = config.DADOS / a
-                    shutil.copy2(origem, destino / origem.name)
-                    arquivos.append(destino / origem.name)
-            c.guardar("arquivos", [rel(a) for a in arquivos])
-            c.status = fluxo.PRODUZIDO
-            registrar(s, cid, usuario, "produzido")
+                c.guardar("arquivos", [rel(a) for a in arquivos])
+                c.status = fluxo.PRODUZIDO
+                registrar(s, cid, usuario, "produzido")
         except Exception as e:
             c.status, c.erro = fluxo.ERRO, str(e)[:2000]
             registrar(s, cid, usuario, "erro na produção", str(e)[:500])

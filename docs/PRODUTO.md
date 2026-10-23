@@ -3,6 +3,9 @@
 > Ferramenta interna do escritório para produzir, revisar e publicar o marketing do próprio escritório
 > e dos clientes PME. Baseada no estudo de 28 ferramentas (relatórios em `docs/pesquisa/`).
 > Combinamos as **ideias** que funcionam nesses produtos com implementação própria. Não copiamos código, marca nem textos.
+>
+> **Decisão de 23/10/2026:** o foco é **material para o Instagram (posts e carrosséis) no piloto automático**, com
+> publicação direta pela API oficial do Instagram. O vídeo com avatar fica desligado por padrão (`studio.formatos`).
 
 ## 1. O que o estudo mostrou
 

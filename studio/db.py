@@ -45,6 +45,15 @@ class Perfil(SQLModel, table=True):
     elevenlabs_voice_id: str = ""
     consentimento_arquivo: str = ""
     consentimento_em: Optional[NaiveDatetime] = None
+    # Piloto automático
+    auto_ativo: bool = False
+    auto_dias: str = "0,2,4"  # dias da semana (0 = segunda ... 6 = domingo)
+    auto_horario: str = "11:30"
+    auto_formatos: str = "carrossel,post"
+    auto_antecedencia: int = 7  # dias de antecedência com que os posts são criados
+    # Instagram (API de publicação de conteúdo)
+    ig_user_id: str = ""
+    ig_token: str = ""
 
     @property
     def avatar_liberado(self) -> bool:
@@ -52,6 +61,16 @@ class Perfil(SQLModel, table=True):
 
     def termos_proibidos(self) -> list[str]:
         return [t.strip() for t in self.nunca_dizer.splitlines() if t.strip()]
+
+    @property
+    def instagram_conectado(self) -> bool:
+        return bool(self.ig_user_id and self.ig_token)
+
+    def dias_auto(self) -> list[int]:
+        return sorted({int(d) for d in self.auto_dias.split(",") if d.strip().isdigit() and 0 <= int(d) <= 6})
+
+    def formatos_auto(self) -> list[str]:
+        return [f for f in (x.strip() for x in self.auto_formatos.split(",")) if f in ("post", "carrossel")] or ["carrossel"]
 
     def canais(self) -> dict[str, str]:
         return {k: v for k, v in json.loads(self.postiz_canais or "{}").items() if v}
@@ -87,6 +106,8 @@ class Conteudo(SQLModel, table=True):
     agendado_para: Optional[NaiveDatetime] = None
     arquivos: str = "[]"
     publicacao: str = "{}"
+    midia_token: str = Field(default="", index=True)  # dá acesso público às imagens finais (o Instagram baixa por URL)
+    automatico: bool = False
     erro: str = ""
     criado_em: NaiveDatetime = Field(default_factory=agora)
     atualizado_em: NaiveDatetime = Field(default_factory=agora)
@@ -117,7 +138,25 @@ def engine():
         caminho.parent.mkdir(parents=True, exist_ok=True)
         _engine = create_engine(f"sqlite:///{caminho}", connect_args={"check_same_thread": False})
         SQLModel.metadata.create_all(_engine)
+        _migrar(_engine)
     return _engine
+
+
+def _migrar(eng) -> None:
+    """Acrescenta colunas novas em bancos criados por versões anteriores."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(eng)
+    with eng.begin() as con:
+        for tabela in SQLModel.metadata.sorted_tables:
+            existentes = {c["name"] for c in insp.get_columns(tabela.name)}
+            for coluna in tabela.columns:
+                if coluna.name in existentes:
+                    continue
+                tipo = coluna.type.compile(dialect=eng.dialect)
+                padrao = coluna.default.arg if coluna.default is not None and not callable(coluna.default.arg) else None
+                sql_padrao = "" if padrao is None else f" DEFAULT {padrao!r}" if isinstance(padrao, str) else f" DEFAULT {int(padrao)}"
+                con.execute(text(f'ALTER TABLE "{tabela.name}" ADD COLUMN "{coluna.name}" {tipo}{sql_padrao}'))
 
 
 def reiniciar_engine() -> None:
