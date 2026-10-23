@@ -1,0 +1,11 @@
+anthropic>=2.1.0
+pydantic>=2.7
+PyYAML>=6.0
+requests>=2.31
+feedparser>=6.0
+python-dotenv>=1.0
+# Publicação no YouTube (opcional)
+google-api-python-client>=2.130
+google-auth-oauthlib>=1.2
+# Testes
+pytest>=8.0

@@ -1,0 +1,72 @@
+# Configuração do pipeline de vídeos com avatar para escritório contábil.
+# Chaves de API ficam no arquivo .env (veja .env.example), nunca aqui.
+
+escritorio:
+  nome: "Seu Escritório Contábil"
+  crc: "CRC-XX 000000/O-0"          # registro exibido no rodapé/legenda
+  whatsapp: "https://wa.me/5500000000000"
+  cor_marca: "#0B3D5C"               # usada no fundo quando não há imagem
+  logo: ""                           # caminho para PNG com transparência (opcional)
+  fundo: ""                          # caminho para imagem de fundo 1080x1920 (opcional)
+  musica: ""                         # caminho para trilha MP3 sem direitos autorais (opcional)
+  volume_musica: 0.08
+
+# Fontes de pauta (RSS). Google News aceita buscas; adicione feeds oficiais que você usa.
+pauta:
+  max_itens_por_fonte: 15
+  dias_retroativos: 3
+  fontes:
+    - nome: "Google News - Reforma Tributária"
+      url: "https://news.google.com/rss/search?q=reforma+tribut%C3%A1ria+IBS+CBS&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    - nome: "Google News - Simples Nacional"
+      url: "https://news.google.com/rss/search?q=%22Simples+Nacional%22+Receita&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    - nome: "Google News - MEI"
+      url: "https://news.google.com/rss/search?q=MEI+Receita+Federal&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    - nome: "Google News - Imposto de Renda"
+      url: "https://news.google.com/rss/search?q=%22imposto+de+renda%22+Receita+Federal&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+
+roteiro:
+  modelo: "claude-opus-5-5"
+  roteiros_por_execucao: 3
+  nota_minima: 7                     # 0 a 10; abaixo disso a pauta é descartada
+  duracao_segundos: 45
+  publico: "donos de pequenas e médias empresas, MEIs e profissionais liberais"
+
+voz:
+  elevenlabs_voice_id: ""            # ID da voz clonada do sócio
+  modelo: "eleven_multilingual_v2"
+
+avatar:
+  heygen_avatar_id: ""               # ID do avatar (clone do sócio)
+  largura: 720
+  altura: 1280
+  cor_chroma: "#00FF00"
+
+publicacao:
+  limite_diario: 2                   # trava: máximo de vídeos publicados por dia
+  youtube:
+    ativo: false
+    privacidade: "private"           # private | unlisted | public
+    categoria_id: "27"               # Educação
+    client_secrets: "config/youtube_client_secret.json"
+    token: "data/youtube_token.json"
+  instagram:
+    ativo: false
+    graph_versao: "v21.0"
+    # O Instagram só aceita vídeo por URL pública. Envie data/videos/* para um
+    # bucket (S3, R2, GCS) e informe aqui a URL base correspondente.
+    url_publica_base: ""
+
+travas:
+  aviso_ia: "Conteúdo produzido com avatar e voz gerados por IA a partir do contador responsável."
+  aviso_tecnico: "Conteúdo informativo. Cada caso exige análise de um contador."
+  # Termos que bloqueiam o roteiro (publicidade sóbria - NBC PG 01)
+  termos_proibidos:
+    - "garantido"
+    - "garantimos"
+    - "sem pagar imposto"
+    - "pague zero"
+    - "sonegar"
+    - "o melhor contador"
+    - "o mais barato"
+    - "resultado certo"
