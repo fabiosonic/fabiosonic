@@ -265,7 +265,7 @@ def relatorio(res, periodo, cart, n_ativos, gerado, cenarios=None, refs=None):
                 m["operacoes"], fm(m, "acerto", pct=True), fm(m, "R_medio", 3), fm(m, "cagr", pct=True),
                 fm(m, "max_drawdown", pct=True), m["anos_positivos"], m["anos"]))
         for nome, r in (refs or {}).items():
-            L.append("| %s | - | - | - | %s | %s | - |" % ("CDI" if nome == "cdi" else "Ibovespa (pontos, sem proventos)",
+            L.append("| %s | - | - | - | %s | %s | - |" % ("CDI" if nome == "cdi" else "Ibovespa (retorno total, com proventos)",
                                                          fm(r, "cagr", pct=True), fm(r, "max_drawdown", pct=True)))
     L += ["", "## Excesso de ajuste", "",
           "Escolhendo a melhor combinação olhando o período inteiro (retrospecto) o resultado parece melhor do que o "

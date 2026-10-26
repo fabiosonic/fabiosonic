@@ -60,7 +60,7 @@ Até 5 posições, um ativo por vez, sem alavancagem, risco fixo por operação 
 | skill antes do treino (padrão, 10 setups, 1% de risco) | 2238 | 42,4% | -0,039 | -0,9% | 47,6% | 5 de 18 |
 | treinada, risco 0.5%, máx. 5 posições | 1314 | 50,5% | 0,133 | 11,1% | 8,5% | 17 de 18 |
 | treinada, risco 1%, máx. 5 posições | 1314 | 50,5% | 0,133 | 11,2% | 15,4% | 15 de 18 |
-| Ibovespa (pontos, sem proventos) | - | - | - | 9,0% | 48,6% | - |
+| Ibovespa (retorno total, com proventos) | - | - | - | 9,0% | 48,6% | - |
 | CDI | - | - | - | 9,9% | 0,0% | - |
 
 ## Excesso de ajuste
@@ -244,3 +244,27 @@ Medido por dia (os ativos rompem juntos nos dias de alta geral), nenhuma
 variante teve significância positiva: o ganho aparente vem de poucos dias. Os
 parâmetros do day trade NÃO foram alterados; trate o ORB como experimental e
 reavalie quando houver mais histórico de 5 minutos acumulado.
+
+## R$ 10 mil de 03/01/2000 a 23/10/2026, depois de impostos
+
+Carteira simulada com até 5 posições, sinais em ordem de menor volatilidade,
+caixa livre no CDI, IR de swing mês a mês (15%, isenção até R$ 20 mil de vendas
+no mês, prejuízo compensado) e 15% sobre o rendimento do caixa. Versão honesta:
+em cada janela de 2 anos os parâmetros vêm só do passado (treino de 4 a 8
+anos); até 2004 não há histórico para treinar e o dinheiro fica no CDI. IPCA
+acumulado no período: 4,84 vezes.
+
+| Aplicação | Valor final | Ao ano | Ao ano acima do IPCA | Maior queda |
+|---|---:|---:|---:|---:|
+| Skill, risco 0,5%, corretagem zero | R$ 179.686 | 11,4% | 5,0% | 14,1% |
+| Skill, risco 0,5%, corretagem de R$ 5 por ordem | R$ 96.313 | 8,8% | 2,6% | 23,1% |
+| Skill, risco 1%, corretagem zero | R$ 148.386 | 10,6% | 4,3% | 39,8% |
+| CDB 100% do CDI, IR de 15% no resgate | R$ 186.035 | 11,5% | 5,1% | 0% |
+| Tesouro Selic, custódia da B3 e IR de 15% | R$ 174.440 | 11,3% | 4,9% | 0% |
+| Ibovespa (retorno total), IR de 15% na venda | R$ 104.465 | 9,1% | 2,9% | 60,0% |
+
+Com os parâmetros de hoje aplicados desde 2000 (olhando o futuro, só para
+comparação), a skill chegaria a R$ 190.557: a diferença para a versão honesta é
+o tamanho do excesso de ajuste. Boa parte do ganho da skill vem do CDI sobre o
+caixa que fica parado; as operações em si acrescentaram pouco, e com
+corretagem de R$ 5 por ordem a carteira pequena perde para a renda fixa.

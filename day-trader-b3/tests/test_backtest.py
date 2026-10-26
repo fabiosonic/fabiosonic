@@ -173,3 +173,29 @@ class ParametrosNaSkill(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CarteiraComCustosEIR(unittest.TestCase):
+    def op(self, ent, sai, R, risco=0.05):
+        return {"entrada": D0 + ent, "saida": D0 + sai, "symbol": "A", "R": R, "reg": 1, "setup_lado": 1,
+                "mom": 0.0, "atr_pct": 0.02, "risco_pct": risco, "dias": sai - ent + 1}
+
+    def test_corretagem_por_ordem(self):
+        m = carteira.simular([self.op(0, 2, 0.0)], max_pos=5, risco=0.01, capital=10000, corretagem=5.0)
+        self.assertAlmostEqual(m["final"], 10000 - 10.0)
+
+    def test_isencao_ate_20_mil_no_mes(self):
+        # vendas de R$ 2 mil no mês com lucro: isento
+        m = carteira.simular([self.op(0, 2, 2.0)], max_pos=5, risco=0.01, capital=10000, ir=True, fim=D0 + 90)
+        self.assertEqual(m["custos"]["ir_swing"], 0.0)
+
+    def test_ir_15_quando_vendas_passam_de_20_mil(self):
+        # patrimônio de R$ 1 milhão: venda de R$ 200 mil no mês, lucro de R$ 20 mil -> IR de R$ 3 mil
+        m = carteira.simular([self.op(0, 2, 2.0)], max_pos=5, risco=0.01, capital=1e6, ir=True, fim=D0 + 90)
+        self.assertAlmostEqual(m["custos"]["ir_swing"], 3000.0)
+
+    def test_cdi_antes_da_primeira_operacao(self):
+        cdi = {(2020, m): 1.0 for m in range(1, 13)}
+        m = carteira.simular([], capital=10000, cdi=cdi, inicio=D0, fim=D0 + 365, ir=True)
+        self.assertGreater(m["final"], 10000 * 1.09)     # ~12,7% bruto, 15% de IR
+        self.assertLess(m["final"], 10000 * 1.115)

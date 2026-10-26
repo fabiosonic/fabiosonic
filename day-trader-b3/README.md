@@ -58,7 +58,7 @@ descoberto apurada no mês da recompra).
 | treinada, risco 0,5% por operação | 50,5% | 11,1% | 8,5% | 17 de 18 |
 | treinada, risco 1% por operação | 50,5% | 11,2% | 15,4% | 15 de 18 |
 | CDI | – | 9,9% | 0% | – |
-| Ibovespa (pontos) | – | 9,0% | 48,6% | – |
+| Ibovespa (retorno total) | – | 9,0% | 48,6% | – |
 
 Ficaram ativos só setups de compra a favor da tendência; nenhum de venda teve
 vantagem. Resultado passado, com viés de sobrevivência; não é promessa.
