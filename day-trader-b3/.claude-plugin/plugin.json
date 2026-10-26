@@ -1,0 +1,26 @@
+{
+  "name": "day-trader-b3",
+  "description": "14 skills para day trade e swing trade (comprado ou vendido) na bolsa brasileira (B3): scanner, notícias da CVM, entrada, saída, máquina do tempo, swing com simulação diária, backtest e treino walk-forward desde 2000, risco, orçamento com lote, fracionário, aluguel e garantia, boleta com sim explícito, alertas, resultados (ITR/DFP), negociações de administradores e apuração de IR.",
+  "version": "1.2.0",
+  "author": {
+    "name": "Fabio"
+  },
+  "homepage": "https://github.com/fabiosonic/fabiosonic/tree/main/day-trader-b3",
+  "repository": "https://github.com/fabiosonic/fabiosonic",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "claude-skills",
+    "b3",
+    "bovespa",
+    "day-trade",
+    "cvm",
+    "imposto-de-renda",
+    "darf",
+    "swing-trade",
+    "venda-a-descoberto",
+    "backtest",
+    "walk-forward"
+  ],
+  "skills": "./"
+}
