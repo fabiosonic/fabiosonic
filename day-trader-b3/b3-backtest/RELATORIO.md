@@ -268,3 +268,24 @@ comparação), a skill chegaria a R$ 190.557: a diferença para a versão honest
 o tamanho do excesso de ajuste. Boa parte do ganho da skill vem do CDI sobre o
 caixa que fica parado; as operações em si acrescentaram pouco, e com
 corretagem de R$ 5 por ordem a carteira pequena perde para a renda fixa.
+
+## R$ 10 mil de 04/01/2016 a 23/10/2026, depois de impostos
+
+Mesmas regras da seção anterior. Versão honesta: as janelas de 2016 em diante
+usam parâmetros treinados só em anos anteriores (a primeira, em 2007–2014).
+IPCA acumulado no período: 1,71 vez.
+
+| Aplicação | Valor final | Ao ano | Ao ano acima do IPCA | Maior queda |
+|---|---:|---:|---:|---:|
+| Skill, risco 0,5%, corretagem zero | R$ 36.059 | 12,6% | 7,1% | 7,0% |
+| Skill, risco 0,5%, corretagem de R$ 5 por ordem | R$ 18.210 | 5,7% | 0,6% | 13,6% |
+| Skill, risco 1%, corretagem zero | R$ 42.709 | 14,4% | 8,8% | 17,0% |
+| Skill, risco 1%, corretagem de R$ 5 por ordem | R$ 25.978 | 9,2% | 3,9% | 22,7% |
+| CDB 100% do CDI, IR de 15% no resgate | R$ 24.556 | 8,7% | 3,4% | 0% |
+| Tesouro Selic, custódia da B3 e IR de 15% | R$ 23.961 | 8,4% | 3,2% | 0% |
+| Ibovespa (retorno total), IR de 15% na venda | R$ 42.866 | 14,4% | 8,9% | 46,8% |
+
+Foram 882 operações com 51,1% de acerto. Os parâmetros de hoje foram treinados
+justamente em 2016–2026, mas aplicados a esse período renderam menos
+(R$ 29.230 com risco de 0,5%) do que a versão honesta: com o filtro de
+validação, eles cortam setups que funcionaram em parte do período.
