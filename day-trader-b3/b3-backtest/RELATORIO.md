@@ -228,3 +228,19 @@ Escolhendo a melhor combinação olhando o período inteiro (retrospecto) o resu
 - R por operação, sem limite de posições simultâneas nem de caixa.
 - Dados gratuitos do Yahoo; o gatilho e o stop usam 0,05% além da máxima/mínima.
 - Resultado passado não garante resultado futuro. Não é recomendação de investimento.
+
+## Day trade (ORB) — avaliação curta, sem mudança de parâmetros
+
+O Yahoo só guarda 60 dias de candles de 5 minutos, então o ORB não pode ser
+treinado como o swing. Avaliação em 148 ativos do IBRA, 56 pregões
+(30/07/2026 a 23/10/2026), custos de 0,03% por perna, saída até 16h45:
+
+| variante | metade 1: R médio | metade 2 (teste): n | acerto | R médio | t por dia |
+|---|---:|---:|---:|---:|---:|
+| padrão (faixa 15 min, stop no meio, 2R) | +0,016 | 1.949 | 40,0% | −0,039 | −1,36 |
+| melhor da metade 1 (faixa 30 min, stop no meio, 3R) | +0,132 | 1.716 | 44,2% | +0,070 | −0,33 |
+
+Medido por dia (os ativos rompem juntos nos dias de alta geral), nenhuma
+variante teve significância positiva: o ganho aparente vem de poucos dias. Os
+parâmetros do day trade NÃO foram alterados; trate o ORB como experimental e
+reavalie quando houver mais histórico de 5 minutos acumulado.

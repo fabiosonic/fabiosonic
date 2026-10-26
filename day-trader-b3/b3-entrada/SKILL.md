@@ -32,5 +32,9 @@ candle. Janela de novas entradas (config): de `sem_entradas_antes` (10h15) até
 `sem_entradas_ultimos_min` (40) minutos antes do fim da negociação — 16h15 ou
 17h15 conforme o horário da B3.
 
+Avaliação de 56 pregões no IBRA (b3-backtest/RELATORIO.md): o ORB não
+mostrou vantagem confiável depois de custos. Diga isso ao usuário e trate o
+day trade como experimental.
+
 Dados do Yahoo podem atrasar: confirme o preço no home broker antes de agir.
 Próximo passo: `/b3-saida` para definir stop e alvo antes de entrar.

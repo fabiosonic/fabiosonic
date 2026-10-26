@@ -63,6 +63,11 @@ descoberto apurada no mês da recompra).
 Ficaram ativos só setups de compra a favor da tendência; nenhum de venda teve
 vantagem. Resultado passado, com viés de sobrevivência; não é promessa.
 
+O day trade (ORB) só tem 60 dias de candles de 5 minutos no Yahoo: na
+avaliação de 56 pregões no IBRA nenhuma variante teve vantagem confiável
+(detalhes no relatório). Os parâmetros do day trade não mudaram; trate-o como
+experimental.
+
 ### Vendido (venda a descoberto)
 
 Desligado por padrão: ligue `"permitir_vendido": true` no config. O pacote
