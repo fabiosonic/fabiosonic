@@ -3,7 +3,8 @@ name: b3-boleta
 description: >-
   Boleta e diário de decisões para a B3: mostra cada ordem aprovada pelo
   b3-risco como boleta em português com o passo a passo para digitar no home
-  broker (ordem + OCO de stop e alvo), registra o SIM explícito do usuário
+  broker (ordem a mercado, limitada ou stop + OCO de stop e alvo; venda a
+  descoberto com aviso de aluguel/BTC), registra o SIM explícito do usuário
   para uma boleta por vez, o envio, as execuções (carteira e
   execucoes.csv para o IR) e monta a ordem de zerar. Nunca envia ordem
   sozinha. Use quando o usuário disser "manda a ordem", "mostra a boleta",
@@ -22,7 +23,8 @@ python3 "${CLAUDE_SKILL_DIR}/ticket.py" show
 python3 "${CLAUDE_SKILL_DIR}/ticket.py" approve --index 1 --reply "<resposta do usuário, palavra por palavra>"
 python3 "${CLAUDE_SKILL_DIR}/ticket.py" result --index 1 --status enviada --id 123456
 python3 "${CLAUDE_SKILL_DIR}/ticket.py" fill --codigo PETR4 --lado compra --qtd 200 --preco 58.57 --custos 3.51
-python3 "${CLAUDE_SKILL_DIR}/ticket.py" zerar --symbol PETR4 --write   # depois /b3-risco e show/approve
+python3 "${CLAUDE_SKILL_DIR}/ticket.py" fill --codigo B3SA3 --lado venda --qtd 100 --preco 22.62 --custos 0.68  # abre vendido
+python3 "${CLAUDE_SKILL_DIR}/ticket.py" zerar --symbol PETR4 --write   # venda (comprado) ou compra (vendido)
 python3 "${CLAUDE_SKILL_DIR}/ticket.py" log
 ```
 

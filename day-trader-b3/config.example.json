@@ -22,6 +22,17 @@
   "permitir_opcoes": false,
   "permitir_vendido": false,
   "permitir_alavancagem": false,
-  "tipos": {"BOVA11": "ETF", "HGLG11": "FII", "TAEE11": "ACAO"},
-  "sessoes": {}
+  "tipos": {
+    "BOVA11": "ETF",
+    "HGLG11": "FII",
+    "TAEE11": "ACAO"
+  },
+  "sessoes": {},
+  "swing_prazo_pregoes": 15,
+  "swing_max_posicoes": 5,
+  "aluguel_taxa_aa_pct": 2.0,
+  "garantia_vendido_pct": 100,
+  "max_exposicao_vendida_pct": 50,
+  "vendido_somente_lote": true,
+  "folga_stop_pct": 0.5
 }

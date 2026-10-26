@@ -16,7 +16,8 @@ momento que importa, o seu sim:
             enviada (com o número da ordem), recusada ou falhou.
   fill      registra uma execução: atualiza trader-b3/carteira.json e
             acrescenta a linha em trader-b3/execucoes.csv (base do b3-fiscal).
-  zerar     monta a(s) ordem(ns) de venda que zeram a posição de um ativo.
+  zerar     monta a(s) ordem(ns) que zeram a posição de um ativo: venda para
+            comprado, compra para vendido.
             Ainda passa por b3-risco e pelo seu sim.
   log       decisões de hoje.
 
@@ -24,6 +25,7 @@ momento que importa, o seu sim:
     python3 ticket.py approve --index 1 --reply "sim"
     python3 ticket.py result --index 1 --status enviada --id 123456
     python3 ticket.py fill --codigo PETR4 --lado compra --qtd 200 --preco 58.57 --custos 3.51
+    python3 ticket.py fill --codigo B3SA3 --lado venda --qtd 100 --preco 22.69 --custos 0.68   # abre vendido
     python3 ticket.py zerar --symbol PETR4 --write
     python3 ticket.py log
 
@@ -92,21 +94,48 @@ def status(ordem, res, est, dia):
     return "PRONTA", v
 
 
+VALIDADE = {"dia": "válida para hoje", "vac": "válida até cancelar"}
+
+
 def texto(o):
-    partes = ["%s %d %s" % ("COMPRA" if o["lado"] == "compra" else "VENDA", o["qtd"], o["codigo"])]
-    partes.append("a mercado" if o["tipo"] == "mercado" else "limitada a %s" % b3lib.reais(o["preco_limite"]))
-    partes.append("válida para hoje")
+    if o["lado"] == "compra":
+        acao = "COMPRA para zerar vendido" if o.get("zerando_vendido") else "COMPRA"
+    else:
+        acao = "VENDA A DESCOBERTO" if o.get("vendido") else "VENDA"
+    partes = ["%s %d %s" % (acao, o["qtd"], o["codigo"])]
+    if o["tipo"] == "mercado":
+        partes.append("a mercado")
+    elif o["tipo"] == "stop":
+        partes.append("ordem stop: gatilho %s, limite %s" % (b3lib.reais(o["preco_gatilho"]), b3lib.reais(o["preco_limite"])))
+    else:
+        partes.append("limitada a %s" % b3lib.reais(o["preco_limite"]))
+    v = o.get("validade", "dia")
+    partes.append(VALIDADE.get(v, "válida até %s" % v))
     return ", ".join(partes)
 
 
 def passo_a_passo(o, cfg):
     linhas = ["  Como digitar na corretora (%s):" % ("conta SIMULADA" if cfg["simulacao"] else "conta REAL")]
-    linhas.append("    1. %s no %s." % (texto(o), "mercado fracionário" if o["mercado"] == "fracionario" else "lote padrão"))
-    if o["lado"] == "compra" and o.get("stop"):
-        linhas.append("    2. Assim que executar, ordem OCO de venda de %d %s: stop com gatilho %s e ganho (alvo) %s."
-                      % (o["qtd"], o["codigo"], b3lib.reais(o["stop"]), b3lib.reais(o["alvo"])))
-        if o.get("zerar_ate"):
-            linhas.append("    3. Se nenhum dos dois executar, zere até %s (/b3-boleta zerar)." % o["zerar_ate"])
+    n = 1
+    if o.get("vendido"):
+        linhas.append("    %d. Confirme que a corretora tem aluguel (BTC) de %s disponível e a taxa; muitas fazem o "
+                      "aluguel automático na venda a descoberto. Proventos no período são reembolsados ao doador." % (n, o["symbol"]))
+        n += 1
+    linhas.append("    %d. %s no %s." % (n, texto(o), "mercado fracionário" if o["mercado"] == "fracionario" else "lote padrão"))
+    n += 1
+    if o.get("stop") and o.get("alvo"):
+        saida = "venda" if o["lado"] == "compra" else "compra"
+        linhas.append("    %d. Assim que executar, ordem OCO de %s de %d %s: stop com gatilho %s e ganho (alvo) %s%s."
+                      % (n, saida, o["qtd"], o["codigo"], b3lib.reais(o["stop"]), b3lib.reais(o["alvo"]),
+                         ", válida até cancelar" if o.get("estrategia") == "swing" else ""))
+        n += 1
+        if o.get("estrategia") == "swing":
+            linhas.append("    %d. Se nada executar até %s (prazo do plano), zere (/b3-boleta zerar). Acompanhe com "
+                          "/b3-swing acompanhar; no swing o gap de abertura pode passar do stop." % (n, o.get("prazo_ate")))
+        elif o.get("zerar_ate"):
+            linhas.append("    %d. Se nenhum dos dois executar, zere até %s (/b3-boleta zerar)." % (n, o["zerar_ate"]))
+        if o["tipo"] == "stop":
+            linhas.append("    Obs.: a ordem stop de entrada vale só hoje; se não disparar, rode o plano de novo amanhã.")
     return linhas
 
 
@@ -217,22 +246,27 @@ def cmd_result(a):
 
 
 def aplicar_execucao(codigo, lado, qtd, preco, custos):
+    """Atualiza a carteira. Quantidade com sinal (negativa = vendido); "custo" é o
+    valor da posição ao preço médio, com o mesmo sinal da quantidade."""
     sym = b3lib.sem_fracionario(codigo)
     cart = b3lib.ler_json(b3lib.caminho("carteira.json"), {"caixa": None, "posicoes": {}}) or {}
     pos = cart.setdefault("posicoes", {}).setdefault(sym, {"qtd": 0, "custo": 0.0})
-    if lado == "compra":
-        pos["qtd"] += qtd
-        pos["custo"] = round(pos["custo"] + qtd * preco + custos, 2)
-        if cart.get("caixa") is not None:
-            cart["caixa"] = round(cart["caixa"] - qtd * preco - custos, 2)
-    else:
-        if pos["qtd"]:
-            medio = pos["custo"] / pos["qtd"]
-            baixa = min(qtd, pos["qtd"])
-            pos["custo"] = round(pos["custo"] - medio * baixa, 2)
-        pos["qtd"] -= qtd
-        if cart.get("caixa") is not None:
-            cart["caixa"] = round(cart["caixa"] + qtd * preco - custos, 2)
+    q, c = int(pos["qtd"]), float(pos["custo"])
+    sl = 1 if lado == "compra" else -1
+    # parte que reduz a posição existente (lado oposto) baixa pelo preço médio
+    reduz = min(qtd, abs(q)) if q * sl < 0 else 0
+    if reduz:
+        medio = c / q
+        q += sl * reduz
+        c = medio * q
+    abre = qtd - reduz
+    if abre:
+        # compra soma custos ao preço; venda a descoberto desconta custos do valor recebido
+        c += sl * (abre * preco + sl * custos * abre / qtd)
+        q += sl * abre
+    pos["qtd"], pos["custo"] = q, round(c, 2)
+    if cart.get("caixa") is not None:
+        cart["caixa"] = round(cart["caixa"] - sl * qtd * preco - custos, 2)
     if pos["qtd"] == 0:
         del cart["posicoes"][sym]
     b3lib.gravar_json(b3lib.caminho("carteira.json"), cart)
@@ -259,7 +293,8 @@ def cmd_fill(a):
                "codigo": codigo, "lado": a.lado, "qtd": a.qtd, "preco": a.preco, "custos": a.custos})
     pos = cart["posicoes"].get(b3lib.sem_fracionario(codigo))
     print("Execução registrada: %s %d %s a %s. Posição agora: %s." % (
-        a.lado, a.qtd, codigo, b3lib.reais(a.preco), "%d ações" % pos["qtd"] if pos else "zerada"))
+        a.lado, a.qtd, codigo, b3lib.reais(a.preco),
+        ("%d ações compradas" % pos["qtd"] if pos["qtd"] > 0 else "%d ações vendidas" % -pos["qtd"]) if pos else "zerada"))
     return 0
 
 
@@ -267,13 +302,14 @@ def cmd_zerar(a):
     cfg = b3lib.ler_config(a.config)
     sym = b3lib.sem_fracionario(a.symbol or "")
     cart = b3lib.ler_json(b3lib.caminho("carteira.json"), {}) or {}
-    qtd = int(((cart.get("posicoes") or {}).get(sym) or {}).get("qtd") or 0)
-    if qtd <= 0:
-        raise b3lib.B3Erro("não há posição comprada em %s na carteira" % sym)
+    tem = int(((cart.get("posicoes") or {}).get(sym) or {}).get("qtd") or 0)
+    if tem == 0:
+        raise b3lib.B3Erro("não há posição em %s na carteira" % sym)
+    qtd = abs(tem)
     lote = int(cfg["lote_padrao"])
     cheio, resto = qtd // lote * lote, qtd % lote
-    base = {"symbol": sym, "lado": "venda", "tipo": "mercado", "validade": "dia", "preco_limite": None,
-            "stop": None, "alvo": None}
+    base = {"symbol": sym, "lado": "venda" if tem > 0 else "compra", "tipo": "mercado", "validade": "dia",
+            "preco_limite": None, "preco_gatilho": None, "stop": None, "alvo": None, "zerando_vendido": tem < 0}
     ords = []
     if cheio:
         ords.append(dict(base, codigo=sym, mercado="lote", qtd=cheio))

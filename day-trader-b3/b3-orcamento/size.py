@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Dimensionamento de posição para b3-orcamento. Só biblioteca padrão, sem rede.
+Serve para day trade (b3-saida) e swing trade comprado ou vendido (b3-swing).
 
 Lê o plano (trader-b3/plano.json, de b3-saida) e o config, calcula quantas
 ações comprar e grava a(s) ordem(ns) em trader-b3/ordens.json. Nunca envia
@@ -26,9 +27,15 @@ Lote padrão: 100 ações. A parte que não fecha lote vai para o fracionário
 descartada. Zero ações (stop longe demais para a sua perda máxima) é uma
 recusa simples.
 
-Preço usado: o limite de uma ordem limitada; numa ordem a mercado, o MAIOR
-entre a entrada do plano e o preço de trader-b3/precos.json com menos de 15
-minutos, porque um preço que subiu aumenta a perda até o mesmo stop.
+Preço usado: o limite de uma ordem limitada; num plano de swing com gatilho,
+o limite da ordem stop (gatilho + folga_stop_pct, padrão 0,5%); numa ordem a
+mercado, o PIOR entre a entrada do plano e o preço de trader-b3/precos.json com
+menos de 15 minutos (o maior na compra, o menor na venda).
+
+Vendido (swing): só lote padrão se "vendido_somente_lote" (padrão true); a
+perda no stop soma o aluguel estimado (aluguel_taxa_aa_pct x prazo do plano);
+tetos extras de garantia (garantia_vendido_pct do valor vendido, padrão 100%)
+e de exposição vendida (max_exposicao_vendida_pct do orçamento).
 """
 
 import argparse
@@ -58,74 +65,108 @@ def custos(qtd, preco_compra, preco_venda, n_ordens, cfg):
     return qtd * (preco_compra + preco_venda) * pct + 2 * n_ordens * float(cfg["corretagem_por_ordem"])
 
 
-def dividir_lote(qtd, cfg):
+def dividir_lote(qtd, cfg, vendido=False):
     lote = int(cfg["lote_padrao"])
     cheio = qtd // lote * lote
     resto = qtd - cheio
-    if resto and not cfg["permitir_fracionario"]:
+    if resto and (not cfg["permitir_fracionario"] or (vendido and cfg["vendido_somente_lote"])):
         resto = 0
     return cheio, resto
+
+
+def aluguel(qtd, preco, prazo, cfg):
+    """Custo estimado do aluguel (BTC) de quem está vendido, pelo prazo do plano em pregões."""
+    return qtd * preco * float(cfg["aluguel_taxa_aa_pct"]) / 100.0 * prazo / 252.0
 
 
 def dimensionar(plano, cfg, orcamento=None, limite=None, preco=None, caixa=None):
     orc = orcamento if orcamento is not None else cfg.get("orcamento")
     if not orc or orc <= 0:
         raise b3lib.B3Erro("defina \"orcamento\" em trader-b3/config.json ou use --orcamento")
+    lado = plano.get("lado", "compra")
+    sl = b3lib.sinal_lado(lado)
+    vendido = sl < 0
     entrada_plano, stop, alvo = float(plano["entrada"]), float(plano["stop"]), float(plano["alvo"])
+    gatilho = None
     if limite is not None:
         ref, ref_nome = float(limite), "o preço limite"
-    elif preco is not None and preco > entrada_plano:
-        ref, ref_nome = float(preco), "o último preço (acima da entrada do plano)"
+    elif plano.get("tipo_entrada") == "stop":
+        gatilho = entrada_plano
+        ref = b3lib.centavos(entrada_plano * (1 + sl * float(cfg["folga_stop_pct"]) / 100.0))
+        ref_nome = "o limite da ordem stop (gatilho %s %s folga de %s%%)" % (b3lib.reais(gatilho), "+" if sl > 0 else "-", b3lib.num(cfg["folga_stop_pct"]))
+    elif preco is not None and sl * (preco - entrada_plano) > 0:
+        ref, ref_nome = float(preco), "o último preço (%s da entrada do plano)" % ("acima" if sl > 0 else "abaixo")
     else:
         ref, ref_nome = entrada_plano, "a entrada do plano"
-    risco = ref - stop
+    risco = sl * (ref - stop)
     if risco <= 0:
-        raise b3lib.B3Erro("o preço %s já está no stop %s ou abaixo: refaça o plano" % (b3lib.reais(ref), b3lib.reais(stop)))
-    rr = (alvo - ref) / risco
+        raise b3lib.B3Erro("o preço %s já passou do stop %s: refaça o plano" % (b3lib.reais(ref), b3lib.reais(stop)))
+    rr = sl * (alvo - ref) / risco
     if rr < float(cfg["min_risco_retorno"]):
         raise b3lib.B3Erro("a %s o risco/retorno é %s, abaixo do mínimo %s: o preço já andou para o alvo"
                            % (b3lib.reais(ref), b3lib.num(rr), b3lib.num(cfg["min_risco_retorno"])))
+    prazo = int(plano.get("prazo_pregoes") or 1)
     reserva = orc * float(cfg["reserva_caixa_pct"]) / 100.0
     tetos = {
         "perda máxima": float(cfg["max_perda_por_operacao"]) / risco,
         "posição máxima": orc * float(cfg["max_posicao_pct"]) / 100.0 / ref,
         "ordem máxima": float(cfg["max_ordem"]) / ref,
-        "caixa": (orc - reserva) / ref,
     }
-    if caixa is not None:
-        tetos["caixa da carteira"] = max(0.0, float(caixa)) / ref
+    if vendido:
+        g = float(cfg["garantia_vendido_pct"]) / 100.0
+        tetos["garantia"] = (orc - reserva) / (ref * g) if g > 0 else float("inf")
+        tetos["exposição vendida"] = orc * float(cfg["max_exposicao_vendida_pct"]) / 100.0 / ref
+        if caixa is not None and g > 0:
+            tetos["caixa da carteira"] = max(0.0, float(caixa) - reserva) / (ref * g)
+    else:
+        tetos["caixa"] = (orc - reserva) / ref
+        if caixa is not None:
+            tetos["caixa da carteira"] = max(0.0, float(caixa)) / ref
     limitante = min(tetos, key=tetos.get)
     qtd = int(math.floor(tetos[limitante] + 1e-9))
-    # a perda no stop inclui os custos de ida e volta
+
+    def perda_de(q, n_ord):
+        return q * risco + custos(q, ref, stop, n_ord, cfg) + (aluguel(q, ref, prazo, cfg) if vendido else 0.0)
+
+    # a perda no stop inclui os custos de ida e volta (e o aluguel, no vendido)
     while qtd > 0:
-        cheio, resto = dividir_lote(qtd, cfg)
+        cheio, resto = dividir_lote(qtd, cfg, vendido)
         q = cheio + resto
         n_ord = (1 if cheio else 0) + (1 if resto else 0)
-        perda = q * risco + custos(q, ref, stop, n_ord, cfg)
-        if q and perda <= float(cfg["max_perda_por_operacao"]) + 1e-9:
+        if q and perda_de(q, n_ord) <= float(cfg["max_perda_por_operacao"]) + 1e-9:
             break
         qtd = q - 1 if q == qtd else q
-    cheio, resto = dividir_lote(max(qtd, 0), cfg)
+    cheio, resto = dividir_lote(max(qtd, 0), cfg, vendido)
     total = cheio + resto
     if total <= 0:
-        raise b3lib.B3Erro("zero ações: com risco de %s por ação, a perda máxima de %s não paga nem uma ação%s"
+        raise b3lib.B3Erro("zero ações: com risco de %s por ação, a perda máxima de %s não paga %s"
                            % (b3lib.reais(risco), b3lib.reais(cfg["max_perda_por_operacao"]),
-                              "" if cfg["permitir_fracionario"] else " (fracionário desligado: mínimo de %d)" % cfg["lote_padrao"]))
+                              "um lote de %d (vendido só no lote padrão)" % cfg["lote_padrao"] if vendido and cfg["vendido_somente_lote"]
+                              else "nem uma ação" if cfg["permitir_fracionario"] else "um lote de %d" % cfg["lote_padrao"]))
     n_ord = (1 if cheio else 0) + (1 if resto else 0)
     c = custos(total, ref, stop, n_ord, cfg)
-    return {"symbol": plano["symbol"], "preco_ref": round(ref, 2), "preco_ref_nome": ref_nome, "stop": stop,
+    alug = aluguel(total, ref, prazo, cfg) if vendido else 0.0
+    return {"symbol": plano["symbol"], "lado": lado, "estrategia": plano.get("estrategia", "daytrade"),
+            "preco_ref": round(ref, 2), "preco_ref_nome": ref_nome, "gatilho": gatilho, "stop": stop,
             "alvo": alvo, "risco_por_acao": round(risco, 2), "risco_retorno": round(rr, 2), "tetos": tetos,
             "limitante": limitante, "qtd": total, "lote": cheio, "fracionario": resto,
-            "valor": round(total * ref, 2), "custos_estimados": round(c, 2),
-            "perda_no_stop": round(total * risco + c, 2), "ganho_no_alvo": round(total * (alvo - ref) - custos(total, ref, alvo, n_ord, cfg), 2),
-            "orcamento": orc, "reserva": round(reserva, 2), "limitada": limite is not None}
+            "valor": round(total * ref, 2), "custos_estimados": round(c, 2), "aluguel_estimado": round(alug, 2),
+            "perda_no_stop": round(total * risco + c + alug, 2),
+            "ganho_no_alvo": round(total * sl * (alvo - ref) - custos(total, ref, alvo, n_ord, cfg) - alug, 2),
+            "garantia_estimada": round(total * ref * float(cfg["garantia_vendido_pct"]) / 100.0, 2) if vendido else None,
+            "orcamento": orc, "reserva": round(reserva, 2), "limitada": limite is not None,
+            "prazo_pregoes": prazo}
 
 
 def ordens(s, plano):
-    base = {"lado": "compra", "tipo": "limitada" if s["limitada"] else "mercado", "validade": "dia",
-            "preco_limite": s["preco_ref"] if s["limitada"] else None, "stop": s["stop"], "alvo": s["alvo"],
-            "entrada_plano": plano["entrada"], "zerar_ate": plano.get("zerar_ate"), "dia": plano.get("dia"),
-            "setup": plano.get("setup")}
+    if s["gatilho"] is not None:
+        tipo, limite, gatilho = "stop", s["preco_ref"], s["gatilho"]
+    else:
+        tipo, limite, gatilho = ("limitada" if s["limitada"] else "mercado"), (s["preco_ref"] if s["limitada"] else None), None
+    base = {"lado": s["lado"], "tipo": tipo, "validade": "dia", "preco_limite": limite, "preco_gatilho": gatilho,
+            "stop": s["stop"], "alvo": s["alvo"], "entrada_plano": plano["entrada"], "zerar_ate": plano.get("zerar_ate"),
+            "dia": plano.get("dia"), "setup": plano.get("setup"), "estrategia": s["estrategia"],
+            "prazo_ate": plano.get("prazo_ate"), "vendido": s["lado"] == "venda"}
     out = []
     if s["lote"]:
         out.append(dict(base, symbol=s["symbol"], codigo=s["symbol"], mercado="lote", qtd=s["lote"]))
@@ -141,10 +182,15 @@ def relatorio(s, ords):
     for k, v in s["tetos"].items():
         linhas.append("  teto por %-18s %s ações%s" % (k, b3lib.num(math.floor(v + 1e-9), 0),
                                                        "  <- limita" if k == s["limitante"] else ""))
-    linhas.append("  comprar %d ações = %s (%s)" % (s["qtd"], b3lib.reais(s["valor"]), " + ".join(
+    linhas.append("  %s %d ações = %s (%s)" % ("comprar" if s["lado"] == "compra" else "vender a descoberto", s["qtd"],
+                                                b3lib.reais(s["valor"]), " + ".join(
         "%d %s em %s" % (o["qtd"], o["mercado"], o["codigo"]) for o in ords)))
-    linhas.append("  custos estimados de ida e volta %s; perda no stop %s; ganho no alvo %s" % (
-        b3lib.reais(s["custos_estimados"]), b3lib.reais(s["perda_no_stop"]), b3lib.reais(s["ganho_no_alvo"])))
+    linhas.append("  custos estimados de ida e volta %s%s; perda no stop %s; ganho no alvo %s" % (
+        b3lib.reais(s["custos_estimados"]),
+        " + aluguel %s em %d pregões" % (b3lib.reais(s["aluguel_estimado"]), s["prazo_pregoes"]) if s["lado"] == "venda" else "",
+        b3lib.reais(s["perda_no_stop"]), b3lib.reais(s["ganho_no_alvo"])))
+    if s.get("garantia_estimada"):
+        linhas.append("  garantia estimada na B3: %s (garantia_vendido_pct; confira com a corretora)" % b3lib.reais(s["garantia_estimada"]))
     return "\n".join(linhas)
 
 

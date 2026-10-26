@@ -1,6 +1,7 @@
 # day-trader-b3
 
-Doze skills do Claude para day trade na **bolsa brasileira (B3)**. É uma
+Treze skills do Claude para **day trade e swing trade, comprado ou vendido**, na
+**bolsa brasileira (B3)**. É uma
 adaptação do [day-trader-skill](https://github.com/Jakeschincariol/day-trader-skill),
 de Jake Schincariol (MIT), refeita para o pregão, os dados públicos e a
 tributação do Brasil.
@@ -18,6 +19,7 @@ tributação do Brasil.
 | `/b3-entrada` | Cronometra a entrada candle a candle (ORB ou nível) dentro da janela de entradas | Yahoo |
 | `/b3-saida` | Stop (faixa, preço, %, ATR) e alvo em R, horário de zerar | — |
 | `/b3-maquina-do-tempo` | 10.000 simulações do resto do pregão + a regra nos pregões passados | Yahoo (60 dias, 5 min) |
+| `/b3-swing` | Swing trade comprado ou vendido: plano com gatilho, stop swing/ATR, alvo em R e prazo; 10.000 caminhos diários com gap e aluguel; histórico da regra; acompanhamento das posições | Yahoo (2 anos, diário) |
 | `/b3-orcamento` | Quantidade pela perda máxima com custos; lote padrão + fracionário | — |
 | `/b3-risco` | APROVADA/BLOQUEADA: perdas, caixa, horário, feriado, lote, duplicidade... | — |
 | `/b3-boleta` | Boleta para digitar no home broker, sim explícito, execuções e zeragem | — |
@@ -26,13 +28,33 @@ tributação do Brasil.
 | `/b3-insiders` | Compras e vendas de administradores e controladores (Res. CVM 44, art. 11) | CVM (VLMO) |
 | `/b3-fiscal` | Separa day trade de operação comum e apura IR/DARF 6015 com a skill `traders` | — |
 
-Fluxo típico de um pregão:
+Fluxo de day trade (só comprado, zera no dia):
 
 ```
-b3-scanner -> b3-noticias -> b3-entrada -> b3-saida -> b3-maquina-do-tempo
-           -> b3-orcamento -> b3-risco -> b3-boleta (seu "sim") -> b3-alertas
-fim do mês: b3-fiscal -> DARF 6015
+b3-scanner orb -> b3-noticias -> b3-entrada -> b3-saida -> b3-maquina-do-tempo
+               -> b3-orcamento -> b3-risco -> b3-boleta (seu "sim") -> b3-alertas
 ```
+
+Fluxo de swing trade (comprado ou vendido, alguns pregões):
+
+```
+b3-scanner diario [--lado venda] -> b3-swing plano -> b3-swing simular
+    -> b3-orcamento -> b3-risco -> b3-boleta (seu "sim") -> b3-alertas from-plan
+    -> todo dia: b3-swing acompanhar (stop, alvo, prazo, aluguel, mover-stop)
+```
+
+Fim do mês: `b3-fiscal apurar` → DARF 6015 (day trade 20%, swing 15%; venda a
+descoberto apurada no mês da recompra).
+
+### Vendido (venda a descoberto)
+
+Desligado por padrão: ligue `"permitir_vendido": true` no config. O pacote
+trata o vendido como a B3 exige: só lote padrão (`vendido_somente_lote`),
+aluguel (BTC) estimado em `aluguel_taxa_aa_pct` somado à perda no stop,
+garantia (`garantia_vendido_pct` do valor vendido) checada contra o caixa
+livre, teto de exposição vendida (`max_exposicao_vendida_pct`) e carteira com
+quantidade negativa. A perda no vendido não tem teto teórico, e o doador pode
+pedir as ações de volta (recall).
 
 As skills conversam por arquivos na pasta `trader-b3/` do diretório atual
 (mude com a variável `B3_DIR`): `watchlist.json`, `entrada.json`,
@@ -54,6 +76,7 @@ As skills conversam por arquivos na pasta `trader-b3/` do diretório atual
 | 8-K e RSS do Yahoo (news) | Documentos IPE da CVM e Google Notícias |
 | Pelosi tracker | Negociações de administradores e controladores (VLMO, Res. CVM 44) |
 | Lotes fiscais e wash sale dos EUA | Custo médio, day trade 20%, IRRF 1%, prejuízos segregados, DARF 6015 (IN RFB 1.585/2015) |
+| Só comprado e só intradiário | Também swing trade de vários pregões, comprado ou vendido com aluguel e garantia |
 
 ## Instalação
 
@@ -93,7 +116,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 Rodam sem rede, com dados reais salvos em `tests/fixtures`: candles do Yahoo
-de outubro de 2026, a carteira do IBRA e recortes dos arquivos da CVM.
+(5 minutos de outubro de 2026 e diários de 2 anos), a carteira do IBRA e
+recortes dos arquivos da CVM.
 
 ## Licença
 

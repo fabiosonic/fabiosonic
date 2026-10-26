@@ -7,7 +7,7 @@ description: >-
   padrão (100) e mercado fracionário (código com F), e grava
   trader-b3/ordens.json. Use quando o usuário disser "quantas ações eu
   compro", "dimensiona a posição", "quanto posso arriscar", "monta a ordem"
-  ou depois do /b3-saida.
+  ou depois do /b3-saida ou do /b3-swing (comprado ou vendido).
 argument-hint: "[--limit [PREÇO]] [--orcamento R$] [--write]"
 ---
 
@@ -27,5 +27,11 @@ vigente de emolumentos da B3 e da sua corretora e ajuste o config.
 Lote padrão de 100; a sobra vai para o fracionário (`PETR4F`) se
 `permitir_fracionario` for true. Zero ações = recusa com o motivo.
 
-Numa ordem a mercado usa o maior entre a entrada do plano e um preço fresco
-(< 15 min) de trader-b3/precos.json. Próximo passo: `/b3-risco`.
+Swing (plano do `/b3-swing`): entrada com gatilho vira ordem stop com limite
+= gatilho ± `folga_stop_pct`. Vendido: só lote padrão (`vendido_somente_lote`),
+aluguel estimado (`aluguel_taxa_aa_pct` x prazo) entra na perda no stop, e há
+tetos de garantia (`garantia_vendido_pct`) e de exposição vendida
+(`max_exposicao_vendida_pct`).
+
+Numa ordem a mercado usa o pior entre a entrada do plano e um preço fresco
+(< 15 min) de trader-b3/precos.json (o maior na compra, o menor na venda). Próximo passo: `/b3-risco`.

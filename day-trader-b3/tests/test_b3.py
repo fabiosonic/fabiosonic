@@ -371,13 +371,15 @@ class Cvm(ComPasta):
 class Repositorio(unittest.TestCase):
     def test_cada_skill_tem_skill_md(self):
         skills = [d for d in os.listdir(RAIZ) if d.startswith("b3-") and d != "b3-comum"]
-        self.assertEqual(len(skills), 12)
+        self.assertEqual(len(skills), 13)
         for d in skills:
-            texto = open(os.path.join(RAIZ, d, "SKILL.md"), encoding="utf-8").read()
+            with open(os.path.join(RAIZ, d, "SKILL.md"), encoding="utf-8") as f:
+                texto = f.read()
             self.assertTrue(texto.startswith("---\nname: %s\n" % d), d)
 
     def test_manifesto(self):
-        m = json.load(open(os.path.join(RAIZ, ".claude-plugin", "plugin.json"), encoding="utf-8"))
+        with open(os.path.join(RAIZ, ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
+            m = json.load(f)
         self.assertEqual(m["name"], "day-trader-b3")
 
 

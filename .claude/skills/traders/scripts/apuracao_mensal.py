@@ -95,11 +95,23 @@ def novo_mes():
         "vendas_acoes_st": ZERO,
         "resultado_acoes_st": ZERO,
         "resultado_outros_st": ZERO,
+        "resultado_vendido_st": ZERO,
         "resultado_dt": ZERO,
         "resultado_fii": ZERO,
         "vendas_st": ZERO,
         "irrf_dt": ZERO,
     }
+
+
+def registrar_st(m, tipo, resultado, vendido=False):
+    if tipo == "FII":
+        m["resultado_fii"] += resultado
+    elif vendido:
+        m["resultado_vendido_st"] += resultado
+    elif tipo == "ACAO":
+        m["resultado_acoes_st"] += resultado
+    else:
+        m["resultado_outros_st"] += resultado
 
 
 def apurar_resultados(operacoes, posicao, alertas):
@@ -117,32 +129,44 @@ def apurar_resultados(operacoes, posicao, alertas):
             continue
 
         pos = posicao.setdefault(op["ativo"], {"quantidade": ZERO, "custo_total": ZERO})
+        pos.setdefault("vendido_qtd", ZERO)
+        pos.setdefault("vendido_valor", ZERO)
+        qtd = op["quantidade"]
+
         if op["operacao"] == "C":
-            pos["quantidade"] += op["quantidade"]
-            pos["custo_total"] += financeiro + op["custos"]
+            # Recompra de venda a descoberto: o resultado é apurado na recompra.
+            cobrir = min(qtd, pos["vendido_qtd"])
+            if cobrir:
+                preco_venda = pos["vendido_valor"] / pos["vendido_qtd"]
+                recompra = (financeiro + op["custos"]) * (cobrir / qtd)
+                registrar_st(m, op["tipo"], preco_venda * cobrir - recompra, vendido=True)
+                pos["vendido_qtd"] -= cobrir
+                pos["vendido_valor"] -= preco_venda * cobrir
+            if qtd > cobrir:
+                pos["quantidade"] += qtd - cobrir
+                pos["custo_total"] += (financeiro + op["custos"]) * ((qtd - cobrir) / qtd)
             continue
 
-        if pos["quantidade"] < op["quantidade"]:
+        vender = min(qtd, pos["quantidade"])
+        if vender:
+            custo_medio = pos["custo_total"] / pos["quantidade"]
+            custo_baixa = custo_medio * vender
+            venda_liquida = (financeiro - op["custos"]) * (vender / qtd)
+            registrar_st(m, op["tipo"], venda_liquida - custo_baixa)
+            pos["quantidade"] -= vender
+            pos["custo_total"] -= custo_baixa
+        if qtd > vender:
             alertas.append(
-                f"{op['data']} {op['ativo']}: venda de {op['quantidade']} com posição de "
-                f"{pos['quantidade']} (venda a descoberto ou posição inicial ausente) — "
-                "resultado calculado só sobre a quantidade em carteira."
+                f"{op['data']} {op['ativo']}: venda a descoberto de {qtd - vender} "
+                "(resultado apurado na recompra; sem isenção de R$ 20 mil nessa parte)."
             )
-        qtd_coberta = min(pos["quantidade"], op["quantidade"])
-        custo_medio = pos["custo_total"] / pos["quantidade"] if pos["quantidade"] else ZERO
-        custo_baixa = custo_medio * qtd_coberta
-        venda_liquida = (financeiro - op["custos"]) * (qtd_coberta / op["quantidade"])
-        resultado = venda_liquida - custo_baixa
-        pos["quantidade"] -= qtd_coberta
-        pos["custo_total"] -= custo_baixa
+            pos["vendido_qtd"] += qtd - vender
+            pos["vendido_valor"] += (financeiro - op["custos"]) * ((qtd - vender) / qtd)
 
-        if op["tipo"] == "FII":
-            m["resultado_fii"] += resultado
-        elif op["tipo"] == "ACAO":
+        # Valor total da venda: base do IRRF e, para ações, do teste da isenção
+        # (conservador: a venda a descoberto também entra no total do mês).
+        if op["tipo"] == "ACAO":
             m["vendas_acoes_st"] += financeiro
-            m["resultado_acoes_st"] += resultado
-        else:
-            m["resultado_outros_st"] += resultado
         m["vendas_st"] += financeiro
 
     resultado_dt_por_dia = defaultdict(lambda: ZERO)
@@ -175,7 +199,8 @@ def apurar_impostos(meses, prej_comum, prej_dt, prej_fii, irrf_saldo):
         m = meses[(ano, mes)]
         isento = m["vendas_acoes_st"] <= LIMITE_ISENCAO_ACOES and m["resultado_acoes_st"] > 0
         ganho_isento = m["resultado_acoes_st"] if isento else ZERO
-        resultado_comum = m["resultado_outros_st"] + (ZERO if isento else m["resultado_acoes_st"])
+        resultado_comum = (m["resultado_outros_st"] + m["resultado_vendido_st"]
+                           + (ZERO if isento else m["resultado_acoes_st"]))
 
         base_comum, prej_comum = compensar(resultado_comum, prej_comum)
         base_dt, prej_dt = compensar(m["resultado_dt"], prej_dt)
@@ -263,7 +288,12 @@ def main():
     args = parser.parse_args()
 
     alertas = []
-    meses = apurar_resultados(ler_operacoes(args.operacoes), ler_posicao_inicial(args.custo_inicial), alertas)
+    posicao = ler_posicao_inicial(args.custo_inicial)
+    meses = apurar_resultados(ler_operacoes(args.operacoes), posicao, alertas)
+    for ativo, pos in sorted(posicao.items()):
+        if pos.get("vendido_qtd"):
+            alertas.append(f"{ativo}: posição vendida em aberto de {pos['vendido_qtd']} — o resultado "
+                           "sai no mês da recompra.")
     linhas = apurar_impostos(meses, args.prejuizo_comum, args.prejuizo_dt, args.prejuizo_fii, args.irrf_anterior)
 
     if args.json:

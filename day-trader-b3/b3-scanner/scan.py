@@ -5,16 +5,26 @@
     python3 scan.py universo --indice IBXX         # IBOV, IBXX (IBrX-100), IBRA, SMLL, IDIV...
     python3 scan.py diario                         # antes da abertura -> trader-b3/watchlist.json
     python3 scan.py diario --symbols PETR4,VALE3,ITUB4
+    python3 scan.py diario --lado venda            # só setups de venda (swing vendido)
     python3 scan.py orb                            # depois das 10h20: rompimentos da faixa de abertura
     python3 scan.py orb --at 10:45 --or-minutes 15
 
-Setups diários (fechamentos de pregões completos, os mesmos do day-trader-skill):
+Setups diários (fechamentos de pregões completos). De compra, os mesmos do
+day-trader-skill:
   rompimento_20d   fechamento acima da máxima de fechamento dos 20 pregões anteriores
   bandeira_alta    alta de mais de 10% entre 15 e 5 pregões atrás e faixa dos
                    últimos 5 fechamentos menor que 5% do preço
   retomou_mm20     fechou abaixo da média de 20 ontem e acima dela hoje
   sobrevendido     IFR(14) de Wilder abaixo de 30
   repique          IFR(14) de ontem abaixo de 30 e fechamento de hoje acima do de ontem
+De venda (para swing trade vendido), os espelhos:
+  perdeu_20d       fechamento abaixo da mínima de fechamento dos 20 pregões anteriores
+  bandeira_baixa   queda de mais de 10% entre 15 e 5 pregões atrás e faixa dos
+                   últimos 5 fechamentos menor que 5% do preço
+  perdeu_mm20      fechou acima da média de 20 ontem e abaixo dela hoje
+  sobrecomprado    IFR(14) acima de 70
+  repique_baixa    IFR(14) de ontem acima de 70 e fechamento de hoje abaixo do de ontem
+--lado compra|venda|ambos (padrão ambos) filtra os setups.
 
 ORB (opening-range breakout) em candles de 5 minutos: a faixa é a máxima e a
 mínima dos primeiros --or-minutes (padrão 15: candles das 10h00, 10h05 e
@@ -43,6 +53,10 @@ import b3lib  # noqa: E402
 B3_INDICE = "https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/"
 MIN_PREGOES = 30
 PASSO = 300
+LADO_SETUP = {"rompimento_20d": "compra", "bandeira_alta": "compra", "retomou_mm20": "compra",
+              "sobrevendido": "compra", "repique": "compra", "perdeu_20d": "venda",
+              "bandeira_baixa": "venda", "perdeu_mm20": "venda", "sobrecomprado": "venda",
+              "repique_baixa": "venda"}
 
 
 # ---------------------------------------------------------------- universo
@@ -105,6 +119,7 @@ def setups(c):
     """fechamentos (mais antigo primeiro, >= 30) -> (setups, números)."""
     ultimo = c[-1]
     max20 = max(c[-21:-1])
+    min20 = min(c[-21:-1])
     mm20 = sum(c[-20:]) / 20.0
     mm20_ant = sum(c[-21:-1]) / 20.0
     alta = c[-6] / c[-16] - 1
@@ -121,7 +136,17 @@ def setups(c):
         tags.append("sobrevendido")
     if r_ant is not None and r_ant < 30 and ultimo > c[-2]:
         tags.append("repique")
-    return tags, {"ifr": r, "max20": max20, "mm20": mm20}
+    if ultimo < min20:
+        tags.append("perdeu_20d")
+    if alta < -0.10 and faixa5 < 0.05:
+        tags.append("bandeira_baixa")
+    if c[-2] > mm20_ant and ultimo < mm20:
+        tags.append("perdeu_mm20")
+    if r is not None and r > 70:
+        tags.append("sobrecomprado")
+    if r_ant is not None and r_ant > 70 and ultimo < c[-2]:
+        tags.append("repique_baixa")
+    return tags, {"ifr": r, "max20": max20, "min20": min20, "mm20": mm20}
 
 
 def pregoes_completos(chart, agora_utc, cfg):
@@ -139,7 +164,7 @@ def pregoes_completos(chart, agora_utc, cfg):
     return [(d, c, vf) for d, (c, vf) in sorted(out.items())]
 
 
-def scan_diario(charts, syms, agora_utc, min_preco, min_vol_fin, cfg):
+def scan_diario(charts, syms, agora_utc, min_preco, min_vol_fin, cfg, lado="ambos"):
     hits = []
     cont = {"pedidos": len(syms), "lidos": 0, "iliquidos": 0, "curtos": 0, "analisados": 0}
     for sym in syms:
@@ -158,10 +183,13 @@ def scan_diario(charts, syms, agora_utc, min_preco, min_vol_fin, cfg):
             continue
         cont["analisados"] += 1
         tags, n = setups(fech)
+        if lado != "ambos":
+            tags = [t for t in tags if LADO_SETUP[t] == lado]
         if tags:
-            hits.append({"symbol": sym, "setups": tags, "preco": round(fech[-1], 2),
+            hits.append({"symbol": sym, "setups": tags, "lados": sorted({LADO_SETUP[t] for t in tags}),
+                         "preco": round(fech[-1], 2),
                          "data_fechamento": dias[-1][0].isoformat(), "ifr": round(n["ifr"], 1),
-                         "max20": round(n["max20"], 2), "mm20": round(n["mm20"], 2),
+                         "max20": round(n["max20"], 2), "min20": round(n["min20"], 2), "mm20": round(n["mm20"], 2),
                          "volume_fin_medio_20d": round(vol_fin)})
     hits.sort(key=lambda h: (-h["volume_fin_medio_20d"], h["symbol"]))
     cont["sinais"] = len(hits)
@@ -275,8 +303,8 @@ def mostrar(doc, a, titulo):
                 h["symbol"], b3lib.reais(h["preco"]), h["hora"], b3lib.pct(h["pct_acima"]),
                 b3lib.reais(h["faixa_min"]), b3lib.reais(h["faixa_max"])))
         else:
-            print("  %-7s %-10s IFR %5s  %s  vol. fin. médio %s" % (
-                h["symbol"], b3lib.reais(h["preco"]), b3lib.num(h["ifr"], 1), ", ".join(h["setups"]),
+            print("  %-7s %-10s IFR %5s  %-6s %s  vol. fin. médio %s" % (
+                h["symbol"], b3lib.reais(h["preco"]), b3lib.num(h["ifr"], 1), "/".join(h["lados"]), ", ".join(h["setups"]),
                 b3lib.reais(h["volume_fin_medio_20d"], 0)))
     if len(doc["hits"]) > a.show:
         print("  ... e mais %d (use --show)" % (len(doc["hits"]) - a.show))
@@ -304,7 +332,7 @@ def cmd_diario(a, cfg):
     syms = simbolos(a)
     charts, falhas = baixar(syms, "3mo", "1d", a.offline, a)
     min_vol = 5e6 if a.min_volume_fin is None else a.min_volume_fin
-    hits, cont = scan_diario(charts, syms, agora, a.min_preco, min_vol, cfg)
+    hits, cont = scan_diario(charts, syms, agora, a.min_preco, min_vol, cfg, a.lado)
     doc = gravar_watchlist(a, "diario", hits, cont, falhas, agora)
     mostrar(doc, a, "Scanner diário (fechamentos completos):")
     return 0 if hits else 1
@@ -341,6 +369,7 @@ def main(argv=None):
     p.add_argument("--min-preco", type=float, default=1.0)
     p.add_argument("--min-volume-fin", type=float)
     p.add_argument("--or-minutes", type=int, default=15)
+    p.add_argument("--lado", choices=["compra", "venda", "ambos"], default="ambos")
     p.add_argument("--at")
     p.add_argument("--now")
     p.add_argument("--offline")

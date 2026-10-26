@@ -69,6 +69,14 @@ DEFAULTS = {
     "permitir_alavancagem": False,
     "tipos": {},
     "sessoes": {},
+    # swing trade (posições de vários pregões, compradas ou vendidas)
+    "swing_prazo_pregoes": 15,
+    "swing_max_posicoes": 5,
+    "aluguel_taxa_aa_pct": 2.0,
+    "garantia_vendido_pct": 100,
+    "max_exposicao_vendida_pct": 50,
+    "vendido_somente_lote": True,
+    "folga_stop_pct": 0.5,
 }
 
 
@@ -242,6 +250,39 @@ def janela_entradas(dia, cfg):
     depois = mais_min(dia, fecha, -int(cfg["sem_entradas_ultimos_min"]))
     zerar = mais_min(dia, fecha, -int(cfg["zerar_min_antes_fechamento"]))
     return antes, depois, zerar
+
+
+def janela_swing(dia, cfg):
+    """(primeiro, último) horário para entradas de swing: o pregão contínuo inteiro."""
+    s = sessao(dia, cfg)
+    return None if s is None else (s[0], s[1])
+
+
+def pregoes_a_frente(dia, n, cfg=None):
+    """O n-ésimo pregão depois de `dia` (n=0 devolve o próprio dia, se for pregão)."""
+    d = dia
+    if n <= 0:
+        return d if dia_de_pregao(d, cfg)[0] else proximo_pregao(d, cfg)
+    for _ in range(n):
+        d = proximo_pregao(d, cfg)
+    return d
+
+
+def pregoes_entre(inicio, fim, cfg=None):
+    """Quantos pregões há depois de `inicio` até `fim` (inclusive)."""
+    n, d = 0, inicio
+    while d < fim:
+        d = proximo_pregao(d, cfg)
+        if d <= fim:
+            n += 1
+    return n
+
+
+def sinal_lado(lado):
+    """+1 para compra (comprado), -1 para venda (vendido)."""
+    if lado not in ("compra", "venda"):
+        raise B3Erro("lado precisa ser compra ou venda (recebi %r)" % lado)
+    return 1 if lado == "compra" else -1
 
 
 # ---------------------------------------------------------------- tickers

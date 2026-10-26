@@ -18,7 +18,7 @@ python3 "${CLAUDE_SKILL_DIR}/alerts.py" clock
 python3 "${CLAUDE_SKILL_DIR}/alerts.py" quote PETR4,VALE3
 python3 "${CLAUDE_SKILL_DIR}/alerts.py" add PETR4 acima 59.17 --nota "alvo"
 python3 "${CLAUDE_SKILL_DIR}/alerts.py" add PETR4 zerar
-python3 "${CLAUDE_SKILL_DIR}/alerts.py" from-plan       # stop, alvo e zerar do plano
+python3 "${CLAUDE_SKILL_DIR}/alerts.py" from-plan       # stop e alvo do plano (lado certo no vendido); zerar no day trade
 python3 "${CLAUDE_SKILL_DIR}/alerts.py" check           # cada alerta toca uma vez por dia
 python3 "${CLAUDE_SKILL_DIR}/alerts.py" list
 python3 "${CLAUDE_SKILL_DIR}/alerts.py" reset

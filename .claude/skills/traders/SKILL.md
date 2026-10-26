@@ -77,7 +77,7 @@ orientar o cliente com base na legislação vigente, sempre citando a norma.
 
 ## Armadilhas (checklist de revisão)
 
-- [ ] Venda a descoberto (posição negativa): o custo só é conhecido na recompra — o script sinaliza.
+- [ ] Venda a descoberto (posição negativa): o script mantém a posição vendida e apura o resultado no mês da recompra; a venda entra no total do mês para o teste dos R$ 20 mil (critério conservador) e o resultado do vendido não recebe a isenção. Inclua a taxa de aluguel (BTC) nos custos e confira o tratamento com o cliente.
 - [ ] Eventos corporativos (desdobramento, grupamento, bonificação com custo informado, subscrição) alteram custo médio — lançar como ajuste antes da apuração.
 - [ ] Units e ações do mesmo emissor são ativos distintos para custo médio.
 - [ ] Opções: prêmio pago no exercício integra o custo da ação; opção que vira pó gera prejuízo pelo prêmio.

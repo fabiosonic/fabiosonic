@@ -6,7 +6,7 @@
     python3 alerts.py add PETR4 acima 59.17
     python3 alerts.py add PETR4 abaixo 58.27
     python3 alerts.py add PETR4 zerar                # toca no horário de zerar do dia
-    python3 alerts.py from-plan                      # stop, alvo e zerar do trader-b3/plano.json
+    python3 alerts.py from-plan                      # stop e alvo do trader-b3/plano.json (e zerar no day trade)
     python3 alerts.py check                          # confere uma vez; cada alerta toca uma vez por dia
     python3 alerts.py list
     python3 alerts.py reset
@@ -175,12 +175,16 @@ def main(argv=None):
             return 0
         if a.cmd == "from-plan":
             pl = b3lib.ler_json(b3lib.caminho("plano.json"), obrigatorio=True, o_que="o plano (rode /b3-saida)")
-            for al in (novo(pl["symbol"], "abaixo", pl["stop"], "stop do plano"),
-                       novo(pl["symbol"], "acima", pl["alvo"], "alvo do plano"),
-                       novo(pl["symbol"], "zerar", None, "zerar até %s" % pl.get("zerar_ate"))):
-                doc["alertas"].append(al)
+            comprado = pl.get("lado", "compra") == "compra"
+            novos = [novo(pl["symbol"], "abaixo" if comprado else "acima", pl["stop"], "stop do plano"),
+                     novo(pl["symbol"], "acima" if comprado else "abaixo", pl["alvo"], "alvo do plano")]
+            if pl.get("estrategia") != "swing":
+                novos.append(novo(pl["symbol"], "zerar", None, "zerar até %s" % pl.get("zerar_ate")))
+            doc["alertas"].extend(novos)
             gravar_alertas(doc)
-            print("3 alertas criados para %s: stop %s, alvo %s e zerar." % (pl["symbol"], b3lib.reais(pl["stop"]), b3lib.reais(pl["alvo"])))
+            print("%d alertas criados para %s %s: stop %s, alvo %s%s." % (
+                len(novos), "comprado em" if comprado else "vendido em", pl["symbol"], b3lib.reais(pl["stop"]),
+                b3lib.reais(pl["alvo"]), " e zerar" if len(novos) == 3 else " (swing: acompanhe o prazo com /b3-swing acompanhar)"))
             return 0
         if a.cmd == "list":
             for al in doc["alertas"]:
