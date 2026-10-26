@@ -24,6 +24,8 @@ python3 "${CLAUDE_SKILL_DIR}/check.py" --json --no-write
 - Carteira com sinal: quantidade negativa = vendido. Swing usa a janela do
   pregão contínuo inteiro; day trade, a janela de novas entradas.
 - Venda a descoberto só com `"permitir_vendido": true`.
+- Swing de setup sem vantagem no backtest fora da amostra é bloqueado com
+  `"swing_somente_validados": true` (padrão).
 - SAÍDA (venda de comprado ou compra que zera vendido) sempre pode sair: só
   formato e ativo bloqueiam.
 - O veredito guarda a impressão digital de cada ordem: `/b3-boleta` só deixa

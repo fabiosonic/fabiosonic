@@ -86,7 +86,8 @@ def dimensionar(plano, cfg, orcamento=None, limite=None, preco=None, caixa=None)
     lado = plano.get("lado", "compra")
     sl = b3lib.sinal_lado(lado)
     vendido = sl < 0
-    entrada_plano, stop, alvo = float(plano["entrada"]), float(plano["stop"]), float(plano["alvo"])
+    entrada_plano, stop = float(plano["entrada"]), float(plano["stop"])
+    alvo = float(plano["alvo"]) if plano.get("alvo") is not None else None
     gatilho = None
     if limite is not None:
         ref, ref_nome = float(limite), "o preço limite"
@@ -101,8 +102,8 @@ def dimensionar(plano, cfg, orcamento=None, limite=None, preco=None, caixa=None)
     risco = sl * (ref - stop)
     if risco <= 0:
         raise b3lib.B3Erro("o preço %s já passou do stop %s: refaça o plano" % (b3lib.reais(ref), b3lib.reais(stop)))
-    rr = sl * (alvo - ref) / risco
-    if rr < float(cfg["min_risco_retorno"]):
+    rr = sl * (alvo - ref) / risco if alvo is not None else None
+    if rr is not None and rr < float(cfg["min_risco_retorno"]):
         raise b3lib.B3Erro("a %s o risco/retorno é %s, abaixo do mínimo %s: o preço já andou para o alvo"
                            % (b3lib.reais(ref), b3lib.num(rr), b3lib.num(cfg["min_risco_retorno"])))
     prazo = int(plano.get("prazo_pregoes") or 1)
@@ -148,11 +149,13 @@ def dimensionar(plano, cfg, orcamento=None, limite=None, preco=None, caixa=None)
     alug = aluguel(total, ref, prazo, cfg) if vendido else 0.0
     return {"symbol": plano["symbol"], "lado": lado, "estrategia": plano.get("estrategia", "daytrade"),
             "preco_ref": round(ref, 2), "preco_ref_nome": ref_nome, "gatilho": gatilho, "stop": stop,
-            "alvo": alvo, "risco_por_acao": round(risco, 2), "risco_retorno": round(rr, 2), "tetos": tetos,
+            "alvo": alvo, "risco_por_acao": round(risco, 2), "risco_retorno": round(rr, 2) if rr is not None else None,
+            "tetos": tetos,
             "limitante": limitante, "qtd": total, "lote": cheio, "fracionario": resto,
             "valor": round(total * ref, 2), "custos_estimados": round(c, 2), "aluguel_estimado": round(alug, 2),
             "perda_no_stop": round(total * risco + c + alug, 2),
-            "ganho_no_alvo": round(total * sl * (alvo - ref) - custos(total, ref, alvo, n_ord, cfg) - alug, 2),
+            "ganho_no_alvo": round(total * sl * (alvo - ref) - custos(total, ref, alvo, n_ord, cfg) - alug, 2)
+            if alvo is not None else None,
             "garantia_estimada": round(total * ref * float(cfg["garantia_vendido_pct"]) / 100.0, 2) if vendido else None,
             "orcamento": orc, "reserva": round(reserva, 2), "limitada": limite is not None,
             "prazo_pregoes": prazo}
@@ -178,7 +181,8 @@ def ordens(s, plano):
 def relatorio(s, ords):
     linhas = ["Dimensionamento %s a %s (%s):" % (s["symbol"], b3lib.reais(s["preco_ref"]), s["preco_ref_nome"]),
               "  risco por ação %s (stop %s), alvo %s, risco/retorno %s" % (
-                  b3lib.reais(s["risco_por_acao"]), b3lib.reais(s["stop"]), b3lib.reais(s["alvo"]), b3lib.num(s["risco_retorno"]))]
+                  b3lib.reais(s["risco_por_acao"]), b3lib.reais(s["stop"]),
+                  b3lib.reais(s["alvo"]) if s["alvo"] is not None else "nenhum (sai no prazo)", b3lib.num(s["risco_retorno"]))]
     for k, v in s["tetos"].items():
         linhas.append("  teto por %-18s %s ações%s" % (k, b3lib.num(math.floor(v + 1e-9), 0),
                                                        "  <- limita" if k == s["limitante"] else ""))

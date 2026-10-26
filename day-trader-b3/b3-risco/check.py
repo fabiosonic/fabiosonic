@@ -43,6 +43,8 @@ Bloqueia uma ENTRADA (ordem que abre ou aumenta posição, comprada ou vendida):
   perda diária soma das perdas no stop das entradas de hoje acima de max_perda_diaria
   operações    max_operacoes_dia ativos diferentes já operados hoje
   posições     swing: swing_max_posicoes ativos já em carteira
+  setup        swing: setup sem vantagem no backtest fora da amostra
+               (b3-swing/parametros.json), com "swing_somente_validados": true
   horário      day trade: fora da janela de novas entradas; swing: fora do
                pregão contínuo; ou sem pregão
 
@@ -60,6 +62,17 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "b3-comum"))
 import b3lib  # noqa: E402
+
+PARAMETROS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "b3-swing", "parametros.json")
+
+
+def setups_treinados():
+    try:
+        with open(PARAMETROS, encoding="utf-8") as f:
+            return json.load(f).get("setups") or {}
+    except (OSError, ValueError):
+        return {}
+
 
 CAMPOS = ("symbol", "codigo", "mercado", "lado", "qtd", "tipo", "preco_limite", "preco_gatilho", "stop", "alvo",
           "validade")
@@ -107,6 +120,8 @@ def checar(ordens, cfg, carteira=None, precos=None, estado=None, agora_utc=None)
     jan_sw = b3lib.janela_swing(hoje, cfg)
     pct_custo = float(cfg["custos_pct"]) / 100.0
     lote = int(cfg["lote_padrao"])
+
+    treinados = setups_treinados()
 
     def exposicao_vendida():
         return sum(abs(p.get("custo") or 0) for p in pos.values() if (p.get("qtd") or 0) < 0)
@@ -231,6 +246,13 @@ def checar(ordens, cfg, carteira=None, precos=None, estado=None, agora_utc=None)
                                 b3lib.num(rr), b3lib.num(cfg["min_risco_retorno"])))
             if sym not in ativos_hoje and len(ativos_hoje) >= int(cfg["max_operacoes_dia"]):
                 regras.append("operações: %d ativos já operados hoje (max_operacoes_dia)" % len(ativos_hoje))
+            if swing and cfg.get("swing_somente_validados") and treinados:
+                st_info = treinados.get(o.get("setup") or "")
+                if st_info and not st_info.get("ativo"):
+                    regras.append("setup: %s não teve vantagem no backtest fora da amostra (swing_somente_validados)"
+                                  % o.get("setup"))
+                elif not st_info:
+                    avisos.append("setup %s não foi testado no backtest" % (o.get("setup") or "manual"))
             if swing and not tem:
                 abertas = {k for k, p in pos.items() if p.get("qtd")}
                 if len(abertas) >= int(cfg["swing_max_posicoes"]):

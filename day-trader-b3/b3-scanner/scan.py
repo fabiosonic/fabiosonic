@@ -164,8 +164,26 @@ def pregoes_completos(chart, agora_utc, cfg):
     return [(d, c, vf) for d, (c, vf) in sorted(out.items())]
 
 
+PARAMETROS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "b3-swing", "parametros.json")
+
+
+def setups_treinados():
+    try:
+        with open(PARAMETROS, encoding="utf-8") as f:
+            return json.load(f).get("setups") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def atr_pct(chart, n=14):
+    b = chart["bars"][-(n + 1):]
+    trs = [max(x["h"] - x["l"], abs(x["h"] - p["c"]), abs(x["l"] - p["c"])) for p, x in zip(b, b[1:])]
+    return (sum(trs) / len(trs)) / b[-1]["c"] if trs and b[-1]["c"] else None
+
+
 def scan_diario(charts, syms, agora_utc, min_preco, min_vol_fin, cfg, lado="ambos"):
     hits = []
+    treinados = setups_treinados()
     cont = {"pedidos": len(syms), "lidos": 0, "iliquidos": 0, "curtos": 0, "analisados": 0}
     for sym in syms:
         ch = charts.get(sym)
@@ -186,13 +204,17 @@ def scan_diario(charts, syms, agora_utc, min_preco, min_vol_fin, cfg, lado="ambo
         if lado != "ambos":
             tags = [t for t in tags if LADO_SETUP[t] == lado]
         if tags:
+            validados = [t for t in tags if (treinados.get(t) or {}).get("ativo")]
             hits.append({"symbol": sym, "setups": tags, "lados": sorted({LADO_SETUP[t] for t in tags}),
+                         "validados": validados, "atr_pct": round(atr_pct(ch) or 0, 4),
                          "preco": round(fech[-1], 2),
                          "data_fechamento": dias[-1][0].isoformat(), "ifr": round(n["ifr"], 1),
                          "max20": round(n["max20"], 2), "min20": round(n["min20"], 2), "mm20": round(n["mm20"], 2),
                          "volume_fin_medio_20d": round(vol_fin)})
-    hits.sort(key=lambda h: (-h["volume_fin_medio_20d"], h["symbol"]))
+    # setups validados pelo backtest primeiro; entre eles, menor volatilidade primeiro (melhor fora da amostra)
+    hits.sort(key=lambda h: (not h["validados"], h["atr_pct"] if h["validados"] else -h["volume_fin_medio_20d"], h["symbol"]))
     cont["sinais"] = len(hits)
+    cont["validados"] = sum(1 for h in hits if h["validados"])
     return hits, cont
 
 
@@ -303,13 +325,16 @@ def mostrar(doc, a, titulo):
                 h["symbol"], b3lib.reais(h["preco"]), h["hora"], b3lib.pct(h["pct_acima"]),
                 b3lib.reais(h["faixa_min"]), b3lib.reais(h["faixa_max"])))
         else:
-            print("  %-7s %-10s IFR %5s  %-6s %s  vol. fin. médio %s" % (
-                h["symbol"], b3lib.reais(h["preco"]), b3lib.num(h["ifr"], 1), "/".join(h["lados"]), ", ".join(h["setups"]),
+            print("  %s %-7s %-10s IFR %5s  %-6s %s  vol. fin. médio %s" % (
+                "✓" if h.get("validados") else " ", h["symbol"], b3lib.reais(h["preco"]), b3lib.num(h["ifr"], 1),
+                "/".join(h["lados"]), ", ".join(h["setups"]),
                 b3lib.reais(h["volume_fin_medio_20d"], 0)))
     if len(doc["hits"]) > a.show:
         print("  ... e mais %d (use --show)" % (len(doc["hits"]) - a.show))
     if doc["falhas"]:
         print("  sem dados: %s" % ", ".join(sorted(doc["falhas"])[:15]))
+    if any(h.get("validados") is not None for h in doc["hits"]):
+        print("  ✓ = setup com vantagem no backtest fora da amostra (b3-backtest); esses vêm primeiro, menor volatilidade antes.")
     if not a.no_write:
         print("Gravado em %s. Uma lista de gráficos não é recomendação de compra." % a.saida)
 

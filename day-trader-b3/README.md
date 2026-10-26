@@ -1,6 +1,6 @@
 # day-trader-b3
 
-Treze skills do Claude para **day trade e swing trade, comprado ou vendido**, na
+Catorze skills do Claude para **day trade e swing trade, comprado ou vendido**, na
 **bolsa brasileira (B3)**. É uma
 adaptação do [day-trader-skill](https://github.com/Jakeschincariol/day-trader-skill),
 de Jake Schincariol (MIT), refeita para o pregão, os dados públicos e a
@@ -19,6 +19,7 @@ tributação do Brasil.
 | `/b3-entrada` | Cronometra a entrada candle a candle (ORB ou nível) dentro da janela de entradas | Yahoo |
 | `/b3-saida` | Stop (faixa, preço, %, ATR) e alvo em R, horário de zerar | — |
 | `/b3-maquina-do-tempo` | 10.000 simulações do resto do pregão + a regra nos pregões passados | Yahoo (60 dias, 5 min) |
+| `/b3-backtest` | Treina o swing no histórico diário desde 2000 (IBRA + Ibovespa): 10 setups × 1.200 combinações, walk-forward 8+2 anos, carteira realista com CDI; grava os parâmetros que as outras skills usam | Yahoo (diário desde 2000), BCB (CDI) |
 | `/b3-swing` | Swing trade comprado ou vendido: plano com gatilho, stop swing/ATR, alvo em R e prazo; 10.000 caminhos diários com gap e aluguel; histórico da regra; acompanhamento das posições | Yahoo (2 anos, diário) |
 | `/b3-orcamento` | Quantidade pela perda máxima com custos; lote padrão + fracionário | — |
 | `/b3-risco` | APROVADA/BLOQUEADA: perdas, caixa, horário, feriado, lote, duplicidade... | — |
@@ -45,6 +46,22 @@ b3-scanner diario [--lado venda] -> b3-swing plano -> b3-swing simular
 
 Fim do mês: `b3-fiscal apurar` → DARF 6015 (day trade 20%, swing 15%; venda a
 descoberto apurada no mês da recompra).
+
+### Treino no histórico (b3-backtest)
+
+Último treino (resumo de `b3-backtest/RELATORIO.md`), fora da amostra
+2009–2026, carteira de até 5 posições com CDI no caixa livre:
+
+| | acerto | retorno ao ano | maior queda | anos positivos |
+|---|---:|---:|---:|---:|
+| skill antes do treino (padrão, 10 setups) | 42,4% | −0,9% | 47,6% | 5 de 18 |
+| treinada, risco 0,5% por operação | 50,5% | 11,1% | 8,5% | 17 de 18 |
+| treinada, risco 1% por operação | 50,5% | 11,2% | 15,4% | 15 de 18 |
+| CDI | – | 9,9% | 0% | – |
+| Ibovespa (pontos) | – | 9,0% | 48,6% | – |
+
+Ficaram ativos só setups de compra a favor da tendência; nenhum de venda teve
+vantagem. Resultado passado, com viés de sobrevivência; não é promessa.
 
 ### Vendido (venda a descoberto)
 

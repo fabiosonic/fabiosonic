@@ -371,7 +371,7 @@ class Cvm(ComPasta):
 class Repositorio(unittest.TestCase):
     def test_cada_skill_tem_skill_md(self):
         skills = [d for d in os.listdir(RAIZ) if d.startswith("b3-") and d != "b3-comum"]
-        self.assertEqual(len(skills), 13)
+        self.assertEqual(len(skills), 14)
         for d in skills:
             with open(os.path.join(RAIZ, d, "SKILL.md"), encoding="utf-8") as f:
                 texto = f.read()

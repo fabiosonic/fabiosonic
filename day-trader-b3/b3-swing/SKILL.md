@@ -40,12 +40,24 @@ python3 "${CLAUDE_SKILL_DIR}/swing.py" mover-stop PETR4 59.10
 6. `/b3-boleta` → mostra, pergunta, registra o sim, o envio e as execuções.
 7. Todo dia: `swing.py acompanhar`; no fim do mês, `/b3-fiscal apurar`.
 
+## Parâmetros treinados
+
+Sem `--entrada/--stop/--target/--prazo`, o plano usa `parametros.json`
+(gerado pelo `/b3-backtest` em walk-forward 2001–2026): pega o setup validado
+de maior R médio fora da amostra presente no ativo e confere o filtro dele.
+No último treino ficaram ativos só setups de COMPRA a favor da tendência
+(rompimento_20d, bandeira_alta, retomou_mm20), com entrada na abertura e
+stop largo (ATR x 2 a 3). Nenhum setup de venda teve vantagem fora da amostra:
+o plano avisa e o `/b3-risco` bloqueia (`swing_somente_validados`, padrão
+true). Explique isso ao usuário que pedir vendido.
+
 ## Regras do plano
 
-- Entrada `gatilho` (padrão): compra 1 centavo acima da máxima do pregão de
-  sinal, venda 1 centavo abaixo da mínima, como ordem stop válida no dia (se
-  não disparar, refaça o plano no dia seguinte). `fechamento` ou um preço
-  viram ordem limitada.
+- Entrada `gatilho`: compra 1 centavo acima da máxima do pregão de sinal,
+  venda 1 centavo abaixo da mínima, como ordem stop válida no dia. `abertura`:
+  a mercado na abertura do próximo pregão. `fechamento` ou um preço viram
+  ordem limitada.
+- Alvo `nenhum`: sai no stop ou no fim do prazo (deixa a tendência correr).
 - Stop `swing:N` (padrão 5 pregões), `atr:K` (ATR 14 diário), `pct:X`,
   `preco:X`; arredondado para longe da entrada.
 - O stop só anda a favor (`mover-stop`); a ferramenta recusa afrouxar.

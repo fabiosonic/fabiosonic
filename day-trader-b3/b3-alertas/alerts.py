@@ -176,15 +176,17 @@ def main(argv=None):
         if a.cmd == "from-plan":
             pl = b3lib.ler_json(b3lib.caminho("plano.json"), obrigatorio=True, o_que="o plano (rode /b3-saida)")
             comprado = pl.get("lado", "compra") == "compra"
-            novos = [novo(pl["symbol"], "abaixo" if comprado else "acima", pl["stop"], "stop do plano"),
-                     novo(pl["symbol"], "acima" if comprado else "abaixo", pl["alvo"], "alvo do plano")]
+            novos = [novo(pl["symbol"], "abaixo" if comprado else "acima", pl["stop"], "stop do plano")]
+            if pl.get("alvo") is not None:
+                novos.append(novo(pl["symbol"], "acima" if comprado else "abaixo", pl["alvo"], "alvo do plano"))
             if pl.get("estrategia") != "swing":
                 novos.append(novo(pl["symbol"], "zerar", None, "zerar até %s" % pl.get("zerar_ate")))
             doc["alertas"].extend(novos)
             gravar_alertas(doc)
             print("%d alertas criados para %s %s: stop %s, alvo %s%s." % (
                 len(novos), "comprado em" if comprado else "vendido em", pl["symbol"], b3lib.reais(pl["stop"]),
-                b3lib.reais(pl["alvo"]), " e zerar" if len(novos) == 3 else " (swing: acompanhe o prazo com /b3-swing acompanhar)"))
+                b3lib.reais(pl["alvo"]) if pl.get("alvo") is not None else "nenhum",
+                " e zerar" if pl.get("estrategia") != "swing" else " (swing: acompanhe o prazo com /b3-swing acompanhar)"))
             return 0
         if a.cmd == "list":
             for al in doc["alertas"]:

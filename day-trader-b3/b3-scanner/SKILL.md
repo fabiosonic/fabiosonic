@@ -44,7 +44,10 @@ entre 15 e 5 pregões atrás e faixa dos últimos 5 fechamentos < 5%),
 `retomou_mm20`, `sobrevendido` (IFR14 < 30), `repique` (IFR de ontem < 30 e
 fechamento acima do de ontem). De venda: `perdeu_20d`, `bandeira_baixa`,
 `perdeu_mm20`, `sobrecomprado` (IFR14 > 70), `repique_baixa`. Cada hit traz
-`lados` (compra/venda); `--lado` filtra.
+`lados` (compra/venda) e `validados` (setups com vantagem fora da amostra no
+`/b3-backtest`, marcados com ✓); `--lado` filtra. Validados vêm primeiro, em
+ordem de menor volatilidade (ATR %), o critério que funcionou melhor na
+carteira fora da amostra.
 
 ORB: faixa = máxima e mínima dos primeiros 15 minutos (10h00, 10h05, 10h10).
 Sinal = primeiro candle completo depois da faixa que FECHA acima da máxima.

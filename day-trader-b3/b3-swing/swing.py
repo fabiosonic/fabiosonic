@@ -2,7 +2,7 @@
 """Swing trade de ações na B3, comprado ou vendido, para b3-swing.
 Só biblioteca padrão. Nunca envia ordem.
 
-    python3 swing.py plano PETR4 --lado compra              # gatilho na máxima de ontem, stop swing:5, alvo 2R
+    python3 swing.py plano PETR4 --lado compra              # parâmetros treinados do setup presente
     python3 swing.py plano B3SA3 --lado venda --stop atr:2 --target 3R --prazo 20 --write
     python3 swing.py plano VALE3 --lado compra --entrada fechamento --stop pct:4
     python3 swing.py simular                                # trader-b3/plano.json: 10.000 caminhos diários
@@ -17,8 +17,15 @@ Plano (a partir do último pregão completo):
   stop     swing:N (padrão swing:5): compra abaixo da mínima dos últimos N
            pregões, venda acima da máxima; atr:K: K x ATR(14) diário;
            pct:X; preco:X. Arredondado no centavo para longe da entrada.
-  alvo     2R (padrão), 1.5R... ou preco:X
+  alvo     2R, 1.5R..., preco:X ou nenhum (sai no stop ou no fim do prazo)
   prazo    pregões máximos na posição (config swing_prazo_pregoes, 15)
+  filtro   nenhum, tendencia (ativo do lado certo da MM200), regime
+           (Ibovespa do lado certo da MM200) ou ambos
+
+Sem --entrada/--stop/--target/--prazo, o plano usa os parâmetros TREINADOS
+(b3-swing/parametros.json, gerado pelo b3-backtest em walk-forward) do setup
+validado de maior R médio fora da amostra presente no ativo; setup sem
+vantagem comprovada gera aviso e o b3-risco bloqueia (swing_somente_validados).
 
 Simulação diária (mesma ideia da máquina do tempo, em candles diários de 2
 anos): cada dia sorteia um pregão passado como razões (abertura, máxima,
@@ -110,6 +117,8 @@ def ler_regra_stop(texto):
 
 def ler_alvo(texto):
     t = str(texto).strip().lower().replace(",", ".")
+    if t in ("nenhum", "sem", "0", "0r", "prazo"):
+        return "nenhum", None
     try:
         if t.endswith("r"):
             r = float(t[:-1])
@@ -119,7 +128,7 @@ def ler_alvo(texto):
             return "preco", float(t[6:])
     except ValueError:
         pass
-    raise b3lib.B3Erro("--target é 2R, 1.5R... ou preco:X (recebi %r)" % texto)
+    raise b3lib.B3Erro("--target é 2R, 1.5R..., preco:X ou nenhum (recebi %r)" % texto)
 
 
 def stop_de(regra, v, dias, entrada, s):
@@ -139,24 +148,93 @@ def stop_de(regra, v, dias, entrada, s):
     return longe(bruto, s), nome
 
 
-def montar_plano(sym, lado, dias, cfg, entrada_txt="gatilho", stop_txt="swing:5", alvo_txt="2R", prazo=None,
-                 hoje=None):
+PARAMETROS = os.path.join(AQUI, "parametros.json")
+
+
+def parametros():
+    """Parâmetros treinados pelo b3-backtest (walk-forward), ou {}."""
+    try:
+        with open(PARAMETROS, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def escolher_parametros(lado_tags, params):
+    """O setup ativo de maior R médio fora da amostra entre os presentes, ou None."""
+    melhores = [(t, params["setups"][t]) for t in lado_tags
+                if ((params.get("setups") or {}).get(t) or {}).get("ativo")]
+    if not melhores:
+        return None, None
+    return max(melhores, key=lambda x: x[1]["oos"].get("R_medio") or -9)
+
+
+def mm(valores, n):
+    return sum(valores[-n:]) / float(n) if len(valores) >= n else None
+
+
+def checar_filtro(filtro, s, dias, ibov_dias):
+    """(ok, texto). ok None quando faltam dados."""
+    if not filtro or filtro == "nenhum":
+        return True, "sem filtro"
+    partes, ok = [], True
+    if filtro in ("tendencia", "ambos"):
+        m = mm([d["c"] for d in dias], 200)
+        if m is None:
+            return None, "menos de 200 pregões para a MM200 do ativo"
+        bom = (dias[-1]["c"] > m) if s > 0 else (dias[-1]["c"] < m)
+        ok = ok and bom
+        partes.append("ativo %s da MM200 (%s)" % ("acima" if dias[-1]["c"] > m else "abaixo", b3lib.reais(m)))
+    if filtro in ("regime", "ambos"):
+        m = mm([d["c"] for d in ibov_dias or []], 200)
+        if m is None:
+            return None, "sem 200 pregões do Ibovespa para o filtro de regime"
+        bom = (ibov_dias[-1]["c"] > m) if s > 0 else (ibov_dias[-1]["c"] < m)
+        ok = ok and bom
+        partes.append("Ibovespa %s da MM200" % ("acima" if ibov_dias[-1]["c"] > m else "abaixo"))
+    return ok, "; ".join(partes)
+
+
+def montar_plano(sym, lado, dias, cfg, entrada_txt=None, stop_txt=None, alvo_txt=None, prazo=None,
+                 hoje=None, filtro=None, ibov_dias=None, params=None):
     s = b3lib.sinal_lado(lado)
     if len(dias) < scan.MIN_PREGOES:
         raise b3lib.B3Erro("só %d pregões completos de %s; preciso de %d" % (len(dias), sym, scan.MIN_PREGOES))
     ult = dias[-1]
+    tags, _ = scan.setups([d["c"] for d in dias])
+    lado_tags = [t for t in tags if scan.LADO_SETUP[t] == lado]
+    params = parametros() if params is None else params
+    avisos = []
+    escolhido = None
+    if entrada_txt is None and stop_txt is None and alvo_txt is None and prazo is None:
+        escolhido, pr = escolher_parametros(lado_tags, params)
+        if escolhido:
+            entrada_txt, stop_txt, prazo = pr["entrada"], pr["stop"], pr["prazo"]
+            alvo_txt = ("%gR" % pr["alvo_r"]) if pr.get("alvo_r") else "nenhum"
+            filtro = filtro or pr.get("filtro")
+            origem = "treinados para %s (b3-backtest, %s, fora da amostra: R médio %s, acerto %s)" % (
+                escolhido, params.get("gerado_em", "?"), b3lib.num(pr["oos"]["R_medio"], 3),
+                b3lib.pct(100 * pr["oos"]["acerto"], 1))
+        else:
+            origem = "padrão da skill (nenhum setup validado pelo backtest neste ativo/lado)"
+    else:
+        origem = "informados por você"
+    entrada_txt, stop_txt, alvo_txt = entrada_txt or "gatilho", stop_txt or "swing:5", alvo_txt or "2R"
     if entrada_txt == "gatilho":
         entrada = cent(ult["h"] + CENT) if s > 0 else cent(ult["l"] - CENT)
         nome_e = "gatilho: %s do pregão de %s %s 1 centavo" % ("máxima" if s > 0 else "mínima",
                                                               ult["data"].strftime("%d/%m"), "mais" if s > 0 else "menos")
         tipo = "stop"
+    elif entrada_txt == "abertura":
+        entrada, tipo = cent(ult["c"]), "mercado"
+        nome_e = "a mercado na abertura do próximo pregão (estimativa: último fechamento)"
     elif entrada_txt == "fechamento":
         entrada, nome_e, tipo = cent(ult["c"]), "último fechamento", "limitada"
     else:
         try:
             entrada = cent(float(str(entrada_txt).replace(",", ".")))
         except ValueError:
-            raise b3lib.B3Erro("--entrada é gatilho, fechamento ou um preço")
+            raise b3lib.B3Erro("--entrada é gatilho, abertura, fechamento ou um preço")
         nome_e, tipo = "seu preço", "limitada"
     regra, v = ler_regra_stop(stop_txt)
     stop, nome_s = stop_de(regra, v, dias, entrada, s)
@@ -167,30 +245,44 @@ def montar_plano(sym, lado, dias, cfg, entrada_txt="gatilho", stop_txt="swing:5"
     if risco < entrada * 0.0005:
         raise b3lib.B3Erro("stop a menos de 0,05%% da entrada: apertado demais")
     ra, va = ler_alvo(alvo_txt)
-    alvo = cent(entrada + s * va * risco) if ra == "r" else cent(va)
-    rr = s * (alvo - entrada) / risco
-    if rr <= 0:
-        raise b3lib.B3Erro("o alvo %s está do lado errado da entrada" % b3lib.reais(alvo))
+    if ra == "nenhum":
+        alvo, rr = None, None
+    else:
+        alvo = cent(entrada + s * va * risco) if ra == "r" else cent(va)
+        rr = s * (alvo - entrada) / risco
+        if rr <= 0:
+            raise b3lib.B3Erro("o alvo %s está do lado errado da entrada" % b3lib.reais(alvo))
     prazo = int(prazo or cfg["swing_prazo_pregoes"])
     hoje = hoje or ult["data"]
     dia = b3lib.proximo_pregao(ult["data"], cfg) if hoje <= ult["data"] else b3lib.pregoes_a_frente(hoje, 0, cfg)
-    tags, _ = scan.setups([d["c"] for d in dias])
-    lado_tags = [t for t in tags if scan.LADO_SETUP[t] == lado]
+    setup = escolhido or (lado_tags[0] if lado_tags else "manual")
+    info = ((params.get("setups") or {}).get(setup) or {})
+    filtro_ok, filtro_txt = checar_filtro(filtro, s, dias, ibov_dias)
     plano = {"symbol": sym, "estrategia": "swing", "lado": lado, "dia_sinal": ult["data"].isoformat(),
              "dia": dia.isoformat(), "tipo_entrada": tipo, "entrada": entrada, "entrada_regra": nome_e,
              "stop": stop, "stop_regra": nome_s, "alvo": alvo, "risco_por_acao": round(risco, 2),
-             "risco_retorno": round(rr, 2), "prazo_pregoes": prazo,
+             "risco_retorno": round(rr, 2) if rr is not None else None, "prazo_pregoes": prazo,
              "prazo_ate": b3lib.pregoes_a_frente(dia, prazo - 1, cfg).isoformat(),
-             "setups": lado_tags, "setup": lado_tags[0] if lado_tags else "manual",
+             "setups": lado_tags, "setup": setup, "setup_validado": bool(info.get("ativo")),
+             "parametros_origem": origem, "filtro": filtro or "nenhum", "filtro_ok": filtro_ok, "filtro_txt": filtro_txt,
              "ultimo_fechamento": round(ult["c"], 2), "zerar_ate": None,
-             "regra": {"stop": regra, "stop_param": v, "alvo_r": round(rr, 2) if ra == "preco" else va,
-                       "entrada": entrada_txt if entrada_txt in ("gatilho", "fechamento") else "preco"}}
-    avisos = []
+             "regra": {"stop": regra, "stop_param": v,
+                       "alvo_r": (round(rr, 2) if ra == "preco" else va) if ra != "nenhum" else None,
+                       "entrada": entrada_txt if entrada_txt in ("gatilho", "fechamento", "abertura") else "preco"}}
     if not lado_tags:
         avisos.append("nenhum setup de %s do scanner está ativo em %s agora" % (lado, sym))
+    elif not plano["setup_validado"] and params.get("setups"):
+        oos = info.get("oos") or {}
+        avisos.append("o setup %s NÃO teve vantagem no backtest fora da amostra (%s): b3-risco bloqueia com "
+                      "swing_somente_validados" % (setup, "R médio %s" % b3lib.num(oos["R_medio"], 3) if oos.get("n")
+                                                   else "nenhuma combinação passou no treino"))
+    if filtro_ok is False:
+        avisos.append("filtro %s reprovado (%s): nesse cenário o setup não teve vantagem no treino" % (filtro, filtro_txt))
+    elif filtro_ok is None:
+        avisos.append("filtro %s não conferido: %s" % (filtro, filtro_txt))
     if abs(entrada / ult["c"] - 1) > 0.03:
         avisos.append("a entrada está %s do último fechamento" % b3lib.pct(100 * (entrada / ult["c"] - 1)))
-    if rr < float(cfg["min_risco_retorno"]):
+    if rr is not None and rr < float(cfg["min_risco_retorno"]):
         avisos.append("risco/retorno %s abaixo do mínimo do config: b3-risco vai bloquear" % b3lib.num(rr))
     if lado == "venda":
         aluguel = entrada * float(cfg["aluguel_taxa_aa_pct"]) / 100.0 * prazo / 252.0
@@ -205,13 +297,16 @@ def montar_plano(sym, lado, dias, cfg, entrada_txt="gatilho", stop_txt="swing:5"
 
 def descrever_plano(p):
     s = b3lib.sinal_lado(p["lado"])
+    alvo = ("%s (%sR)" % (b3lib.reais(p["alvo"]), b3lib.num(p["risco_retorno"])) if p.get("alvo") is not None
+            else "sem alvo: sai no stop ou no fim do prazo")
     linhas = ["Plano de swing %s %s (sinal de %s, entrada a partir de %s):" % (
         "COMPRADO em" if s > 0 else "VENDIDO em", p["symbol"], p["dia_sinal"], p["dia"]),
         "  entrada %s (%s)" % (b3lib.reais(p["entrada"]), p["entrada_regra"]),
         "  stop    %s (%s) — risco de %s por ação" % (b3lib.reais(p["stop"]), p["stop_regra"], b3lib.reais(p["risco_por_acao"])),
-        "  alvo    %s (%sR)" % (b3lib.reais(p["alvo"]), b3lib.num(p["risco_retorno"])),
+        "  alvo    " + alvo,
         "  prazo   %d pregões, até %s" % (p["prazo_pregoes"], p["prazo_ate"]),
-        "  setups ativos: %s" % (", ".join(p["setups"]) or "nenhum")]
+        "  setups ativos: %s | parâmetros %s" % (", ".join(p["setups"]) or "nenhum", p.get("parametros_origem", "")),
+        "  filtro: %s%s" % (p.get("filtro", "nenhum"), " (%s)" % p["filtro_txt"] if p.get("filtro") not in (None, "nenhum") else "")]
     for a in p.get("avisos") or []:
         linhas.append("  aviso: " + a)
     linhas.append("  Um stop é um plano, não garantia: no swing o gap de abertura pode executar bem pior.")
@@ -249,6 +344,9 @@ def um_dia(o, h, l, c, stop, alvo, s):
 
 def simular(pool, entrada, stop, alvo, lado, prazo, replays=10000, seed=19, aluguel_dia=0.0):
     s = b3lib.sinal_lado(lado)
+    sem_alvo = alvo is None
+    if sem_alvo:
+        alvo = float("inf") * s
     risco = s * (entrada - stop)
     rng = random.Random(seed)
     escolha = rng.choice
@@ -277,7 +375,7 @@ def simular(pool, entrada, stop, alvo, lado, prazo, replays=10000, seed=19, alug
             "p_positivo": round(sum(1 for r in Rs if r > 0) / float(replays), 4),
             "R_medio": round(statistics.mean(Rs), 3), "R_p5": round(q(0.05), 2), "R_p95": round(q(0.95), 2),
             "p_gap_no_stop": round(gap / float(replays), 4), "dias_medios": round(statistics.mean(dias_pos), 1),
-            "r_alvo": round(s * (alvo - entrada) / risco, 2)}
+            "r_alvo": None if sem_alvo else round(s * (alvo - entrada) / risco, 2)}
 
 
 def historico(dias, plano, cfg):
@@ -301,6 +399,8 @@ def historico(dias, plano, cfg):
                 t += 1
                 continue
             e = max(prox["o"], gat) if s > 0 else min(prox["o"], gat)
+        elif regra.get("entrada") == "abertura":
+            e = prox["o"]
         else:
             e = sinal["c"]
         try:
@@ -312,7 +412,7 @@ def historico(dias, plano, cfg):
         if risco <= 0:
             t += 1
             continue
-        alvo = e + s * float(regra["alvo_r"]) * risco
+        alvo = e + s * float(regra["alvo_r"]) * risco if regra.get("alvo_r") else float("inf") * s
         sai, mot, j = None, None, t + 1
         if (prox["l"] <= st) if s > 0 else (prox["h"] >= st):  # stop no próprio dia da entrada
             sai, mot = st, "stop"
@@ -324,7 +424,8 @@ def historico(dias, plano, cfg):
         if sai is None:
             j = min(len(dias) - 1, t + prazo)
             sai, mot = dias[j]["c"], "prazo"
-        ops.append({"sinal": sinal["data"].isoformat(), "entrada": round(e, 2), "stop": st, "alvo": round(alvo, 2),
+        ops.append({"sinal": sinal["data"].isoformat(), "entrada": round(e, 2), "stop": st,
+                    "alvo": round(alvo, 2) if math.isfinite(alvo) else None,
                     "saida": round(sai, 2), "resultado": mot, "R": round(s * (sai - e) / risco, 2)})
         t = j + 1
     return {"operacoes": len(ops), "alvo": sum(1 for o in ops if o["resultado"] == "alvo"),
@@ -336,6 +437,9 @@ def historico(dias, plano, cfg):
 
 def veredito(mc):
     pa, ps = mc["p_alvo"], mc["p_stop"]
+    if mc.get("r_alvo") is None:
+        return "Sem alvo: %s dos caminhos pararam no stop e %s terminaram positivos no fim do prazo." % (
+            b3lib.pct(100 * ps, 0), b3lib.pct(100 * mc["p_positivo"], 0))
     if pa + ps <= 0:
         return "Nenhum caminho tocou alvo ou stop no prazo: o preço no fim do prazo decide."
     r = mc["r_alvo"] or 1.0
@@ -403,6 +507,8 @@ def avaliar_posicao(sym, pos, plano, dias, hoje, cfg):
     desde = [d for d in dias if d["data"].isoformat() >= plano["dia"]]
     preco = dias[-1]["c"] if dias else None
     stop, alvo = plano["stop"], plano["alvo"]
+    if alvo is None:
+        alvo = float("inf") * s
     risco = s * (medio - stop) if medio else plano["risco_por_acao"]
     tocou = None
     for d in desde:
@@ -424,12 +530,13 @@ def avaliar_posicao(sym, pos, plano, dias, hoje, cfg):
             sugestao = longe(min(d["l"] for d in ult3) - CENT, s) if s > 0 else longe(max(d["h"] for d in ult3) + CENT, s)
         elif r_atual >= 1:
             sugestao = round(medio, 2)
-        if sugestao is not None and s * (sugestao - stop) > 0:
+        if sugestao is not None and s * (sugestao - stop) > 0 and s * (alvo - sugestao) > 0:
             acoes.append("a favor %sR: considere mover o stop para %s (swing.py mover-stop %s %s)" % (
                 b3lib.num(r_atual), b3lib.reais(sugestao), sym, "%.2f" % sugestao))
     out = {"symbol": sym, "lado": "comprado" if s > 0 else "vendido", "qtd": qtd, "preco_medio": round(medio, 2),
            "preco": preco, "resultado": round(s * (preco - medio) * abs(qtd), 2) if preco else None,
-           "R": round(r_atual, 2) if r_atual is not None else None, "stop": stop, "alvo": alvo,
+           "R": round(r_atual, 2) if r_atual is not None else None, "stop": stop,
+           "alvo": alvo if math.isfinite(alvo) else None,
            "pregoes_em_posicao": em_posicao, "prazo_ate": plano["prazo_ate"], "tocou": tocou, "acoes": acoes}
     if s < 0:
         out["aluguel_acumulado"] = round(medio * abs(qtd) * float(cfg["aluguel_taxa_aa_pct"]) / 100.0 * em_posicao / 252.0, 2)
@@ -460,7 +567,7 @@ def cmd_acompanhar(a, cfg, agora):
             r["symbol"], r["lado"], abs(r["qtd"]), b3lib.reais(r["preco_medio"]), b3lib.reais(r["preco"]),
             b3lib.reais(r["resultado"]), b3lib.num(r["R"]), r["pregoes_em_posicao"], r["prazo_ate"],
             ", aluguel ≈ %s" % b3lib.reais(r["aluguel_acumulado"]) if "aluguel_acumulado" in r else ""))
-        print("  stop %s | alvo %s" % (b3lib.reais(r["stop"]), b3lib.reais(r["alvo"])))
+        print("  stop %s | alvo %s" % (b3lib.reais(r["stop"]), b3lib.reais(r["alvo"]) if r["alvo"] else "nenhum (sai no prazo)"))
         for x in r["acoes"] or ["nada a fazer: dentro do plano"]:
             print("  -> " + x)
     if sem_plano:
@@ -479,7 +586,7 @@ def cmd_mover_stop(a, cfg):
     if s * (novo - p["stop"]) <= 0:
         raise b3lib.B3Erro("o stop só anda a favor da posição: %s -> %s %s" % (
             b3lib.reais(p["stop"]), b3lib.reais(novo), "afrouxa o risco" if s * (novo - p["stop"]) < 0 else "não muda"))
-    if s * (p["alvo"] - novo) <= 0:
+    if p.get("alvo") is not None and s * (p["alvo"] - novo) <= 0:
         raise b3lib.B3Erro("o novo stop passaria do alvo %s" % b3lib.reais(p["alvo"]))
     p.setdefault("historico_stop", []).append({"de": p["stop"], "para": novo,
                                                 "em": b3lib.para_brt(b3lib.ler_agora(a.now)).strftime("%Y-%m-%d %H:%M")})
@@ -487,6 +594,16 @@ def cmd_mover_stop(a, cfg):
     b3lib.gravar_json(planos_path(), planos)
     print("Stop de %s movido para %s. Ajuste também a OCO na corretora." % (sym, b3lib.reais(novo)))
     return 0
+
+
+def carregar_ibov(offline=None):
+    if offline:
+        for nome in ("_BVSP.json.gz", "_BVSP.json", "BVSP.json.gz", "BVSP.json"):
+            p = os.path.join(offline, nome)
+            if os.path.exists(p):
+                return b3lib.ler_chart(b3lib.ler_texto(p), "^BVSP")
+        raise b3lib.B3Erro("sem Ibovespa em %s" % offline)
+    return b3lib.ler_chart(b3lib.yahoo_get("/v8/finance/chart/%5EBVSP?range=1y&interval=1d"), "^BVSP")
 
 
 # ---------------------------------------------------------------- main
@@ -497,9 +614,10 @@ def main(argv=None):
     pa.add_argument("symbol", nargs="?")
     pa.add_argument("preco", nargs="?")
     pa.add_argument("--lado", choices=["compra", "venda"])
-    pa.add_argument("--entrada", default="gatilho")
-    pa.add_argument("--stop", default="swing:5")
-    pa.add_argument("--target", default="2R")
+    pa.add_argument("--entrada")
+    pa.add_argument("--stop")
+    pa.add_argument("--target")
+    pa.add_argument("--filtro", choices=["nenhum", "tendencia", "regime", "ambos"])
     pa.add_argument("--prazo", type=int)
     pa.add_argument("--replays", type=int, default=10000)
     pa.add_argument("--seed", type=int, default=19)
@@ -517,7 +635,13 @@ def main(argv=None):
                 raise b3lib.B3Erro("uso: swing.py plano PETR4 --lado compra|venda")
             sym = b3lib.sem_fracionario(a.symbol)
             dias = pregoes_diarios(b3lib.obter_chart(sym, "1y", "1d", a.offline), agora, cfg)
-            p = montar_plano(sym, a.lado, dias, cfg, a.entrada, a.stop, a.target, a.prazo, b3lib.para_brt(agora).date())
+            ibov = None
+            try:
+                ibov = pregoes_diarios(carregar_ibov(a.offline), agora, cfg)
+            except (b3lib.B3Erro, OSError, ValueError):
+                pass
+            p = montar_plano(sym, a.lado, dias, cfg, a.entrada, a.stop, a.target, a.prazo, b3lib.para_brt(agora).date(),
+                             a.filtro, ibov)
             if a.write:
                 b3lib.gravar_json(b3lib.caminho("plano.json"), p)
                 planos = ler_planos()

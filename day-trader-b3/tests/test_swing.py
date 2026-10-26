@@ -17,7 +17,7 @@ from test_b3 import (CFG, ComPasta, FIX, RAIZ, b3lib, boleta, carregar, orcament
 swing = carregar("b3-swing", "swing.py")
 SW = os.path.join(FIX, "swing")
 AGORA = "2026-10-26 09:00"
-CFG_V = dict(CFG, permitir_vendido=True, max_perda_por_operacao=200, orcamento=30000)
+CFG_V = dict(CFG, permitir_vendido=True, max_perda_por_operacao=200, orcamento=30000, swing_somente_validados=False)
 APURACAO = os.path.join(os.path.dirname(RAIZ), ".claude", "skills", "traders", "scripts", "apuracao_mensal.py")
 
 
@@ -126,6 +126,11 @@ class RiscoVendido(unittest.TestCase):
         self.assertTrue(any(m.startswith("stop") for m in r["ordens"][0]["motivos"]))
         r = risco.checar([self.ordem()], CFG_V, agora_utc=utc("2026-10-26 17:00"))
         self.assertTrue(any("entradas de swing" in m for m in r["ordens"][0]["motivos"]))
+
+    def test_setup_sem_vantagem_bloqueado_por_padrao(self):
+        r = risco.checar([self.ordem()], dict(CFG_V, swing_somente_validados=True), {"caixa": 30000, "posicoes": {}},
+                         agora_utc=utc("2026-10-26 10:05"))
+        self.assertTrue(any(m.startswith("setup: sobrecomprado") for m in r["ordens"][0]["motivos"]))
 
     def test_zerar_vendido_sempre_passa(self):
         cobre = {"symbol": "B3SA3", "codigo": "B3SA3", "mercado": "lote", "lado": "compra", "qtd": 100,

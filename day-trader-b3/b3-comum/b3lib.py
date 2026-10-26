@@ -77,6 +77,7 @@ DEFAULTS = {
     "max_exposicao_vendida_pct": 50,
     "vendido_somente_lote": True,
     "folga_stop_pct": 0.5,
+    "swing_somente_validados": True,
 }
 
 

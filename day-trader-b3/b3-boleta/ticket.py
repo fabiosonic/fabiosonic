@@ -123,6 +123,13 @@ def passo_a_passo(o, cfg):
         n += 1
     linhas.append("    %d. %s no %s." % (n, texto(o), "mercado fracionário" if o["mercado"] == "fracionario" else "lote padrão"))
     n += 1
+    if o.get("stop") and not o.get("alvo"):
+        saida = "venda" if o["lado"] == "compra" else "compra"
+        linhas.append("    %d. Assim que executar, ordem stop de %s de %d %s com gatilho %s, válida até cancelar (plano sem "
+                      "alvo: a saída é o stop ou o fim do prazo)." % (n, saida, o["qtd"], o["codigo"], b3lib.reais(o["stop"])))
+        n += 1
+        if o.get("estrategia") == "swing":
+            linhas.append("    %d. No fim do prazo (%s), zere o que sobrar (/b3-boleta zerar)." % (n, o.get("prazo_ate")))
     if o.get("stop") and o.get("alvo"):
         saida = "venda" if o["lado"] == "compra" else "compra"
         linhas.append("    %d. Assim que executar, ordem OCO de %s de %d %s: stop com gatilho %s e ganho (alvo) %s%s."
@@ -144,7 +151,7 @@ def render(o, i, total, cfg, res, est, dia):
     linhas = ["Boleta %d de %d — %s" % (i, total, st), "  " + texto(o)]
     if o.get("stop"):
         perda = (v or {}).get("perda_no_stop")
-        linhas.append("  stop %s | alvo %s%s" % (b3lib.reais(o["stop"]), b3lib.reais(o.get("alvo")),
+        linhas.append("  stop %s | alvo %s%s" % (b3lib.reais(o["stop"]), b3lib.reais(o.get("alvo")) if o.get("alvo") else "nenhum",
                                                  " | perda no stop com custos ≈ %s" % b3lib.reais(perda) if perda else ""))
     if v:
         for m in v["motivos"]:
