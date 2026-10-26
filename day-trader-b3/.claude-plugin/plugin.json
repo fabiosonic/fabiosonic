@@ -1,0 +1,22 @@
+{
+  "name": "day-trader-b3",
+  "description": "12 skills de day trade para a bolsa brasileira (B3): scanner, notícias da CVM, entrada, saída, máquina do tempo, risco, orçamento com lote e fracionário, boleta com sim explícito, alertas, resultados (ITR/DFP), negociações de administradores e apuração de IR.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Fabio"
+  },
+  "homepage": "https://github.com/fabiosonic/fabiosonic/tree/main/day-trader-b3",
+  "repository": "https://github.com/fabiosonic/fabiosonic",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "claude-skills",
+    "b3",
+    "bovespa",
+    "day-trade",
+    "cvm",
+    "imposto-de-renda",
+    "darf"
+  ],
+  "skills": "./"
+}

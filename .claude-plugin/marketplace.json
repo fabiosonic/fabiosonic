@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "fabiosonic",
+  "description": "Skills de tributação e day trade para o mercado brasileiro",
+  "owner": {
+    "name": "Fabio"
+  },
+  "plugins": [
+    {
+      "name": "day-trader-b3",
+      "description": "Day trade na B3 com Claude: scanner, entrada, saída, simulação, risco, boleta com sim explícito, dados da CVM e apuração de IR.",
+      "source": "./day-trader-b3",
+      "category": "productivity"
+    }
+  ]
+}
