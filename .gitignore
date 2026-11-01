@@ -1,0 +1,4 @@
+__pycache__/
+# Dados de clientes ficam apenas localmente (nao versionar): parecer, notas, manuais
+dados/
+manuais/
