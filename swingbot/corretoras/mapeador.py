@@ -148,6 +148,37 @@ def _clique_seguro(loc, log) -> bool:
         return False
 
 
+TEXTOS_VISIVEIS_JS = r"""
+() => { const out = [];
+  const andar = (raiz) => { for (const e of raiz.querySelectorAll('*')) {
+    if (e.shadowRoot) andar(e.shadowRoot);
+    if (e.children.length > 0) continue;
+    const t = (e.innerText || e.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!t || t.length > 30 || /\d/.test(t)) continue;
+    const b = e.getBoundingClientRect(), s = getComputedStyle(e);
+    if (b.width > 0 && b.height > 0 && s.visibility !== 'hidden' && s.display !== 'none')
+      out.push([t, Math.round(b.y), Math.round(b.x)]); } };
+  andar(document); return out; }
+"""
+
+
+def _textos_visiveis(page) -> list:
+    try:
+        return page.evaluate(TEXTOS_VISIVEIS_JS)
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _novos_textos(antes: list, depois: list) -> list[str]:
+    """Textos que APARECERAM após o clique (as opções da lista), na ordem da tela."""
+    vistos = {t for t, _, _ in antes}
+    novos = []
+    for t, _, _ in sorted(depois, key=lambda x: (x[1], x[2])):
+        if t not in vistos and t not in novos:
+            novos.append(t)
+    return novos
+
+
 def _texto_opcoes(page) -> list[str]:
     ops = page.locator("[role=option], [role=menuitem], .MuiMenu-list li, .MuiPopover-paper li, [role=listbox] li")
     textos = []
@@ -165,49 +196,57 @@ def explorar_boleta(page, log=print) -> dict:
     if not boleta.count():
         log("    boleta não encontrada (abra uma janela de boleta no Home Broker)")
         return res
-    if _clique_seguro(boleta.locator(CHIP.format("Compra")).first, log):
+
+    def vis(seletor):
+        return boleta.locator(f"{seletor} >> visible=true")
+
+    if _clique_seguro(vis(CHIP.format("Compra")).first, log):
         page.wait_for_timeout(500)
-    # descobre ONDE clicar para abrir a lista: no "A mercado ⌄", no item "Tipo de ordem" ou num botão de menu
+    # descobre ONDE clicar para abrir a lista: no "A mercado ⌄", na linha "Tipo de ordem" ou num botão de menu
     candidatos = {
-        # o valor mostrado muda (A mercado -> Limitada...), então a referência não pode depender do texto
-        "valor_atual": boleta.locator(f"{LINHA_TIPO} .SomaListItemSingleLine-endSlot").first,
-        "linha": boleta.locator(LINHA_TIPO).first,
-        "seta": boleta.locator(f"{LINHA_TIPO} svg").last,
-        "item": boleta.locator("li:has-text('Tipo de ordem')").first,
-        "popup": boleta.locator("[aria-haspopup]").first,
+        "valor_atual": vis(f"{LINHA_TIPO} .SomaListItemSingleLine-endSlot").first,
+        "linha": vis(LINHA_TIPO).first,
+        "seta": vis(f"{LINHA_TIPO} svg").last,
+        "item": vis("li:has-text('Tipo de ordem')").first,
+        "popup": vis("[aria-haspopup]").first,
     }
     tipo = None
     for nome, loc in candidatos.items():
-        if not loc.count() or not _clique_seguro(loc, log):
+        if not loc.count():
             continue
-        page.wait_for_timeout(800)
-        opcoes = _texto_opcoes(page)
+        antes = _textos_visiveis(page)
+        if not _clique_seguro(loc, log):
+            continue
+        page.wait_for_timeout(900)
+        depois = _textos_visiveis(page)
+        opcoes = _texto_opcoes(page) or _novos_textos(antes, depois)
+        res["estados"][f"apos_clicar_{nome}"] = coletar(page)
         if opcoes:
             tipo = loc
             res["abrir_tipo"] = nome
-            res["estados"]["lista_tipo_aberta"] = coletar(page)
             res["opcoes_tipo_ordem"] = opcoes
             log(f"    lista aberta clicando em '{nome}'. Opções: {opcoes}")
             page.keyboard.press("Escape")
             page.wait_for_timeout(400)
             break
+        log(f"    clique em '{nome}' não abriu lista")
         page.keyboard.press("Escape")
+        page.wait_for_timeout(300)
     if tipo is None:
         log("    não consegui abrir a lista 'Tipo de ordem' automaticamente")
-        res["estados"]["sem_lista"] = coletar(page)
-        tipo = candidatos["item"]
+        return res
     for op in res["opcoes_tipo_ordem"]:
         if not _clique_seguro(tipo, log):
             break
-        page.wait_for_timeout(500)
-        item = page.locator(f"[role=option]:text-is('{op}'), [role=menuitem]:text-is('{op}'), li:text-is('{op}')").first
-        if _clique_seguro(item, log):
-            page.wait_for_timeout(700)
+        page.wait_for_timeout(600)
+        item = page.locator(f"text='{op}' >> visible=true").last
+        if item.count() and _clique_seguro(item, log):
+            page.wait_for_timeout(800)
             res["estados"][f"tipo_{op}"] = coletar(page)
-            campos = boleta.locator("input:not([type=checkbox])")
+            campos = vis("input:not([type=checkbox])")
             nomes = []
-            for i in range(min(campos.count(), 12)):
-                c = campos.nth(i)
+            for k in range(min(campos.count(), 12)):
+                c = campos.nth(k)
                 nomes.append({"name": c.get_attribute("name"), "id": c.get_attribute("id"),
                               "type": c.get_attribute("type"), "placeholder": c.get_attribute("placeholder")})
             res["seletores_descobertos"][op] = nomes
@@ -215,7 +254,7 @@ def explorar_boleta(page, log=print) -> dict:
         else:
             page.keyboard.press("Escape")
     # como trocar o ativo da boleta: clicar no código no topo da janela
-    cab = boleta.locator(".SomaWindow-header").first
+    cab = vis(".SomaWindow-header").first
     if cab.count():
         alvo = cab.locator("text=/^[A-Z]{4}[0-9]{1,2}$/").first
         if alvo.count() and _clique_seguro(alvo, log):

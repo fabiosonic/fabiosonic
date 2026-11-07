@@ -228,3 +228,46 @@ def test_ignora_janelas_de_workspaces_escondidos():
         hb.page = pg
         hb._clicar("boleta.abrir_compra")          # clica no chip VISÍVEL (o oculto falharia)
         b.close()
+
+
+SOMA_HTML = """<html><body>
+<div data-testid="SomaWindow">
+  <div class="SomaWindow-header"><span>BEEF3</span></div>
+  <div style="display:none"><div data-testid="SomaChipChoice">Compra</div></div>
+  <div data-testid="SomaChipChoice">Compra</div><div data-testid="SomaChipChoice">Venda</div>
+  <div data-testid="SomaListItemSingleLine" id="tipo"><p>Tipo de ordem</p>
+    <div class="SomaListItemSingleLine-endSlot"><span id="val">A mercado</span></div></div>
+  <div id="campos"><input name="price"><input name="quantity"></div>
+  <button data-testid="SomaButtonTrade" id="enviar">Comprar 2,68</button>
+</div>
+<div id="pop"></div>
+<script>
+  window.ENVIADO = false; document.getElementById('enviar').onclick = () => window.ENVIADO = true;
+  document.querySelector('#tipo .SomaListItemSingleLine-endSlot').onclick = () => {
+    // lista própria: divs simples, sem role=option nem li
+    document.getElementById('pop').innerHTML = ['A mercado', 'Limitada', 'Stop Loss']
+      .map(o => '<div class="SomaOption"><span>' + o + '</span></div>').join('');
+    document.querySelectorAll('.SomaOption').forEach(d => d.onclick = () => {
+      document.getElementById('val').innerText = d.innerText;
+      document.getElementById('campos').innerHTML = '<input name="price"><input name="quantity">'
+        + (d.innerText === 'Stop Loss' ? '<input name="triggerPrice">' : '');
+      document.getElementById('pop').innerHTML = '';
+    });
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('pop').innerHTML = ''; });
+</script></body></html>"""
+
+
+def test_lista_propria_da_clear_e_chip_escondido():
+    from swingbot.corretoras.mapeador import explorar_boleta
+    with pw.sync_playwright() as p:
+        b = _navegador(p)
+        pg = b.new_page()
+        pg.set_content(SOMA_HTML)
+        r = explorar_boleta(pg, log=lambda *_: None)
+        enviado = pg.evaluate("window.ENVIADO")
+        b.close()
+    assert enviado is False
+    assert r["abrir_tipo"] == "valor_atual"
+    assert r["opcoes_tipo_ordem"] == ["Limitada", "Stop Loss"]     # "A mercado" já estava na tela
+    assert "triggerPrice" in [c["name"] for c in r["seletores_descobertos"]["Stop Loss"]]
