@@ -217,13 +217,14 @@ def cmd_ia_testar(cfg, args):
     except Exception as e:  # noqa: BLE001
         sys.exit(f"O modelo não respondeu ({e}). Tente outro: ollama pull qwen2.5:7b")
     if args.configurar:
-        arq = Path(args.config)
-        texto = arq.read_text(encoding="utf-8")
-        import re
-        texto = re.sub(r"(?m)^(\s*provedor:\s*)\S+", r"\1ollama", texto, count=1)
-        texto = re.sub(r"(?m)^(\s*ollama_modelo:\s*)\S+", rf"\g<1>{modelo}", texto, count=1)
-        arq.write_text(texto, encoding="utf-8")
-        print(f"\nPronto: config.yaml agora usa provedor ollama com {modelo}. Reinicie o painel.")
+        import yaml
+        arq = Path(args.config).with_name("local.yaml")   # pessoal: ignorado pelo git
+        dados = yaml.safe_load(arq.read_text(encoding="utf-8")) if arq.exists() else {}
+        dados = dados or {}
+        dados.setdefault("ia", {}).update({"provedor": "ollama", "ollama_modelo": modelo})
+        arq.write_text("# Configurações PESSOAIS (não vão para o GitHub)\n"
+                       + yaml.safe_dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        print(f"\nPronto: {arq} agora usa provedor ollama com {modelo}. Reinicie o painel.")
     else:
         print("\nTudo certo. Para ativar: python -m swingbot ia-testar --configurar")
 

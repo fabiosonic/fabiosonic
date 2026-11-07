@@ -8,3 +8,15 @@ dados_cache/
 estado/
 logs/
 PARAR
+
+# ---- PRIVACIDADE: nada pessoal vai para o GitHub ----
+# suas configurações pessoais (capital, provedor de IA, modo real)
+config/local.yaml
+*.local.yaml
+.env
+.env.*
+mapa_clear.json
+*.png
+*.jpg
+*.webp
+!docs/**/*.png

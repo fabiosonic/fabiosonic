@@ -88,9 +88,20 @@ def _montar(cls, dados: dict | None):
     return cls(**dados)
 
 
+def _mesclar(base: dict, extra: dict) -> dict:
+    for k, v in (extra or {}).items():
+        base[k] = _mesclar(dict(base.get(k) or {}), v) if isinstance(v, dict) and isinstance(base.get(k), dict) else v
+    return base
+
+
 def carregar(caminho: str | Path = "config/config.yaml") -> Config:
+    """Lê config.yaml (padrão, versionado) e aplica por cima o config/local.yaml (pessoal, NUNCA versionado)."""
     with open(caminho, encoding="utf-8") as f:
         bruto = yaml.safe_load(f) or {}
+    local = Path(caminho).with_name("local.yaml")
+    if local.exists():
+        with open(local, encoding="utf-8") as f:
+            bruto = _mesclar(bruto, yaml.safe_load(f) or {})
     cfg = Config(
         modo=bruto.get("modo", "simulado"),
         ativos=[a.upper() for a in bruto.get("ativos", [])],
