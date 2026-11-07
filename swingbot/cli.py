@@ -259,7 +259,17 @@ def cmd_executar_fila(cfg, args):
         hb.fechar()
 
 
+def _console_utf8() -> None:
+    """Evita UnicodeEncodeError em terminais do Windows (cp1252) ao imprimir acentos e símbolos."""
+    for fluxo in (sys.stdout, sys.stderr):
+        try:
+            fluxo.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None):
+    _console_utf8()
     p = argparse.ArgumentParser(prog="swingbot", description="Robô de swing trade — Home Broker Clear")
     p.add_argument("--config", default="config/config.yaml")
     sub = p.add_subparsers(dest="comando", required=True)
