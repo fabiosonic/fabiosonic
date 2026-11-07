@@ -29,7 +29,7 @@ navegacao:
   link_login: ""                 # botão "Entrar" do site (opcional)
   link_homebroker: ""            # não necessário: usa urls.homebroker
   indicador_logado: "text=Resumo da conta"   # painel que só existe logado
-  modo_swing: "button:has-text('Swing Trade')"   # alternância Swing Trade | DT no topo
+  modo_swing: "[role=radio]:has-text('Swing Trade')"   # alternância Swing Trade | DT (confirmado no mapa)
   menu_custodia: ""              # painel "Posição Swing Trade" já fica na tela
   menu_ordens: ""                # painel "Ordens Swing Trade" já fica na tela
 
@@ -41,15 +41,17 @@ custodia:                        # tabela de posições
   preco_atual: ""                # relativo à linha (opcional: cotação usada pelo monitor)
 
 boleta:
-  abrir_compra: "text='Compra'"  # aba da boleta (Compra | Venda | Rápida)
-  abrir_venda: "text='Venda'"
+  abrir_compra: ".MuiChip-root:text-is('Compra')"   # chip da boleta (confirmado no mapa)
+  abrir_venda: ".MuiChip-root:text-is('Venda')"
   # "Tipo de ordem" é uma LISTA: use dois cliques (abrir a lista, escolher a opção), ex.:
   #   aba_limitada: ["<seletor da lista>", "text='Limitada'"]
-  aba_limitada: PREENCHER
+  aba_limitada:                  # abre a lista e escolhe a opção (nome da opção a confirmar no próximo mapa)
+    - "[data-testid='SomaWindow']:has(.MuiChip-root:text-is('Compra')) li:has-text('Tipo de ordem')"
+    - "[role=option]:text-is('Limitada'), [role=menuitem]:text-is('Limitada'), li:text-is('Limitada')"
   aba_stop: PREENCHER
   campo_ativo: PREENCHER
-  campo_quantidade: PREENCHER
-  campo_preco: PREENCHER         # preço limite
+  campo_quantidade: "input[name='quantity']"   # confirmado no mapa
+  campo_preco: "input[name='price']"          # confirmado no mapa
   campo_disparo: PREENCHER       # preço de disparo do stop
   campo_assinatura: ""           # assinatura eletrônica (se exigida a cada ordem)
   botao_enviar: "button:text-matches('^(Comprar|Vender)', 'i')"   # botão verde "Comprar 2,68"

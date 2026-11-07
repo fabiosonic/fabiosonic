@@ -9,7 +9,7 @@ pw = pytest.importorskip("playwright.sync_api")
 HTML = """<html><body>
 <div class="resumo"><span>Resumo da conta</span><span>Total investido + saldo</span><b>R$ 1.234,56</b></div>
 <div class="boleta">
-  <button role="tab">Compra</button><button role="tab">Venda</button><button role="tab">Rápida</button>
+  <div class="MuiChip-root" role="button">Compra</div><div class="MuiChip-root" role="button">Venda</div>
   <div class="tipo"><span>Tipo de ordem</span><div role="combobox" aria-label="Tipo de ordem">A mercado</div></div>
   <fieldset><legend>Preço</legend><input name="price" value="2,68"></fieldset>
   <fieldset><legend>Quantidade</legend><input name="qty" value="100"></fieldset>
@@ -88,3 +88,61 @@ def test_coleta_dentro_de_shadow_dom():
     assert "Compra" in textos and "Venda" in textos and "Limitada" in textos and "Comprar #,##" in textos
     assert any(i["rotulo"] == "Quantidade" and i["name"] == "qty" for i in q["itens"])
     assert q["diagnostico"]["componentes_shadow"] == 1
+
+
+BOLETA_HTML = """<html><body>
+<div data-testid="SomaWindow">
+  <div class="SomaWindow-header"><span id="tk">BEEF3</span> <span>2,61</span></div>
+  <div class="MuiChip-root" role="button">Compra</div><div class="MuiChip-root" role="button">Venda</div>
+  <ul><li class="MuiListItem-root" id="tipo"><p>Tipo de ordem</p><span id="tipoval">A mercado</span></li></ul>
+  <div id="campos"><input name="price" value="A mercado"><input name="quantity" value="100"></div>
+  <button id="enviar">Comprar 2,68</button>
+</div>
+<div id="menu"></div>
+<script>
+  window.ENVIADO = false;
+  document.getElementById('enviar').onclick = () => { window.ENVIADO = true; };
+  document.getElementById('tipo').onclick = () => {
+    document.getElementById('menu').innerHTML = ['A mercado','Limitada','Stop','Stop duplo']
+      .map(o => '<li role="option">' + o + '</li>').join('');
+    document.querySelectorAll('#menu li').forEach(li => li.onclick = () => {
+      document.getElementById('tipoval').innerText = li.innerText;
+      const extra = li.innerText === 'Stop' ? '<input name="stopPrice">' :
+                    li.innerText === 'Stop duplo' ? '<input name="gainTrigger"><input name="lossTrigger">' : '';
+      document.getElementById('campos').innerHTML = '<input name="price"><input name="quantity">' + extra;
+      document.getElementById('menu').innerHTML = '';
+    });
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('menu').innerHTML = ''; });
+  document.getElementById('tk').onclick = () => {
+    document.getElementById('menu').innerHTML = '<div role="dialog"><input name="symbolSearch" placeholder="Buscar ativo"></div>';
+    document.querySelector('[name=symbolSearch]').focus();
+  };
+</script></body></html>"""
+
+
+def test_exploracao_automatica_descobre_campos_sem_enviar():
+    from swingbot.corretoras.mapeador import explorar_boleta
+    with pw.sync_playwright() as p:
+        b = _navegador(p)
+        pg = b.new_page()
+        pg.set_content(BOLETA_HTML)
+        r = explorar_boleta(pg, log=lambda *_: None)
+        enviado = pg.evaluate("window.ENVIADO")
+        b.close()
+    assert enviado is False, "a exploração NUNCA pode clicar em Comprar"
+    assert r["opcoes_tipo_ordem"] == ["A mercado", "Limitada", "Stop", "Stop duplo"]
+    nomes = {op: [c["name"] for c in cs] for op, cs in r["seletores_descobertos"].items() if op != "busca_ativo"}
+    assert "stopPrice" in nomes["Stop"] and "gainTrigger" in nomes["Stop duplo"]
+    assert r["seletores_descobertos"]["busca_ativo"][0]["name"] == "symbolSearch"
+
+
+def test_clique_seguro_bloqueia_envio():
+    from swingbot.corretoras.mapeador import _clique_seguro
+    with pw.sync_playwright() as p:
+        b = _navegador(p)
+        pg = b.new_page()
+        pg.set_content(BOLETA_HTML)
+        assert _clique_seguro(pg.locator("#enviar"), lambda *_: None) is False
+        assert pg.evaluate("window.ENVIADO") is False
+        b.close()

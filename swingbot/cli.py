@@ -68,16 +68,6 @@ def cmd_calibrar(cfg, args):
         hb.fechar()
 
 
-ETAPAS_MAPA = [
-    ("tela_principal", "Deixe o Home Broker aberto na tela principal (com Posição e Ordens Swing Trade visíveis)."),
-    ("boleta_compra_lista", "Na boleta, clique em 'Compra' e ABRA a lista 'Tipo de ordem' (deixe a lista aberta)."),
-    ("boleta_limitada", "Escolha 'Limitada' na lista (os campos de preço e quantidade devem aparecer)."),
-    ("boleta_stop", "Abra 'Tipo de ordem' de novo e escolha a ordem STOP (stop loss / stop de venda)."),
-    ("boleta_oco", "Se existir 'Stop duplo' / 'OCO' na lista, escolha-o. Se não existir, apenas tecle ENTER."),
-    ("boleta_venda", "Clique na aba 'Venda' da boleta (não envie nada)."),
-]
-
-
 def _pagina_do_homebroker(hb):
     """Escolhe a aba do navegador que está no Home Broker (o login pode abrir novas abas)."""
     abas = [pg for pg in hb._ctx.pages if not pg.is_closed()]
@@ -88,9 +78,9 @@ def _pagina_do_homebroker(hb):
 
 
 def cmd_mapear(cfg, args):
-    """Abre a Clear, você faz login e navega; coleta a estrutura da página (sem dados da conta)."""
+    """Abre a Clear; você só faz o login. O mapeador explora a tela sozinho (sem enviar ordens)."""
     from .corretoras.clear_homebroker import ClearHomeBroker, carregar_seletores
-    from .corretoras.mapeador import coletar, sem_dados_pessoais
+    from .corretoras.mapeador import coletar, explorar_boleta, sem_dados_pessoais
     sel = carregar_seletores(cfg.clear.arquivo_seletores)
     hb = ClearHomeBroker(sel, cfg.clear.pasta_sessao, cfg.pasta_logs, cfg.clear.timeout_login_seg, False)
     hb.abrir()
@@ -98,19 +88,12 @@ def cmd_mapear(cfg, args):
     try:
         hb.page.goto((sel.get("urls") or {}).get("homebroker") or "https://trader.clear.com.br/home-broker/new/")
         input("\n>>> Faça o LOGIN na janela do navegador. Quando o Home Broker estiver aberto, tecle ENTER aqui...")
-        for i, (nome, instrucao) in enumerate(ETAPAS_MAPA, 1):
-            input(f"\n[{i}/{len(ETAPAS_MAPA)}] {instrucao}\n    Tecle ENTER quando estiver pronto (NÃO envie ordens)...")
-            hb.page = _pagina_do_homebroker(hb)
-            resultado[nome] = coletar(hb.page)
-            quadros = resultado[nome]["quadros"]
-            n = sum(len(q.get("itens", [])) for q in quadros)
-            diag = [q.get("diagnostico") for q in quadros if q.get("diagnostico")]
-            erros = [q["erro"] for q in quadros if q.get("erro")]
-            print(f"    coletados {n} elementos  (páginas/quadros: {len(quadros)}; {diag[:2]})")
-            if erros:
-                print(f"    avisos: {erros[:2]}")
-            if n == 0:
-                print("    ATENÇÃO: nada coletado. Confira se o Home Broker está aberto NESTA janela do navegador.")
+        hb.page = _pagina_do_homebroker(hb)
+        print("\nMapeando sozinho — NÃO mexa no navegador até terminar (nenhuma ordem será enviada)...")
+        resultado["tela_principal"] = coletar(hb.page)
+        n = sum(len(q.get("itens", [])) for q in resultado["tela_principal"]["quadros"])
+        print(f"  tela principal: {n} elementos")
+        resultado["exploracao"] = explorar_boleta(hb.page, log=print)
     finally:
         hb.fechar()
     if not sem_dados_pessoais(resultado):
@@ -119,7 +102,7 @@ def cmd_mapear(cfg, args):
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(json.dumps(resultado, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"\nMapa salvo em {destino} ({destino.stat().st_size // 1024} KB).")
-    print("Ele contém só a estrutura da página (botões, campos, tabelas) — números da conta foram trocados por '#'.")
+    print("Ele contém só a estrutura da página — números da conta foram trocados por '#'.")
     print("Envie esse arquivo na conversa para eu finalizar os seletores.")
 
 

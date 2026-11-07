@@ -72,8 +72,8 @@ goto menu
 :mapear
 echo.
 echo Uma janela do navegador vai abrir no Home Broker da Clear.
-echo 1. Faca o seu login normalmente.
-echo 2. Siga as instrucoes que aparecerem AQUI nesta janela.
+echo 1. Faca o seu login normalmente e tecle ENTER aqui.
+echo 2. O robo explora a boleta sozinho: NAO mexa no navegador ate terminar.
 echo Nenhuma ordem sera enviada.
 echo.
 "%PY%" -m swingbot mapear

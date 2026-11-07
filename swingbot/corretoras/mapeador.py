@@ -11,6 +11,9 @@ import re
 
 COLETOR_JS = r"""
 () => {
+  const ATTRS = ['col-id', 'aria-colindex', 'row-index', 'aria-rowindex', 'row-id', 'aria-haspopup', 'aria-expanded',
+                 'aria-selected', 'aria-checked', 'data-value', 'data-testid', 'for', 'href'];
+  const NUMERICOS = ['col-id', 'aria-colindex', 'row-index', 'aria-rowindex'];
   const red = (t) => (t || '').replace(/\s+/g, ' ').trim().replace(/\d/g, '#').slice(0, 40);
   const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
     return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
@@ -51,6 +54,8 @@ COLETOR_JS = r"""
       classes: [...e.classList].slice(0, 4).join(' '), texto: red(e.innerText || e.value || ''),
       rotulo: ['input', 'select', 'textarea'].includes(e.tagName.toLowerCase()) ? rotulo(e) : '',
       caminho: caminho(e), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
+      attrs: Object.fromEntries([...e.attributes].filter(a => ATTRS.includes(a.name))
+        .map(a => [a.name, NUMERICOS.includes(a.name) ? a.value.slice(0, 40) : red(a.value)])),
     });
   }
   const tabelas = todos.filter(t => t.matches('table, [role=table], [role=grid]') && vis(t)).slice(0, 12).map(t => ({
@@ -62,7 +67,7 @@ COLETOR_JS = r"""
         classes: [...c.classList].slice(0, 3).join(' '), texto: red(c.innerText) })) }; })(),
     linhas: t.querySelectorAll('tbody tr, [role=row]').length,
   }));
-  return { url: location.href.replace(/\d{4,}/g, '#'), titulo: red(document.title), itens, tabelas,
+  return { url: (location.origin + location.pathname).replace(/\d{4,}/g, '#'), titulo: red(document.title), itens, tabelas,
            diagnostico: { elementos: todos.length, componentes_shadow: hosts,
                           iframes: document.querySelectorAll('iframe').length } };
 }
@@ -85,3 +90,88 @@ def sem_dados_pessoais(dados: dict) -> bool:
     texto = json.dumps(dados, ensure_ascii=False)
     campos = re.findall(r'"(?:texto|placeholder|aria|rotulo|titulo_proximo)": "([^"]*)"', texto)
     return not any(re.search(r"\d", c) for c in campos)
+
+
+# ---------------------------------------------------------------------------- exploração automática
+PROIBIDOS = re.compile(r"^\s*(comprar|vender|enviar|confirmar|executar|zerar|cancelar todas)", re.I)
+BOLETA = "[data-testid='SomaWindow']:has(.MuiChip-root:text-is('Compra'))"
+
+
+def _clique_seguro(loc, log) -> bool:
+    """Clica somente se o elemento NÃO for de envio/confirmação de ordem."""
+    try:
+        texto = (loc.inner_text(timeout=2000) or "").strip()
+    except Exception:  # noqa: BLE001
+        texto = ""
+    if PROIBIDOS.search(texto):
+        log(f"    (bloqueado por segurança: '{texto[:20]}')")
+        return False
+    try:
+        loc.click(timeout=4000)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log(f"    (não foi possível clicar: {str(e)[:60]})")
+        return False
+
+
+def _texto_opcoes(page) -> list[str]:
+    ops = page.locator("[role=option], [role=menuitem], .MuiMenu-list li, .MuiPopover-paper li, [role=listbox] li")
+    textos = []
+    for i in range(min(ops.count(), 30)):
+        t = re.sub(r"\s+", " ", ops.nth(i).inner_text() or "").strip()
+        if t and not re.search(r"\d", t) and t not in textos:
+            textos.append(t)
+    return textos
+
+
+def explorar_boleta(page, log=print) -> dict:
+    """Abre a lista 'Tipo de ordem', testa cada opção e coleta os campos — sem nunca enviar ordem."""
+    res = {"opcoes_tipo_ordem": [], "estados": {}, "seletores_descobertos": {}}
+    boleta = page.locator(BOLETA).first
+    if not boleta.count():
+        log("    boleta não encontrada (abra uma janela de boleta no Home Broker)")
+        return res
+    if _clique_seguro(page.locator(".MuiChip-root:text-is('Compra')").first, log):
+        page.wait_for_timeout(500)
+    tipo = boleta.locator("li:has-text('Tipo de ordem')").first
+    if _clique_seguro(tipo, log):
+        page.wait_for_timeout(700)
+        res["estados"]["lista_tipo_aberta"] = coletar(page)
+        res["opcoes_tipo_ordem"] = _texto_opcoes(page)
+        log(f"    opções de 'Tipo de ordem': {res['opcoes_tipo_ordem']}")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(400)
+    for op in res["opcoes_tipo_ordem"]:
+        if not _clique_seguro(tipo, log):
+            break
+        page.wait_for_timeout(500)
+        item = page.locator(f"[role=option]:text-is('{op}'), [role=menuitem]:text-is('{op}'), li:text-is('{op}')").first
+        if _clique_seguro(item, log):
+            page.wait_for_timeout(700)
+            res["estados"][f"tipo_{op}"] = coletar(page)
+            campos = boleta.locator("input:not([type=checkbox])")
+            nomes = []
+            for i in range(min(campos.count(), 12)):
+                c = campos.nth(i)
+                nomes.append({"name": c.get_attribute("name"), "id": c.get_attribute("id"),
+                              "type": c.get_attribute("type"), "placeholder": c.get_attribute("placeholder")})
+            res["seletores_descobertos"][op] = nomes
+            log(f"    '{op}': campos {[n['name'] or n['id'] for n in nomes]}")
+        else:
+            page.keyboard.press("Escape")
+    # como trocar o ativo da boleta: clicar no código no topo da janela
+    cab = boleta.locator(".SomaWindow-header").first
+    if cab.count():
+        alvo = cab.locator("text=/^[A-Z]{4}[0-9]{1,2}$/").first
+        if alvo.count() and _clique_seguro(alvo, log):
+            page.wait_for_timeout(800)
+            res["estados"]["busca_ativo"] = coletar(page)
+            entradas = page.locator("input:focus, [role=dialog] input, .MuiPopover-paper input, .MuiAutocomplete-input")
+            res["seletores_descobertos"]["busca_ativo"] = [
+                {"name": entradas.nth(i).get_attribute("name"), "id": entradas.nth(i).get_attribute("id"),
+                 "placeholder": entradas.nth(i).get_attribute("placeholder")} for i in range(min(entradas.count(), 5))]
+            log(f"    busca de ativo: {res['seletores_descobertos']['busca_ativo']}")
+            page.keyboard.press("Escape")
+    # volta ao estado inicial (Compra / A mercado) sem enviar nada
+    page.keyboard.press("Escape")
+    return res
