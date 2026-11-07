@@ -1,0 +1,62 @@
+# =============================================================================
+# Mapa da tela do Home Broker da Clear (seletores CSS/Playwright)
+# =============================================================================
+# O layout do Home Broker muda com frequência e só é visível logado, por isso
+# os seletores NÃO vêm prontos: você os captura uma vez com
+#
+#     python -m swingbot calibrar
+#
+# (abre o navegador + Playwright Inspector; clique em "Pick locator", aponte o
+# elemento e cole o seletor aqui). Prefira seletores estáveis:
+#   - texto visível:      text=Comprar            role=button[name="Enviar"]
+#   - atributos:          input[name="quantity"]  [data-testid="order-price"]
+#   - evite classes geradas automaticamente (ex.: .sc-1x2y3z).
+#
+# Valor "PREENCHER" = obrigatório e ainda não calibrado (o modo real se recusa
+# a rodar). Valor "" = opcional / não usado.
+# Depois de calibrar, teste SEM enviar ordens:  python -m swingbot ensaio PETR4
+# =============================================================================
+
+urls:
+  site: "https://www.clear.com.br"
+  homebroker: ""                 # URL direta do HB, se houver (senão usa link_homebroker)
+
+navegacao:
+  link_login: ""                 # botão "Entrar" do site (opcional)
+  link_homebroker: PREENCHER     # link/botão que leva ao Home Broker
+  indicador_logado: PREENCHER    # elemento que SÓ existe com o HB aberto e logado
+  menu_custodia: PREENCHER       # menu/aba de posição/custódia
+  menu_ordens: PREENCHER         # menu/aba de ordens do dia
+
+custodia:                        # tabela de posições
+  linha: PREENCHER               # seletor de cada linha da tabela
+  ativo: PREENCHER               # relativo à linha
+  quantidade: PREENCHER          # relativo à linha
+  preco_medio: PREENCHER         # relativo à linha
+
+boleta:
+  abrir_compra: PREENCHER        # botão que abre a boleta de compra
+  abrir_venda: PREENCHER         # botão que abre a boleta de venda
+  aba_limitada: ""               # aba/opção "Limitada" (se a boleta tiver abas)
+  aba_stop: PREENCHER            # aba/opção "Stop" (stop loss de venda)
+  campo_ativo: PREENCHER
+  campo_quantidade: PREENCHER
+  campo_preco: PREENCHER         # preço limite
+  campo_disparo: PREENCHER       # preço de disparo do stop
+  campo_assinatura: ""           # assinatura eletrônica (se exigida a cada ordem)
+  botao_enviar: PREENCHER
+  confirmacao: PREENCHER         # mensagem/elemento de ordem enviada com sucesso
+  erro: ""                       # mensagem de erro/rejeição (recomendado)
+  fechar: ""                     # fechar a boleta após enviar (se necessário)
+
+ordens:                          # tabela de ordens do dia
+  linha: PREENCHER
+  ativo: PREENCHER               # relativo à linha
+  tipo: PREENCHER                # relativo à linha (ex.: "Stop", "Limitada")
+  lado: PREENCHER                # relativo à linha (ex.: "Compra", "Venda")
+  status: PREENCHER              # relativo à linha (ex.: "Aberta", "Executada")
+  botao_cancelar: PREENCHER      # relativo à linha
+  confirmar_cancelamento: ""     # botão de confirmação do cancelamento (se houver)
+  textos_stop: ["Stop"]
+  textos_venda: ["Venda", "V"]
+  textos_aberta: ["Aberta", "Pendente", "Parcial", "Nova"]

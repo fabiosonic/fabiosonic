@@ -1,0 +1,48 @@
+# =============================================================================
+# SwingBot — configuração
+# =============================================================================
+# modo: simulado -> nenhuma ordem vai para a Clear (paper trading com dados reais)
+# modo: real     -> opera de verdade, mas SÓ com `python -m swingbot rodar --real`
+modo: simulado
+
+# Ativos monitorados (sem .SA). Prefira papéis líquidos do IBOV.
+ativos: [PETR4, VALE3, ITUB4, BBDC4, BBAS3, WEGE3, ABEV3, RENT3, PRIO3, SUZB3, B3SA3, EQTL3]
+
+inicio_dados: "2018-01-01"
+pasta_estado: estado
+pasta_logs: logs
+
+estrategia:
+  nome: tendencia_mm
+  mm_rapida: 9          # MME
+  mm_lenta: 21          # MME
+  mm_filtro: 200        # MMS — só compra acima dela
+  atr_periodo: 14
+  stop_atr: 3.0         # stop = fechamento - 3 x ATR
+  alvo_r: 3.0           # alvo = 3x o risco
+  tempo_max_dias: 30    # pregões
+  trailing_atr: true
+
+risco:
+  capital_teste: 5000.00      # o robô nunca usa mais do que isso
+  risco_por_operacao: 0.01    # perde no máx. 1% do capital por trade (no stop)
+  max_posicoes: 3
+  max_peso_posicao: 0.40
+  max_ordens_dia: 6
+  perda_maxima_total: 0.10    # KILL SWITCH: -10% do capital => para de comprar
+  folga_preco: 0.005          # limite de compra = fechamento + 0,5%
+  folga_stop: 0.01            # stop limite 1% abaixo do disparo
+  custo_percentual: 0.0003    # emolumentos/liquidação B3 (aprox.)
+
+fiscal:
+  limite_isencao_mensal: 20000.00
+  bloquear_venda_acima_isencao: false   # true = adia saídas com lucro que estourariam a isenção
+  tipos_ativo: {}                       # finais 11: informe {TAEE11: acao, BOVA11: etf, HGLG11: fii}
+
+clear:
+  arquivo_seletores: config/seletores_clear.yaml
+  pasta_sessao: .sessao_clear     # perfil do navegador (sessão logada) — não versionar
+  timeout_login_seg: 300
+  horario_inicio: "10:15"         # evita o leilão de abertura
+  horario_fim: "16:45"            # evita o call de fechamento
+  headless: false                 # mantenha a janela visível

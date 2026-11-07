@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# dados locais e sensíveis do robô — nunca versionar
+.sessao_clear/
+dados_cache/
+estado/
+logs/
+PARAR
