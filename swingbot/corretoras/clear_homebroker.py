@@ -276,11 +276,11 @@ class ClearHomeBroker:
         ok, erro = self.s("boleta.confirmacao"), self.s("boleta.erro")
         limite = time.time() + 15
         while time.time() < limite:
-            if erro and self.page.locator(erro).first.is_visible():
-                msg = self.page.locator(erro).first.inner_text()
+            if erro and self._loc(erro).count() > 0:
+                msg = self._loc(erro).first.inner_text()
                 self.foto(f"ERRO_{rotulo}")
                 raise ErroHomeBroker(f"Ordem rejeitada ({rotulo}): {msg}")
-            if self.page.locator(ok).first.is_visible():
+            if self._loc(ok).count() > 0:
                 self.foto(f"ok_{rotulo}")
                 if self.s("boleta.fechar"):
                     try:
