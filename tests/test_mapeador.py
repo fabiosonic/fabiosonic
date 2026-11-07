@@ -146,3 +146,24 @@ def test_clique_seguro_bloqueia_envio():
         assert _clique_seguro(pg.locator("#enviar"), lambda *_: None) is False
         assert pg.evaluate("window.ENVIADO") is False
         b.close()
+
+
+def test_url_sem_codigos_de_acesso():
+    from swingbot.corretoras.mapeador import _url_limpa
+    assert _url_limpa("https://authenticate.clear.com.br/login?state=hKFo2SBW") == "https://authenticate.clear.com.br/login"
+    assert _url_limpa("https://trader.clear.com.br/home-broker/new/?code=abc#x") == "https://trader.clear.com.br/home-broker/new/"
+
+
+def test_espera_o_home_broker_carregar():
+    from swingbot.corretoras.mapeador import esperar_homebroker
+    with pw.sync_playwright() as p:
+        b = _navegador(p)
+        ctx = b.new_context()
+        pg = ctx.new_page()
+        pg.set_content("<p>Tela de login</p>")
+        assert esperar_homebroker(ctx, log=lambda *_: None, timeout_seg=3) is None   # ainda no login: não começa
+        pg.route("https://trader.clear.com.br/**", lambda r: r.fulfill(body="<span>Resumo da conta</span>",
+                                                                       content_type="text/html"))
+        pg.goto("https://trader.clear.com.br/home-broker/new/")
+        assert esperar_homebroker(ctx, log=lambda *_: None, timeout_seg=10) is pg
+        b.close()

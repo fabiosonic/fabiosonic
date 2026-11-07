@@ -74,15 +74,45 @@ COLETOR_JS = r"""
 """
 
 
+def _url_limpa(url: str) -> str:
+    """Endereço sem parâmetros (?code=, ?state=...), que podem conter códigos de acesso."""
+    return re.sub(r"[?#].*$", "", url or "")[:100]
+
+
 def coletar(page) -> dict:
     """Coleta a estrutura da página principal e de todos os iframes."""
     quadros = []
     for f in page.frames:
-        try:
-            quadros.append(f.evaluate(COLETOR_JS))
-        except Exception as e:  # noqa: BLE001 - iframes de outros domínios podem recusar
-            quadros.append({"url": f.url[:80], "erro": str(e)[:120]})
+        for tentativa in range(3):
+            try:
+                quadros.append(f.evaluate(COLETOR_JS))
+                break
+            except Exception as e:  # noqa: BLE001 - página navegando ou iframe de outro domínio
+                if "destroyed" in str(e) and tentativa < 2:
+                    page.wait_for_timeout(2000)   # a página ainda estava carregando: tenta de novo
+                    continue
+                quadros.append({"url": _url_limpa(f.url), "erro": str(e)[:120]})
+                break
     return {"quadros": quadros}
+
+
+def esperar_homebroker(contexto, log=print, timeout_seg: int = 600):
+    """Espera o login terminar e o Home Broker carregar (painel 'Resumo da conta' visível)."""
+    import time
+    limite, aviso = time.time() + timeout_seg, 0.0
+    while time.time() < limite:
+        for pg in reversed([p for p in contexto.pages if not p.is_closed()]):
+            try:
+                if "trader.clear.com.br" in pg.url and pg.locator("text=Resumo da conta").first.is_visible(timeout=500):
+                    pg.wait_for_timeout(3000)   # deixa terminar de desenhar as janelas
+                    return pg
+            except Exception:  # noqa: BLE001
+                continue
+        if time.time() - aviso > 15:
+            log("    aguardando você concluir o login e o Home Broker carregar...")
+            aviso = time.time()
+        time.sleep(2)
+    return None
 
 
 def sem_dados_pessoais(dados: dict) -> bool:

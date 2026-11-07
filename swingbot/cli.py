@@ -80,16 +80,20 @@ def _pagina_do_homebroker(hb):
 def cmd_mapear(cfg, args):
     """Abre a Clear; você só faz o login. O mapeador explora a tela sozinho (sem enviar ordens)."""
     from .corretoras.clear_homebroker import ClearHomeBroker, carregar_seletores
-    from .corretoras.mapeador import coletar, explorar_boleta, sem_dados_pessoais
+    from .corretoras.mapeador import coletar, esperar_homebroker, explorar_boleta, sem_dados_pessoais
     sel = carregar_seletores(cfg.clear.arquivo_seletores)
     hb = ClearHomeBroker(sel, cfg.clear.pasta_sessao, cfg.pasta_logs, cfg.clear.timeout_login_seg, False)
     hb.abrir()
     resultado = {}
     try:
         hb.page.goto((sel.get("urls") or {}).get("homebroker") or "https://trader.clear.com.br/home-broker/new/")
-        input("\n>>> Faça o LOGIN na janela do navegador. Quando o Home Broker estiver aberto, tecle ENTER aqui...")
-        hb.page = _pagina_do_homebroker(hb)
-        print("\nMapeando sozinho — NÃO mexa no navegador até terminar (nenhuma ordem será enviada)...")
+        print("\n>>> Faça o LOGIN na janela do navegador (inclusive a verificação em duas etapas, se houver).")
+        print("    Não precisa apertar nada aqui: o mapeamento começa sozinho quando o Home Broker carregar.")
+        pagina = esperar_homebroker(hb._ctx, log=print)
+        if pagina is None:
+            sys.exit("O Home Broker não carregou em 10 minutos. Tente de novo.")
+        hb.page = pagina
+        print("\nHome Broker detectado. Mapeando sozinho — NÃO mexa no navegador até terminar...")
         resultado["tela_principal"] = coletar(hb.page)
         n = sum(len(q.get("itens", [])) for q in resultado["tela_principal"]["quadros"])
         print(f"  tela principal: {n} elementos")
