@@ -1,0 +1,26 @@
+PAINEL QUANT B3 - COMO USAR (sem precisar programar)
+====================================================
+
+PRIMEIRA VEZ
+1) De DOIS CLIQUES no arquivo  INICIAR.bat  (nesta mesma pasta).
+   - Se faltar o Python, ele instala sozinho.
+   - Depois instala os componentes e baixa os dados (alguns minutos, so na primeira vez).
+   - Cria o atalho "Painel Quant B3" na sua Area de Trabalho.
+2) Se o Windows mostrar "O Windows protegeu o computador":
+   clique em "Mais informacoes" e depois em "Executar assim mesmo".
+
+NO DIA A DIA
+- Use o atalho "Painel Quant B3" na Area de Trabalho e escolha no menu:
+    1 - Abrir o painel
+    2 - Atualizar os dados do mercado (todo dia)
+    3 - Mapear o Home Broker da Clear (so uma vez; envie o arquivo gerado ao Claude)
+    4 - Testar a boleta da Clear SEM enviar ordem
+    5 - Ativar a IA gratuita (Ollama)
+    6 - Atualizar o programa
+
+PRIVACIDADE
+- Sua carteira, login, configuracoes e o mapa da Clear ficam SO neste computador.
+  Nada disso e enviado ao GitHub.
+
+PROBLEMAS
+- Tire uma foto da janela preta com a mensagem e envie na conversa com o Claude.

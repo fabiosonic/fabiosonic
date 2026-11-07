@@ -1,5 +1,9 @@
 # SwingBot — robô de swing trade para o Home Broker da Clear
 
+> **Começo rápido no Windows (sem programar):** dê dois cliques em **`INICIAR.bat`**. Ele instala tudo
+> o que faltar, baixa os dados, cria o atalho "Painel Quant B3" na Área de Trabalho e mostra um menu.
+> As instruções em linguagem simples estão em **`COMO USAR.txt`**.
+
 O robô abre o site da Clear, entra no Home Broker, analisa os ativos no gráfico diário e opera sozinho
 um **capital de teste**. Tem gestão de risco, stop sempre registrado na corretora e apuração do IR.
 
