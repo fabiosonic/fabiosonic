@@ -76,6 +76,36 @@ python -m swingbot monitorar --real       # pregão: registra stops, faz trailin
 O preço vem da custódia da Clear (seletor `custodia.preco_atual`) ou, sem ele, do Yahoo com ~15 min de atraso.
 Para ter stop e alvo juntos na Clear, calibre os seletores de OCO em `config/seletores_clear.yaml`.
 
+### Alerta de reversão de tendência (saída)
+Depois da entrada, o painel e o monitor avaliam a tendência de cada posição a cada minuto (painel) ou a cada 15 min (monitor):
+
+| Sinal | Peso |
+|---|---|
+| MME9 virou para baixo | 1 |
+| MACD cruzou abaixo do sinal (ou está abaixo e caindo) | 2 (1) |
+| Fechamento abaixo da MME21 | 1 |
+| MME9 cruzou abaixo da MME21 | 2 |
+| Rompeu a mínima de 10 pregões | 2 |
+| Perdeu a MMS200 (ou já estava abaixo) | 3 (1) |
+| Devolveu 2 ATR ou mais desde a máxima | 2 |
+
+**1 a 2 pontos = ATENÇÃO; 3 ou mais = SAIR.** No nível SAIR o painel mostra um alerta e envia uma notificação no navegador.
+Se a proteção estiver com **"sair automaticamente"**, o monitor cancela o stop e vende.
+
+### Quanto custa a IA (API da Anthropic)
+A API é cobrada **à parte** da assinatura do claude.ai: é paga por uso, com créditos pré-pagos no Claude Console.
+O painel registra o gasto de cada chamada, mostra o total do mês e **desliga a IA ao atingir o teto** (`ia.orcamento_mensal_usd`).
+
+| Uso (Claude Opus 5.5, US$ 4 / 20 por milhão de tokens) | Custo estimado |
+|---|---|
+| Análise do dia (~5 mil tokens de entrada + raciocínio e resposta) | US$ 0,10 – 0,20 |
+| Pergunta ao assistente | US$ 0,03 – 0,08 |
+| Pergunta com notícias da web | US$ 0,15 – 0,40 |
+| Pesquisa das carteiras das casas (1x por mês) | US$ 0,30 – 1,00 |
+| **Uso diário típico no mês** (1 análise e 5 perguntas por pregão) | **US$ 5 – 10** |
+
+Para gastar menos, use `claude-sonnet-5-5` (cerca de metade) ou `claude-haiku-5-5` (bem menos) em `ia.modelo_chat`.
+
 ## Passo a passo
 
 ### 1. Backtest

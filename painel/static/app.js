@@ -187,7 +187,7 @@ function renderScanner() {
     { t: "Risco", n: 1, f: (o) => Pabs(o.risco_pct) },
     { t: "Tendência", f: (o) => (o.acima_mm200 ? '<span class="etiqueta compra">acima MM200</span>' : '<span class="etiqueta venda">abaixo MM200</span>') },
     { t: "Evidência 10a", f: (o) => evidencia(o.evidencia) },
-    { t: "", f: (o, i) => `<button class="btn peq" data-acao="boleta">Ordem</button>` },
+    { t: "", f: (o, i) => `<button class="btn peq fantasma" data-acao="grafico" title="Ver no gráfico">📈</button> <button class="btn peq" data-acao="boleta">Ordem</button>` },
   ];
   const vz = { vazioTitulo: "Nenhum sinal no último pregão" };
   $("#tab-opps").innerHTML = tabela([...col.slice(0, 4), { t: "Saída", f: (o) => `<span class="nota">${esc(o.saida)}</span>` }, ...col.slice(4)], s.oportunidades, { ...vz, clicavel: true });
@@ -197,8 +197,9 @@ function renderScanner() {
     const tr = ev.target.closest("tr[data-i]"); if (!tr) return;
     const o = s.oportunidades[+tr.dataset.i];
     estado.atrBoleta = o.atr;
-    if (ev.target.dataset.acao === "boleta") abrirBoleta({ ticker: o.ticker, lado: o.direcao === "Compra" ? "C" : "V", preco: o.entrada, stop: o.stop, motivo: o.setup });
-    else if (o.ticker !== "IBOV") verNoGrafico(o.ticker);
+    if (ev.target.closest("[data-acao='grafico']")) { if (o.ticker !== "IBOV") verNoGrafico(o.ticker); return; }
+    // clique na linha (ou no botão Ordem): boleta preenchida com entrada, stop, alvo 2R e tamanho pelo risco
+    abrirBoleta({ ticker: o.ticker, lado: o.direcao === "Compra" ? "C" : "V", preco: o.entrada, stop: o.stop, motivo: o.setup });
   });
 }
 
@@ -278,7 +279,7 @@ function renderAnalise(a) {
 $("#btn-ia").addEventListener("click", async () => {
   const b = $("#btn-ia"); b.disabled = true; b.textContent = "Analisando…"; $("#ia-orbe").classList.add("pensando");
   $("#ia-saida").innerHTML = `<div class="ia-bloco">${'<div class="esqueleto"></div>'.repeat(3)}<div class="esqueleto" style="width:60%"></div></div><div class="ia-bloco">${'<div class="esqueleto"></div>'.repeat(4)}</div>`;
-  try { renderAnalise(await api("/api/ia/analise", { method: "POST" })); }
+  try { renderAnalise(await api("/api/ia/analise", { method: "POST" })); carregarUsoIA(); }
   catch (e) { $("#ia-saida").innerHTML = `<div class="vazio"><b>IA indisponível</b>${esc(e.message)}</div>`; }
   finally { b.disabled = false; b.textContent = "Gerar análise do dia"; $("#ia-orbe").classList.remove("pensando"); }
 });
@@ -297,7 +298,7 @@ async function enviarChat() {
   try {
     const r = await api("/api/ia/chat", { method: "POST", body: JSON.stringify({ pergunta: texto, historico: estado.chat, pesquisar_web: $("#chat-web").checked }) });
     espera.innerHTML = esc(r.resposta) + (r.fontes.length ? `<div class="fontes">Fontes: ${r.fontes.map((f, i) => `<a href="${esc(f.url)}" target="_blank" rel="noopener">[${i + 1}] ${esc(f.titulo).slice(0, 40)}</a>`).join(" ")}</div>` : "");
-    estado.chat.push({ role: "user", content: texto }, { role: "assistant", content: r.resposta });
+    estado.chat.push({ role: "user", content: texto }, { role: "assistant", content: r.resposta }); carregarUsoIA();
   } catch (e) { espera.innerHTML = `⚠️ ${esc(e.message)}`; }
   finally { $("#chat-orbe").classList.remove("pensando"); }
 }
@@ -317,7 +318,7 @@ function abrirBoleta({ ticker = estado.ativo, lado = "C", preco = null, stop = n
   const risco1 = preco && stop ? Math.abs(preco - stop) : null;
   $("#b-sl").value = stop && lado === "C" ? (+stop).toFixed(2) : "";
   $("#b-tp").value = risco1 && lado === "C" ? (+preco + 2 * risco1).toFixed(2) : "";
-  $("#b-tr-tipo").value = ""; $("#b-tr-valor").value = ""; $("#b-tr-ativ").value = "0"; $("#b-be").value = ""; $("#b-oco").checked = false;
+  $("#b-tr-tipo").value = ""; $("#b-tr-valor").value = ""; $("#b-tr-ativ").value = "0"; $("#b-be").value = ""; $("#b-oco").checked = false; $("#b-rev").value = "avisar";
   atualizarResumoBoleta(); $("#modal-boleta").classList.add("aberto"); $("#b-qtd").focus();
 }
 function definirLado(l) { ladoBoleta = l; $$(".lado-toggle button").forEach((b) => b.classList.toggle("ativa", b.dataset.lado === l)); $("#b-protecoes").style.display = l === "C" && $("#b-tipo").value === "limitada" ? "" : "none"; atualizarResumoBoleta(); }
@@ -326,7 +327,7 @@ $("#b-tipo").addEventListener("change", () => { const s = $("#b-tipo").value ===
 ["#b-qtd", "#b-preco", "#b-ticker", "#b-disparo", "#b-sl", "#b-tp"].forEach((s) => $(s).addEventListener("input", atualizarResumoBoleta));
 function lerProtecao() {
   if (ladoBoleta !== "C" || $("#b-tipo").value !== "limitada" || !$("#b-sl").value) return null;
-  const pr = { stop: +$("#b-sl").value, take_profit: $("#b-tp").value ? +$("#b-tp").value : null, usa_oco: $("#b-oco").checked,
+  const pr = { stop: +$("#b-sl").value, take_profit: $("#b-tp").value ? +$("#b-tp").value : null, usa_oco: $("#b-oco").checked, na_reversao: $("#b-rev").value,
     breakeven_pct: $("#b-be").value ? +$("#b-be").value / 100 : null, trailing: null };
   const tipo = $("#b-tr-tipo").value;
   if (tipo) {
@@ -420,6 +421,7 @@ async function carregarRobo() {
       { t: "Próx. stop", n: 1, f: (x) => (x.proximo_stop > x.stop ? `<span class="sobe">${N(x.proximo_stop)}</span>` : "—") },
       { t: "Take profit", n: 1, f: (x) => (x.take_profit ? `${N(x.take_profit)} <span class="nota">${P(x.dist_alvo_pct)}</span>` : "—") },
       { t: "Trailing / BE", f: (x) => (x.trailing ? `<span class="etiqueta destaque">${x.trailing.tipo === "pct" ? Pabs(x.trailing.valor) : x.trailing.valor + "×ATR"}${x.trailing.ativacao_pct ? " após " + Pabs(x.trailing.ativacao_pct) : ""}</span>` : "—") + (x.breakeven_pct ? ` <span class="etiqueta">BE ${Pabs(x.breakeven_pct)}</span>` : "") + (x.usa_oco ? ' <span class="etiqueta">OCO</span>' : "") },
+      { t: "Tendência", f: (x) => { const al = (estado.alertas || []).find((a) => a.ticker === x.ticker); return !x.ativa ? "—" : !al ? "—" : `<span class="etiqueta ${al.nivel === "SAIR" ? "venda" : al.nivel === "OK" ? "compra" : "aviso"}" title="${esc(al.sinais.join(" · "))}">${al.nivel === "OK" ? "intacta" : al.nivel}</span> <span class="nota">${x.na_reversao === "vender" ? "auto-saída" : "aviso"}</span>`; } },
       { t: "Status", f: (x) => (!x.ativa ? '<span class="etiqueta">encerrada</span>' : x.stop_enviado ? '<span class="etiqueta compra">stop na Clear</span>' : '<span class="etiqueta aviso">aguardando monitor</span>') },
       { t: "", f: (x) => `<button class="btn peq fantasma" data-remprot="${x.ticker}">remover</button>` },
     ], prots, { vazioTitulo: "Nenhuma proteção", vazio: "Defina stop loss, take profit e trailing na boleta de compra." });
@@ -489,13 +491,87 @@ function renderConsenso() {
 $$("#seg-consenso button").forEach((b) => b.addEventListener("click", () => {
   $$("#seg-consenso button").forEach((x) => x.classList.toggle("ativa", x === b)); filtroConsenso = b.dataset.f; renderConsenso();
 }));
-$("#btn-casas").addEventListener("click", () => {
-  const mes = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  $("#chat-painel").classList.add("aberto");
-  $("#chat-web").checked = true;
-  $("#chat-texto").value = `Pesquise as carteiras recomendadas de ações brasileiras de ${mes} das principais casas (BTG Pactual, XP, Itaú BBA, Bradesco BBI, Santander, Safra, Genial, Goldman Sachs, JPMorgan, Morgan Stanley, UBS, BofA). Liste os ativos mais citados com o número de casas que recomendam cada um, compare com o consenso e os fatores do painel, e cite as fontes.`;
-  enviarChat();
+// ---------------------------------------------------------------- carteiras das casas
+function renderCasas(d) {
+  if (!d || !d.casas || !d.casas.length) return;
+  $("#sub-casas").textContent = `· ${d.casas.length} carteiras · ${d.atualizado_em}${d.custo_usd != null ? ` · custo US$ ${num2.format(d.custo_usd)}` : ""}`;
+  const citados = tabela([
+    { t: "Ativo", f: (m) => `<span class="tk">${esc(m.ticker)}</span>` },
+    { t: "Casas", n: 1, f: (m) => `<b>${m.casas}</b>` },
+    { t: "Quem recomenda", f: (m) => `<span class="nota">${esc(m.nomes_casas.join(", "))}</span>` },
+    { t: "Consenso", f: (m) => (m.consenso ? `<span class="etiqueta">${esc(m.consenso)}</span>` : "—") },
+    { t: "Potencial", n: 1, f: (m) => `<span class="${cls(m.upside)}">${P(m.upside)}</span>` },
+    { t: "Convergência", f: (m) => (m.convergencia || []).map((x) => `<span class="etiqueta ${x.startsWith("Top") ? "destaque" : "compra"}">${x}</span>`).join(" ") || "—" },
+  ], d.mais_citados, { clicavel: true, vazioTitulo: "Sem ativos consolidados" });
+  const lista = d.casas.map((c) => `<div class="casa-item"><b>${esc(c.casa)}</b> <span class="nota">· ${esc(c.carteira)} · ${esc(c.data)}</span>
+      ${c.fonte ? ` <a href="${esc(c.fonte)}" target="_blank" rel="noopener">fonte ↗</a>` : ""}
+      <div class="chips">${c.ativos.map((t) => `<span class="etiqueta">${esc(t)}</span>`).join("")}</div></div>`).join("");
+  $("#casas-saida").innerHTML = `<div class="casas-grade"><div class="tabela-wrap" style="max-height:420px">${citados}</div><div class="lista-casas">${lista}</div></div>
+    ${d.observacoes ? `<div class="legenda">${esc(d.observacoes)}</div>` : ""}`;
+  $("#casas-saida").onclick = (ev) => {
+    const tr = ev.target.closest("tr[data-i]"); if (!tr) return;
+    const t = d.mais_citados[+tr.dataset.i].ticker.toUpperCase();
+    const a = (estado.ranking?.ativos || []).find((x) => x.ticker === t);
+    abrirBoleta({ ticker: t, lado: "C", preco: a ? a.preco : null, motivo: `Carteiras recomendadas (${d.mais_citados[+tr.dataset.i].casas} casas)` });
+  };
+}
+async function carregarCasas() { try { renderCasas(await api("/api/casas")); } catch (_) {} }
+$("#btn-casas").addEventListener("click", async () => {
+  if (!confirm("Pesquisar as carteiras do mês na web? Usa a API da Anthropic (cerca de US$ 0,30 a US$ 1,00 por pesquisa).")) return;
+  const b = $("#btn-casas"); b.disabled = true; b.textContent = "Pesquisando… (1–3 min)";
+  $("#casas-saida").innerHTML = `<div class="ia-bloco">${'<div class="esqueleto"></div>'.repeat(5)}</div>`;
+  try { await api("/api/casas/atualizar", { method: "POST" }); await carregarCasas(); carregarUsoIA(); }
+  catch (e) { $("#casas-saida").innerHTML = `<div class="vazio"><b>Pesquisa indisponível</b>${esc(e.message)}</div>`; }
+  finally { b.disabled = false; b.textContent = "Pesquisar carteiras do mês (IA + web)"; }
 });
+
+// ---------------------------------------------------------------- gasto com IA
+async function carregarUsoIA() {
+  try {
+    const u = await api("/api/ia/uso");
+    const pct = u.orcamento_usd ? u.gasto_usd / u.orcamento_usd : 0;
+    const el = $("#ia-gasto");
+    el.textContent = `· US$ ${num2.format(u.gasto_usd)} / ${num2.format(u.orcamento_usd)} no mês`;
+    el.className = `sub ${pct >= 0.8 ? "desce" : ""}`;
+    el.title = `${u.chamadas} chamadas · análise: ${u.modelo_analise} · chat: ${u.modelo_chat}`;
+  } catch (_) {}
+}
+
+// ---------------------------------------------------------------- alertas de reversão (saída)
+const alertasVistos = new Set();
+function notificar(titulo, corpo) {
+  try {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") new Notification(titulo, { body: corpo });
+    else if (Notification.permission !== "denied") Notification.requestPermission();
+  } catch (_) {}
+}
+async function carregarAlertas() {
+  try {
+    const r = await api("/api/alertas");
+    estado.alertas = r.alertas;
+    const relevantes = r.alertas.filter((a) => a.nivel !== "OK");
+    $("#faixa-alertas").innerHTML = relevantes.map((a, i) => `
+      <div class="alerta-saida ${a.nivel === "SAIR" ? "sair pulso" : "atencao"}">
+        <span class="icone-alerta">${a.nivel === "SAIR" ? "⛔" : "⚠️"}</span>
+        <div class="txt"><b class="tk">${a.ticker}</b><span class="etiqueta ${a.nivel === "SAIR" ? "venda" : "aviso"}">${a.nivel === "SAIR" ? "REVERSÃO: SAIR" : "ATENÇÃO"} · ${a.pontos} pts</span>
+          <span class="num ${cls(a.resultado_pct)}">${P(a.resultado_pct)}</span>
+          <div class="sinais">${a.sinais.map(esc).join(" · ")}${a.nivel === "SAIR" ? ` — ${a.na_reversao === "vender" ? "o monitor vai vender automaticamente" : "considere sair do ativo"}` : ""}</div></div>
+        <button class="btn peq" data-alerta-grafico="${i}">Ver gráfico</button>
+        ${a.nivel === "SAIR" ? `<button class="btn peq primario" data-alerta-sair="${i}">Sair agora</button>` : ""}
+      </div>`).join("");
+    $("#faixa-alertas").onclick = (ev) => {
+      const g = ev.target.dataset.alertaGrafico, sx = ev.target.dataset.alertaSair;
+      if (g != null) verNoGrafico(relevantes[+g].ticker);
+      if (sx != null) { const a = relevantes[+sx]; abrirBoleta({ ticker: a.ticker, lado: "V", preco: +(a.preco * 0.997).toFixed(2), motivo: "reversão de tendência" }); $("#b-qtd").value = a.quantidade; atualizarResumoBoleta(); }
+    };
+    for (const a of relevantes) {
+      const chave = `${a.ticker}:${a.nivel}`;
+      if (a.nivel === "SAIR" && !alertasVistos.has(chave)) notificar(`⛔ ${a.ticker}: reversão de tendência`, a.sinais.join(" · "));
+      alertasVistos.add(chave);
+    }
+  } catch (_) {}
+}
 
 // ---------------------------------------------------------------- inicialização
 async function iniciar() {
@@ -509,4 +585,5 @@ async function iniciar() {
   }
 }
 criarGraficos();
-iniciar().then(() => { const aba = location.hash.slice(1); if (aba && $(`#${aba}`)) abrirAba(aba); });
+iniciar().then(() => { const aba = location.hash.slice(1); if (aba && $(`#${aba}`)) abrirAba(aba); carregarAlertas(); carregarCasas(); carregarUsoIA(); });
+setInterval(carregarAlertas, 60000);   // reavalia as posições a cada minuto

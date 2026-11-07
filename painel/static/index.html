@@ -41,6 +41,7 @@
 <main>
   <!-- ====================================================== VISÃO GERAL -->
   <section class="secao ativa" id="visao">
+    <div id="faixa-alertas"></div>
     <div class="grade g-kpi" id="kpis"></div>
 
     <div class="grade g-principal mt">
@@ -67,7 +68,7 @@
 
       <div class="cartao" id="cartao-ia">
         <div class="cartao-topo">
-          <h2 class="ia-cabecalho"><span class="ia-orbe" id="ia-orbe"></span>Analista IA</h2>
+          <h2 class="ia-cabecalho"><span class="ia-orbe" id="ia-orbe"></span>Analista IA <span class="sub" id="ia-gasto" title="Gasto estimado com a API da Anthropic no mês"></span></h2>
           <button class="btn ia peq" id="btn-ia">Gerar análise do dia</button>
         </div>
         <div class="cartao-corpo sem-pad" id="ia-saida">
@@ -81,11 +82,22 @@
         <h2>Consenso das casas de análise <span class="sub" id="sub-consenso"></span></h2>
         <div class="ferramentas">
           <div class="segmentado" id="seg-consenso"><button data-f="todos" class="ativa">Compra</button><button data-f="convergentes">Convergentes</button><button data-f="neutros">Neutro/Venda</button></div>
-          <button class="btn ia peq" id="btn-casas">Carteiras recomendadas do mês (IA + web)</button>
+
         </div>
       </div>
       <div class="cartao-corpo sem-pad tabela-wrap" id="tab-consenso" style="max-height:420px"></div>
       <div class="legenda">Consenso de bancos e corretoras que cobrem cada ação (dados LSEG via Yahoo). Nota 1 = compra forte … 5 = venda forte. <b>Convergência</b> = o consenso coincide com os fatores que venceram no estudo de 10 anos ou com a tendência.</div>
+    </div>
+
+    <div class="cartao mt">
+      <div class="cartao-topo">
+        <h2>Carteiras recomendadas das casas de análise <span class="sub" id="sub-casas"></span></h2>
+        <button class="btn ia peq" id="btn-casas">Pesquisar carteiras do mês (IA + web)</button>
+      </div>
+      <div class="cartao-corpo sem-pad" id="casas-saida">
+        <div class="vazio"><b>Carteiras de BTG, XP, Itaú BBA, Bradesco BBI, Santander, Safra, Genial, Goldman, JPMorgan, Morgan Stanley, UBS BB, BofA e Citi</b>
+        A IA pesquisa as carteiras do mês na web, lista os ativos mais citados e cruza com o consenso e os fatores do painel. Fica salvo: pesquise 1x por mês.</div>
+      </div>
     </div>
 
     <div class="grade g-2 mt">
@@ -236,6 +248,8 @@
           <div class="campo"><label for="b-be">Breakeven após ganho (%)</label><input type="number" id="b-be" step="0.5" placeholder="ex.: 3"></div>
           <div class="campo"><label>&nbsp;</label><label class="check"><input type="checkbox" id="b-oco"> Usar OCO na Clear (stop + alvo juntos)</label></div>
         </div>
+        <div class="campo"><label for="b-rev">Na reversão de tendência</label>
+          <select id="b-rev"><option value="avisar">Avisar para sair (alerta no painel e no monitor)</option><option value="vender">Sair automaticamente (vende no nível SAIR)</option></select></div>
       </fieldset>
       <div class="campo"><label for="b-motivo">Motivo</label><input type="text" id="b-motivo" placeholder="ex.: MACD cruzamento"></div>
       <div class="resumo-boleta" id="b-resumo">—</div>

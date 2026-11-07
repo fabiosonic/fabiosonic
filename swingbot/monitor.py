@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import time
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 from . import risco
@@ -37,12 +38,23 @@ def precos_yahoo(tickers: list[str]) -> dict[str, tuple[float, float]]:
     return saida
 
 
+def historico_diario(ticker: str):
+    """Candles diários (não ajustados, com cache) para avaliar a reversão."""
+    from .dados import baixar
+    inicio = (dt.date.today() - dt.timedelta(days=600)).isoformat()
+    return baixar(ticker, inicio)
+
+
 class Monitor:
-    def __init__(self, repo: Repositorio, corretora=None, log=print, folga_stop: float = 0.01):
+    def __init__(self, repo: Repositorio, corretora=None, log=print, folga_stop: float = 0.01,
+                 fonte_diaria=historico_diario, intervalo_reversao_seg: int = 900):
         self.repo = repo
         self.hb = corretora            # None = simulação (não envia ordens nem grava estado)
         self.log = log
         self.folga_stop = folga_stop
+        self.fonte_diaria = fonte_diaria
+        self.intervalo_reversao = intervalo_reversao_seg
+        self._ultima_reversao = 0.0
 
     @property
     def simulado(self) -> bool:
@@ -61,6 +73,28 @@ class Monitor:
         p.stop_enviado = True
         self.log(f"{p.ticker}: {'OCO' if usar_oco else 'stop'} registrado na Clear — stop {p.stop:.2f}"
                  + (f" / alvo {p.take_profit:.2f}" if usar_oco else ""))
+
+    def checar_reversao(self, p: Protecao, preco: float) -> Optional[str]:
+        """Avalia reversão de tendência; registra alerta e, se configurado, sai da posição."""
+        from .reversao import SAIR, avaliar as avaliar_rev, com_preco_atual
+        try:
+            df = com_preco_atual(self.fonte_diaria(p.ticker), preco)
+        except Exception as e:  # noqa: BLE001 - falha de dados não pode derrubar o monitor
+            self.log(f"{p.ticker}: sem dados para avaliar reversão ({e})")
+            return None
+        diag = avaliar_rev(df, p.maior_preco)
+        anterior = (p.ultimo_alerta or {}).get("nivel")
+        p.ultimo_alerta = {**diag.to_dict(), "quando": agora()}
+        if diag.nivel == "OK" or diag.nivel == anterior:
+            return None
+        msg = f"{p.ticker} @ {preco:.2f}: REVERSÃO {diag.nivel} ({diag.pontos} pts) — " + "; ".join(diag.sinais)
+        if diag.nivel == SAIR:
+            msg += " → " + ("SAINDO DA POSIÇÃO" if p.na_reversao == "vender" else "AVISO: considere sair")
+        self.log(("[SIMULAÇÃO] " if self.simulado else "") + msg)
+        p.historico.append([agora(), msg])
+        if diag.nivel == SAIR and p.na_reversao == "vender" and not self.simulado:
+            self._executar_take_profit(p, preco)
+        return msg
 
     def _executar_take_profit(self, p: Protecao, preco: float) -> None:
         self.hb.cancelar_stops(p.ticker)
@@ -87,6 +121,9 @@ class Monitor:
     def ciclo(self, precos: dict[str, tuple[float, float]], posicoes: dict | None = None) -> list[str]:
         itens = self.repo.carregar()
         eventos = []
+        checar_rev = time.time() - self._ultima_reversao >= self.intervalo_reversao
+        if checar_rev:
+            self._ultima_reversao = time.time()
         if posicoes is not None:
             self.sincronizar_quantidades(itens, posicoes)
         for p in itens.values():
@@ -99,6 +136,10 @@ class Monitor:
             preco, maxima = precos[p.ticker]
             d = avaliar(p, preco, maxima)
             if d.acao == "MANTER":
+                if checar_rev:
+                    msg = self.checar_reversao(p, preco)
+                    if msg:
+                        eventos.append(msg)
                 continue
             msg = f"{p.ticker} @ {preco:.2f}: {d.acao} — {d.motivo}"
             eventos.append(msg)

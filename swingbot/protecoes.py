@@ -53,6 +53,8 @@ class Protecao:
     stop_enviado: bool = False        # stop atual está registrado na Clear?
     usa_oco: bool = False             # stop + alvo registrados juntos (OCO) na Clear
     origem: str = "painel"
+    na_reversao: str = "avisar"       # avisar | vender (sai automaticamente no nível SAIR)
+    ultimo_alerta: Optional[dict] = None
     ativa: bool = True
     historico: list = field(default_factory=list)
 
@@ -74,6 +76,8 @@ class Protecao:
             raise ValueError("take profit deve ficar acima do stop")
         if self.trailing:
             self.trailing.validar()
+        if self.na_reversao not in ("avisar", "vender"):
+            raise ValueError("na_reversao deve ser 'avisar' ou 'vender'")
         if self.breakeven_pct is not None and self.breakeven_pct <= 0:
             raise ValueError("breakeven_pct deve ser positivo")
 

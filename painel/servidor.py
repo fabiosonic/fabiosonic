@@ -65,6 +65,11 @@ def grafico(ticker: str, dias: int = 500):
     return _proteger(dp.grafico, ticker, max(60, min(dias, 3000)))
 
 
+@app.get("/api/alertas")
+def alertas():
+    return _proteger(dp.alertas)
+
+
 @app.get("/api/consenso")
 def consenso():
     return _proteger(dp.consenso)
@@ -98,6 +103,7 @@ class ProtecaoIn(BaseModel):
     trailing: dict | None = None
     breakeven_pct: float | None = None
     usa_oco: bool = False
+    na_reversao: str = "avisar"
 
 
 class OrdemIn(BaseModel):
@@ -183,6 +189,31 @@ def _contexto() -> dict:
 def ia_analise():
     try:
         return ia.analisar(_proteger(_contexto))
+    except ia.IAIndisponivel as e:
+        raise HTTPException(503, str(e)) from e
+
+
+@app.get("/api/ia/uso")
+def ia_uso():
+    return ia.uso_mes()
+
+
+@app.get("/api/casas")
+def casas():
+    dados = ia.carteiras_casas_cache() or {"casas": [], "mais_citados": [], "atualizado_em": None}
+    cons = {a["ticker"]: a for a in _proteger(dp.consenso)["ativos"]}
+    for m in dados.get("mais_citados", []):
+        c = cons.get(m["ticker"].upper().replace(".SA", ""))
+        m["consenso"] = c["recomendacao"] if c else None
+        m["upside"] = c["upside"] if c else None
+        m["convergencia"] = c["convergencia"] if c else []
+    return dados
+
+
+@app.post("/api/casas/atualizar")
+def casas_atualizar():
+    try:
+        return ia.pesquisar_carteiras_casas()
     except ia.IAIndisponivel as e:
         raise HTTPException(503, str(e)) from e
 

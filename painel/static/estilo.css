@@ -280,3 +280,23 @@ label.check { display: flex; align-items: center; gap: 6px; font-size: 12px; col
 .linha-campos > *, .campo { min-width: 0; }
 .campo input, .campo select { width: 100%; }
 .campo input[type="checkbox"] { width: auto; }
+
+#faixa-alertas { display: grid; gap: 8px; margin-bottom: 14px; }
+#faixa-alertas:empty { display: none; }
+.alerta-saida { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 10px; border: 1px solid transparent; flex-wrap: wrap; }
+.alerta-saida.sair { background: var(--baixa-suave); border-color: color-mix(in srgb, var(--baixa) 40%, transparent); }
+.alerta-saida.atencao { background: var(--aviso-suave); }
+.alerta-saida .icone-alerta { font-size: 18px; }
+.alerta-saida .txt { flex: 1; min-width: 220px; }
+.alerta-saida .txt b { margin-right: 6px; }
+.alerta-saida .sinais { color: var(--texto-2); font-size: 12.5px; }
+.pulso { animation: pulso 1.6s ease-in-out infinite; }
+@keyframes pulso { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--baixa) 25%, transparent); } }
+
+.casas-grade { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+.casas-grade > div + div { border-left: 1px solid var(--borda); }
+.casa-item { padding: 10px 14px; border-bottom: 1px solid var(--borda); }
+.casa-item:last-child { border-bottom: 0; }
+.casa-item .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lista-casas { max-height: 420px; overflow: auto; }
+@media (max-width: 1080px) { .casas-grade { grid-template-columns: minmax(0, 1fr); } .casas-grade > div + div { border-left: 0; border-top: 1px solid var(--borda); } }

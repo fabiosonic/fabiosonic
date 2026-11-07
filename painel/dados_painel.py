@@ -424,7 +424,7 @@ def protecoes() -> list[dict]:
 def salvar_protecao(dados: dict) -> dict:
     from swingbot.protecoes import Protecao
     campos = {k: dados.get(k) for k in ("ticker", "quantidade", "preco_entrada", "stop", "take_profit", "trailing",
-                                         "breakeven_pct", "usa_oco")}
+                                         "breakeven_pct", "usa_oco", "na_reversao")}
     campos = {k: v for k, v in campos.items() if v is not None}
     return _repo().upsert(Protecao(origem="painel", **campos)).to_dict()
 
@@ -474,3 +474,35 @@ def consenso() -> dict:
     linhas.sort(key=lambda x: (0 if (x["nota_media"] or 9) <= 2.5 else 1, -len(x["convergencia"]),
                                x["nota_media"] or 9, -(x["upside"] or 0)))
     return {"atualizado_em": dados.get("atualizado_em"), "ativos": linhas}
+
+
+# ============================================================================ alertas de reversão
+def alertas() -> dict:
+    """Diagnóstico de reversão para cada posição acompanhada (proteções ativas + posições do robô)."""
+    from swingbot.reversao import avaliar as avaliar_rev
+    *_, ohlc = paineis()
+    acompanhar: dict[str, dict] = {}
+    for p in _repo().carregar().values():
+        if p.ativa:
+            acompanhar[p.ticker] = {"quantidade": p.quantidade, "entrada": p.preco_entrada,
+                                    "maior_preco": p.maior_preco, "origem": "proteção", "na_reversao": p.na_reversao}
+    cart, _ = carregar_carteira()
+    for t, p in cart.posicoes.items():
+        acompanhar.setdefault(t, {"quantidade": p.quantidade, "entrada": p.preco_medio, "maior_preco": None,
+                                  "data_entrada": p.data_entrada, "origem": "robô",
+                                  "na_reversao": "robô (saída na regra da estratégia)"})
+    saida = []
+    for t, info in acompanhar.items():
+        df = ohlc.get(t)
+        if df is None or df.empty:
+            continue
+        maior = info["maior_preco"]
+        if info.get("data_entrada"):
+            desde = df.loc[info.pop("data_entrada"):, "high"]
+            maior = float(desde.max()) if len(desde) else None
+        d = avaliar_rev(df, maior)
+        saida.append({"ticker": t, **info, **d.to_dict(),
+                      "resultado_pct": _f(d.preco / info["entrada"] - 1) if info["entrada"] else None})
+    ordem = {"SAIR": 0, "ATENÇÃO": 1, "OK": 2}
+    saida.sort(key=lambda x: (ordem.get(x["nivel"], 3), -x["pontos"]))
+    return {"data": paineis()[0].index[-1].date().isoformat(), "alertas": saida}

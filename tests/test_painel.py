@@ -71,3 +71,26 @@ def test_endpoints_basicos():
     assert len(rk["carteiras_alvo"]["dividendos"]) == 10
     assert c.get("/api/grafico/NAOEXISTE").status_code == 404
     assert c.get("/api/rebalanceamento?estrategia=xyz").status_code == 400
+
+
+def test_custo_e_orcamento(tmp_path, monkeypatch):
+    # Opus 5.5: US$ 4 / 20 por milhão; 5.000 tokens de entrada + 4.000 de saída = US$ 0,10
+    assert ia.custo("claude-opus-5-5", 5000, 4000) == pytest.approx(0.10)
+    assert ia.custo("claude-haiku-5-5", 5000, 4000) == pytest.approx(0.0025)
+    assert ia.custo("claude-opus-5-5", 0, 0, buscas=3) == pytest.approx(0.03)
+    arq = tmp_path / "uso.json"
+    monkeypatch.setattr(ia, "_arq_uso", lambda: arq)
+    uso = SimpleNamespace(input_tokens=5000, output_tokens=4000, cache_creation_input_tokens=0,
+                          cache_read_input_tokens=0, server_tool_use=SimpleNamespace(web_search_requests=2))
+    assert ia.registrar_uso("chat_web", SimpleNamespace(usage=uso, model="claude-opus-5-5")) == pytest.approx(0.12)
+    u = ia.uso_mes()
+    assert u["gasto_usd"] == pytest.approx(0.12) and u["por_tipo"]["chat_web"]["chamadas"] == 1
+    cfg = SimpleNamespace(orcamento_mensal_usd=0.10, modelo_analise="claude-opus-5-5", modelo_chat="claude-opus-5-5")
+    monkeypatch.setattr(ia, "_cfg_ia", lambda: (cfg, tmp_path))
+    with pytest.raises(ia.IAIndisponivel, match="Orçamento"):
+        ia.analisar({})
+
+
+def test_haiku_sem_fallback_no_servidor():
+    assert ia._opcoes_modelo("claude-haiku-5-5") == {}
+    assert ia._opcoes_modelo("claude-sonnet-5-5")["fallbacks"] == "default"

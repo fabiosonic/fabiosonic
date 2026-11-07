@@ -46,3 +46,8 @@ clear:
   horario_inicio: "10:15"         # evita o leilão de abertura
   horario_fim: "16:45"            # evita o call de fechamento
   headless: false                 # mantenha a janela visível
+
+ia:
+  modelo_analise: claude-opus-5-5     # análise do dia e carteiras recomendadas das casas
+  modelo_chat: claude-opus-5-5        # assistente; claude-sonnet-5-5 custa ~metade, claude-haiku-5-5 bem menos
+  orcamento_mensal_usd: 15.00         # teto de gasto: ao atingir, a IA é desligada até o mês seguinte

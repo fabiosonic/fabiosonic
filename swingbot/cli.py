@@ -125,7 +125,8 @@ def _registrar_protecao_da_fila(cfg, o):
     Repositorio(Path(cfg.pasta_estado) / "protecoes.json").upsert(Protecao(
         ticker=o["ticker"], quantidade=o["quantidade"], preco_entrada=o["preco"], stop=pr["stop"],
         take_profit=pr.get("take_profit"), trailing=pr.get("trailing"), breakeven_pct=pr.get("breakeven_pct"),
-        usa_oco=bool(pr.get("usa_oco")), origem=o.get("origem", "painel")))
+        usa_oco=bool(pr.get("usa_oco")), na_reversao=pr.get("na_reversao") or "avisar",
+        origem=o.get("origem", "painel")))
     print(f"  {o['ticker']}: proteção registrada (stop {pr['stop']})")
 
 

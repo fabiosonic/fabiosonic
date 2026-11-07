@@ -51,6 +51,13 @@ class ConfigClear:
 
 
 @dataclass
+class ConfigIA:
+    modelo_analise: str = "claude-opus-5-5"     # análise do dia e carteiras das casas
+    modelo_chat: str = "claude-opus-5-5"        # assistente (claude-sonnet-5-5 custa metade)
+    orcamento_mensal_usd: float = 15.0          # trava: a IA para ao atingir o valor no mês
+
+
+@dataclass
 class Config:
     modo: str = "simulado"                # simulado | real
     ativos: list = field(default_factory=list)
@@ -61,6 +68,7 @@ class Config:
     risco: ConfigRisco = field(default_factory=ConfigRisco)
     fiscal: ConfigFiscal = field(default_factory=ConfigFiscal)
     clear: ConfigClear = field(default_factory=ConfigClear)
+    ia: ConfigIA = field(default_factory=ConfigIA)
 
 
 def _montar(cls, dados: dict | None):
@@ -85,6 +93,7 @@ def carregar(caminho: str | Path = "config/config.yaml") -> Config:
         risco=_montar(ConfigRisco, bruto.get("risco")),
         fiscal=_montar(ConfigFiscal, bruto.get("fiscal")),
         clear=_montar(ConfigClear, bruto.get("clear")),
+        ia=_montar(ConfigIA, bruto.get("ia")),
     )
     validar(cfg)
     return cfg
