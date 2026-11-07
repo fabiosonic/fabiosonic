@@ -133,14 +133,33 @@ def explorar_boleta(page, log=print) -> dict:
         return res
     if _clique_seguro(page.locator(".MuiChip-root:text-is('Compra')").first, log):
         page.wait_for_timeout(500)
-    tipo = boleta.locator("li:has-text('Tipo de ordem')").first
-    if _clique_seguro(tipo, log):
-        page.wait_for_timeout(700)
-        res["estados"]["lista_tipo_aberta"] = coletar(page)
-        res["opcoes_tipo_ordem"] = _texto_opcoes(page)
-        log(f"    opções de 'Tipo de ordem': {res['opcoes_tipo_ordem']}")
+    # descobre ONDE clicar para abrir a lista: no "A mercado ⌄", no item "Tipo de ordem" ou num botão de menu
+    candidatos = {
+        "valor_atual": boleta.locator("li:has-text('Tipo de ordem') :text-is('A mercado')").first,
+        "seta": boleta.locator("li:has-text('Tipo de ordem') svg").last,
+        "item": boleta.locator("li:has-text('Tipo de ordem')").first,
+        "popup": boleta.locator("[aria-haspopup]").first,
+    }
+    tipo = None
+    for nome, loc in candidatos.items():
+        if not loc.count() or not _clique_seguro(loc, log):
+            continue
+        page.wait_for_timeout(800)
+        opcoes = _texto_opcoes(page)
+        if opcoes:
+            tipo = loc
+            res["abrir_tipo"] = nome
+            res["estados"]["lista_tipo_aberta"] = coletar(page)
+            res["opcoes_tipo_ordem"] = opcoes
+            log(f"    lista aberta clicando em '{nome}'. Opções: {opcoes}")
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(400)
+            break
         page.keyboard.press("Escape")
-        page.wait_for_timeout(400)
+    if tipo is None:
+        log("    não consegui abrir a lista 'Tipo de ordem' automaticamente")
+        res["estados"]["sem_lista"] = coletar(page)
+        tipo = candidatos["item"]
     for op in res["opcoes_tipo_ordem"]:
         if not _clique_seguro(tipo, log):
             break
