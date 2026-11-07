@@ -41,6 +41,7 @@
 <main>
   <!-- ====================================================== VISÃO GERAL -->
   <section class="secao ativa" id="visao">
+    <div id="acoes-manuais"></div>
     <div id="faixa-alertas"></div>
     <div class="grade g-kpi" id="kpis"></div>
 
@@ -251,10 +252,11 @@
         <div class="campo"><label for="b-rev">Na reversão de tendência</label>
           <select id="b-rev"><option value="avisar">Avisar para sair (alerta no painel e no monitor)</option><option value="vender">Sair automaticamente (vende no nível SAIR)</option></select></div>
       </fieldset>
+      <label class="check" id="campo-stop-clear"><input type="checkbox" id="b-stop-clear" checked> Já coloquei a ordem STOP na Clear</label>
       <div class="campo"><label for="b-motivo">Motivo</label><input type="text" id="b-motivo" placeholder="ex.: MACD cruzamento"></div>
       <div class="resumo-boleta" id="b-resumo">—</div>
       <button class="btn primario" id="b-enviar" style="justify-content:center">Adicionar à fila</button>
-      <p class="nota">A ordem não vai direto para a Clear: ela entra na fila e só é executada pelo robô, com sua confirmação.</p>
+      <p class="nota" id="b-nota">A ordem não vai direto para a Clear: ela entra na fila e só é executada pelo robô, com sua confirmação.</p>
     </div>
   </div>
 </div>

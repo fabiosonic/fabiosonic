@@ -119,8 +119,8 @@ def carregar(caminho: str | Path = "config/config.yaml") -> Config:
 
 
 def validar(cfg: Config) -> None:
-    if cfg.modo not in ("simulado", "real"):
-        raise ValueError("modo deve ser 'simulado' ou 'real'")
+    if cfg.modo not in ("manual", "simulado", "real"):
+        raise ValueError("modo deve ser 'manual', 'simulado' ou 'real'")
     if not cfg.ativos:
         raise ValueError("Informe ao menos um ativo em 'ativos'")
     r = cfg.risco

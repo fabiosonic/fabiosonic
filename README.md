@@ -3,6 +3,10 @@
 > **Começo rápido no Windows (sem programar):** dê dois cliques em **`INICIAR.bat`**. Ele instala tudo
 > o que faltar, baixa os dados, cria o atalho "Painel Quant B3" na Área de Trabalho e mostra um menu.
 > As instruções em linguagem simples estão em **`COMO USAR.txt`**.
+>
+> **Modo manual (padrão):** o painel indica a operação; você executa na Clear e registra no painel.
+> O quadro **"O que fazer agora na Clear"** acompanha cada posição e avisa quando subir o stop
+> (trailing/breakeven), vender no alvo ou sair por reversão de tendência. A automação do Home Broker é opcional.
 
 O robô abre o site da Clear, entra no Home Broker, analisa os ativos no gráfico diário e opera sozinho
 um **capital de teste**. Tem gestão de risco, stop sempre registrado na corretora e apuração do IR.

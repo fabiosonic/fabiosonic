@@ -69,9 +69,9 @@ function renderResumo() {
   $("#pilula-dados").innerHTML = `<span class="ponto"></span>Dados até ${m.data_dados.split("-").reverse().join("/")}`;
   const pm = $("#pilula-modo");
   pm.className = `pilula ${r.parar || r.kill_switch ? "perigo" : r.modo === "real" ? "alerta" : "ok"}`;
-  pm.innerHTML = `<span class="ponto"></span>${r.parar ? "ROBÔ TRAVADO" : r.kill_switch ? "KILL SWITCH" : r.modo === "real" ? "MODO REAL" : "SIMULADO"}`;
+  pm.innerHTML = `<span class="ponto"></span>${r.parar ? "ROBÔ TRAVADO" : r.kill_switch ? "KILL SWITCH" : r.modo === "real" ? "MODO REAL" : r.modo === "manual" ? "MODO MANUAL" : "SIMULADO"}`;
   const kpis = [
-    { r: "Patrimônio do robô", v: R(r.patrimonio), rod: `<span class="${cls(r.resultado_total)}">${P(r.resultado_total_pct, 2)}</span> desde o início` },
+    { r: r.modo === "manual" ? "Meu patrimônio (registrado)" : "Patrimônio do robô", v: R(r.patrimonio), rod: `<span class="${cls(r.resultado_total)}">${P(r.resultado_total_pct, 2)}</span> desde o início` },
     { r: "Resultado", v: `<span class="${cls(r.resultado_total)}">${R(r.resultado_total)}</span>`, rod: `realizado ${R(r.resultado_realizado)}` },
     { r: "Exposição", v: Pabs(r.exposicao_pct, 0), rod: `${r.posicoes.length}/${r.regras.max_posicoes} posições`, barra: r.exposicao_pct },
     { r: "Risco aberto (até stops)", v: R(r.risco_aberto), rod: `${Pabs(r.risco_aberto_pct, 2)} do patrimônio`, barra: r.risco_aberto_pct / r.regras.perda_maxima_total, aviso: true },
@@ -96,7 +96,8 @@ function renderPosicoes() {
   const vazio = { vazioTitulo: "Sem posições abertas", vazio: "Use o scanner, a análise de IA ou o rebalanceamento para gerar ordens." };
   $("#tab-posicoes-resumo").innerHTML = tabela(col, r.posicoes, vazio);
   $("#tab-posicoes").innerHTML = tabela(col, r.posicoes, vazio);
-  $("#sub-posicoes").textContent = `carteira ${r.carteira} · caixa ${R(r.caixa)}`;
+  $("#sub-posicoes").textContent = r.modo === "manual" ? "operações registradas por você" : `carteira ${r.carteira} · caixa ${R(r.caixa)}`;
+  $$(".cartao-topo h2").forEach((h) => { if (h.textContent === "Posições do robô" && r.modo === "manual") h.textContent = "Minhas posições"; });
   $("#sub-carteira").textContent = `Carteira ${r.carteira} · capital de teste ${R(r.capital_inicial)} · risco por operação ${Pabs(r.regras.risco_por_operacao)} · kill switch em -${Pabs(r.regras.perda_maxima_total, 0)}`;
   const concentr = r.posicoes.length ? Math.max(...r.posicoes.map((p) => p.valor)) / r.patrimonio : 0;
   $("#risco-cards").innerHTML = [
@@ -321,7 +322,7 @@ function abrirBoleta({ ticker = estado.ativo, lado = "C", preco = null, stop = n
   $("#b-tr-tipo").value = ""; $("#b-tr-valor").value = ""; $("#b-tr-ativ").value = "0"; $("#b-be").value = ""; $("#b-oco").checked = false; $("#b-rev").value = "avisar";
   atualizarResumoBoleta(); $("#modal-boleta").classList.add("aberto"); $("#b-qtd").focus();
 }
-function definirLado(l) { ladoBoleta = l; $$(".lado-toggle button").forEach((b) => b.classList.toggle("ativa", b.dataset.lado === l)); $("#b-protecoes").style.display = l === "C" && $("#b-tipo").value === "limitada" ? "" : "none"; atualizarResumoBoleta(); }
+function definirLado(l) { ladoBoleta = l; $$(".lado-toggle button").forEach((b) => b.classList.toggle("ativa", b.dataset.lado === l)); $("#b-protecoes").style.display = l === "C" && $("#b-tipo").value === "limitada" ? "" : "none"; ajustarBoletaAoModo(); atualizarResumoBoleta(); }
 $$(".lado-toggle button").forEach((b) => b.addEventListener("click", () => definirLado(b.dataset.lado)));
 $("#b-tipo").addEventListener("change", () => { const s = $("#b-tipo").value === "stop"; $("#campo-disparo").style.display = s ? "" : "none"; definirLado(s ? "V" : ladoBoleta); });
 ["#b-qtd", "#b-preco", "#b-ticker", "#b-disparo", "#b-sl", "#b-tp"].forEach((s) => $(s).addEventListener("input", atualizarResumoBoleta));
@@ -349,7 +350,30 @@ function atualizarResumoBoleta() {
 $$("[data-fechar]").forEach((b) => b.addEventListener("click", () => $("#modal-boleta").classList.remove("aberto")));
 $("#modal-boleta").addEventListener("click", (e) => { if (e.target.id === "modal-boleta") e.target.classList.remove("aberto"); });
 $("#btn-boleta-grafico").addEventListener("click", () => abrirBoleta({ ticker: estado.ativo }));
+const modoManual = () => estado.resumo && estado.resumo.modo === "manual";
+function ajustarBoletaAoModo() {
+  const m = modoManual();
+  $("#b-enviar").textContent = m ? (ladoBoleta === "C" ? "Registrar compra feita na Clear" : "Registrar venda feita na Clear") : "Adicionar à fila";
+  $("#b-nota").textContent = m
+    ? "Modo manual: primeiro execute a ordem na Clear; depois registre aqui o preço que você conseguiu. O painel passa a acompanhar e avisar quando subir o stop ou sair."
+    : "A ordem não vai direto para a Clear: ela entra na fila e só é executada pelo robô, com sua confirmação.";
+  $("#campo-stop-clear").style.display = m && ladoBoleta === "C" ? "" : "none";
+  $(".modal .cartao-topo h2").textContent = m ? "Registrar operação feita na Clear" : "Nova ordem → fila do robô";
+}
 $("#b-enviar").addEventListener("click", async () => {
+  if (modoManual()) {
+    const corpo = { ticker: $("#b-ticker").value, quantidade: +$("#b-qtd").value, preco: +$("#b-preco").value,
+      motivo: $("#b-motivo").value, stop_na_clear: $("#b-stop-clear").checked };
+    if (ladoBoleta === "C") Object.assign(corpo, lerProtecao() || {});
+    try {
+      const r = await api(ladoBoleta === "C" ? "/api/manual/compra" : "/api/manual/venda", { method: "POST", body: JSON.stringify(corpo) });
+      $("#modal-boleta").classList.remove("aberto");
+      toast(ladoBoleta === "C" ? "Compra registrada: o painel está acompanhando este ativo." :
+        `Venda registrada. Resultado: ${R(r.resultado)}.`, "ok");
+      estado.resumo = await api("/api/resumo"); renderResumo(); carregarAcoes();
+    } catch (e) { toast(e.message, "erro"); }
+    return;
+  }
   try {
     await api("/api/fila", { method: "POST", body: JSON.stringify({
       ticker: $("#b-ticker").value, lado: ladoBoleta, quantidade: +$("#b-qtd").value, preco: +$("#b-preco").value,
@@ -544,6 +568,47 @@ async function carregarUsoIA() {
   } catch (_) {}
 }
 
+// ---------------------------------------------------------------- O QUE FAZER AGORA (modo manual)
+const acoesVistas = new Set();
+const ICONES = { VENDER: "⛔", SUBIR_STOP: "⬆️", COLOCAR_STOP: "🛡️", ATENCAO: "⚠️" };
+async function carregarAcoes() {
+  try {
+    const r = await api("/api/manual/acoes");
+    estado.acoes = r.acoes;
+    if (!r.acompanhando) { $("#acoes-manuais").innerHTML = ""; return; }
+    const itens = r.acoes.map((a, i) => `
+      <div class="acao-item u${a.urgencia}">
+        <span class="icone-acao">${ICONES[a.acao] || "•"}</span>
+        <div class="txt"><b class="tk">${a.ticker}</b> <span class="nota">${a.quantidade} ações · ${N(a.preco)}
+          <span class="${cls(a.resultado_pct)}">${P(a.resultado_pct)}</span> · ${esc(a.fonte)}</span><br>${esc(a.texto)}</div>
+        ${a.acao === "SUBIR_STOP" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="stop">Já subi o stop na Clear</button>` : ""}
+        ${a.acao === "COLOCAR_STOP" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="pus">Já coloquei o stop</button>` : ""}
+        ${a.acao === "VENDER" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="venda">Registrar a venda</button>` : ""}
+        <button class="btn peq fantasma" data-acao-i="${i}" data-tipo="grafico">Gráfico</button>
+      </div>`).join("");
+    $("#acoes-manuais").innerHTML = `<div class="cartao"><div class="cartao-topo"><h2>O que fazer agora na Clear</h2>
+      <span class="sub">acompanhando ${r.acompanhando} ativo(s) · atualizado ${r.atualizado}</span></div>
+      <div class="cartao-corpo sem-pad">${itens || '<div class="vazio"><b>Nada a fazer agora ✓</b>Suas posições estão dentro do plano. O painel avisa quando precisar agir.</div>'}</div></div>`;
+    $("#acoes-manuais").onclick = async (ev) => {
+      const b = ev.target.closest("[data-acao-i]"); if (!b) return;
+      const a = estado.acoes[+b.dataset.acaoI];
+      if (b.dataset.tipo === "grafico") return verNoGrafico(a.ticker);
+      if (b.dataset.tipo === "venda") {
+        abrirBoleta({ ticker: a.ticker, lado: "V", preco: a.preco, motivo: a.texto.slice(0, 60) });
+        $("#b-qtd").value = a.quantidade; atualizarResumoBoleta(); return;
+      }
+      const stop = b.dataset.tipo === "stop" ? a.novo_stop : a.stop;
+      try { await api(`/api/protecoes/${a.ticker}/stop`, { method: "POST", body: JSON.stringify({ stop }) });
+        toast(`Stop de ${a.ticker} registrado em ${N(stop)}.`, "ok"); carregarAcoes(); } catch (e) { toast(e.message, "erro"); }
+    };
+    for (const a of r.acoes.filter((x) => x.urgencia <= 2)) {
+      const chave = `${a.ticker}:${a.acao}:${a.novo_stop || ""}`;
+      if (!acoesVistas.has(chave)) notificar(`${ICONES[a.acao] || ""} ${a.ticker}`, a.texto);
+      acoesVistas.add(chave);
+    }
+  } catch (_) {}
+}
+
 // ---------------------------------------------------------------- alertas de reversão (saída)
 const alertasVistos = new Set();
 function notificar(titulo, corpo) {
@@ -592,5 +657,6 @@ async function iniciar() {
   }
 }
 criarGraficos();
-iniciar().then(() => { const aba = location.hash.slice(1); if (aba && $(`#${aba}`)) abrirAba(aba); carregarAlertas(); carregarCasas(); carregarUsoIA(); });
+iniciar().then(() => { const aba = location.hash.slice(1); if (aba && $(`#${aba}`)) abrirAba(aba); carregarAlertas(); carregarCasas(); carregarUsoIA(); carregarAcoes(); });
 setInterval(carregarAlertas, 60000);   // reavalia as posições a cada minuto
+setInterval(carregarAcoes, 60000);

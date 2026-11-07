@@ -81,7 +81,7 @@ def cdi_anual(cdi: pd.Series) -> float:
 # ============================================================================ carteira / robô
 def carregar_carteira(cfg=None) -> tuple[Carteira, str]:
     cfg = cfg or _cfg()
-    nome = "real" if cfg.modo == "real" else "simulada"
+    nome = {"real": "real", "manual": "manual"}.get(cfg.modo, "simulada")
     caminho = RAIZ / cfg.pasta_estado / f"carteira_{nome}.json"
     cart = Carteira.carregar_ou_criar(caminho, cfg.risco.capital_teste, cfg.risco.custo_percentual)
     return cart, nome
@@ -506,3 +506,154 @@ def alertas() -> dict:
     ordem = {"SAIR": 0, "ATENÇÃO": 1, "OK": 2}
     saida.sort(key=lambda x: (ordem.get(x["nivel"], 3), -x["pontos"]))
     return {"data": paineis()[0].index[-1].date().isoformat(), "alertas": saida}
+
+
+# ============================================================================ modo manual
+_cache_precos: dict = {"quando": 0.0, "precos": {}}
+
+
+def precos_atuais(tickers: list[str]) -> dict[str, tuple[float, float, str]]:
+    """(preço, máxima do dia, fonte). Intradiário do Yahoo (~15 min de atraso), em cache de 5 min;
+    sem conexão, usa o último fechamento baixado."""
+    agora = time.time()
+    if agora - _cache_precos["quando"] > 300 or not set(tickers) <= set(_cache_precos["precos"]):
+        try:
+            from swingbot.monitor import precos_yahoo
+            novos = precos_yahoo(tickers) if tickers else {}
+        except Exception:  # noqa: BLE001
+            novos = {}
+        _cache_precos.update(quando=agora, precos={t: (p, m, "intradiário (~15 min)") for t, (p, m) in novos.items()})
+    saida = dict(_cache_precos["precos"])
+    try:
+        *_, ohlc = paineis()
+        for t in tickers:
+            if t not in saida and t in ohlc:
+                d = ohlc[t]
+                saida[t] = (float(d.close.iloc[-1]), float(d.high.iloc[-1]), "último fechamento")
+    except RuntimeError:
+        pass
+    return saida
+
+
+def registrar_compra(d: dict) -> dict:
+    """Você comprou na Clear: registra a posição e passa a acompanhá-la."""
+    from swingbot.protecoes import Protecao
+    cfg = _cfg()
+    ticker = str(d.get("ticker", "")).upper().strip()
+    qtd, preco = int(d.get("quantidade") or 0), float(d.get("preco") or 0)
+    stop = float(d.get("stop") or 0)
+    if not ticker or qtd <= 0 or preco <= 0:
+        raise ValueError("Informe ativo, quantidade e preço de compra")
+    if not 0 < stop < preco:
+        raise ValueError("Informe o stop loss (abaixo do preço de compra) — ele protege sua operação")
+    tp = d.get("take_profit")
+    prot = Protecao(ticker=ticker, quantidade=qtd, preco_entrada=preco, stop=stop,
+                    take_profit=float(tp) if tp else None, trailing=d.get("trailing") or None,
+                    breakeven_pct=d.get("breakeven_pct"), na_reversao="avisar", origem="manual")
+    prot.stop_enviado = bool(d.get("stop_na_clear", True))
+    existente = _repo().carregar().get(ticker)
+    if existente and existente.ativa:      # aumento de posição: preço médio ponderado
+        total = existente.quantidade + qtd
+        prot.preco_entrada = round((existente.preco_entrada * existente.quantidade + preco * qtd) / total, 4)
+        prot.quantidade = total
+    _repo().upsert(prot)
+    cart, _ = carregar_carteira(cfg)
+    hoje = time.strftime("%Y-%m-%d")
+    cart.comprar(hoje, ticker, qtd, preco, stop, prot.take_profit or 0.0, origem="manual")
+    cart.posicoes[ticker].stop_enviado = prot.stop_enviado
+    cart.salvar(RAIZ / cfg.pasta_estado / "carteira_manual.json")
+    return prot.to_dict()
+
+
+def registrar_venda(d: dict) -> dict:
+    """Você vendeu na Clear: registra a venda (resultado e IR) e encerra/reduz o acompanhamento."""
+    cfg = _cfg()
+    ticker = str(d.get("ticker", "")).upper().strip()
+    qtd, preco = int(d.get("quantidade") or 0), float(d.get("preco") or 0)
+    cart, _ = carregar_carteira(cfg)
+    pos = cart.posicoes.get(ticker)
+    if not pos:
+        raise ValueError(f"Não há posição registrada em {ticker}")
+    if qtd <= 0 or qtd > pos.quantidade or preco <= 0:
+        raise ValueError(f"Quantidade deve ser entre 1 e {pos.quantidade}, e o preço positivo")
+    trade = cart.vender(time.strftime("%Y-%m-%d"), ticker, qtd, preco, d.get("motivo") or "venda manual")
+    cart.salvar(RAIZ / cfg.pasta_estado / "carteira_manual.json")
+    itens = _repo().carregar()
+    if ticker in itens:
+        p = itens[ticker]
+        p.quantidade -= qtd
+        if p.quantidade <= 0:
+            p.ativa = False
+        p.historico.append([time.strftime("%Y-%m-%d %H:%M"), f"venda manual {qtd} @ {preco:.2f}"])
+        _repo().salvar(itens)
+    return trade
+
+
+def ajustar_stop(ticker: str, stop: float) -> dict:
+    """Você subiu o stop na Clear: atualiza o acompanhamento."""
+    cfg = _cfg()
+    itens = _repo().carregar()
+    p = itens.get(ticker.upper())
+    if not p or not p.ativa:
+        raise ValueError("Posição não encontrada")
+    if stop <= 0:
+        raise ValueError("Stop inválido")
+    p.stop, p.stop_enviado = round(float(stop), 2), True
+    p.historico.append([time.strftime("%Y-%m-%d %H:%M"), f"stop ajustado para {p.stop:.2f}"])
+    _repo().salvar(itens)
+    cart, _ = carregar_carteira(cfg)
+    if p.ticker in cart.posicoes:
+        cart.posicoes[p.ticker].stop = p.stop
+        cart.posicoes[p.ticker].stop_enviado = True
+        cart.salvar(RAIZ / cfg.pasta_estado / f"carteira_{_}.json")
+    return p.to_dict()
+
+
+def acoes_manuais() -> dict:
+    """Lista do que VOCÊ deve fazer agora na Clear para cada posição acompanhada."""
+    from swingbot.protecoes import avaliar
+    from swingbot.reversao import avaliar as avaliar_rev
+    from swingbot.reversao import com_preco_atual
+    itens = _repo().carregar()
+    ativos = [t for t, p in itens.items() if p.ativa]
+    precos = precos_atuais(ativos)
+    try:
+        *_, ohlc = paineis()
+    except RuntimeError:
+        ohlc = {}
+    acoes, mudou = [], False
+    for t in ativos:
+        p = itens[t]
+        if t not in precos:
+            continue
+        preco, maxima, fonte = precos[t]
+        maior_antes = p.maior_preco
+        d = avaliar(p, preco, maxima)
+        mudou |= p.maior_preco != maior_antes
+        base = {"ticker": t, "quantidade": p.quantidade, "preco": round(preco, 2), "fonte": fonte,
+                "entrada": p.preco_entrada, "stop": p.stop, "alvo": p.take_profit,
+                "resultado_pct": round(preco / p.preco_entrada - 1, 4)}
+        if not p.stop_enviado:
+            acoes.append({**base, "urgencia": 1, "acao": "COLOCAR_STOP",
+                          "texto": f"Registre na Clear uma ordem STOP de venda em R$ {p.stop:.2f}"})
+        if d.acao == "STOP_ATINGIDO":
+            acoes.append({**base, "urgencia": 0, "acao": "VENDER",
+                          "texto": f"Preço {preco:.2f} atingiu o stop {p.stop:.2f}: se a ordem stop não executou, VENDA"})
+        elif d.acao == "TAKE_PROFIT":
+            acoes.append({**base, "urgencia": 0, "acao": "VENDER",
+                          "texto": f"ALVO atingido ({preco:.2f} ≥ {p.take_profit:.2f}): venda e realize o lucro"})
+        elif d.acao == "NOVO_STOP":
+            acoes.append({**base, "urgencia": 2, "acao": "SUBIR_STOP", "novo_stop": d.novo_stop,
+                          "texto": f"Suba seu stop na Clear de {p.stop:.2f} para {d.novo_stop:.2f} ({d.motivo.split(':')[0]})"})
+        if t in ohlc:
+            diag = avaliar_rev(com_preco_atual(ohlc[t], preco), p.maior_preco)
+            if diag.nivel == "SAIR":
+                acoes.append({**base, "urgencia": 1, "acao": "VENDER", "sinais": diag.sinais,
+                              "texto": "Reversão de tendência: considere sair — " + "; ".join(diag.sinais[:3])})
+            elif diag.nivel == "ATENÇÃO":
+                acoes.append({**base, "urgencia": 3, "acao": "ATENCAO", "sinais": diag.sinais,
+                              "texto": "Tendência enfraquecendo: acompanhe — " + "; ".join(diag.sinais[:2])})
+    if mudou:
+        _repo().salvar(itens)          # guarda a máxima observada (base do trailing stop)
+    acoes.sort(key=lambda a: a["urgencia"])
+    return {"acoes": acoes, "acompanhando": len(ativos), "atualizado": time.strftime("%H:%M")}

@@ -1,9 +1,10 @@
 # =============================================================================
 # SwingBot — configuração
 # =============================================================================
+# modo: manual   -> o painel indica as operações, VOCÊ executa na Clear e registra no painel (padrão)
 # modo: simulado -> nenhuma ordem vai para a Clear (paper trading com dados reais)
 # modo: real     -> opera de verdade, mas SÓ com `python -m swingbot rodar --real`
-modo: simulado
+modo: manual
 
 # Ativos monitorados (sem .SA). Prefira papéis líquidos do IBOV.
 ativos: [PETR4, VALE3, ITUB4, BBDC4, BBAS3, WEGE3, ABEV3, RENT3, PRIO3, SUZB3, B3SA3, EQTL3]

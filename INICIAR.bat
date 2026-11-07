@@ -34,10 +34,10 @@ echo ==================================================
 echo              PAINEL QUANT B3  - gratuito
 echo ==================================================
 echo.
-echo   1 - Abrir o painel
+echo   1 - Abrir o painel  - indica as operacoes; voce executa na Clear
 echo   2 - Atualizar os dados do mercado  - faca todo dia
-echo   3 - Mapear o Home Broker da Clear  - so uma vez
-echo   4 - Testar a boleta da Clear SEM enviar ordem
+echo   3 - (opcional) Mapear o Home Broker da Clear
+echo   4 - (opcional) Testar a boleta da Clear SEM enviar ordem
 echo   5 - Ativar a IA gratuita - Ollama
 echo   6 - Atualizar o programa
 echo   0 - Sair

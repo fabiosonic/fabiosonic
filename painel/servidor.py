@@ -152,6 +152,42 @@ def remover_protecao(ticker: str):
     return {"ok": True}
 
 
+class OperacaoManual(BaseModel):
+    ticker: str
+    quantidade: int
+    preco: float
+    stop: float | None = None
+    take_profit: float | None = None
+    trailing: dict | None = None
+    breakeven_pct: float | None = None
+    stop_na_clear: bool = True
+    motivo: str = ""
+
+
+@app.post("/api/manual/compra")
+def manual_compra(o: OperacaoManual):
+    return _proteger(dp.registrar_compra, o.model_dump())
+
+
+@app.post("/api/manual/venda")
+def manual_venda(o: OperacaoManual):
+    return _proteger(dp.registrar_venda, o.model_dump())
+
+
+@app.get("/api/manual/acoes")
+def manual_acoes():
+    return _proteger(dp.acoes_manuais)
+
+
+class NovoStop(BaseModel):
+    stop: float
+
+
+@app.post("/api/protecoes/{ticker}/stop")
+def protecao_stop(ticker: str, n: NovoStop):
+    return _proteger(dp.ajustar_stop, ticker, n.stop)
+
+
 @app.get("/api/robo/logs")
 def logs():
     return dp.logs_robo()

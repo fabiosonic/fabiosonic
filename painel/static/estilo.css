@@ -300,3 +300,12 @@ label.check { display: flex; align-items: center; gap: 6px; font-size: 12px; col
 .casa-item .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .lista-casas { max-height: 420px; overflow: auto; }
 @media (max-width: 1080px) { .casas-grade { grid-template-columns: minmax(0, 1fr); } .casas-grade > div + div { border-left: 0; border-top: 1px solid var(--borda); } }
+
+#acoes-manuais:empty { display: none; }
+#acoes-manuais { margin-bottom: 14px; }
+.acao-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--borda); flex-wrap: wrap; }
+.acao-item:last-child { border-bottom: 0; }
+.acao-item .txt { flex: 1; min-width: 240px; }
+.acao-item.u0 { background: var(--baixa-suave); }
+.acao-item.u1 { background: var(--aviso-suave); }
+.acao-item .icone-acao { font-size: 18px; width: 24px; text-align: center; }

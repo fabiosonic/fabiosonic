@@ -9,6 +9,15 @@ PRIMEIRA VEZ
 2) Se o Windows mostrar "O Windows protegeu o computador":
    clique em "Mais informacoes" e depois em "Executar assim mesmo".
 
+COMO OPERAR (modo manual - padrao)
+1) Abra o painel (opcao 1). Veja as sugestoes no Scanner, no Analista e nas carteiras das casas.
+2) Clique numa sugestao: a boleta ja vem com preco, quantidade, STOP e ALVO.
+3) Faca a compra NA CLEAR, com as suas maos, e registre tambem a ordem STOP de venda la.
+4) Volte ao painel e clique em "Registrar compra feita na Clear" (ajuste o preco que voce conseguiu).
+5) O quadro "O que fazer agora na Clear" avisa quando: subir o stop, vender no alvo ou sair
+   por reversao de tendencia. Deixe o painel aberto para receber os avisos (notificacoes).
+6) Quando vender na Clear, clique em "Registrar a venda": o painel calcula o resultado e o IR.
+
 NO DIA A DIA
 - Use o atalho "Painel Quant B3" na Area de Trabalho e escolha no menu:
     1 - Abrir o painel
