@@ -264,6 +264,53 @@ class ClearHomeBroker:
     def stop_venda(self, ticker: str, qtd: int, disparo: float, limite: float, enviar: bool = True) -> None:
         self._boleta("venda", "stop", ticker, qtd, limite, disparo=disparo, enviar=enviar)
 
+    # ----------------------------------------------------------------- OCO e preços
+    def suporta_oco(self) -> bool:
+        return all(self.s(f"boleta.{k}") for k in ("aba_oco", "campo_gain_disparo", "campo_gain_preco",
+                                                   "campo_loss_disparo", "campo_loss_preco"))
+
+    def oco_venda(self, ticker: str, qtd: int, gain_disparo: float, gain_preco: float,
+                  loss_disparo: float, loss_preco: float, enviar: bool = True) -> None:
+        """Stop duplo (OCO): take profit e stop loss na mesma ordem; a execução de um cancela o outro."""
+        if not self.suporta_oco():
+            raise ErroHomeBroker("OCO não calibrado (boleta.aba_oco e campos de gain/loss)")
+        rotulo = f"venda_oco_{ticker}_{qtd}"
+        self._clicar("boleta.abrir_venda")
+        self.page.wait_for_timeout(800)
+        self._clicar("boleta.aba_oco")
+        self.page.wait_for_timeout(500)
+        self._preencher("boleta.campo_ativo", ticker)
+        self.page.keyboard.press("Tab")
+        self.page.wait_for_timeout(1200)
+        self._preencher("boleta.campo_quantidade", str(qtd))
+        self._preencher("boleta.campo_gain_disparo", formatar_br(gain_disparo))
+        self._preencher("boleta.campo_gain_preco", formatar_br(gain_preco))
+        self._preencher("boleta.campo_loss_disparo", formatar_br(loss_disparo))
+        self._preencher("boleta.campo_loss_preco", formatar_br(loss_preco))
+        if self.s("boleta.campo_assinatura") and self._assinatura:
+            self._preencher("boleta.campo_assinatura", self._assinatura)
+        self.foto(f"boleta_{rotulo}")
+        if not enviar:
+            print(f"[ENSAIO] OCO preenchida e NÃO enviada: {rotulo}")
+            return
+        self._clicar("boleta.botao_enviar")
+        self._aguardar_confirmacao(rotulo)
+
+    def ler_precos(self) -> dict[str, float]:
+        """Último preço de cada ativo na tabela de custódia (coluna custodia.preco_atual)."""
+        if not self.s("custodia.preco_atual"):
+            return {}
+        self._clicar("navegacao.menu_custodia")
+        self.page.wait_for_timeout(1500)
+        precos = {}
+        for linha in self.page.locator(self.s("custodia.linha")).all():
+            try:
+                ativo = ticker_base(linha.locator(self.s("custodia.ativo")).first.inner_text().strip().upper())
+                precos[ativo] = numero_br(linha.locator(self.s("custodia.preco_atual")).first.inner_text())
+            except Exception:
+                continue
+        return precos
+
     def cancelar_stops(self, ticker: str) -> int:
         """Cancela os stops de venda abertos do ativo (padrão e fracionário)."""
         o = self.sel["ordens"]

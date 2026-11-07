@@ -39,6 +39,43 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+## Painel Quant B3 (dashboard com IA)
+
+```bash
+python pesquisa/baixar.py && python pesquisa/baixar_dividendos.py && python pesquisa/baixar_consenso.py   # 1ª vez
+export ANTHROPIC_API_KEY=...        # opcional: ativa o Analista IA e o assistente (Windows: set ANTHROPIC_API_KEY=...)
+python -m swingbot painel          # abre http://127.0.0.1:8050 (só na sua máquina)
+```
+
+| Aba | O que tem |
+|---|---|
+| **Visão geral** | KPIs do robô, gráfico profissional (MMs, MACD, volume, sinais), **Analista IA**, **consenso das casas de análise** com convergência, scanner e posições |
+| **Oportunidades** | Rastreador de setups com a evidência de 10 anos de cada setup |
+| **Ranking & carteiras** | Ranking por dividendos, momentum e mix, alerta de armadilha de dividendos, rebalanceamento para a fila |
+| **Carteira & risco** | Risco aberto até os stops, concentração, orçamento de perda, custódia da Clear |
+| **Laboratório** | Curvas de patrimônio e resultados dos estudos |
+| **Fiscal** | Apuração mensal e DARF |
+| **Robô Clear** | Fila de ordens, **proteções** (stop loss, take profit, trailing, breakeven, OCO) e log |
+
+A IA usa o Claude (`claude-opus-5-5`) e se baseia **só** nos dados do painel. O assistente pode pesquisar notícias
+e as carteiras recomendadas do mês na web, citando as fontes. Se o modelo recusar, a API refaz a pergunta num modelo alternativo (*fallback*).
+O consenso de analistas vem do Yahoo Finance (estimativas LSEG de bancos e corretoras). Não é a carteira oficial de nenhuma casa.
+
+### Stop loss, take profit e trailing stop
+Na boleta de compra do painel:
+- **Stop loss**: fica **sempre registrado na Clear** como ordem stop. Continua protegendo mesmo com o computador desligado.
+- **Take profit**: executado pelo monitor quando o preço chega ao alvo. Com **OCO** calibrado, o stop e o alvo ficam juntos na Clear.
+- **Trailing stop**: em % da máxima ou em múltiplos de ATR, com ganho mínimo para ativar. O stop nunca desce.
+- **Breakeven**: depois de X% de ganho, o stop sobe para o preço de entrada (+0,2% de custos).
+
+```bash
+python -m swingbot executar-fila --real   # envia as compras da fila; as proteções ficam registradas
+python -m swingbot monitorar              # simulação: mostra o que o monitor faria
+python -m swingbot monitorar --real       # pregão: registra stops, faz trailing e take profit na Clear
+```
+O preço vem da custódia da Clear (seletor `custodia.preco_atual`) ou, sem ele, do Yahoo com ~15 min de atraso.
+Para ter stop e alvo juntos na Clear, calibre os seletores de OCO em `config/seletores_clear.yaml`.
+
 ## Passo a passo
 
 ### 1. Backtest

@@ -33,6 +33,7 @@ custodia:                        # tabela de posições
   ativo: PREENCHER               # relativo à linha
   quantidade: PREENCHER          # relativo à linha
   preco_medio: PREENCHER         # relativo à linha
+  preco_atual: ""                # relativo à linha (opcional: cotação usada pelo monitor)
 
 boleta:
   abrir_compra: PREENCHER        # botão que abre a boleta de compra
@@ -48,6 +49,12 @@ boleta:
   confirmacao: PREENCHER         # mensagem/elemento de ordem enviada com sucesso
   erro: ""                       # mensagem de erro/rejeição (recomendado)
   fechar: ""                     # fechar a boleta após enviar (se necessário)
+  # --- OCO / stop duplo (opcional): stop loss + take profit juntos na Clear
+  aba_oco: ""
+  campo_gain_disparo: ""
+  campo_gain_preco: ""
+  campo_loss_disparo: ""
+  campo_loss_preco: ""
 
 ordens:                          # tabela de ordens do dia
   linha: PREENCHER
@@ -57,6 +64,6 @@ ordens:                          # tabela de ordens do dia
   status: PREENCHER              # relativo à linha (ex.: "Aberta", "Executada")
   botao_cancelar: PREENCHER      # relativo à linha
   confirmar_cancelamento: ""     # botão de confirmação do cancelamento (se houver)
-  textos_stop: ["Stop"]
+  textos_stop: ["Stop", "OCO"]
   textos_venda: ["Venda", "V"]
   textos_aberta: ["Aberta", "Pendente", "Parcial", "Nova"]

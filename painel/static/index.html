@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel Quant B3</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f8cff'/%3E%3Cpath d='M7 21l6-6 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/estilo.css">
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<header class="topo">
+  <div class="marca">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--destaque)"/><path d="M7 21l6-6 4 4 8-9" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Painel Quant <small>B3</small></span>
+  </div>
+  <nav class="abas" id="abas">
+    <button data-aba="visao" class="ativa">Visão geral</button>
+    <button data-aba="oportunidades">Oportunidades</button>
+    <button data-aba="ranking">Ranking &amp; carteiras</button>
+    <button data-aba="carteira">Carteira &amp; risco</button>
+    <button data-aba="laboratorio">Laboratório</button>
+    <button data-aba="fiscal">Fiscal</button>
+    <button data-aba="robo">Robô Clear</button>
+  </nav>
+  <div class="status">
+    <span class="pilula opcional" id="pilula-dados">—</span>
+    <span class="pilula" id="pilula-modo">—</span>
+    <button class="btn fantasma peq" id="btn-tema" title="Alternar tema" aria-label="Alternar tema">
+      <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+    <button class="btn peq" id="btn-atualizar" title="Baixar cotações, dividendos e CDI">
+      <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+      Atualizar dados
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- ====================================================== VISÃO GERAL -->
+  <section class="secao ativa" id="visao">
+    <div class="grade g-kpi" id="kpis"></div>
+
+    <div class="grade g-principal mt">
+      <div class="cartao">
+        <div class="cartao-topo">
+          <div class="cotacao"><select id="sel-ativo" aria-label="Ativo"></select><b id="cot-preco">—</b><span id="cot-var" class="num"></span></div>
+          <div class="ferramentas">
+            <div class="segmentado" id="seg-periodo">
+              <button data-dias="126">6M</button><button data-dias="252" class="ativa">1A</button><button data-dias="504">2A</button><button data-dias="1260">5A</button>
+            </div>
+            <button class="btn peq" id="btn-boleta-grafico">Nova ordem</button>
+          </div>
+        </div>
+        <div class="cartao-corpo sem-pad">
+          <div id="grafico-principal"></div>
+          <div id="grafico-macd"></div>
+        </div>
+        <div class="legenda">
+          <span><i style="background:#f5b84a"></i>MME 9</span><span><i style="background:#4f8cff"></i>MME 21</span>
+          <span><i style="background:#a78bfa"></i>MMS 200</span><span><i style="background:#1fc28b"></i>MACD / sinal</span>
+          <span>▲▼ cruzamentos do MACD (setup mais consistente no estudo)</span>
+        </div>
+      </div>
+
+      <div class="cartao" id="cartao-ia">
+        <div class="cartao-topo">
+          <h2 class="ia-cabecalho"><span class="ia-orbe" id="ia-orbe"></span>Analista IA</h2>
+          <button class="btn ia peq" id="btn-ia">Gerar análise do dia</button>
+        </div>
+        <div class="cartao-corpo sem-pad" id="ia-saida">
+          <div class="vazio"><b>Análise com IA sob demanda</b>Lê o mercado, a carteira, o ranking e o scanner e sugere operações com entrada, stop e evidência histórica.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cartao mt">
+      <div class="cartao-topo">
+        <h2>Consenso das casas de análise <span class="sub" id="sub-consenso"></span></h2>
+        <div class="ferramentas">
+          <div class="segmentado" id="seg-consenso"><button data-f="todos" class="ativa">Compra</button><button data-f="convergentes">Convergentes</button><button data-f="neutros">Neutro/Venda</button></div>
+          <button class="btn ia peq" id="btn-casas">Carteiras recomendadas do mês (IA + web)</button>
+        </div>
+      </div>
+      <div class="cartao-corpo sem-pad tabela-wrap" id="tab-consenso" style="max-height:420px"></div>
+      <div class="legenda">Consenso de bancos e corretoras que cobrem cada ação (dados LSEG via Yahoo). Nota 1 = compra forte … 5 = venda forte. <b>Convergência</b> = o consenso coincide com os fatores que venceram no estudo de 10 anos ou com a tendência.</div>
+    </div>
+
+    <div class="grade g-2 mt">
+      <div class="cartao">
+        <div class="cartao-topo"><h2>Oportunidades do scanner</h2><span class="sub" id="sub-scanner"></span></div>
+        <div class="cartao-corpo sem-pad tabela-wrap" id="tab-opps-resumo"></div>
+      </div>
+      <div class="cartao">
+        <div class="cartao-topo"><h2>Posições do robô</h2><span class="sub" id="sub-posicoes"></span></div>
+        <div class="cartao-corpo sem-pad tabela-wrap" id="tab-posicoes-resumo"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== OPORTUNIDADES -->
+  <section class="secao" id="oportunidades">
+    <div class="titulo-secao">
+      <div><h1>Oportunidades</h1><p>Rastreador de setups em 44 ações e no Ibovespa, com a evidência de 10 anos de cada setup.</p></div>
+    </div>
+    <div class="aviso-faixa">⚠️ Sinais gerados no fechamento do último pregão. A evidência mostra o retorno histórico do setup acima do CDI (2016–2026); números negativos significam que o setup perdeu para o CDI.</div>
+    <div class="cartao mt"><div class="cartao-corpo sem-pad tabela-wrap" id="tab-opps" style="max-height:none"></div></div>
+  </section>
+
+  <!-- ====================================================== RANKING -->
+  <section class="secao" id="ranking">
+    <div class="titulo-secao">
+      <div><h1>Ranking por fatores &amp; carteiras-alvo</h1><p>Estratégias de seleção que venceram o CDI no estudo de 10 anos.</p></div>
+      <div class="segmentado" id="seg-estrategia">
+        <button data-e="dividendos" class="ativa">Dividendos (top 10 DY)</button><button data-e="mix">Mix 50/50</button><button data-e="momentum">Momentum 12-1</button>
+      </div>
+    </div>
+    <div class="grade g-principal">
+      <div class="cartao"><div class="cartao-topo"><h2>Ranking do universo</h2><span class="sub" id="sub-ranking"></span></div>
+        <div class="cartao-corpo sem-pad tabela-wrap" id="tab-ranking" style="max-height:640px"></div></div>
+      <div class="cartao">
+        <div class="cartao-topo"><h2>Rebalanceamento</h2></div>
+        <div class="cartao-corpo">
+          <div class="campo"><label for="inp-capital">Capital da estratégia (R$)</label><input type="number" id="inp-capital" value="10000" min="500" step="500"></div>
+          <div class="mt" id="rebal-saida"></div>
+          <button class="btn primario mt" id="btn-rebal-fila" style="width:100%;justify-content:center">Enviar ordens à fila do robô</button>
+          <p class="nota">Compara a carteira-alvo com a custódia sincronizada da Clear (ou carteira vazia). Rebalanceie 1x por mês; o estudo mostra resultado parecido com rebalanceamento trimestral.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== CARTEIRA -->
+  <section class="secao" id="carteira">
+    <div class="titulo-secao"><div><h1>Carteira &amp; risco</h1><p id="sub-carteira"></p></div></div>
+    <div class="grade g-3" id="risco-cards"></div>
+    <div class="grade g-2 mt">
+      <div class="cartao"><div class="cartao-topo"><h2>Posições do robô</h2></div><div class="cartao-corpo sem-pad tabela-wrap" id="tab-posicoes"></div></div>
+      <div class="cartao"><div class="cartao-topo"><h2>Custódia na Clear</h2><span class="sub" id="sub-custodia"></span></div><div class="cartao-corpo sem-pad tabela-wrap" id="tab-custodia"></div></div>
+    </div>
+    <div class="cartao mt"><div class="cartao-topo"><h2>Operações encerradas</h2></div><div class="cartao-corpo sem-pad tabela-wrap" id="tab-trades"></div></div>
+  </section>
+
+  <!-- ====================================================== LABORATÓRIO -->
+  <section class="secao" id="laboratorio">
+    <div class="titulo-secao"><div><h1>Laboratório de estratégias</h1><p>Resultados dos estudos (nov/2016 – nov/2026), com custos e CDI no caixa.</p></div></div>
+    <div class="cartao"><div class="cartao-topo"><h2>Patrimônio acumulado (R$ 1 inicial)</h2><span class="sub">escala log</span></div>
+      <div class="cartao-corpo sem-pad"><div id="grafico-lab"></div></div><div class="legenda" id="legenda-lab"></div></div>
+    <div class="grade g-2 mt">
+      <div class="cartao"><div class="cartao-topo"><h2>Fatores de seleção</h2></div><div class="cartao-corpo sem-pad tabela-wrap" id="tab-fatores"></div></div>
+      <div class="cartao"><div class="cartao-topo"><h2>Setups de swing trade</h2>
+        <div class="segmentado" id="seg-universo"><button data-u="44 ações" class="ativa">44 ações</button><button data-u="Ibovespa">Ibovespa</button></div></div>
+        <div class="cartao-corpo sem-pad tabela-wrap" id="tab-setups"></div></div>
+    </div>
+  </section>
+
+  <!-- ====================================================== FISCAL -->
+  <section class="secao" id="fiscal">
+    <div class="titulo-secao"><div><h1>Apuração fiscal</h1><p>IR mensal sobre renda variável: isenção de R$ 20 mil, day trade, IRRF e DARF 6015.</p></div></div>
+    <div class="cartao"><div class="cartao-corpo sem-pad tabela-wrap" id="tab-fiscal" style="max-height:none"></div></div>
+    <p class="nota">Valores de controle. A apuração oficial deve ser conferida com as notas de corretagem.</p>
+  </section>
+
+  <!-- ====================================================== ROBÔ -->
+  <section class="secao" id="robo">
+    <div class="titulo-secao"><div><h1>Robô Clear</h1><p>Integração com o Home Broker via automação de navegador, com login e confirmação feitos por você.</p></div>
+      <button class="btn primario" id="btn-sincronizar">Sincronizar custódia da Clear</button></div>
+    <div class="grade g-2">
+      <div class="cartao"><div class="cartao-topo"><h2>Fila de ordens</h2><span class="sub" id="sub-fila"></span></div><div class="cartao-corpo sem-pad tabela-wrap" id="tab-fila"></div></div>
+      <div class="cartao"><div class="cartao-topo"><h2>Como executar</h2></div>
+        <div class="cartao-corpo">
+          <ol class="passos">
+            <li>Calibre a tela da Clear (uma vez): <code class="cmd">python -m swingbot calibrar</code></li>
+            <li>Teste sem enviar: <code class="cmd">python -m swingbot ensaio PETR4 --preco 10</code></li>
+            <li>Execute a fila: <code class="cmd">python -m swingbot executar-fila --real</code></li>
+          </ol>
+          <p class="nota">O robô abre a Clear, aguarda seu login, mostra cada ordem e pede a confirmação <b>OPERAR REAL</b>. Para travar tudo, crie o arquivo <code class="cmd">PARAR</code> na pasta do projeto.</p>
+        </div></div>
+    </div>
+    <div class="cartao mt"><div class="cartao-topo"><h2>Proteções ativas · stop loss, take profit e trailing</h2><span class="sub">monitor: <code class="cmd">python -m swingbot monitorar --real</code></span></div>
+      <div class="cartao-corpo sem-pad tabela-wrap" id="tab-protecoes"></div></div>
+    <div class="cartao mt"><div class="cartao-topo"><h2>Log do robô (hoje)</h2></div><pre class="log" id="log-robo">—</pre></div>
+  </section>
+</main>
+
+<!-- ====================================================== CHAT IA -->
+<div class="chat">
+  <div class="chat-painel" id="chat-painel" role="dialog" aria-label="Assistente IA">
+    <div class="cartao-topo"><h2 class="ia-cabecalho"><span class="ia-orbe" id="chat-orbe"></span>Assistente IA</h2>
+      <button class="btn fantasma peq" id="chat-fechar" aria-label="Fechar">✕</button></div>
+    <div class="chat-msgs" id="chat-msgs">
+      <div class="msg assistant">Olá! Pergunte sobre qualquer ativo, sua carteira ou as estratégias. Marque "notícias da web" para eu pesquisar fatos recentes.</div>
+    </div>
+    <div class="chat-entrada">
+      <div class="sugestoes" id="chat-sugestoes">
+        <button>Vale a pena rebalancear a carteira de dividendos agora?</button>
+        <button>Qual o maior risco da minha carteira?</button>
+        <button>Explique o sinal mais forte do scanner</button>
+      </div>
+      <textarea id="chat-texto" placeholder="Pergunte algo… (Enter envia)"></textarea>
+      <div class="chat-opcoes"><label><input type="checkbox" id="chat-web"> notícias da web</label><button class="btn ia peq" id="chat-enviar">Enviar</button></div>
+    </div>
+  </div>
+  <button class="btn ia chat-botao" id="chat-abrir"><span class="ia-orbe" style="width:16px;height:16px"></span>Assistente IA</button>
+</div>
+
+<!-- ====================================================== BOLETA -->
+<div class="modal-fundo" id="modal-boleta">
+  <div class="modal" role="dialog" aria-label="Nova ordem">
+    <div class="cartao-topo"><h2>Nova ordem → fila do robô</h2><button class="btn fantasma peq" data-fechar aria-label="Fechar">✕</button></div>
+    <div class="cartao-corpo">
+      <div class="lado-toggle"><button class="c ativa" data-lado="C">COMPRA</button><button class="v" data-lado="V">VENDA</button></div>
+      <div class="linha-campos">
+        <div class="campo"><label for="b-ticker">Ativo</label><input type="text" id="b-ticker"></div>
+        <div class="campo"><label for="b-tipo">Tipo</label><select id="b-tipo"><option value="limitada">Limitada</option><option value="stop">Stop (venda)</option></select></div>
+      </div>
+      <div class="linha-campos">
+        <div class="campo"><label for="b-qtd">Quantidade</label><input type="number" id="b-qtd" min="1" step="1"></div>
+        <div class="campo"><label for="b-preco">Preço limite (R$)</label><input type="number" id="b-preco" min="0.01" step="0.01"></div>
+      </div>
+      <div class="campo" id="campo-disparo" style="display:none"><label for="b-disparo">Preço de disparo (R$)</label><input type="number" id="b-disparo" step="0.01"></div>
+      <fieldset class="protecoes" id="b-protecoes">
+        <legend>Proteções da compra</legend>
+        <div class="linha-campos">
+          <div class="campo"><label for="b-sl">Stop loss (R$)</label><input type="number" id="b-sl" step="0.01"></div>
+          <div class="campo"><label for="b-tp">Take profit (R$)</label><input type="number" id="b-tp" step="0.01"></div>
+        </div>
+        <div class="linha-campos tres">
+          <div class="campo"><label for="b-tr-tipo">Trailing stop</label><select id="b-tr-tipo"><option value="">Desligado</option><option value="pct">% da máxima</option><option value="atr">Múltiplo de ATR</option></select></div>
+          <div class="campo"><label for="b-tr-valor">Distância</label><input type="number" id="b-tr-valor" step="0.1" placeholder="5 (%) ou 2 (ATR)"></div>
+          <div class="campo"><label for="b-tr-ativ">Ativar após ganho (%)</label><input type="number" id="b-tr-ativ" step="0.5" value="0"></div>
+        </div>
+        <div class="linha-campos">
+          <div class="campo"><label for="b-be">Breakeven após ganho (%)</label><input type="number" id="b-be" step="0.5" placeholder="ex.: 3"></div>
+          <div class="campo"><label>&nbsp;</label><label class="check"><input type="checkbox" id="b-oco"> Usar OCO na Clear (stop + alvo juntos)</label></div>
+        </div>
+      </fieldset>
+      <div class="campo"><label for="b-motivo">Motivo</label><input type="text" id="b-motivo" placeholder="ex.: MACD cruzamento"></div>
+      <div class="resumo-boleta" id="b-resumo">—</div>
+      <button class="btn primario" id="b-enviar" style="justify-content:center">Adicionar à fila</button>
+      <p class="nota">A ordem não vai direto para a Clear: ela entra na fila e só é executada pelo robô, com sua confirmação.</p>
+    </div>
+  </div>
+</div>
+<div class="toasts" id="toasts"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
