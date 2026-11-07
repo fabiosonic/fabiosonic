@@ -18,6 +18,10 @@ NO DIA A DIA
     5 - Ativar a IA gratuita (Ollama)
     6 - Atualizar o programa
 
+ISOLAMENTO
+- Tudo e instalado na pasta oculta .venv dentro desta pasta: nao altera nenhum outro
+  programa do seu computador. Para desinstalar, basta apagar esta pasta.
+
 PRIVACIDADE
 - Sua carteira, login, configuracoes e o mapa da Clear ficam SO neste computador.
   Nada disso e enviado ao GitHub.

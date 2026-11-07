@@ -13,7 +13,15 @@ call :achar_python
 if not defined PY call :instalar_python
 if not defined PY exit /b
 
-if not exist "estado\.instalado" (
+rem Ambiente ISOLADO na pasta .venv: nao altera nenhum outro programa do computador
+if not exist ".venv\Scripts\python.exe" (
+  echo Criando o ambiente isolado do painel...
+  "%PY%" -m venv .venv
+  if errorlevel 1 goto falha
+)
+set "PY=%~dp0.venv\Scripts\python.exe"
+
+if not exist ".venv\.instalado" (
   call :instalar
   if errorlevel 1 goto falha
 )
@@ -114,8 +122,10 @@ if errorlevel 1 (
 )
 git pull
 call :instalar
+echo.
+echo Programa atualizado. FECHE esta janela e abra o INICIAR de novo.
 pause
-goto menu
+exit /b
 
 rem ------------------------------------------------------------ rotinas
 :achar_python
@@ -149,8 +159,7 @@ echo Instalando os componentes - pode levar alguns minutos...
 if errorlevel 1 exit /b 1
 "%PY%" -m playwright install chromium
 if errorlevel 1 exit /b 1
-if not exist estado mkdir estado
-echo ok> "estado\.instalado"
+echo ok> ".venv\.instalado"
 exit /b 0
 
 :baixar_dados
