@@ -1,0 +1,250 @@
+schema: paperclip/v1
+
+company:
+  requireBoardApprovalForNewAgents: true
+
+# Modelos: Opus para julgamento (CEO, consultoria, qualidade), Sonnet para execução,
+# Haiku para triagem de alto volume. Orçamentos em centavos de dólar por mês
+# (gasto de tokens reportado pelo provedor). Ajuste após o 1º mês de uso real.
+agents:
+  ceo:
+    role: ceo
+    budgetMonthlyCents: 4000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-opus-5-5
+  gerente-operacoes:
+    role: pm
+    budgetMonthlyCents: 3000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+  analista-fiscal:
+    role: general
+    budgetMonthlyCents: 4000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+  analista-contabil:
+    role: general
+    budgetMonthlyCents: 4000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+  analista-dp:
+    role: general
+    budgetMonthlyCents: 2500
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+  analista-societario:
+    role: general
+    budgetMonthlyCents: 1500
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+  consultor-tributario:
+    role: researcher
+    budgetMonthlyCents: 3500
+    adapter:
+      type: claude_local
+      config:
+        model: claude-opus-5-5
+  controller-qualidade:
+    role: qa
+    budgetMonthlyCents: 3000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-opus-5-5
+  atendimento:
+    role: general
+    budgetMonthlyCents: 2000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-haiku-5-5
+  marketing-comercial:
+    role: cmo
+    budgetMonthlyCents: 2000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+  financeiro-interno:
+    role: cfo
+    budgetMonthlyCents: 1000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+  engenheiro-automacao:
+    role: engineer
+    budgetMonthlyCents: 4000
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-5-5
+    inputs:
+      env:
+        GH_TOKEN:
+          kind: secret
+          requirement: optional
+
+# Rotinas recorrentes. Fuso: America/Sao_Paulo. Cron: minuto hora dia-do-mês mês dia-da-semana.
+# Os horários evitam o minuto 0 para não concorrer com picos de agendamento.
+routines:
+  # ---- Diárias (dias úteis) ----
+  monitor-legislacao-diario:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: skip_missed
+    triggers:
+      - kind: schedule
+        label: Dias úteis 07:40
+        cronExpression: "40 7 * * 1-5"
+        timezone: America/Sao_Paulo
+  triagem-atendimento-diaria:
+    concurrencyPolicy: coalesce_if_active
+    catchUpPolicy: skip_missed
+    triggers:
+      - kind: schedule
+        label: Dias úteis 08:10 e 13:40
+        cronExpression: "10 8 * * 1-5"
+        timezone: America/Sao_Paulo
+      - kind: schedule
+        label: Tarde
+        cronExpression: "40 13 * * 1-5"
+        timezone: America/Sao_Paulo
+  # ---- Semanais ----
+  painel-prazos-semanal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Segunda 07:50
+        cronExpression: "50 7 * * 1"
+        timezone: America/Sao_Paulo
+  briefing-semanal-socios:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Segunda 08:35
+        cronExpression: "35 8 * * 1"
+        timezone: America/Sao_Paulo
+  revisao-qualidade-semanal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: skip_missed
+    triggers:
+      - kind: schedule
+        label: Sexta 14:20
+        cronExpression: "20 14 * * 5"
+        timezone: America/Sao_Paulo
+  pauta-conteudo-semanal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: skip_missed
+    triggers:
+      - kind: schedule
+        label: Segunda 09:25
+        cronExpression: "25 9 * * 1"
+        timezone: America/Sao_Paulo
+  # ---- Mensais ----
+  cobranca-documentos-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 1 08:20
+        cronExpression: "20 8 1 * *"
+        timezone: America/Sao_Paulo
+  atualizar-calendario-obrigacoes:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 1 07:15
+        cronExpression: "15 7 1 * *"
+        timezone: America/Sao_Paulo
+  conciliacao-bancaria-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 5 08:40
+        cronExpression: "40 8 5 * *"
+        timezone: America/Sao_Paulo
+  fechamento-dp-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 3 08:30
+        cronExpression: "30 8 3 * *"
+        timezone: America/Sao_Paulo
+  apuracao-simples-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 6 08:15
+        cronExpression: "15 8 6 * *"
+        timezone: America/Sao_Paulo
+  apuracao-presumido-real-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 8 08:15
+        cronExpression: "15 8 8 * *"
+        timezone: America/Sao_Paulo
+  honorarios-inadimplencia-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 12 09:10
+        cronExpression: "10 9 12 * *"
+        timezone: America/Sao_Paulo
+  fechamento-contabil-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 15 08:30
+        cronExpression: "30 8 15 * *"
+        timezone: America/Sao_Paulo
+  relatorio-gerencial-mensal:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: Dia 27 10:20
+        cronExpression: "20 10 27 * *"
+        timezone: America/Sao_Paulo
+  # ---- Anuais ----
+  planejamento-tributario-anual:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: 2 de dezembro (antes da opção de regime em janeiro)
+        cronExpression: "30 8 2 12 *"
+        timezone: America/Sao_Paulo
+  campanha-obrigacoes-anuais:
+    concurrencyPolicy: skip_if_active
+    catchUpPolicy: enqueue_missed_with_cap
+    triggers:
+      - kind: schedule
+        label: 2 de janeiro — DEFIS, DASN-SIMEI, IRPF, RAIS/informes
+        cronExpression: "45 8 2 1 *"
+        timezone: America/Sao_Paulo
+      - kind: schedule
+        label: 2 de abril — ECD e ECF
+        cronExpression: "45 8 2 4 *"
+        timezone: America/Sao_Paulo
