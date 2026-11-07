@@ -20,6 +20,10 @@ PRECOS = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0), "cla
 PRECO_BUSCA_WEB = 0.01   # US$ por pesquisa web (US$ 10 / 1.000)
 
 
+DESCRICAO_PROVEDOR = {"regras": "Analista por regras (gratuito, local)", "ollama": "Ollama (IA local, gratuita)",
+                      "compativel": "API compatível (plano gratuito)", "anthropic": "Claude (pago por uso)"}
+
+
 def _cfg_ia():
     from swingbot import config as config_mod
     cfg = config_mod.carregar(RAIZ / "config" / "config.yaml")
@@ -73,6 +77,8 @@ def uso_mes() -> dict:
         t["custo_usd"] = round(t["custo_usd"] + i["custo_usd"], 4)
     total = round(sum(i["custo_usd"] for i in do_mes), 4)
     return {"mes": mes, "gasto_usd": total, "orcamento_usd": ia_cfg.orcamento_mensal_usd,
+            "provedor": ia_cfg.provedor, "gratuito": ia_cfg.provedor != "anthropic",
+            "descricao": DESCRICAO_PROVEDOR.get(ia_cfg.provedor, ia_cfg.provedor),
             "chamadas": len(do_mes), "por_tipo": por_tipo, "modelo_analise": ia_cfg.modelo_analise,
             "modelo_chat": ia_cfg.modelo_chat, "ultimas": do_mes[-10:]}
 
@@ -80,8 +86,9 @@ def uso_mes() -> dict:
 def _checar_orcamento() -> None:
     u = uso_mes()
     if u["gasto_usd"] >= u["orcamento_usd"]:
-        raise IAIndisponivel(f"Orçamento mensal da IA atingido (US$ {u['gasto_usd']:.2f} de US$ {u['orcamento_usd']:.2f}). "
-                             "Aumente 'ia.orcamento_mensal_usd' no config.yaml para continuar.")
+        raise IAIndisponivel(f"Provedor pago bloqueado: gasto do mês US$ {u['gasto_usd']:.2f} de US$ {u['orcamento_usd']:.2f} "
+                             "permitidos. Use um provedor gratuito (ia.provedor: regras, ollama ou compativel) ou "
+                             "aumente 'ia.orcamento_mensal_usd'.")
 
 SISTEMA = """Você é o analista quantitativo de um painel de investimentos em ações da B3, usado por uma
 pessoa física que opera pela corretora Clear. Escreva em português do Brasil, de forma direta e técnica.
@@ -168,7 +175,7 @@ def _dados(contexto: dict) -> str:
     return "<dados>\n" + json.dumps(contexto, ensure_ascii=False, default=str) + "\n</dados>"
 
 
-def analisar(contexto: dict) -> dict:
+def _analisar_anthropic(contexto: dict) -> dict:
     _checar_orcamento()
     modelo = _cfg_ia()[0].modelo_analise
     anthropic, cli = _cliente()
@@ -197,7 +204,7 @@ def analisar(contexto: dict) -> dict:
     return dados
 
 
-def conversar(pergunta: str, historico: list[dict], contexto: dict, pesquisar_web: bool = False) -> dict:
+def _conversar_anthropic(pergunta: str, historico: list[dict], contexto: dict, pesquisar_web: bool = False) -> dict:
     _checar_orcamento()
     modelo = _cfg_ia()[0].modelo_chat
     anthropic, cli = _cliente()
@@ -266,7 +273,7 @@ def carteiras_casas_cache() -> dict | None:
     return json.loads(arq.read_text(encoding="utf-8")) if arq.exists() else None
 
 
-def pesquisar_carteiras_casas() -> dict:
+def _casas_anthropic() -> dict:
     """1) pesquisa web com fontes; 2) estrutura o resultado em JSON. Resultado fica em cache."""
     _checar_orcamento()
     modelo = _cfg_ia()[0].modelo_analise
@@ -307,6 +314,127 @@ def pesquisar_carteiras_casas() -> dict:
     dados = json.loads(_texto(r2))
     dados.update({"atualizado_em": dt.datetime.now().strftime("%d/%m/%Y %H:%M"), "fontes": fontes,
                   "custo_usd": round(gasto, 4), "modelo": r2.model})
+    arq = _arq_casas()
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    arq.write_text(json.dumps(dados, indent=2, ensure_ascii=False), encoding="utf-8")
+    return dados
+
+
+# ======================================================================== provedores gratuitos
+def _post_json(url: str, corpo: dict, cabecalhos: dict | None = None, timeout: int = 180) -> dict:
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url, data=json.dumps(corpo).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", **(cabecalhos or {})})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        raise IAIndisponivel(f"Erro {e.code} do provedor de IA: {e.read().decode(errors='ignore')[:200]}") from e
+    except urllib.error.URLError as e:
+        raise IAIndisponivel(f"Provedor de IA inacessível ({url}): {e.reason}. Se for o Ollama, ele está aberto?") from e
+
+
+def _llm_gratuito(mensagens: list[dict], esquema: dict | None = None) -> tuple[str, str]:
+    """Chama Ollama (local) ou uma API compatível com OpenAI (Groq, OpenRouter, Gemini). Retorna (texto, modelo)."""
+    import os
+    cfg, _ = _cfg_ia()
+    if cfg.provedor == "ollama":
+        corpo = {"model": cfg.ollama_modelo, "messages": mensagens, "stream": False, "options": {"temperature": 0.2}}
+        if esquema:
+            corpo["format"] = esquema
+        r = _post_json(cfg.ollama_url.rstrip("/") + "/api/chat", corpo)
+        return r["message"]["content"], f"{cfg.ollama_modelo} (Ollama local)"
+    chave = os.environ.get(cfg.compat_variavel_chave)
+    if not chave:
+        raise IAIndisponivel(f"Defina a variável de ambiente {cfg.compat_variavel_chave} com a chave gratuita do provedor.")
+    corpo = {"model": cfg.compat_modelo, "messages": mensagens, "temperature": 0.2}
+    if esquema:
+        corpo["response_format"] = {"type": "json_object"}
+    r = _post_json(cfg.compat_url.rstrip("/") + "/chat/completions", corpo, {"Authorization": f"Bearer {chave}"})
+    return r["choices"][0]["message"]["content"], cfg.compat_modelo
+
+
+def _json_da_resposta(texto: str) -> dict:
+    texto = texto.strip()
+    if texto.startswith("```"):
+        texto = texto.strip("`").split("\n", 1)[1] if "\n" in texto else texto
+    ini, fim = texto.find("{"), texto.rfind("}")
+    return json.loads(texto[ini: fim + 1])
+
+
+def _contexto_noticias(pergunta: str) -> tuple[str, list[dict]]:
+    """Manchetes gratuitas (Google Notícias) para dar contexto atual ao assistente."""
+    import re
+    from . import noticias
+    tickers = sorted(set(re.findall(r"\b[A-Z]{4}(?:3|4|5|6|11)\b", pergunta.upper())))
+    consulta = " ".join(tickers) + " ações" if tickers else pergunta[:120]
+    try:
+        itens = noticias.google_noticias(consulta, 8)
+    except Exception:  # noqa: BLE001
+        return "", []
+    texto = "\n".join(f"- {n['titulo']} ({n['fonte']}, {n['data'][:16] if n.get('data') else ''})" for n in itens)
+    return texto, [{"url": n["link"], "titulo": f"{n['fonte']}: {n['titulo']}"} for n in itens]
+
+
+# ======================================================================== API pública (escolhe o provedor)
+def analisar(contexto: dict) -> dict:
+    from . import analista_regras
+    cfg, _ = _cfg_ia()
+    if cfg.provedor == "anthropic":
+        return _analisar_anthropic(contexto)
+    base = analista_regras.analisar(contexto)
+    if cfg.provedor == "regras":
+        base["custo_usd"] = 0.0
+        return base
+    # IA gratuita: parte da análise por regras e refina o texto/ideias, sem inventar números
+    pedido = (_dados(contexto) + "\n\nAnálise preliminar calculada por regras (use como base, pode reordenar ou "
+              "descartar ideias, nunca invente preços):\n" + json.dumps(base, ensure_ascii=False) +
+              "\n\nResponda SOMENTE com um JSON no mesmo formato da análise preliminar, com as chaves: "
+              + ", ".join(ESQUEMA["required"]) + ".")
+    try:
+        texto, modelo = _llm_gratuito([{"role": "system", "content": SISTEMA}, {"role": "user", "content": pedido}], ESQUEMA)
+        dados = _json_da_resposta(texto)
+        faltando = [k for k in ESQUEMA["required"] if k not in dados]
+        if faltando:
+            raise ValueError(f"campos ausentes: {faltando}")
+        dados["modelo"], dados["custo_usd"] = modelo, 0.0
+        return dados
+    except (IAIndisponivel, ValueError, KeyError, json.JSONDecodeError) as e:
+        base["riscos"].append(f"IA local indisponível ({e}); análise feita por regras.")
+        base["custo_usd"] = 0.0
+        return base
+
+
+def conversar(pergunta: str, historico: list[dict], contexto: dict, pesquisar_web: bool = False) -> dict:
+    from . import analista_regras
+    cfg, _ = _cfg_ia()
+    if cfg.provedor == "anthropic":
+        return _conversar_anthropic(pergunta, historico, contexto, pesquisar_web)
+    manchetes, fontes = _contexto_noticias(pergunta) if pesquisar_web else ("", [])
+    if cfg.provedor == "regras":
+        resposta = analista_regras.responder(pergunta, contexto)
+        if manchetes:
+            resposta += "\n\nNotícias recentes (Google Notícias):\n" + manchetes
+        return {"resposta": resposta, "fontes": fontes, "modelo": DESCRICAO_PROVEDOR["regras"], "custo_usd": 0.0}
+    msgs = [{"role": "system", "content": SISTEMA + "\nResponda em até 250 palavras."}]
+    msgs += [{"role": m["role"], "content": m["content"]} for m in historico[-8:] if m.get("role") in ("user", "assistant")]
+    extra = f"\n\nManchetes recentes (cite quando usar):\n{manchetes}" if manchetes else ""
+    msgs.append({"role": "user", "content": _dados(contexto) + extra + "\n\nPergunta: " + pergunta})
+    texto, modelo = _llm_gratuito(msgs)
+    return {"resposta": texto, "fontes": fontes, "modelo": modelo, "custo_usd": 0.0}
+
+
+def pesquisar_carteiras_casas() -> dict:
+    """Gratuito por padrão (Google Notícias + extração). Com provedor anthropic, usa a pesquisa paga."""
+    cfg, estado = _cfg_ia()
+    if cfg.provedor == "anthropic":
+        return _casas_anthropic()
+    from . import noticias
+    universo = {f.stem for f in (RAIZ / "dados_cache" / "pesquisa").glob("*.csv") if not f.stem.startswith("_")}
+    dados = noticias.carteiras_recomendadas(universo or None)
+    if not dados["casas"]:
+        raise IAIndisponivel("Nenhuma carteira encontrada nas notícias agora. Tente novamente mais tarde.")
     arq = _arq_casas()
     arq.parent.mkdir(parents=True, exist_ok=True)
     arq.write_text(json.dumps(dados, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -52,9 +52,17 @@ class ConfigClear:
 
 @dataclass
 class ConfigIA:
-    modelo_analise: str = "claude-opus-5-5"     # análise do dia e carteiras das casas
-    modelo_chat: str = "claude-opus-5-5"        # assistente (claude-sonnet-5-5 custa metade)
-    orcamento_mensal_usd: float = 15.0          # trava: a IA para ao atingir o valor no mês
+    # regras (grátis, sem IA) | ollama (grátis, IA local) | compativel (Groq/OpenRouter/Gemini, plano grátis)
+    # | anthropic (pago)
+    provedor: str = "regras"
+    ollama_url: str = "http://localhost:11434"
+    ollama_modelo: str = "qwen2.5:7b"
+    compat_url: str = "https://api.groq.com/openai/v1"
+    compat_modelo: str = "llama-3.3-70b-versatile"
+    compat_variavel_chave: str = "IA_API_KEY"
+    modelo_analise: str = "claude-opus-5-5"     # só para provedor anthropic
+    modelo_chat: str = "claude-opus-5-5"
+    orcamento_mensal_usd: float = 0.0           # gasto máximo com provedor pago (0 = bloqueia qualquer gasto)
 
 
 @dataclass
@@ -111,6 +119,8 @@ def validar(cfg: Config) -> None:
         raise ValueError("capital_teste deve ser positivo")
     if not 0 < r.perda_maxima_total <= 0.5:
         raise ValueError("perda_maxima_total deve ficar entre 0 e 50%")
+    if cfg.ia.provedor not in ("regras", "ollama", "compativel", "anthropic"):
+        raise ValueError("ia.provedor deve ser regras, ollama, compativel ou anthropic")
     e = cfg.estrategia
     if not e.mm_rapida < e.mm_lenta < e.mm_filtro:
         raise ValueError("Exige-se mm_rapida < mm_lenta < mm_filtro")

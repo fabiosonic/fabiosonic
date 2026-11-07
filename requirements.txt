@@ -8,3 +8,4 @@ fastapi>=0.110
 uvicorn>=0.29
 anthropic>=2.0
 httpx>=0.27
+googlenewsdecoder>=0.1.7

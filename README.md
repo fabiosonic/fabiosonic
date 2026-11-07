@@ -43,7 +43,6 @@ playwright install chromium
 
 ```bash
 python pesquisa/baixar.py && python pesquisa/baixar_dividendos.py && python pesquisa/baixar_consenso.py   # 1ª vez
-export ANTHROPIC_API_KEY=...        # opcional: ativa o Analista IA e o assistente (Windows: set ANTHROPIC_API_KEY=...)
 python -m swingbot painel          # abre http://127.0.0.1:8050 (só na sua máquina)
 ```
 
@@ -57,8 +56,8 @@ python -m swingbot painel          # abre http://127.0.0.1:8050 (só na sua máq
 | **Fiscal** | Apuração mensal e DARF |
 | **Robô Clear** | Fila de ordens, **proteções** (stop loss, take profit, trailing, breakeven, OCO) e log |
 
-A IA usa o Claude (`claude-opus-5-5`) e se baseia **só** nos dados do painel. O assistente pode pesquisar notícias
-e as carteiras recomendadas do mês na web, citando as fontes. Se o modelo recusar, a API refaz a pergunta num modelo alternativo (*fallback*).
+O analista (por regras ou com IA gratuita) se baseia **só** nos dados do painel. As carteiras recomendadas das casas
+e as notícias vêm de matérias públicas, com o link da fonte.
 O consenso de analistas vem do Yahoo Finance (estimativas LSEG de bancos e corretoras). Não é a carteira oficial de nenhuma casa.
 
 ### Stop loss, take profit e trailing stop
@@ -92,19 +91,29 @@ Depois da entrada, o painel e o monitor avaliam a tendência de cada posição a
 **1 a 2 pontos = ATENÇÃO; 3 ou mais = SAIR.** No nível SAIR o painel mostra um alerta e envia uma notificação no navegador.
 Se a proteção estiver com **"sair automaticamente"**, o monitor cancela o stop e vende.
 
-### Quanto custa a IA (API da Anthropic)
-A API é cobrada **à parte** da assinatura do claude.ai: é paga por uso, com créditos pré-pagos no Claude Console.
-O painel registra o gasto de cada chamada, mostra o total do mês e **desliga a IA ao atingir o teto** (`ia.orcamento_mensal_usd`).
+### 100% gratuito
+Nada no painel exige pagamento ou chave:
 
-| Uso (Claude Opus 5.5, US$ 4 / 20 por milhão de tokens) | Custo estimado |
+| Função | Fonte gratuita |
 |---|---|
-| Análise do dia (~5 mil tokens de entrada + raciocínio e resposta) | US$ 0,10 – 0,20 |
-| Pergunta ao assistente | US$ 0,03 – 0,08 |
-| Pergunta com notícias da web | US$ 0,15 – 0,40 |
-| Pesquisa das carteiras das casas (1x por mês) | US$ 0,30 – 1,00 |
-| **Uso diário típico no mês** (1 análise e 5 perguntas por pregão) | **US$ 5 – 10** |
+| Cotações, dividendos e consenso de analistas | Yahoo Finance (`yfinance`) |
+| CDI | API pública do Banco Central (SGS) |
+| Notícias e carteiras recomendadas das casas | RSS do Google Notícias, com extração automática dos tickers (sem chave) |
+| Análise do dia e assistente | **Analista por regras** (padrão: sem IA, sem internet, sem chave) |
+| Gráficos | TradingView Lightweight Charts (código aberto) |
+| Execução na Clear | Automação do seu navegador (Playwright) |
 
-Para gastar menos, use `claude-sonnet-5-5` (cerca de metade) ou `claude-haiku-5-5` (bem menos) em `ia.modelo_chat`.
+**IA gratuita opcional** (em `config/config.yaml`, chave `ia.provedor`):
+- **`ollama`** (recomendado): IA rodando **no seu computador**, grátis e privada.
+  1. Instale o Ollama em ollama.com.
+  2. Rode `ollama pull qwen2.5:7b` (é preciso ter cerca de 8 GB de RAM livres).
+  3. Defina `provedor: ollama`.
+- **`compativel`**: APIs com **plano gratuito** e limites diários: Groq, OpenRouter (modelos `:free`) ou Google Gemini.
+  Crie a chave gratuita no site do provedor, defina a variável `IA_API_KEY` e ajuste `compat_url` e `compat_modelo`
+  (confira no site do provedor o nome atual do modelo).
+
+Se a IA local falhar, o painel cai automaticamente para o analista por regras. O provedor `anthropic` (Claude) é
+**pago** e fica **bloqueado** enquanto `orcamento_mensal_usd` for 0.
 
 ## Passo a passo
 

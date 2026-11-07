@@ -48,6 +48,22 @@ clear:
   headless: false                 # mantenha a janela visível
 
 ia:
-  modelo_analise: claude-opus-5-5     # análise do dia e carteiras recomendadas das casas
-  modelo_chat: claude-opus-5-5        # assistente; claude-sonnet-5-5 custa ~metade, claude-haiku-5-5 bem menos
-  orcamento_mensal_usd: 15.00         # teto de gasto: ao atingir, a IA é desligada até o mês seguinte
+  # ---- 100% GRATUITO por padrão ----
+  # regras     -> analista por regras + assistente por regras (sem IA, sem chave, sem custo)
+  # ollama     -> IA rodando no seu computador (grátis, privada). Instale em ollama.com e rode:
+  #               ollama pull qwen2.5:7b
+  # compativel -> API com plano gratuito (Groq, OpenRouter, Google Gemini). Crie a chave grátis e
+  #               defina a variável de ambiente IA_API_KEY. Exemplos de compat_url:
+  #               Groq:       https://api.groq.com/openai/v1                     (modelo llama-3.3-70b-versatile)
+  #               OpenRouter: https://openrouter.ai/api/v1                       (modelos com sufixo :free)
+  #               Gemini:     https://generativelanguage.googleapis.com/v1beta/openai   (modelo gemini-2.0-flash)
+  # anthropic  -> Claude (PAGO por uso; exige orcamento_mensal_usd > 0)
+  provedor: regras
+  ollama_url: http://localhost:11434
+  ollama_modelo: qwen2.5:7b
+  compat_url: https://api.groq.com/openai/v1
+  compat_modelo: llama-3.3-70b-versatile
+  compat_variavel_chave: IA_API_KEY
+  modelo_analise: claude-opus-5-5
+  modelo_chat: claude-opus-5-5
+  orcamento_mensal_usd: 0.00          # 0 = nunca gastar nada com provedor pago

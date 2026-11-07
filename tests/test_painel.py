@@ -44,7 +44,8 @@ def test_ia_analisar_usa_saida_estruturada(monkeypatch):
     fake = _Fake(SimpleNamespace(stop_reason="end_turn", model="claude-opus-5-5",
                                  content=[SimpleNamespace(type="text", text=json.dumps(conteudo))]))
     monkeypatch.setattr(ia, "_cliente", lambda: (None, fake))
-    out = ia.analisar({"mercado": {}})
+    monkeypatch.setattr(ia, "_checar_orcamento", lambda: None)
+    out = ia._analisar_anthropic({"mercado": {}})
     assert out["regime"] == "baixa" and out["modelo"] == "claude-opus-5-5"
     k = fake.kwargs
     assert k["model"] == "claude-opus-5-5" and k["fallbacks"] == "default"
@@ -55,8 +56,9 @@ def test_ia_analisar_usa_saida_estruturada(monkeypatch):
 def test_ia_recusa_vira_erro_amigavel(monkeypatch):
     fake = _Fake(SimpleNamespace(stop_reason="refusal", model="m", content=[]))
     monkeypatch.setattr(ia, "_cliente", lambda: (None, fake))
+    monkeypatch.setattr(ia, "_checar_orcamento", lambda: None)
     with pytest.raises(ia.IAIndisponivel):
-        ia.analisar({})
+        ia._analisar_anthropic({})
 
 
 def test_endpoints_basicos():
@@ -85,9 +87,10 @@ def test_custo_e_orcamento(tmp_path, monkeypatch):
     assert ia.registrar_uso("chat_web", SimpleNamespace(usage=uso, model="claude-opus-5-5")) == pytest.approx(0.12)
     u = ia.uso_mes()
     assert u["gasto_usd"] == pytest.approx(0.12) and u["por_tipo"]["chat_web"]["chamadas"] == 1
-    cfg = SimpleNamespace(orcamento_mensal_usd=0.10, modelo_analise="claude-opus-5-5", modelo_chat="claude-opus-5-5")
+    cfg = SimpleNamespace(orcamento_mensal_usd=0.10, modelo_analise="claude-opus-5-5", modelo_chat="claude-opus-5-5",
+                          provedor="anthropic")
     monkeypatch.setattr(ia, "_cfg_ia", lambda: (cfg, tmp_path))
-    with pytest.raises(ia.IAIndisponivel, match="Orçamento"):
+    with pytest.raises(ia.IAIndisponivel, match="bloqueado"):
         ia.analisar({})
 
 

@@ -182,6 +182,9 @@ def _contexto() -> dict:
         "evidencia_setups": [{k: s.get(k) for k in ("setup", "lado", "universo", "excesso_cdi_aa", "dd_max",
                                                     "excesso_1a_metade", "excesso_2a_metade")}
                              for s in melhores_setups],
+        "consenso_top": [c for c in dp.consenso()["ativos"] if (c.get("nota_media") or 9) <= 2.5][:20],
+        "alertas": [a for a in dp.alertas()["alertas"]],
+        "ranking_completo": rk["ativos"],
     }
 
 

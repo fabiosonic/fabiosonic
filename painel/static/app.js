@@ -517,23 +517,30 @@ function renderCasas(d) {
 }
 async function carregarCasas() { try { renderCasas(await api("/api/casas")); } catch (_) {} }
 $("#btn-casas").addEventListener("click", async () => {
-  if (!confirm("Pesquisar as carteiras do mês na web? Usa a API da Anthropic (cerca de US$ 0,30 a US$ 1,00 por pesquisa).")) return;
-  const b = $("#btn-casas"); b.disabled = true; b.textContent = "Pesquisando… (1–3 min)";
+  const pago = estado.usoIA && !estado.usoIA.gratuito;
+  if (pago && !confirm("Pesquisar com a API paga da Anthropic (cerca de US$ 0,30 a US$ 1,00)?")) return;
+  const b = $("#btn-casas"); b.disabled = true; b.textContent = "Pesquisando nas notícias… (30–90 s)";
   $("#casas-saida").innerHTML = `<div class="ia-bloco">${'<div class="esqueleto"></div>'.repeat(5)}</div>`;
   try { await api("/api/casas/atualizar", { method: "POST" }); await carregarCasas(); carregarUsoIA(); }
   catch (e) { $("#casas-saida").innerHTML = `<div class="vazio"><b>Pesquisa indisponível</b>${esc(e.message)}</div>`; }
-  finally { b.disabled = false; b.textContent = "Pesquisar carteiras do mês (IA + web)"; }
+  finally { b.disabled = false; b.textContent = "Pesquisar carteiras do mês (grátis)"; }
 });
 
 // ---------------------------------------------------------------- gasto com IA
 async function carregarUsoIA() {
   try {
     const u = await api("/api/ia/uso");
-    const pct = u.orcamento_usd ? u.gasto_usd / u.orcamento_usd : 0;
+    estado.usoIA = u;
     const el = $("#ia-gasto");
-    el.textContent = `· US$ ${num2.format(u.gasto_usd)} / ${num2.format(u.orcamento_usd)} no mês`;
-    el.className = `sub ${pct >= 0.8 ? "desce" : ""}`;
-    el.title = `${u.chamadas} chamadas · análise: ${u.modelo_analise} · chat: ${u.modelo_chat}`;
+    if (u.gratuito) {
+      el.innerHTML = `<span class="etiqueta compra">Gratuito</span> <span class="nota">${esc(u.descricao)}</span>`;
+      el.className = "sub"; el.title = "Sem custo: troque o provedor em config/config.yaml (ia.provedor)";
+    } else {
+      const pct = u.orcamento_usd ? u.gasto_usd / u.orcamento_usd : 1;
+      el.textContent = `· US$ ${num2.format(u.gasto_usd)} / ${num2.format(u.orcamento_usd)} no mês`;
+      el.className = `sub ${pct >= 0.8 ? "desce" : ""}`;
+      el.title = `${u.chamadas} chamadas · análise: ${u.modelo_analise} · chat: ${u.modelo_chat}`;
+    }
   } catch (_) {}
 }
 
