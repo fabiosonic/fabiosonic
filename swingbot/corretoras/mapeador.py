@@ -135,7 +135,8 @@ def explorar_boleta(page, log=print) -> dict:
         page.wait_for_timeout(500)
     # descobre ONDE clicar para abrir a lista: no "A mercado ⌄", no item "Tipo de ordem" ou num botão de menu
     candidatos = {
-        "valor_atual": boleta.locator("li:has-text('Tipo de ordem') :text-is('A mercado')").first,
+        # o valor mostrado muda (A mercado -> Limitada...), então a referência não pode depender do texto
+        "valor_atual": boleta.locator("li:has-text('Tipo de ordem') >> span").last,
         "seta": boleta.locator("li:has-text('Tipo de ordem') svg").last,
         "item": boleta.locator("li:has-text('Tipo de ordem')").first,
         "popup": boleta.locator("[aria-haspopup]").first,
