@@ -87,6 +87,8 @@ def cmd_mapear(cfg, args):
     resultado = {}
     try:
         hb.page.goto((sel.get("urls") or {}).get("homebroker") or "https://trader.clear.com.br/home-broker/new/")
+        print("\n>>> IMPORTANTE: FECHE o Home Broker no seu Chrome/Edge normal, se estiver aberto.")
+        print("    A Clear só permite UMA sessão: o login aqui derruba a outra (e vice-versa).")
         print("\n>>> Faça o LOGIN na janela do navegador (inclusive a verificação em duas etapas, se houver).")
         print("    Não precisa apertar nada aqui: o mapeamento começa sozinho quando o Home Broker carregar.")
         pagina = esperar_homebroker(hb._ctx, log=print)
@@ -99,6 +101,10 @@ def cmd_mapear(cfg, args):
         print(f"  tela principal: {n} elementos")
         resultado["exploracao"] = explorar_boleta(hb.page, log=print)
     finally:
+        try:
+            input("\nTecle ENTER para fechar o navegador do robô...")
+        except (EOFError, KeyboardInterrupt):
+            pass
         hb.fechar()
     if not sem_dados_pessoais(resultado):
         sys.exit("Aviso: restaram números nos textos coletados; arquivo NÃO salvo por segurança.")
