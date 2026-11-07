@@ -108,3 +108,10 @@ def test_carteiras_recomendadas_sem_rede(monkeypatch):
     top = r["mais_citados"][0]
     assert top["ticker"] == "PETR4" and top["casas"] == 1 and top["materias"] == 2
     assert r["custo_usd"] == 0.0
+
+
+def test_escolhe_melhor_modelo_ollama():
+    from swingbot.cli import escolher_modelo
+    assert escolher_modelo(["nomic-embed-text:latest", "llama3.2:3b", "qwen2.5:7b"]) == "qwen2.5:7b"
+    assert escolher_modelo(["nomic-embed-text:latest", "deepseek-r1:8b"]) == "deepseek-r1:8b"
+    assert escolher_modelo(["nomic-embed-text:latest"]) is None

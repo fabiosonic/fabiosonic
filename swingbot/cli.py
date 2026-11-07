@@ -130,6 +130,56 @@ def _registrar_protecao_da_fila(cfg, o):
     print(f"  {o['ticker']}: proteção registrada (stop {pr['stop']})")
 
 
+PREFERIDOS_OLLAMA = ["qwen3", "qwen2.5", "llama3.3", "llama3.2", "llama3.1", "gemma3", "gemma2", "mistral", "phi4", "phi3"]
+
+
+def escolher_modelo(instalados: list[str]) -> str | None:
+    """Melhor modelo instalado para o painel (bom em português e em JSON)."""
+    for pref in PREFERIDOS_OLLAMA:
+        for m in instalados:
+            if m.startswith(pref) and "embed" not in m:
+                return m
+    return next((m for m in instalados if "embed" not in m), None)
+
+
+def cmd_ia_testar(cfg, args):
+    """Verifica o Ollama local, escolhe o modelo e (com --configurar) ativa no config.yaml."""
+    import urllib.request
+    url = cfg.ia.ollama_url.rstrip("/")
+    try:
+        with urllib.request.urlopen(url + "/api/tags", timeout=5) as r:
+            modelos = [m["name"] for m in json.loads(r.read().decode()).get("models", [])]
+    except Exception as e:  # noqa: BLE001
+        sys.exit(f"Ollama não respondeu em {url} ({e}).\n"
+                 "  - Abra o aplicativo Ollama (ou rode: ollama serve) e tente de novo.\n"
+                 "  - Confirme a instalação com: ollama --version")
+    print(f"Ollama encontrado em {url}. Modelos instalados: {', '.join(modelos) or 'nenhum'}")
+    modelo = escolher_modelo(modelos)
+    if not modelo:
+        sys.exit("Nenhum modelo de conversa instalado. Rode: ollama pull qwen2.5:7b  (≈ 4,7 GB)")
+    print(f"Modelo escolhido: {modelo}. Testando…")
+    corpo = json.dumps({"model": modelo, "stream": False, "messages": [
+        {"role": "user", "content": "Responda só com JSON: {\"ok\": true, \"idioma\": \"pt\"}"}],
+        "format": "json"}).encode()
+    req = urllib.request.Request(url + "/api/chat", data=corpo, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            resp = json.loads(r.read().decode())["message"]["content"]
+        print(f"Resposta do modelo: {resp.strip()[:120]}")
+    except Exception as e:  # noqa: BLE001
+        sys.exit(f"O modelo não respondeu ({e}). Tente outro: ollama pull qwen2.5:7b")
+    if args.configurar:
+        arq = Path(args.config)
+        texto = arq.read_text(encoding="utf-8")
+        import re
+        texto = re.sub(r"(?m)^(\s*provedor:\s*)\S+", r"\1ollama", texto, count=1)
+        texto = re.sub(r"(?m)^(\s*ollama_modelo:\s*)\S+", rf"\g<1>{modelo}", texto, count=1)
+        arq.write_text(texto, encoding="utf-8")
+        print(f"\nPronto: config.yaml agora usa provedor ollama com {modelo}. Reinicie o painel.")
+    else:
+        print("\nTudo certo. Para ativar: python -m swingbot ia-testar --configurar")
+
+
 def cmd_monitorar(cfg, args):
     from .monitor import Monitor
     from .protecoes import Repositorio
@@ -233,6 +283,9 @@ def main(argv=None):
 
     sub.add_parser("sincronizar", help="lê a custódia da Clear para o painel")
 
+    it = sub.add_parser("ia-testar", help="verifica o Ollama local e ativa a IA gratuita")
+    it.add_argument("--configurar", action="store_true", help="grava provedor ollama e o modelo no config.yaml")
+
     mo = sub.add_parser("monitorar", help="stop loss, take profit e trailing durante o pregão")
     mo.add_argument("--real", action="store_true")
     mo.add_argument("--intervalo", type=int, default=60, help="segundos entre leituras")
@@ -249,7 +302,8 @@ def main(argv=None):
     cfg = config_mod.carregar(args.config)
     {"backtest": cmd_backtest, "rodar": cmd_rodar, "apuracao": cmd_apuracao,
      "calibrar": cmd_calibrar, "ensaio": cmd_ensaio, "painel": cmd_painel,
-     "sincronizar": cmd_sincronizar, "executar-fila": cmd_executar_fila, "monitorar": cmd_monitorar}[args.comando](cfg, args)
+     "sincronizar": cmd_sincronizar, "executar-fila": cmd_executar_fila, "monitorar": cmd_monitorar,
+     "ia-testar": cmd_ia_testar}[args.comando](cfg, args)
 
 
 if __name__ == "__main__":
