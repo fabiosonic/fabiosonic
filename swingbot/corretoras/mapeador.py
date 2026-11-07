@@ -103,7 +103,8 @@ def esperar_homebroker(contexto, log=print, timeout_seg: int = 600):
     while time.time() < limite:
         for pg in reversed([p for p in contexto.pages if not p.is_closed()]):
             try:
-                if "trader.clear.com.br" in pg.url and pg.locator("text=Resumo da conta").first.is_visible(timeout=500):
+                # a Clear mantém na página as janelas de TODOS os workspaces (inclusive escondidos): só vale o visível
+                if "trader.clear.com.br" in pg.url and pg.locator("text=Resumo da conta >> visible=true").count() > 0:
                     pg.wait_for_timeout(3000)   # deixa terminar de desenhar as janelas
                     return pg
             except Exception:  # noqa: BLE001
@@ -160,7 +161,7 @@ def _texto_opcoes(page) -> list[str]:
 def explorar_boleta(page, log=print) -> dict:
     """Abre a lista 'Tipo de ordem', testa cada opção e coleta os campos — sem nunca enviar ordem."""
     res = {"opcoes_tipo_ordem": [], "estados": {}, "seletores_descobertos": {}}
-    boleta = page.locator(BOLETA).first
+    boleta = page.locator(f"{BOLETA} >> visible=true").first   # ignora boletas de workspaces escondidos
     if not boleta.count():
         log("    boleta não encontrada (abra uma janela de boleta no Home Broker)")
         return res

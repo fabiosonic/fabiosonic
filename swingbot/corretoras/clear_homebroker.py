@@ -107,12 +107,16 @@ class ClearHomeBroker:
         except Exception:
             pass
 
+    def _loc(self, seletor: str):
+        """Só elementos VISÍVEIS: a Clear mantém na página janelas de workspaces escondidos."""
+        return self.page.locator(f"{seletor} >> visible=true")
+
     def _clicar(self, chave: str, timeout: int = 15000) -> None:
         seletor = self.s(chave)
         if not seletor:
             raise ErroHomeBroker(f"Seletor {chave} não configurado")
         for passo in (seletor if isinstance(seletor, list) else [seletor]):
-            self.page.locator(passo).first.click(timeout=timeout)
+            self._loc(passo).first.click(timeout=timeout)
             self.page.wait_for_timeout(300)
 
     def _clicar_se(self, chave: str, timeout: int = 8000) -> None:
@@ -121,7 +125,7 @@ class ClearHomeBroker:
             self._clicar(chave, timeout)
 
     def _preencher(self, chave: str, valor: str) -> None:
-        campo = self.page.locator(self.s(chave)).first
+        campo = self._loc(self.s(chave)).first
         campo.click(timeout=10000)
         campo.fill("")
         campo.fill(valor)
@@ -156,7 +160,7 @@ class ClearHomeBroker:
         indicador = self.s("navegacao.indicador_logado")
         for pg in self._ctx.pages:
             try:
-                if indicador and pg.locator(indicador).first.is_visible(timeout=500):
+                if indicador and pg.locator(f"{indicador} >> visible=true").count() > 0:
                     return pg
             except Exception:
                 continue
@@ -208,7 +212,7 @@ class ClearHomeBroker:
         self.page.wait_for_timeout(2500)
         self.foto("custodia")
         posicoes: dict[str, tuple[int, float]] = {}
-        for linha in self.page.locator(self.s("custodia.linha")).all():
+        for linha in self._loc(self.s("custodia.linha")).all():
             try:
                 ativo = self._ativo_da_linha(linha)
                 qtd = int(numero_br(linha.locator(self.s("custodia.quantidade")).first.inner_text()))
@@ -337,7 +341,7 @@ class ClearHomeBroker:
         self._clicar_se("navegacao.menu_custodia")
         self.page.wait_for_timeout(1500)
         precos = {}
-        for linha in self.page.locator(self.s("custodia.linha")).all():
+        for linha in self._loc(self.s("custodia.linha")).all():
             try:
                 ativo = ticker_base(linha.locator(self.s("custodia.ativo")).first.inner_text().strip().upper())
                 precos[ativo] = numero_br(linha.locator(self.s("custodia.preco_atual")).first.inner_text())
@@ -353,7 +357,7 @@ class ClearHomeBroker:
         canceladas = 0
         for _ in range(10):  # a tabela é redesenhada a cada cancelamento
             alvo = None
-            for linha in self.page.locator(self.s("ordens.linha")).all():
+            for linha in self._loc(self.s("ordens.linha")).all():
                 try:
                     ativo = ticker_base(linha.locator(self.s("ordens.ativo")).first.inner_text().strip().upper())
                     tipo = linha.locator(self.s("ordens.tipo")).first.inner_text()

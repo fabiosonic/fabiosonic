@@ -201,3 +201,30 @@ def test_le_posicoes_da_tabela_ag_grid():
         pos = hb.ler_posicoes()
         b.close()
     assert pos == {"BBAS3": (300, 0.0), "CSAN3": (1000, 0.0)}   # não lê a 'Lista de ativos'
+
+
+WORKSPACES_HTML = """<html><body>
+<div id="ws2" style="display:none"><div data-testid="SomaWindow"><span>Resumo da conta</span>
+  <div data-testid="SomaChipChoice">Compra</div><button data-testid="SomaButtonTrade" id="oculto">Comprar</button></div></div>
+<div id="ws1"><div data-testid="SomaWindow"><span>Resumo da conta</span>
+  <div data-testid="SomaChipChoice" id="chip">Compra</div><button data-testid="SomaButtonTrade">Comprar</button></div></div>
+</body></html>"""
+
+
+def test_ignora_janelas_de_workspaces_escondidos():
+    """O HB mantém no DOM as janelas de todos os workspaces; o primeiro encontrado pode estar oculto."""
+    import yaml
+    from swingbot.corretoras.clear_homebroker import ClearHomeBroker
+    from swingbot.corretoras.mapeador import esperar_homebroker
+    sel = yaml.safe_load(open("config/seletores_clear.yaml", encoding="utf-8"))
+    with pw.sync_playwright() as p:
+        b = _navegador(p)
+        ctx = b.new_context()
+        pg = ctx.new_page()
+        pg.route("https://trader.clear.com.br/**", lambda r: r.fulfill(body=WORKSPACES_HTML, content_type="text/html"))
+        pg.goto("https://trader.clear.com.br/home-broker/new/")
+        assert esperar_homebroker(ctx, log=lambda *_: None, timeout_seg=5) is pg
+        hb = ClearHomeBroker(sel, "/tmp/x", "/tmp/logs_teste")
+        hb.page = pg
+        hb._clicar("boleta.abrir_compra")          # clica no chip VISÍVEL (o oculto falharia)
+        b.close()
