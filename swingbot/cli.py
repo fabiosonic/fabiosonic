@@ -78,6 +78,15 @@ ETAPAS_MAPA = [
 ]
 
 
+def _pagina_do_homebroker(hb):
+    """Escolhe a aba do navegador que está no Home Broker (o login pode abrir novas abas)."""
+    abas = [pg for pg in hb._ctx.pages if not pg.is_closed()]
+    for pg in reversed(abas):
+        if "home-broker" in pg.url or "trader.clear" in pg.url:
+            return pg
+    return abas[-1] if abas else hb.page
+
+
 def cmd_mapear(cfg, args):
     """Abre a Clear, você faz login e navega; coleta a estrutura da página (sem dados da conta)."""
     from .corretoras.clear_homebroker import ClearHomeBroker, carregar_seletores
@@ -89,12 +98,19 @@ def cmd_mapear(cfg, args):
     try:
         hb.page.goto((sel.get("urls") or {}).get("homebroker") or "https://trader.clear.com.br/home-broker/new/")
         input("\n>>> Faça o LOGIN na janela do navegador. Quando o Home Broker estiver aberto, tecle ENTER aqui...")
-        hb.page = hb._ctx.pages[-1]
         for i, (nome, instrucao) in enumerate(ETAPAS_MAPA, 1):
             input(f"\n[{i}/{len(ETAPAS_MAPA)}] {instrucao}\n    Tecle ENTER quando estiver pronto (NÃO envie ordens)...")
+            hb.page = _pagina_do_homebroker(hb)
             resultado[nome] = coletar(hb.page)
-            n = sum(len(q.get("itens", [])) for q in resultado[nome]["quadros"])
-            print(f"    coletados {n} elementos")
+            quadros = resultado[nome]["quadros"]
+            n = sum(len(q.get("itens", [])) for q in quadros)
+            diag = [q.get("diagnostico") for q in quadros if q.get("diagnostico")]
+            erros = [q["erro"] for q in quadros if q.get("erro")]
+            print(f"    coletados {n} elementos  (páginas/quadros: {len(quadros)}; {diag[:2]})")
+            if erros:
+                print(f"    avisos: {erros[:2]}")
+            if n == 0:
+                print("    ATENÇÃO: nada coletado. Confira se o Home Broker está aberto NESTA janela do navegador.")
     finally:
         hb.fechar()
     if not sem_dados_pessoais(resultado):

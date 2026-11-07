@@ -31,10 +31,18 @@ COLETOR_JS = r"""
     const lb = e.getAttribute('aria-labelledby'); if (lb && document.getElementById(lb)) return red(document.getElementById(lb).innerText);
     const ant = e.parentElement && e.parentElement.previousElementSibling; return ant ? red(ant.innerText) : '';
   };
-  const sel = 'button, a, input, select, textarea, [role], th, label, legend, [data-testid], [aria-label], [tabindex]';
+  // percorre o documento E o conteúdo dos componentes (Shadow DOM aberto), onde ficam os botões do HB novo
+  const todos = []; let hosts = 0;
+  const andar = (raiz) => { for (const e of raiz.querySelectorAll('*')) { todos.push(e);
+    if (e.shadowRoot) { hosts++; andar(e.shadowRoot); } } };
+  andar(document);
+  const sel = 'button, a, input, select, textarea, [role], th, label, legend, [data-testid], [aria-label], [tabindex], [contenteditable]';
   const itens = [];
-  for (const e of document.querySelectorAll(sel)) {
-    if (!vis(e) || itens.length > 1500) continue;
+  const clicaveis = (e) => getComputedStyle(e).cursor === 'pointer' && (e.innerText || '').trim().length > 0
+    && (e.innerText || '').trim().length < 40 && e.children.length <= 3;
+  for (const e of todos) {
+    if (itens.length > 2500) break;
+    if (!(e.matches(sel) || clicaveis(e)) || !vis(e)) continue;
     const r = e.getBoundingClientRect();
     itens.push({
       tag: e.tagName.toLowerCase(), role: e.getAttribute('role') || '', type: e.getAttribute('type') || '',
@@ -45,7 +53,7 @@ COLETOR_JS = r"""
       caminho: caminho(e), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
     });
   }
-  const tabelas = [...document.querySelectorAll('table, [role=table], [role=grid]')].filter(vis).slice(0, 12).map(t => ({
+  const tabelas = todos.filter(t => t.matches('table, [role=table], [role=grid]') && vis(t)).slice(0, 12).map(t => ({
     caminho: caminho(t),
     titulo_proximo: red((t.closest('section, article, div[class]') || t).querySelector('h1,h2,h3,h4,span,p')?.innerText),
     cabecalhos: [...t.querySelectorAll('th, [role=columnheader]')].slice(0, 15).map(h => red(h.innerText)),
@@ -54,7 +62,9 @@ COLETOR_JS = r"""
         classes: [...c.classList].slice(0, 3).join(' '), texto: red(c.innerText) })) }; })(),
     linhas: t.querySelectorAll('tbody tr, [role=row]').length,
   }));
-  return { url: location.href.replace(/\d{4,}/g, '#'), titulo: red(document.title), itens, tabelas };
+  return { url: location.href.replace(/\d{4,}/g, '#'), titulo: red(document.title), itens, tabelas,
+           diagnostico: { elementos: todos.length, componentes_shadow: hosts,
+                          iframes: document.querySelectorAll('iframe').length } };
 }
 """
 

@@ -66,3 +66,25 @@ def test_rascunho_de_seletores_encontra_elementos_do_layout():
         assert pg.locator(sel["boleta"]["botao_enviar"]).first.inner_text().startswith("Comprar")
         b.close()
     assert sel["validado"] is False   # modo real bloqueado até o ensaio ser confirmado
+
+
+def test_coleta_dentro_de_shadow_dom():
+    """O HB novo usa componentes com Shadow DOM: o coletor precisa enxergar dentro deles."""
+    from swingbot.corretoras.mapeador import coletar
+    html = """<html><body><boleta-clear></boleta-clear><script>
+      const h = document.querySelector('boleta-clear'); const r = h.attachShadow({mode: 'open'});
+      r.innerHTML = '<div role="tablist"><button>Compra</button><button>Venda</button></div>' +
+        '<fieldset><legend>Quantidade</legend><input name="qty" value="100"></fieldset>' +
+        '<div style="cursor:pointer">Limitada</div><button>Comprar 9,99</button>';
+    </script></body></html>"""
+    with pw.sync_playwright() as p:
+        b = _navegador(p)
+        pg = b.new_page()
+        pg.set_content(html)
+        q = coletar(pg)["quadros"][0]
+        assert pg.locator("text='Compra'").count() == 1          # o Playwright também enxerga o shadow
+        b.close()
+    textos = [i["texto"] for i in q["itens"]]
+    assert "Compra" in textos and "Venda" in textos and "Limitada" in textos and "Comprar #,##" in textos
+    assert any(i["rotulo"] == "Quantidade" and i["name"] == "qty" for i in q["itens"])
+    assert q["diagnostico"]["componentes_shadow"] == 1
