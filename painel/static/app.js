@@ -36,7 +36,7 @@ function tabela(colunas, linhas, opcoes = {}) {
   const tr = linhas.map((l, i) => `<tr class="${opcoes.clicavel ? "clicavel" : ""}" data-i="${i}">${colunas.map((c) => `<td class="${c.n ? "n" : ""}">${c.f(l)}</td>`).join("")}</tr>`).join("");
   return `<table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
 }
-const etiquetaDirecao = (d) => `<span class="etiqueta ${d === "Compra" ? "compra" : "venda"}">${d}</span>`;
+const etiquetaDirecao = (d) => `<span class="etiqueta ${d === "Compra" ? "compra" : "venda"}">${d === "Compra" ? "COMPRAR" : "VENDER"}</span>`;
 function evidencia(e) {
   if (!e || e.excesso_cdi_aa == null) return `<span class="etiqueta">sem estudo</span>`;
   const consistente = e.metade1 > 0 && e.metade2 > 0;
@@ -200,7 +200,13 @@ function renderScanner() {
     estado.atrBoleta = o.atr;
     if (ev.target.closest("[data-acao='grafico']")) { if (o.ticker !== "IBOV") verNoGrafico(o.ticker); return; }
     // clique na linha (ou no botão Ordem): boleta preenchida com entrada, stop, alvo 2R e tamanho pelo risco
-    abrirBoleta({ ticker: o.ticker, lado: o.direcao === "Compra" ? "C" : "V", preco: o.entrada, stop: o.stop, motivo: o.setup });
+    const avisos = [];
+    if (o.direcao === "Compra" && !o.acima_mm200) avisos.push("ativo abaixo da média de 200 dias (tendência de baixa)");
+    const evid = o.evidencia && o.evidencia.excesso_cdi_aa;
+    if (evid != null && evid <= 0) avisos.push(`este setup perdeu para o CDI no estudo de 10 anos (${P(evid)} a.a.)`);
+    else if (o.evidencia && !(o.evidencia.metade1 > 0 && o.evidencia.metade2 > 0)) avisos.push("resultado do setup inconsistente entre 2016–21 e 2021–26");
+    abrirBoleta({ ticker: o.ticker, lado: o.direcao === "Compra" ? "C" : "V", preco: o.entrada, stop: o.stop, motivo: o.setup,
+      aviso: avisos.length ? `⚠️ Sinal de ${o.direcao === "Compra" ? "COMPRA" : "VENDA"} FRACO: ${avisos.join("; ")}. Se entrar, use posição menor e respeite o stop.` : "" });
   });
 }
 
@@ -306,7 +312,8 @@ async function enviarChat() {
 
 // ---------------------------------------------------------------- boleta
 let ladoBoleta = "C";
-function abrirBoleta({ ticker = estado.ativo, lado = "C", preco = null, stop = null, motivo = "" } = {}) {
+function abrirBoleta({ ticker = estado.ativo, lado = "C", preco = null, stop = null, motivo = "", aviso = "" } = {}) {
+  $("#b-aviso").textContent = aviso;
   if (ticker === "IBOV") ticker = "BOVA11";
   $("#b-ticker").value = ticker; $("#b-preco").value = preco ? (+preco).toFixed(2) : ""; $("#b-motivo").value = motivo;
   $("#b-tipo").value = "limitada"; $("#campo-disparo").style.display = "none"; definirLado(lado);
@@ -578,15 +585,16 @@ async function carregarAcoes() {
     if (!r.acompanhando) { $("#acoes-manuais").innerHTML = ""; return; }
     const itens = r.acoes.map((a, i) => `
       <div class="acao-item u${a.urgencia}">
-        <span class="icone-acao">${ICONES[a.acao] || "•"}</span>
-        <div class="txt"><b class="tk">${a.ticker}</b> <span class="nota">${a.quantidade} ações · ${N(a.preco)}
-          <span class="${cls(a.resultado_pct)}">${P(a.resultado_pct)}</span> · ${esc(a.fonte)}</span><br>${esc(a.texto)}</div>
+        <span class="veredito ${(a.veredito || "").split(" ")[0]}">${esc(a.veredito || a.acao)}</span>
+        <div class="txt"><b class="tk">${a.ticker}</b> — você está <b>COMPRADO</b> em ${a.quantidade} ações
+          (entrada ${N(a.entrada)} · agora ${N(a.preco)} <span class="${cls(a.resultado_pct)}">${P(a.resultado_pct)}</span>)
+          <span class="nota">· preço ${esc(a.fonte)}</span><br>${esc(a.texto)}</div>
         ${a.acao === "SUBIR_STOP" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="stop">Já subi o stop na Clear</button>` : ""}
         ${a.acao === "COLOCAR_STOP" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="pus">Já coloquei o stop</button>` : ""}
         ${a.acao === "VENDER" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="venda">Registrar a venda</button>` : ""}
         <button class="btn peq fantasma" data-acao-i="${i}" data-tipo="grafico">Gráfico</button>
       </div>`).join("");
-    $("#acoes-manuais").innerHTML = `<div class="cartao"><div class="cartao-topo"><h2>O que fazer agora na Clear</h2>
+    $("#acoes-manuais").innerHTML = `<div class="cartao"><div class="cartao-topo"><h2>O que fazer agora na Clear — suas posições</h2>
       <span class="sub">acompanhando ${r.acompanhando} ativo(s) · atualizado ${r.atualizado}</span></div>
       <div class="cartao-corpo sem-pad">${itens || '<div class="vazio"><b>Nada a fazer agora ✓</b>Suas posições estão dentro do plano. O painel avisa quando precisar agir.</div>'}</div></div>`;
     $("#acoes-manuais").onclick = async (ev) => {

@@ -630,29 +630,37 @@ def acoes_manuais() -> dict:
         maior_antes = p.maior_preco
         d = avaliar(p, preco, maxima)
         mudou |= p.maior_preco != maior_antes
+        n_antes = len(acoes)
         base = {"ticker": t, "quantidade": p.quantidade, "preco": round(preco, 2), "fonte": fonte,
                 "entrada": p.preco_entrada, "stop": p.stop, "alvo": p.take_profit,
                 "resultado_pct": round(preco / p.preco_entrada - 1, 4)}
         if not p.stop_enviado:
-            acoes.append({**base, "urgencia": 1, "acao": "COLOCAR_STOP",
+            acoes.append({**base, "urgencia": 1, "acao": "COLOCAR_STOP", "veredito": "COLOCAR O STOP",
                           "texto": f"Registre na Clear uma ordem STOP de venda em R$ {p.stop:.2f}"})
         if d.acao == "STOP_ATINGIDO":
-            acoes.append({**base, "urgencia": 0, "acao": "VENDER",
-                          "texto": f"Preço {preco:.2f} atingiu o stop {p.stop:.2f}: se a ordem stop não executou, VENDA"})
+            acoes.append({**base, "urgencia": 0, "acao": "VENDER", "veredito": "VENDER",
+                          "texto": f"O preço {preco:.2f} atingiu o seu stop {p.stop:.2f}. Se a ordem stop não executou, venda."})
         elif d.acao == "TAKE_PROFIT":
-            acoes.append({**base, "urgencia": 0, "acao": "VENDER",
-                          "texto": f"ALVO atingido ({preco:.2f} ≥ {p.take_profit:.2f}): venda e realize o lucro"})
+            acoes.append({**base, "urgencia": 0, "acao": "VENDER", "veredito": "VENDER",
+                          "texto": f"Alvo atingido ({preco:.2f} ≥ {p.take_profit:.2f}): venda e realize o lucro."})
         elif d.acao == "NOVO_STOP":
-            acoes.append({**base, "urgencia": 2, "acao": "SUBIR_STOP", "novo_stop": d.novo_stop,
-                          "texto": f"Suba seu stop na Clear de {p.stop:.2f} para {d.novo_stop:.2f} ({d.motivo.split(':')[0]})"})
+            acoes.append({**base, "urgencia": 2, "acao": "SUBIR_STOP", "novo_stop": d.novo_stop, "veredito": "SUBIR O STOP",
+                          "texto": f"Mantenha a posição e altere sua ordem stop na Clear de {p.stop:.2f} para "
+                                   f"{d.novo_stop:.2f} ({d.motivo.split(':')[0]}: protege o lucro)."})
         if t in ohlc:
             diag = avaliar_rev(com_preco_atual(ohlc[t], preco), p.maior_preco)
             if diag.nivel == "SAIR":
-                acoes.append({**base, "urgencia": 1, "acao": "VENDER", "sinais": diag.sinais,
-                              "texto": "Reversão de tendência: considere sair — " + "; ".join(diag.sinais[:3])})
+                acoes.append({**base, "urgencia": 1, "acao": "VENDER", "sinais": diag.sinais, "veredito": "VENDER",
+                              "texto": "A tendência virou (reversão confirmada). Recomendação: vender. Motivos: "
+                                       + "; ".join(diag.sinais[:3]) + "."})
             elif diag.nivel == "ATENÇÃO":
-                acoes.append({**base, "urgencia": 3, "acao": "ATENCAO", "sinais": diag.sinais,
-                              "texto": "Tendência enfraquecendo: acompanhe — " + "; ".join(diag.sinais[:2])})
+                acoes.append({**base, "urgencia": 3, "acao": "ATENCAO", "sinais": diag.sinais, "veredito": "MANTER",
+                              "texto": "Mantenha a posição (não precisa vender agora), mas fique atento: a tendência "
+                                       "está enfraquecendo — " + "; ".join(diag.sinais[:2]) + ". Seu stop protege."})
+        if len(acoes) == n_antes:      # nada a fazer: deixe claro que é para manter
+            acoes.append({**base, "urgencia": 4, "acao": "MANTER", "veredito": "MANTER",
+                          "texto": f"Tudo dentro do plano: mantenha. Stop em {p.stop:.2f}"
+                                   + (f", alvo em {p.take_profit:.2f}." if p.take_profit else ".")})
     if mudou:
         _repo().salvar(itens)          # guarda a máxima observada (base do trailing stop)
     acoes.sort(key=lambda a: a["urgencia"])

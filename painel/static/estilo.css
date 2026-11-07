@@ -309,3 +309,12 @@ label.check { display: flex; align-items: center; gap: 6px; font-size: 12px; col
 .acao-item.u0 { background: var(--baixa-suave); }
 .acao-item.u1 { background: var(--aviso-suave); }
 .acao-item .icone-acao { font-size: 18px; width: 24px; text-align: center; }
+
+.veredito { min-width: 128px; text-align: center; padding: 7px 10px; border-radius: 8px; font-weight: 800;
+  font-size: 13px; letter-spacing: .04em; color: #fff; }
+.veredito.VENDER { background: var(--baixa); }
+.veredito.SUBIR { background: var(--destaque); }
+.veredito.COLOCAR { background: var(--aviso); color: #1a1205; }
+.veredito.MANTER { background: var(--alta); }
+.aviso-boleta { background: var(--aviso-suave); border-radius: 8px; padding: 9px 11px; font-size: 12.5px; }
+.aviso-boleta:empty { display: none; }

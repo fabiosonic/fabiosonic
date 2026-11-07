@@ -27,9 +27,10 @@ def test_fluxo_manual_completo(ambiente):
     acoes = dp.acoes_manuais()["acoes"]
     assert acoes[0]["acao"] == "SUBIR_STOP" and acoes[0]["novo_stop"] == 41.8
     dp.ajustar_stop("PETR4", 41.8)                     # você subiu o stop na Clear
-    assert dp.acoes_manuais()["acoes"] == []           # nada pendente
+    a = dp.acoes_manuais()["acoes"]
+    assert [x["veredito"] for x in a] == ["MANTER"]    # nada pendente: instrução clara de manter
     precos["PETR4"] = (46.5, 46.6, "teste")           # bateu o alvo
-    assert dp.acoes_manuais()["acoes"][0]["acao"] == "VENDER"
+    assert dp.acoes_manuais()["acoes"][0]["veredito"] == "VENDER"
     trade = dp.registrar_venda({"ticker": "PETR4", "quantidade": 100, "preco": 46.5})
     assert trade["resultado"] > 600                    # (46,5 - 40) x 100 - custos
     assert dp.acoes_manuais()["acompanhando"] == 0
@@ -51,3 +52,11 @@ def test_compra_adicional_faz_preco_medio(ambiente):
     dp.registrar_compra({"ticker": "ITUB4", "quantidade": 100, "preco": 30.0, "stop": 28.0})
     p = dp.registrar_compra({"ticker": "ITUB4", "quantidade": 100, "preco": 32.0, "stop": 29.0})
     assert p["quantidade"] == 200 and p["preco_entrada"] == 31.0
+
+
+def test_toda_posicao_tem_veredito_claro(ambiente):
+    precos = ambiente
+    dp.registrar_compra({"ticker": "BRAP4", "quantidade": 38, "preco": 19.15, "stop": 17.85, "take_profit": 21.75})
+    precos["BRAP4"] = (19.25, 19.3, "teste")
+    a = dp.acoes_manuais()["acoes"]
+    assert a and all(x["veredito"] in ("VENDER", "SUBIR O STOP", "COLOCAR O STOP", "MANTER") for x in a)
