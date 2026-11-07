@@ -112,7 +112,26 @@ Nada no painel exige pagamento ou chave:
   Crie a chave gratuita no site do provedor, defina a variável `IA_API_KEY` e ajuste `compat_url` e `compat_modelo`
   (confira no site do provedor o nome atual do modelo).
 
-Se a IA local falhar, o painel cai automaticamente para o analista por regras. O provedor `anthropic` (Claude) é
+**Outros programas de IA local gratuitos** também funcionam, pois todos oferecem uma API compatível com a da OpenAI e
+dispensam chave quando rodam no seu computador. Use `provedor: compativel` com:
+
+| Programa | `compat_url` | Observação |
+|---|---|---|
+| Ollama (modo compatível) | `http://localhost:11434/v1` | O mesmo Ollama, via API padrão |
+| LM Studio | `http://localhost:1234/v1` | Interface gráfica para baixar modelos; ative o "Local Server" |
+| Jan | `http://localhost:1337/v1` | Código aberto, com interface gráfica |
+| llama.cpp (`llama-server`) | `http://localhost:8080/v1` | O mais leve; bom para PCs modestos |
+| GPT4All | `http://localhost:4891/v1` | Ative "Enable API server" nas configurações |
+
+**Qual modelo escolher** (testado no painel, em CPU de 4 núcleos e sem GPU):
+| Modelo | Tamanho | Tempo de resposta | Qualidade |
+|---|---|---|---|
+| `qwen2.5:1.5b` | 1 GB | cerca de 20 s | Fraca: confunde números. Só para máquinas muito modestas |
+| `qwen2.5:7b` | 4,7 GB | cerca de 70 s | **Boa**: leu corretamente stop, quedas, evidência e carteira (**recomendado**) |
+Com placa de vídeo (GPU), o tempo cai para poucos segundos. Se tiver 16 GB ou mais de RAM, teste também
+`qwen2.5:14b` ou `gemma3:12b`.
+
+Se a IA local falhar ou demorar demais, o painel cai automaticamente para o analista por regras. O provedor `anthropic` (Claude) é
 **pago** e fica **bloqueado** enquanto `orcamento_mensal_usd` for 0.
 
 ## Passo a passo

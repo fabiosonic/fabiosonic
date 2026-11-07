@@ -321,7 +321,7 @@ def _casas_anthropic() -> dict:
 
 
 # ======================================================================== provedores gratuitos
-def _post_json(url: str, corpo: dict, cabecalhos: dict | None = None, timeout: int = 180) -> dict:
+def _post_json(url: str, corpo: dict, cabecalhos: dict | None = None, timeout: int = 300) -> dict:
     import urllib.error
     import urllib.request
     req = urllib.request.Request(url, data=json.dumps(corpo).encode(), method="POST",
@@ -333,6 +333,8 @@ def _post_json(url: str, corpo: dict, cabecalhos: dict | None = None, timeout: i
         raise IAIndisponivel(f"Erro {e.code} do provedor de IA: {e.read().decode(errors='ignore')[:200]}") from e
     except urllib.error.URLError as e:
         raise IAIndisponivel(f"Provedor de IA inacessível ({url}): {e.reason}. Se for o Ollama, ele está aberto?") from e
+    except (TimeoutError, OSError) as e:
+        raise IAIndisponivel(f"A IA demorou demais para responder ({e}). Use um modelo menor ou tente de novo.") from e
 
 
 def _llm_gratuito(mensagens: list[dict], esquema: dict | None = None) -> tuple[str, str]:
@@ -340,18 +342,23 @@ def _llm_gratuito(mensagens: list[dict], esquema: dict | None = None) -> tuple[s
     import os
     cfg, _ = _cfg_ia()
     if cfg.provedor == "ollama":
-        corpo = {"model": cfg.ollama_modelo, "messages": mensagens, "stream": False, "options": {"temperature": 0.2}}
+        # num_ctx: o padrão do Ollama (2-4 mil tokens) corta o contexto sem avisar
+        corpo = {"model": cfg.ollama_modelo, "messages": mensagens, "stream": False,
+                 "options": {"temperature": 0.2, "num_ctx": 8192}}
         if esquema:
             corpo["format"] = esquema
         r = _post_json(cfg.ollama_url.rstrip("/") + "/api/chat", corpo)
         return r["message"]["content"], f"{cfg.ollama_modelo} (Ollama local)"
+    # servidores locais (LM Studio, Jan, llama.cpp, GPT4All, Ollama /v1) não precisam de chave
+    local = any(h in cfg.compat_url for h in ("localhost", "127.0.0.1", "0.0.0.0"))
     chave = os.environ.get(cfg.compat_variavel_chave)
-    if not chave:
+    if not chave and not local:
         raise IAIndisponivel(f"Defina a variável de ambiente {cfg.compat_variavel_chave} com a chave gratuita do provedor.")
     corpo = {"model": cfg.compat_modelo, "messages": mensagens, "temperature": 0.2}
     if esquema:
         corpo["response_format"] = {"type": "json_object"}
-    r = _post_json(cfg.compat_url.rstrip("/") + "/chat/completions", corpo, {"Authorization": f"Bearer {chave}"})
+    cab = {"Authorization": f"Bearer {chave or 'local'}"}
+    r = _post_json(cfg.compat_url.rstrip("/") + "/chat/completions", corpo, cab)
     return r["choices"][0]["message"]["content"], cfg.compat_modelo
 
 
@@ -377,6 +384,60 @@ def _contexto_noticias(pergunta: str) -> tuple[str, list[dict]]:
     return texto, [{"url": n["link"], "titulo": f"{n['fonte']}: {n['titulo']}"} for n in itens]
 
 
+def _pc(v, casas=1):
+    return None if v is None else f"{v * 100:+.{casas}f}%".replace(".", ",")
+
+
+def contexto_enxuto(ctx: dict, pergunta: str = "") -> dict:
+    """Contexto compacto e AUTOEXPLICATIVO para modelos locais: percentuais já formatados e rótulos claros
+    (modelos pequenos erram ao ler frações e nomes abreviados)."""
+    import re
+    citados = set(re.findall(r"\b[A-Z]{4}(?:3|4|5|6|11)\b", pergunta.upper()))
+    m = ctx.get("mercado") or {}
+    regras = ctx.get("regras_risco") or {}
+    cart = ctx.get("carteira") or {}
+    cons = {c["ticker"]: c for c in ctx.get("consenso_top", [])}
+    rk = ctx.get("ranking_completo") or ctx.get("ranking_resumido", [])
+    rank_dy = {a["ticker"]: i + 1 for i, a in enumerate(sorted(rk, key=lambda a: -(a.get("dy_12m") or 0)))}
+
+    def ativo(a):
+        c = cons.get(a["ticker"], {})
+        return {
+            "ticker": a["ticker"], "preco_atual_R$": a.get("preco"),
+            "variacao_no_dia": _pc(a.get("var_dia"), 2), "variacao_ultimos_3_meses": _pc(a.get("var_3m")),
+            "queda_desde_a_maxima_de_6_meses": _pc(a.get("queda_max_6m")),
+            "dividend_yield_12_meses": _pc(a.get("dy_12m")), "posicao_no_ranking_de_dividendos": rank_dy.get(a["ticker"]),
+            "esta_na_carteira_de_dividendos_top10": bool(a.get("top_dividendos")),
+            "possivel_armadilha_de_dividendos": bool(a.get("alerta_dy")),
+            "retorno_12_meses_excluindo_ultimo_mes": _pc(a.get("momentum_12_1")),
+            "consenso_analistas": c.get("recomendacao"), "potencial_ate_preco_alvo": _pc(c.get("upside")),
+        }
+
+    return {
+        "LEGENDA": "Percentuais já calculados. 'risco_ate_o_stop' é a distância entre a entrada e o stop, em % do preço. "
+                   "'risco_maximo_por_operacao' é quanto do CAPITAL se aceita perder por operação (tamanho da posição "
+                   "é ajustado para isso). 'excesso_sobre_CDI_ao_ano' vem do estudo de 10 anos do setup.",
+        "mercado": {"ibovespa_vs_media_200_dias": _pc(m.get("ibov_dist_mm200")),
+                    "ibovespa_acima_da_media_200": m.get("ibov_acima_mm200"),
+                    "ibovespa_12_meses": _pc(m.get("ibov_12m")), "CDI_ao_ano": _pc(m.get("cdi_aa")),
+                    "data_dos_dados": m.get("data_dados")},
+        "regras_de_risco": {"capital_de_teste_R$": regras.get("capital_teste"),
+                            "risco_maximo_por_operacao_do_capital": _pc(regras.get("risco_por_operacao")),
+                            "maximo_de_posicoes": regras.get("max_posicoes")},
+        "carteira_do_robo": {"patrimonio_R$": cart.get("patrimonio"), "exposicao": _pc(cart.get("exposicao_pct")),
+                             "kill_switch_ativo": cart.get("kill_switch"),
+                             "posicoes": [p.get("ticker") for p in cart.get("posicoes") or []]},
+        "sinais_do_scanner_hoje": [{"ticker": o["ticker"], "setup": o["setup"], "direcao": o["direcao"],
+                                    "entrada_R$": o["entrada"], "stop_R$": o["stop"], "risco_ate_o_stop": _pc(o.get("risco_pct")),
+                                    "excesso_sobre_CDI_ao_ano_do_setup": _pc((o.get("evidencia") or {}).get("excesso_cdi_aa"))}
+                                   for o in ctx.get("scanner_oportunidades", [])[:8]],
+        "alertas_de_reversao": [{"ticker": a["ticker"], "nivel": a["nivel"], "motivos": a.get("sinais")}
+                                for a in ctx.get("alertas", [])],
+        "carteira_de_dividendos_top10": [a["ticker"] for a in rk if a.get("top_dividendos")],
+        "ativos_citados_na_pergunta": [ativo(a) for a in rk if a["ticker"] in citados],
+    }
+
+
 # ======================================================================== API pública (escolhe o provedor)
 def analisar(contexto: dict) -> dict:
     from . import analista_regras
@@ -388,7 +449,7 @@ def analisar(contexto: dict) -> dict:
         base["custo_usd"] = 0.0
         return base
     # IA gratuita: parte da análise por regras e refina o texto/ideias, sem inventar números
-    pedido = (_dados(contexto) + "\n\nAnálise preliminar calculada por regras (use como base, pode reordenar ou "
+    pedido = (_dados(contexto_enxuto(contexto)) + "\n\nAnálise preliminar calculada por regras (use como base, pode reordenar ou "
               "descartar ideias, nunca invente preços):\n" + json.dumps(base, ensure_ascii=False) +
               "\n\nResponda SOMENTE com um JSON no mesmo formato da análise preliminar, com as chaves: "
               + ", ".join(ESQUEMA["required"]) + ".")
@@ -420,8 +481,12 @@ def conversar(pergunta: str, historico: list[dict], contexto: dict, pesquisar_we
     msgs = [{"role": "system", "content": SISTEMA + "\nResponda em até 250 palavras."}]
     msgs += [{"role": m["role"], "content": m["content"]} for m in historico[-8:] if m.get("role") in ("user", "assistant")]
     extra = f"\n\nManchetes recentes (cite quando usar):\n{manchetes}" if manchetes else ""
-    msgs.append({"role": "user", "content": _dados(contexto) + extra + "\n\nPergunta: " + pergunta})
-    texto, modelo = _llm_gratuito(msgs)
+    msgs.append({"role": "user", "content": _dados(contexto_enxuto(contexto, pergunta)) + extra + "\n\nPergunta: " + pergunta})
+    try:
+        texto, modelo = _llm_gratuito(msgs)
+    except IAIndisponivel as e:  # IA local fora do ar ou lenta: responde por regras
+        texto = f"(IA local indisponível: {e})\n\n" + analista_regras.responder(pergunta, contexto)
+        modelo = DESCRICAO_PROVEDOR["regras"]
     return {"resposta": texto, "fontes": fontes, "modelo": modelo, "custo_usd": 0.0}
 
 

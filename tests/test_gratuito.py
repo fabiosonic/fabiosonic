@@ -115,3 +115,40 @@ def test_escolhe_melhor_modelo_ollama():
     assert escolher_modelo(["nomic-embed-text:latest", "llama3.2:3b", "qwen2.5:7b"]) == "qwen2.5:7b"
     assert escolher_modelo(["nomic-embed-text:latest", "deepseek-r1:8b"]) == "deepseek-r1:8b"
     assert escolher_modelo(["nomic-embed-text:latest"]) is None
+
+
+def test_servidor_compativel_local_dispensa_chave(monkeypatch, tmp_path):
+    cfg = _cfg("compativel")
+    cfg.compat_url = "http://localhost:1234/v1"          # LM Studio / Jan / llama.cpp
+    monkeypatch.setattr(ia, "_cfg_ia", lambda: (cfg, tmp_path))
+    monkeypatch.delenv("IA_API_KEY", raising=False)
+    visto = {}
+
+    def falso(url, corpo, cab=None, timeout=300):
+        visto["url"] = url
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(ia, "_post_json", falso)
+    assert ia._llm_gratuito([{"role": "user", "content": "oi"}])[0] == "ok"
+    assert visto["url"] == "http://localhost:1234/v1/chat/completions"
+
+
+def test_contexto_enxuto_rotulado_para_modelos_locais():
+    ctx = dict(CTX, ranking_completo=[{"ticker": "PETR4", "preco": 45.3, "dy_12m": 0.081, "var_3m": 0.109,
+                                       "queda_max_6m": -0.241, "top_dividendos": False}])
+    e = ia.contexto_enxuto(ctx, "E a PETR4?")
+    a = e["ativos_citados_na_pergunta"][0]
+    assert a["variacao_ultimos_3_meses"] == "+10,9%" and a["queda_desde_a_maxima_de_6_meses"] == "-24,1%"
+    assert a["esta_na_carteira_de_dividendos_top10"] is False
+    assert e["sinais_do_scanner_hoje"][0]["risco_ate_o_stop"] == "+6,8%"
+
+
+def test_chat_cai_para_regras_se_ia_local_travar(monkeypatch, tmp_path):
+    monkeypatch.setattr(ia, "_cfg_ia", lambda: (_cfg("ollama"), tmp_path))
+
+    def lento(*a, **k):
+        raise ia.IAIndisponivel("A IA demorou demais")
+
+    monkeypatch.setattr(ia, "_post_json", lento)
+    r = ia.conversar("E a VALE3?", [], CTX)
+    assert "IA local indisponível" in r["resposta"] and "VALE3" in r["resposta"]
