@@ -17,35 +17,42 @@
 # Depois de calibrar, teste SEM enviar ordens:  python -m swingbot ensaio PETR4
 # =============================================================================
 
+# RASCUNHO baseado na tela do Home Broker novo (trader.clear.com.br/home-broker/new/).
+# Itens com texto visível já preenchidos; os demais vêm do comando 'python -m swingbot mapear'.
+validado: false                  # só vira true depois do 'ensaio' confirmado por você
+
 urls:
   site: "https://www.clear.com.br"
-  homebroker: ""                 # URL direta do HB, se houver (senão usa link_homebroker)
+  homebroker: "https://trader.clear.com.br/home-broker/new/"
 
 navegacao:
   link_login: ""                 # botão "Entrar" do site (opcional)
-  link_homebroker: PREENCHER     # link/botão que leva ao Home Broker
-  indicador_logado: PREENCHER    # elemento que SÓ existe com o HB aberto e logado
-  menu_custodia: PREENCHER       # menu/aba de posição/custódia
-  menu_ordens: PREENCHER         # menu/aba de ordens do dia
+  link_homebroker: ""            # não necessário: usa urls.homebroker
+  indicador_logado: "text=Resumo da conta"   # painel que só existe logado
+  modo_swing: "button:has-text('Swing Trade')"   # alternância Swing Trade | DT no topo
+  menu_custodia: ""              # painel "Posição Swing Trade" já fica na tela
+  menu_ordens: ""                # painel "Ordens Swing Trade" já fica na tela
 
 custodia:                        # tabela de posições
   linha: PREENCHER               # seletor de cada linha da tabela
   ativo: PREENCHER               # relativo à linha
   quantidade: PREENCHER          # relativo à linha
-  preco_medio: PREENCHER         # relativo à linha
+  preco_medio: ""                # a tabela "Posição Swing Trade" não mostra preço médio
   preco_atual: ""                # relativo à linha (opcional: cotação usada pelo monitor)
 
 boleta:
-  abrir_compra: PREENCHER        # botão que abre a boleta de compra
-  abrir_venda: PREENCHER         # botão que abre a boleta de venda
-  aba_limitada: ""               # aba/opção "Limitada" (se a boleta tiver abas)
-  aba_stop: PREENCHER            # aba/opção "Stop" (stop loss de venda)
+  abrir_compra: "text='Compra'"  # aba da boleta (Compra | Venda | Rápida)
+  abrir_venda: "text='Venda'"
+  # "Tipo de ordem" é uma LISTA: use dois cliques (abrir a lista, escolher a opção), ex.:
+  #   aba_limitada: ["<seletor da lista>", "text='Limitada'"]
+  aba_limitada: PREENCHER
+  aba_stop: PREENCHER
   campo_ativo: PREENCHER
   campo_quantidade: PREENCHER
   campo_preco: PREENCHER         # preço limite
   campo_disparo: PREENCHER       # preço de disparo do stop
   campo_assinatura: ""           # assinatura eletrônica (se exigida a cada ordem)
-  botao_enviar: PREENCHER
+  botao_enviar: "button:text-matches('^(Comprar|Vender)', 'i')"   # botão verde "Comprar 2,68"
   confirmacao: PREENCHER         # mensagem/elemento de ordem enviada com sucesso
   erro: ""                       # mensagem de erro/rejeição (recomendado)
   fechar: ""                     # fechar a boleta após enviar (se necessário)

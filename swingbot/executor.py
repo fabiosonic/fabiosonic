@@ -94,7 +94,8 @@ def reconciliar(cart: Carteira, hb: dict[str, tuple[int, float]], hoje: str, ati
         if o.acao == COMPRAR:
             if q_hb > q_robo:
                 exec_qtd = min(q_hb - q_robo, o.quantidade)
-                preco = round(hb[o.ticker][1], 2) if q_robo == 0 else o.preco_limite
+                pm_tela = hb[o.ticker][1]
+                preco = round(pm_tela, 2) if q_robo == 0 and pm_tela > 0 else o.preco_limite
                 cart.comprar(o.data_envio or hoje, o.ticker, exec_qtd, preco, o.preco_stop, o.alvo, estimado=True)
                 cart.posicoes[o.ticker].stop_enviado = False
                 log(f"EXECUTADA compra {o.ticker} {exec_qtd} @ ~{preco}")

@@ -68,6 +68,45 @@ def cmd_calibrar(cfg, args):
         hb.fechar()
 
 
+ETAPAS_MAPA = [
+    ("tela_principal", "Deixe o Home Broker aberto na tela principal (com Posição e Ordens Swing Trade visíveis)."),
+    ("boleta_compra_lista", "Na boleta, clique em 'Compra' e ABRA a lista 'Tipo de ordem' (deixe a lista aberta)."),
+    ("boleta_limitada", "Escolha 'Limitada' na lista (os campos de preço e quantidade devem aparecer)."),
+    ("boleta_stop", "Abra 'Tipo de ordem' de novo e escolha a ordem STOP (stop loss / stop de venda)."),
+    ("boleta_oco", "Se existir 'Stop duplo' / 'OCO' na lista, escolha-o. Se não existir, apenas tecle ENTER."),
+    ("boleta_venda", "Clique na aba 'Venda' da boleta (não envie nada)."),
+]
+
+
+def cmd_mapear(cfg, args):
+    """Abre a Clear, você faz login e navega; coleta a estrutura da página (sem dados da conta)."""
+    from .corretoras.clear_homebroker import ClearHomeBroker, carregar_seletores
+    from .corretoras.mapeador import coletar, sem_dados_pessoais
+    sel = carregar_seletores(cfg.clear.arquivo_seletores)
+    hb = ClearHomeBroker(sel, cfg.clear.pasta_sessao, cfg.pasta_logs, cfg.clear.timeout_login_seg, False)
+    hb.abrir()
+    resultado = {}
+    try:
+        hb.page.goto((sel.get("urls") or {}).get("homebroker") or "https://trader.clear.com.br/home-broker/new/")
+        input("\n>>> Faça o LOGIN na janela do navegador. Quando o Home Broker estiver aberto, tecle ENTER aqui...")
+        hb.page = hb._ctx.pages[-1]
+        for i, (nome, instrucao) in enumerate(ETAPAS_MAPA, 1):
+            input(f"\n[{i}/{len(ETAPAS_MAPA)}] {instrucao}\n    Tecle ENTER quando estiver pronto (NÃO envie ordens)...")
+            resultado[nome] = coletar(hb.page)
+            n = sum(len(q.get("itens", [])) for q in resultado[nome]["quadros"])
+            print(f"    coletados {n} elementos")
+    finally:
+        hb.fechar()
+    if not sem_dados_pessoais(resultado):
+        sys.exit("Aviso: restaram números nos textos coletados; arquivo NÃO salvo por segurança.")
+    destino = Path(cfg.pasta_logs) / "mapa_clear.json"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(json.dumps(resultado, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"\nMapa salvo em {destino} ({destino.stat().st_size // 1024} KB).")
+    print("Ele contém só a estrutura da página (botões, campos, tabelas) — números da conta foram trocados por '#'.")
+    print("Envie esse arquivo na conversa para eu finalizar os seletores.")
+
+
 def cmd_ensaio(cfg, args):
     """Testa os seletores: login, custódia e boleta preenchida SEM enviar."""
     from .corretoras.clear_homebroker import ClearHomeBroker, carregar_seletores
@@ -80,7 +119,16 @@ def cmd_ensaio(cfg, args):
         hb.comprar_limitada(args.ticker, 1, args.preco, enviar=False)
         hb.stop_venda(args.ticker, 1, args.preco, round(args.preco * 0.99, 2), enviar=False)
         print(f"Capturas de tela em {hb.pasta_logs}")
-        input("Confira a tela e tecle ENTER para fechar...")
+        ok = input("A boleta foi preenchida CORRETAMENTE (ativo, quantidade, preço e tipo)? [s/N] ").strip().lower()
+        if ok == "s":
+            arq = Path(cfg.clear.arquivo_seletores)
+            texto = arq.read_text(encoding="utf-8")
+            import re as _re
+            texto = _re.sub(r"(?m)^validado:\s*\S+", "validado: true", texto, count=1)
+            arq.write_text(texto, encoding="utf-8")
+            print("Mapeamento VALIDADO: o modo real fica liberado (ainda exige 'OPERAR REAL' a cada uso).")
+        else:
+            print("Não validado. Ajuste os seletores (ou rode 'mapear' e envie o arquivo) e repita o ensaio.")
     finally:
         hb.fechar()
 
@@ -286,6 +334,7 @@ def main(argv=None):
     a.add_argument("--carteira", choices=["simulada", "real"], default="simulada")
 
     sub.add_parser("calibrar", help="abre a Clear com o Playwright Inspector para mapear seletores")
+    sub.add_parser("mapear", help="coleta a estrutura do Home Broker (sem dados da conta) para configurar o robô")
 
     pn = sub.add_parser("painel", help="abre o painel web com IA")
     pn.add_argument("--porta", type=int, default=8050)
@@ -313,7 +362,7 @@ def main(argv=None):
     {"backtest": cmd_backtest, "rodar": cmd_rodar, "apuracao": cmd_apuracao,
      "calibrar": cmd_calibrar, "ensaio": cmd_ensaio, "painel": cmd_painel,
      "sincronizar": cmd_sincronizar, "executar-fila": cmd_executar_fila, "monitorar": cmd_monitorar,
-     "ia-testar": cmd_ia_testar}[args.comando](cfg, args)
+     "ia-testar": cmd_ia_testar, "mapear": cmd_mapear}[args.comando](cfg, args)
 
 
 if __name__ == "__main__":

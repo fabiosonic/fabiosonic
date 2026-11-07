@@ -24,9 +24,11 @@ from ..fiscal import ticker_base
 
 PENDENTE = "PREENCHER"
 
+# menus e preço médio são opcionais: no Home Broker novo os painéis de posição e ordens ficam fixos
+# na tela e a tabela de posição não mostra o preço médio.
 OBRIGATORIOS = [
-    "navegacao.indicador_logado", "navegacao.menu_custodia", "navegacao.menu_ordens",
-    "custodia.linha", "custodia.ativo", "custodia.quantidade", "custodia.preco_medio",
+    "navegacao.indicador_logado",
+    "custodia.linha", "custodia.ativo", "custodia.quantidade",
     "boleta.abrir_compra", "boleta.abrir_venda", "boleta.aba_stop", "boleta.campo_ativo",
     "boleta.campo_quantidade", "boleta.campo_preco", "boleta.campo_disparo",
     "boleta.botao_enviar", "boleta.confirmacao",
@@ -54,6 +56,8 @@ def pendencias(sel: dict) -> list[str]:
     nav = sel.get("navegacao") or {}
     if not (sel.get("urls") or {}).get("homebroker") and nav.get("link_homebroker") in (None, "", PENDENTE):
         faltando.append("urls.homebroker ou navegacao.link_homebroker")
+    if not faltando and not sel.get("validado"):
+        faltando.append("validado (rode 'python -m swingbot ensaio PETR4 --preco 10' e confirme a boleta)")
     return faltando
 
 
@@ -83,9 +87,12 @@ class ClearHomeBroker:
         self._assinatura: str | None = None
 
     # ----------------------------------------------------------------- utilidades
-    def s(self, chave: str) -> str:
+    def s(self, chave: str):
+        """Seletor configurado. Pode ser uma lista (cliques em sequência, ex.: abrir lista e escolher opção)."""
         grupo, nome = chave.split(".")
         valor = (self.sel.get(grupo) or {}).get(nome, "")
+        if isinstance(valor, list):
+            return [v for v in valor if v and v != PENDENTE]
         return "" if valor == PENDENTE else (valor or "")
 
     def foto(self, nome: str) -> None:
@@ -102,7 +109,14 @@ class ClearHomeBroker:
         seletor = self.s(chave)
         if not seletor:
             raise ErroHomeBroker(f"Seletor {chave} não configurado")
-        self.page.locator(seletor).first.click(timeout=timeout)
+        for passo in (seletor if isinstance(seletor, list) else [seletor]):
+            self.page.locator(passo).first.click(timeout=timeout)
+            self.page.wait_for_timeout(300)
+
+    def _clicar_se(self, chave: str, timeout: int = 8000) -> None:
+        """Clica só se o seletor estiver configurado (passos opcionais do layout)."""
+        if self.s(chave):
+            self._clicar(chave, timeout)
 
     def _preencher(self, chave: str, valor: str) -> None:
         campo = self.page.locator(self.s(chave)).first
@@ -188,7 +202,7 @@ class ClearHomeBroker:
     # ----------------------------------------------------------------- leitura
     def ler_posicoes(self) -> dict[str, tuple[int, float]]:
         """{TICKER_BASE: (quantidade, preço médio)} somando padrão + fracionário."""
-        self._clicar("navegacao.menu_custodia")
+        self._clicar_se("navegacao.menu_custodia")
         self.page.wait_for_timeout(2500)
         self.foto("custodia")
         posicoes: dict[str, tuple[int, float]] = {}
@@ -196,7 +210,8 @@ class ClearHomeBroker:
             try:
                 ativo = linha.locator(self.s("custodia.ativo")).first.inner_text().strip().upper()
                 qtd = int(numero_br(linha.locator(self.s("custodia.quantidade")).first.inner_text()))
-                pm = numero_br(linha.locator(self.s("custodia.preco_medio")).first.inner_text())
+                pm = (numero_br(linha.locator(self.s("custodia.preco_medio")).first.inner_text())
+                      if self.s("custodia.preco_medio") else 0.0)   # 0 = não informado pela tela
             except Exception:
                 continue
             if not ativo or qtd <= 0:
@@ -211,6 +226,7 @@ class ClearHomeBroker:
     def _boleta(self, lado: str, tipo: str, ticker: str, qtd: int, preco: float,
                 disparo: float | None = None, enviar: bool = True) -> None:
         rotulo = f"{lado}_{tipo}_{ticker}_{qtd}"
+        self._clicar_se("navegacao.modo_swing")   # garante Swing Trade (e não DT)
         self._clicar("boleta.abrir_compra" if lado == "compra" else "boleta.abrir_venda")
         self.page.wait_for_timeout(800)
         aba = "boleta.aba_stop" if tipo == "stop" else "boleta.aba_limitada"
@@ -275,6 +291,7 @@ class ClearHomeBroker:
         if not self.suporta_oco():
             raise ErroHomeBroker("OCO não calibrado (boleta.aba_oco e campos de gain/loss)")
         rotulo = f"venda_oco_{ticker}_{qtd}"
+        self._clicar_se("navegacao.modo_swing")
         self._clicar("boleta.abrir_venda")
         self.page.wait_for_timeout(800)
         self._clicar("boleta.aba_oco")
@@ -300,7 +317,7 @@ class ClearHomeBroker:
         """Último preço de cada ativo na tabela de custódia (coluna custodia.preco_atual)."""
         if not self.s("custodia.preco_atual"):
             return {}
-        self._clicar("navegacao.menu_custodia")
+        self._clicar_se("navegacao.menu_custodia")
         self.page.wait_for_timeout(1500)
         precos = {}
         for linha in self.page.locator(self.s("custodia.linha")).all():
@@ -314,7 +331,7 @@ class ClearHomeBroker:
     def cancelar_stops(self, ticker: str) -> int:
         """Cancela os stops de venda abertos do ativo (padrão e fracionário)."""
         o = self.sel["ordens"]
-        self._clicar("navegacao.menu_ordens")
+        self._clicar_se("navegacao.menu_ordens")
         self.page.wait_for_timeout(2000)
         canceladas = 0
         for _ in range(10):  # a tabela é redesenhada a cada cancelamento
