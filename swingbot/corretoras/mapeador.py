@@ -200,6 +200,7 @@ def explorar_boleta(page, log=print) -> dict:
     def vis(seletor):
         return boleta.locator(f"{seletor} >> visible=true")
 
+    log("    boleta encontrada; selecionando 'Compra'...")
     if _clique_seguro(vis(CHIP.format("Compra")).first, log):
         page.wait_for_timeout(500)
     # descobre ONDE clicar para abrir a lista: no "A mercado ⌄", na linha "Tipo de ordem" ou num botão de menu
@@ -214,6 +215,7 @@ def explorar_boleta(page, log=print) -> dict:
     for nome, loc in candidatos.items():
         if not loc.count():
             continue
+        log(f"    testando abrir a lista pelo ponto '{nome}'... (aguarde)")
         antes = _textos_visiveis(page)
         if not _clique_seguro(loc, log):
             continue
@@ -236,6 +238,7 @@ def explorar_boleta(page, log=print) -> dict:
         log("    não consegui abrir a lista 'Tipo de ordem' automaticamente")
         return res
     for op in res["opcoes_tipo_ordem"]:
+        log(f"    escolhendo '{op}' (sem enviar)...")
         if not _clique_seguro(tipo, log):
             break
         page.wait_for_timeout(600)
