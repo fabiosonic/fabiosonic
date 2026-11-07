@@ -69,3 +69,5 @@ def test_seletores_pendentes_bloqueiam_modo_real():
     from swingbot.corretoras.clear_homebroker import carregar_seletores, numero_br, pendencias
     assert pendencias(carregar_seletores("config/seletores_clear.yaml"))
     assert numero_br("R$ 1.234,56") == 1234.56 and numero_br("300") == 300
+    assert numero_br("1.000") == 1000 and numero_br("12.500.000") == 12500000   # ponto de milhar
+    assert numero_br("2.5") == 2.5 and numero_br("-1.234,5") == -1234.5

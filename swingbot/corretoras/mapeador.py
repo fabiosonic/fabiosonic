@@ -124,7 +124,10 @@ def sem_dados_pessoais(dados: dict) -> bool:
 
 # ---------------------------------------------------------------------------- exploração automática
 PROIBIDOS = re.compile(r"^\s*(comprar|vender|enviar|confirmar|executar|zerar|cancelar todas)", re.I)
-BOLETA = "[data-testid='SomaWindow']:has(.MuiChip-root:text-is('Compra'))"
+# âncoras estáveis do Home Broker (data-testid), confirmadas no mapa real
+BOLETA = "[data-testid='SomaWindow']:has([data-testid='SomaButtonTrade'])"
+CHIP = "[data-testid='SomaChipChoice']:has-text('{}')"
+LINHA_TIPO = "[data-testid='SomaListItemSingleLine']:has-text('Tipo de ordem')"
 
 
 def _clique_seguro(loc, log) -> bool:
@@ -161,13 +164,14 @@ def explorar_boleta(page, log=print) -> dict:
     if not boleta.count():
         log("    boleta não encontrada (abra uma janela de boleta no Home Broker)")
         return res
-    if _clique_seguro(page.locator(".MuiChip-root:text-is('Compra')").first, log):
+    if _clique_seguro(boleta.locator(CHIP.format("Compra")).first, log):
         page.wait_for_timeout(500)
     # descobre ONDE clicar para abrir a lista: no "A mercado ⌄", no item "Tipo de ordem" ou num botão de menu
     candidatos = {
         # o valor mostrado muda (A mercado -> Limitada...), então a referência não pode depender do texto
-        "valor_atual": boleta.locator("li:has-text('Tipo de ordem') >> span").last,
-        "seta": boleta.locator("li:has-text('Tipo de ordem') svg").last,
+        "valor_atual": boleta.locator(f"{LINHA_TIPO} .SomaListItemSingleLine-endSlot").first,
+        "linha": boleta.locator(LINHA_TIPO).first,
+        "seta": boleta.locator(f"{LINHA_TIPO} svg").last,
         "item": boleta.locator("li:has-text('Tipo de ordem')").first,
         "popup": boleta.locator("[aria-haspopup]").first,
     }

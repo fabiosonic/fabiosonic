@@ -34,19 +34,21 @@ navegacao:
   menu_ordens: ""                # painel "Ordens Swing Trade" já fica na tela
 
 custodia:                        # tabela de posições
-  linha: PREENCHER               # seletor de cada linha da tabela
-  ativo: PREENCHER               # relativo à linha
-  quantidade: PREENCHER          # relativo à linha
+  # tabela ag-grid da janela "Posição Swing Trade" (confirmado no mapa: col-id symbol / qty)
+  linha: "[data-testid='SomaWindow']:has-text('Posição Swing Trade') .ag-center-cols-container [role=row]"
+  ativo: "@row-id"               # o código do ativo vem do atributo row-id da linha
+  ativo_coluna_fixa: "[data-testid='SomaWindow']:has-text('Posição Swing Trade') .ag-pinned-left-cols-container [row-index='{i}'] [col-id='symbol']"
+  quantidade: "[col-id='qty']"
   preco_medio: ""                # a tabela "Posição Swing Trade" não mostra preço médio
   preco_atual: ""                # relativo à linha (opcional: cotação usada pelo monitor)
 
 boleta:
-  abrir_compra: ".MuiChip-root:text-is('Compra')"   # chip da boleta (confirmado no mapa)
-  abrir_venda: ".MuiChip-root:text-is('Venda')"
+  abrir_compra: "[data-testid='SomaChipChoice']:has-text('Compra')"   # confirmado no mapa
+  abrir_venda: "[data-testid='SomaChipChoice']:has-text('Venda')"
   # "Tipo de ordem" é uma LISTA: use dois cliques (abrir a lista, escolher a opção), ex.:
   #   aba_limitada: ["<seletor da lista>", "text='Limitada'"]
   aba_limitada:                  # abre a lista e escolhe a opção (nome da opção a confirmar no próximo mapa)
-    - "[data-testid='SomaWindow']:has(.MuiChip-root:text-is('Compra')) li:has-text('Tipo de ordem')"
+    - "[data-testid='SomaWindow']:has([data-testid='SomaButtonTrade']) [data-testid='SomaListItemSingleLine']:has-text('Tipo de ordem')"
     - "[role=option]:text-is('Limitada'), [role=menuitem]:text-is('Limitada'), li:text-is('Limitada')"
   aba_stop: PREENCHER
   campo_ativo: PREENCHER
@@ -54,7 +56,7 @@ boleta:
   campo_preco: "input[name='price']"          # confirmado no mapa
   campo_disparo: PREENCHER       # preço de disparo do stop
   campo_assinatura: ""           # assinatura eletrônica (se exigida a cada ordem)
-  botao_enviar: "button:text-matches('^(Comprar|Vender)', 'i')"   # botão verde "Comprar 2,68"
+  botao_enviar: "[data-testid='SomaButtonTrade']"   # botão verde "Comprar 2,68" (confirmado no mapa)
   confirmacao: PREENCHER         # mensagem/elemento de ordem enviada com sucesso
   erro: ""                       # mensagem de erro/rejeição (recomendado)
   fechar: ""                     # fechar a boleta após enviar (se necessário)

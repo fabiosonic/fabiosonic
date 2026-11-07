@@ -66,6 +66,8 @@ def numero_br(texto: str) -> float:
     limpo = re.sub(r"[^\d,.\-]", "", texto or "")
     if "," in limpo:
         limpo = limpo.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"-?\d{1,3}(\.\d{3})+", limpo):
+        limpo = limpo.replace(".", "")          # "1.000" = mil (ponto de milhar), não 1,0
     if not limpo or limpo in "-.":
         raise ValueError(f"Número inválido: {texto!r}")
     return float(limpo)
@@ -208,7 +210,7 @@ class ClearHomeBroker:
         posicoes: dict[str, tuple[int, float]] = {}
         for linha in self.page.locator(self.s("custodia.linha")).all():
             try:
-                ativo = linha.locator(self.s("custodia.ativo")).first.inner_text().strip().upper()
+                ativo = self._ativo_da_linha(linha)
                 qtd = int(numero_br(linha.locator(self.s("custodia.quantidade")).first.inner_text()))
                 pm = (numero_br(linha.locator(self.s("custodia.preco_medio")).first.inner_text())
                       if self.s("custodia.preco_medio") else 0.0)   # 0 = não informado pela tela
@@ -221,6 +223,21 @@ class ClearHomeBroker:
             total = q0 + qtd
             posicoes[base] = (total, (q0 * pm0 + qtd * pm) / total)
         return posicoes
+
+    def _ativo_da_linha(self, linha) -> str:
+        """Código do ativo da linha. Tabelas ag-grid (HB novo) deixam o ativo numa coluna fixa
+        separada: usa o atributo row-id ou busca a célula 'symbol' pelo row-index."""
+        regra = self.s("custodia.ativo")
+        if regra == "@row-id":
+            rid = (linha.get_attribute("row-id") or "").strip().upper()
+            if re.fullmatch(r"[A-Z]{4}\d{1,2}F?", rid):
+                return rid
+            fixa = self.s("custodia.ativo_coluna_fixa")
+            idx = linha.get_attribute("row-index")
+            if fixa and idx is not None:
+                return self.page.locator(fixa.format(i=idx)).first.inner_text().strip().upper()
+            return rid
+        return linha.locator(regra).first.inner_text().strip().upper()
 
     # ----------------------------------------------------------------- ordens
     def _boleta(self, lado: str, tipo: str, ticker: str, qtd: int, preco: float,

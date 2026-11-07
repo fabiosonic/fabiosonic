@@ -9,11 +9,12 @@ pw = pytest.importorskip("playwright.sync_api")
 HTML = """<html><body>
 <div class="resumo"><span>Resumo da conta</span><span>Total investido + saldo</span><b>R$ 1.234,56</b></div>
 <div class="boleta">
-  <div class="MuiChip-root" role="button">Compra</div><div class="MuiChip-root" role="button">Venda</div>
+  <div data-testid="SomaChipChoice" class="MuiChip-root" role="button">Compra</div>
+  <div data-testid="SomaChipChoice" class="MuiChip-root" role="button">Venda</div>
   <div class="tipo"><span>Tipo de ordem</span><div role="combobox" aria-label="Tipo de ordem">A mercado</div></div>
   <fieldset><legend>Preço</legend><input name="price" value="2,68"></fieldset>
   <fieldset><legend>Quantidade</legend><input name="qty" value="100"></fieldset>
-  <button class="btn-buy">Comprar 2,68</button>
+  <button data-testid="SomaButtonTrade" class="btn-buy">Comprar 2,68</button>
 </div>
 <section><h3>Posição Swing Trade</h3>
 <table><thead><tr><th>Ativo</th><th>Qtd.</th><th>Posição</th></tr></thead>
@@ -93,10 +94,12 @@ def test_coleta_dentro_de_shadow_dom():
 BOLETA_HTML = """<html><body>
 <div data-testid="SomaWindow">
   <div class="SomaWindow-header"><span id="tk">BEEF3</span> <span>2,61</span></div>
-  <div class="MuiChip-root" role="button">Compra</div><div class="MuiChip-root" role="button">Venda</div>
-  <ul><li class="MuiListItem-root" id="tipo"><p>Tipo de ordem</p><span id="tipoval">A mercado</span></li></ul>
+  <div data-testid="SomaChipChoice" class="MuiChip-root" role="button">Compra</div>
+  <div data-testid="SomaChipChoice" class="MuiChip-root" role="button">Venda</div>
+  <ul><li class="MuiListItem-root"><div data-testid="SomaListItemSingleLine" id="tipo"><p>Tipo de ordem</p>
+    <div class="SomaListItemSingleLine-endSlot"><span id="tipoval">A mercado</span></div></div></li></ul>
   <div id="campos"><input name="price" value="A mercado"><input name="quantity" value="100"></div>
-  <button id="enviar">Comprar 2,68</button>
+  <button id="enviar" data-testid="SomaButtonTrade">Comprar 2,68</button>
 </div>
 <div id="menu"></div>
 <script>
@@ -167,3 +170,34 @@ def test_espera_o_home_broker_carregar():
         pg.goto("https://trader.clear.com.br/home-broker/new/")
         assert esperar_homebroker(ctx, log=lambda *_: None, timeout_seg=10) is pg
         b.close()
+
+
+AGGRID_HTML = """<html><body>
+<div data-testid="SomaWindow"><div class="SomaWindow-header"><span>Posição Swing Trade</span></div>
+ <div class="ag-pinned-left-cols-container">
+  <div role="row" row-index="0" row-id="0"><div col-id="symbol">BBAS3</div></div>
+  <div role="row" row-index="1" row-id="1"><div col-id="symbol">CSAN3</div></div>
+ </div>
+ <div class="ag-center-cols-container">
+  <div role="row" row-index="0" row-id="0"><div col-id="qty">300</div><div col-id="position">9.876,54</div></div>
+  <div role="row" row-index="1" row-id="1"><div col-id="qty">1.000</div><div col-id="position">1.111,22</div></div>
+ </div>
+</div>
+<div data-testid="SomaWindow"><div class="SomaWindow-header"><span>Lista de ativos</span></div>
+ <div class="ag-center-cols-container"><div role="row" row-index="0" row-id="PETR4"><div col-id="qty">9</div></div></div>
+</div></body></html>"""
+
+
+def test_le_posicoes_da_tabela_ag_grid():
+    """Ativo na coluna fixa (row-id numérico) e quantidade na área central, como no HB novo."""
+    import yaml
+    from swingbot.corretoras.clear_homebroker import ClearHomeBroker
+    sel = yaml.safe_load(open("config/seletores_clear.yaml", encoding="utf-8"))
+    with pw.sync_playwright() as p:
+        b = _navegador(p)
+        hb = ClearHomeBroker(sel, "/tmp/x", "/tmp/logs_teste")
+        hb.page = b.new_page()
+        hb.page.set_content(AGGRID_HTML)
+        pos = hb.ler_posicoes()
+        b.close()
+    assert pos == {"BBAS3": (300, 0.0), "CSAN3": (1000, 0.0)}   # não lê a 'Lista de ativos'
