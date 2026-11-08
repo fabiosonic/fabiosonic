@@ -609,6 +609,47 @@ def ajustar_stop(ticker: str, stop: float) -> dict:
     return p.to_dict()
 
 
+def _br(v: float) -> str:
+    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _virgula(texto: str) -> str:
+    """'51.31' -> '51,31' nos textos (formato brasileiro)."""
+    import re
+    return re.sub(r"(?<![\d.])(\d+)\.(\d{2})(?!\d)", r"\1,\2", texto)
+
+
+PRIORIDADE = {"VENDER": 0, "COLOCAR O STOP": 1, "SUBIR O STOP": 2, "MANTER": 3}
+
+
+def _consolidar(itens: list[dict]) -> list[dict]:
+    """Uma linha por ativo: a ordem mais importante, com os demais avisos como complemento."""
+    por_ativo: dict[str, list[dict]] = {}
+    for a in itens:
+        por_ativo.setdefault(a["ticker"], []).append(a)
+    saida = []
+    for t, lista in por_ativo.items():
+        lista.sort(key=lambda a: (PRIORIDADE.get(a["veredito"], 9), a["urgencia"]))
+        principal = dict(lista[0])
+        extras = [a for a in lista[1:] if a["acao"] != "MANTER"]
+        complemento = []
+        for a in extras:
+            if a["acao"] == "ATENCAO":
+                if principal["veredito"] == "VENDER":
+                    continue        # já é para vender: o aviso de 'manter com atenção' só confundiria
+                complemento.append("Atenção, a tendência está enfraquecendo: " + "; ".join(a.get("sinais", [])[:2]) + ".")
+            else:
+                complemento.append(a["texto"])
+        if complemento:
+            principal["complemento"] = [_virgula(c) for c in complemento]
+            if any(a["acao"] == "SUBIR_STOP" for a in extras) and "novo_stop" not in principal:
+                principal["novo_stop"] = next(a["novo_stop"] for a in extras if a["acao"] == "SUBIR_STOP")
+        principal["texto"] = _virgula(principal["texto"])
+        saida.append(principal)
+    saida.sort(key=lambda a: (PRIORIDADE.get(a["veredito"], 9), a["urgencia"]))
+    return saida
+
+
 def acoes_manuais() -> dict:
     """Lista do que VOCÊ deve fazer agora na Clear para cada posição acompanhada."""
     from swingbot.protecoes import avaliar
@@ -636,17 +677,17 @@ def acoes_manuais() -> dict:
                 "resultado_pct": round(preco / p.preco_entrada - 1, 4)}
         if not p.stop_enviado:
             acoes.append({**base, "urgencia": 1, "acao": "COLOCAR_STOP", "veredito": "COLOCAR O STOP",
-                          "texto": f"Registre na Clear uma ordem STOP de venda em R$ {p.stop:.2f}"})
+                          "texto": f"Registre na Clear uma ordem STOP de venda em R$ {_br(p.stop)}"})
         if d.acao == "STOP_ATINGIDO":
             acoes.append({**base, "urgencia": 0, "acao": "VENDER", "veredito": "VENDER",
-                          "texto": f"O preço {preco:.2f} atingiu o seu stop {p.stop:.2f}. Se a ordem stop não executou, venda."})
+                          "texto": f"O preço {_br(preco)} atingiu o seu stop {_br(p.stop)}. Se a ordem stop não executou, venda."})
         elif d.acao == "TAKE_PROFIT":
             acoes.append({**base, "urgencia": 0, "acao": "VENDER", "veredito": "VENDER",
-                          "texto": f"Alvo atingido ({preco:.2f} ≥ {p.take_profit:.2f}): venda e realize o lucro."})
+                          "texto": f"Alvo atingido ({_br(preco)} ≥ {_br(p.take_profit)}): venda e realize o lucro."})
         elif d.acao == "NOVO_STOP":
             acoes.append({**base, "urgencia": 2, "acao": "SUBIR_STOP", "novo_stop": d.novo_stop, "veredito": "SUBIR O STOP",
-                          "texto": f"Mantenha a posição e altere sua ordem stop na Clear de {p.stop:.2f} para "
-                                   f"{d.novo_stop:.2f} ({d.motivo.split(':')[0]}: protege o lucro)."})
+                          "texto": f"Mantenha a posição e altere sua ordem stop na Clear de {_br(p.stop)} para "
+                                   f"{_br(d.novo_stop)} ({d.motivo.split(':')[0]}: protege o lucro)."})
         if t in ohlc:
             diag = avaliar_rev(com_preco_atual(ohlc[t], preco), p.maior_preco)
             if diag.nivel == "SAIR":
@@ -659,9 +700,8 @@ def acoes_manuais() -> dict:
                                        "está enfraquecendo — " + "; ".join(diag.sinais[:2]) + ". Seu stop protege."})
         if len(acoes) == n_antes:      # nada a fazer: deixe claro que é para manter
             acoes.append({**base, "urgencia": 4, "acao": "MANTER", "veredito": "MANTER",
-                          "texto": f"Tudo dentro do plano: mantenha. Stop em {p.stop:.2f}"
-                                   + (f", alvo em {p.take_profit:.2f}." if p.take_profit else ".")})
+                          "texto": f"Tudo dentro do plano: mantenha. Stop em {_br(p.stop)}"
+                                   + (f", alvo em {_br(p.take_profit)}." if p.take_profit else ".")})
     if mudou:
         _repo().salvar(itens)          # guarda a máxima observada (base do trailing stop)
-    acoes.sort(key=lambda a: a["urgencia"])
-    return {"acoes": acoes, "acompanhando": len(ativos), "atualizado": time.strftime("%H:%M")}
+    return {"acoes": _consolidar(acoes), "acompanhando": len(ativos), "atualizado": time.strftime("%H:%M")}

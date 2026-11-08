@@ -1,0 +1,102 @@
+{
+  "capital_inicial": 5000.0,
+  "custo_percentual": 0.0003,
+  "caixa": -3281.199999999999,
+  "ultima_data": null,
+  "ultima_execucao": null,
+  "posicoes": [
+    {
+      "ticker": "VALE3",
+      "quantidade": 50,
+      "preco_medio": 58.0,
+      "stop": 55.0,
+      "alvo": 75.0,
+      "data_entrada": "2026-11-08",
+      "stop_enviado": true
+    },
+    {
+      "ticker": "ITUB4",
+      "quantidade": 100,
+      "preco_medio": 40.0,
+      "stop": 37.5,
+      "alvo": 46.0,
+      "data_entrada": "2026-11-08",
+      "stop_enviado": false
+    },
+    {
+      "ticker": "WEGE3",
+      "quantidade": 40,
+      "preco_medio": 47.5,
+      "stop": 44.0,
+      "alvo": 55.0,
+      "data_entrada": "2026-11-08",
+      "stop_enviado": true
+    }
+  ],
+  "pendentes": [],
+  "operacoes": [
+    {
+      "data": "2026-11-08",
+      "ticker": "PETR4",
+      "lado": "C",
+      "quantidade": 100,
+      "preco": 40.0,
+      "custos": 1.2,
+      "origem": "manual",
+      "estimado": false
+    },
+    {
+      "data": "2026-11-08",
+      "ticker": "VALE3",
+      "lado": "C",
+      "quantidade": 50,
+      "preco": 58.0,
+      "custos": 0.87,
+      "origem": "manual",
+      "estimado": false
+    },
+    {
+      "data": "2026-11-08",
+      "ticker": "ITUB4",
+      "lado": "C",
+      "quantidade": 100,
+      "preco": 40.0,
+      "custos": 1.2,
+      "origem": "manual",
+      "estimado": false
+    },
+    {
+      "data": "2026-11-08",
+      "ticker": "WEGE3",
+      "lado": "C",
+      "quantidade": 40,
+      "preco": 47.5,
+      "custos": 0.57,
+      "origem": "manual",
+      "estimado": false
+    },
+    {
+      "data": "2026-11-08",
+      "ticker": "PETR4",
+      "lado": "V",
+      "quantidade": 100,
+      "preco": 45.24,
+      "custos": 1.36,
+      "origem": "Alvo atingido (45,24 ≥ 44,50): venda e realize o lucro.",
+      "estimado": false
+    }
+  ],
+  "trades": [
+    {
+      "ticker": "PETR4",
+      "entrada": "2026-11-08",
+      "saida": "2026-11-08",
+      "quantidade": 100,
+      "preco_entrada": 40.0,
+      "preco_saida": 45.24,
+      "resultado": 522.64,
+      "motivo": "Alvo atingido (45,24 ≥ 44,50): venda e realize o lucro.",
+      "day_trade": true
+    }
+  ]
+}

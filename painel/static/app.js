@@ -588,7 +588,8 @@ async function carregarAcoes() {
         <span class="veredito ${(a.veredito || "").split(" ")[0]}">${esc(a.veredito || a.acao)}</span>
         <div class="txt"><b class="tk">${a.ticker}</b> — você está <b>COMPRADO</b> em ${a.quantidade} ações
           (entrada ${N(a.entrada)} · agora ${N(a.preco)} <span class="${cls(a.resultado_pct)}">${P(a.resultado_pct)}</span>)
-          <span class="nota">· preço ${esc(a.fonte)}</span><br>${esc(a.texto)}</div>
+          <span class="nota">· preço ${esc(a.fonte)}</span><br>${esc(a.texto)}
+          ${(a.complemento || []).map((c) => `<div class="nota">• Também: ${esc(c)}</div>`).join("")}</div>
         ${a.acao === "SUBIR_STOP" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="stop">Já subi o stop na Clear</button>` : ""}
         ${a.acao === "COLOCAR_STOP" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="pus">Já coloquei o stop</button>` : ""}
         ${a.acao === "VENDER" ? `<button class="btn peq primario" data-acao-i="${i}" data-tipo="venda">Registrar a venda</button>` : ""}

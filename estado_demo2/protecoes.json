@@ -1,0 +1,84 @@
+{
+  "PETR4": {
+    "ticker": "PETR4",
+    "quantidade": 0,
+    "preco_entrada": 40.0,
+    "stop": 38.0,
+    "take_profit": 44.5,
+    "trailing": null,
+    "breakeven_pct": null,
+    "passo_min": 0.005,
+    "maior_preco": 46.11000061035156,
+    "stop_enviado": true,
+    "usa_oco": false,
+    "origem": "manual",
+    "na_reversao": "avisar",
+    "ultimo_alerta": null,
+    "ativa": false,
+    "historico": [
+      [
+        "2026-11-08 13:50",
+        "venda manual 100 @ 45.24"
+      ]
+    ]
+  },
+  "VALE3": {
+    "ticker": "VALE3",
+    "quantidade": 50,
+    "preco_entrada": 58.0,
+    "stop": 55.0,
+    "take_profit": 75.0,
+    "trailing": {
+      "tipo": "pct",
+      "valor": 0.05,
+      "ativacao_pct": 0.03,
+      "atr": null
+    },
+    "breakeven_pct": null,
+    "passo_min": 0.005,
+    "maior_preco": 64.27999877929688,
+    "stop_enviado": true,
+    "usa_oco": false,
+    "origem": "manual",
+    "na_reversao": "avisar",
+    "ultimo_alerta": null,
+    "ativa": true,
+    "historico": []
+  },
+  "ITUB4": {
+    "ticker": "ITUB4",
+    "quantidade": 100,
+    "preco_entrada": 40.0,
+    "stop": 37.5,
+    "take_profit": 46.0,
+    "trailing": null,
+    "breakeven_pct": null,
+    "passo_min": 0.005,
+    "maior_preco": 41.0099983215332,
+    "stop_enviado": false,
+    "usa_oco": false,
+    "origem": "manual",
+    "na_reversao": "avisar",
+    "ultimo_alerta": null,
+    "ativa": true,
+    "historico": []
+  },
+  "WEGE3": {
+    "ticker": "WEGE3",
+    "quantidade": 40,
+    "preco_entrada": 47.5,
+    "stop": 44.0,
+    "take_profit": 55.0,
+    "trailing": null,
+    "breakeven_pct": null,
+    "passo_min": 0.005,
+    "maior_preco": 48.83000183105469,
+    "stop_enviado": true,
+    "usa_oco": false,
+    "origem": "manual",
+    "na_reversao": "avisar",
+    "ultimo_alerta": null,
+    "ativa": true,
+    "historico": []
+  }
+}

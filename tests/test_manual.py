@@ -43,7 +43,7 @@ def test_lembra_de_colocar_stop_e_valida(ambiente):
     dp.registrar_compra({"ticker": "VALE3", "quantidade": 10, "preco": 60.0, "stop": 55.0, "stop_na_clear": False})
     precos["VALE3"] = (60.5, 60.5, "teste")
     a = dp.acoes_manuais()["acoes"]
-    assert a[0]["acao"] == "COLOCAR_STOP" and "55,00" not in a[0]["texto"] and "55.00" in a[0]["texto"]
+    assert a[0]["acao"] == "COLOCAR_STOP" and "55,00" in a[0]["texto"]
     with pytest.raises(ValueError):
         dp.registrar_venda({"ticker": "VALE3", "quantidade": 11, "preco": 61})
 
@@ -60,3 +60,22 @@ def test_toda_posicao_tem_veredito_claro(ambiente):
     precos["BRAP4"] = (19.25, 19.3, "teste")
     a = dp.acoes_manuais()["acoes"]
     assert a and all(x["veredito"] in ("VENDER", "SUBIR O STOP", "COLOCAR O STOP", "MANTER") for x in a)
+
+
+def test_uma_linha_por_ativo_com_a_ordem_mais_importante(ambiente):
+    precos = ambiente
+    dp.registrar_compra({"ticker": "PETR4", "quantidade": 100, "preco": 40.0, "stop": 38.0, "take_profit": 44.5,
+                         "stop_na_clear": False})
+    precos["PETR4"] = (45.24, 45.3, "teste")           # alvo atingido E sem stop na Clear
+    a = dp.acoes_manuais()["acoes"]
+    assert len(a) == 1 and a[0]["veredito"] == "VENDER"
+    assert "45,24" in a[0]["texto"] and "44,50" in a[0]["texto"]          # formato brasileiro
+    assert any("STOP" in c for c in a[0]["complemento"])
+
+
+def test_vender_nao_vem_com_conselho_de_manter(ambiente):
+    itens = [{"ticker": "X", "veredito": "VENDER", "acao": "VENDER", "urgencia": 0, "texto": "Alvo atingido (45.24)"},
+             {"ticker": "X", "veredito": "MANTER", "acao": "ATENCAO", "urgencia": 3, "texto": "Mantenha...",
+              "sinais": ["abaixo da MME21 (51.31)"]}]
+    a = dp._consolidar(itens)
+    assert len(a) == 1 and "complemento" not in a[0] and "45,24" in a[0]["texto"]
