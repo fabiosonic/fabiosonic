@@ -115,15 +115,25 @@ def resumo() -> dict:
     realizado = sum(t["resultado"] for t in cart.trades)
     ib = ibov.dropna()
     mm200 = ib.rolling(200).mean()
+    manual = cfg.modo == "manual"
+    if manual:
+        # modo manual: só o que VOCÊ registrou (sem capital fictício)
+        custo = sum(p.quantidade * p.preco_medio for p in cart.posicoes.values())
+        aberto = valor_pos - custo
+        resultado = aberto + realizado
+        base = custo or 1.0
+        extra = {"custo_total": _f(custo, 2), "resultado_aberto": _f(aberto, 2), "n_posicoes": len(cart.posicoes)}
     return {
+        **(extra if manual else {}),
         "modo": cfg.modo, "carteira": nome, "capital_inicial": cart.capital_inicial,
-        "patrimonio": _f(patrimonio, 2), "caixa": _f(cart.caixa, 2),
-        "resultado_total": _f(patrimonio - cart.capital_inicial, 2),
-        "resultado_total_pct": _f(patrimonio / cart.capital_inicial - 1),
+        "patrimonio": _f(valor_pos if manual else patrimonio, 2), "caixa": _f(cart.caixa, 2),
+        "resultado_total": _f(resultado if manual else patrimonio - cart.capital_inicial, 2),
+        "resultado_total_pct": _f(resultado / base if manual else patrimonio / cart.capital_inicial - 1),
         "resultado_realizado": _f(realizado, 2),
         "exposicao_pct": _f(valor_pos / patrimonio if patrimonio else 0),
-        "risco_aberto": _f(risco_aberto, 2), "risco_aberto_pct": _f(risco_aberto / patrimonio if patrimonio else 0),
-        "kill_switch": risco.kill_switch(cfg.risco, patrimonio), "parar": risco.parada_manual_ativa(RAIZ),
+        "risco_aberto": _f(risco_aberto, 2),
+        "risco_aberto_pct": _f(risco_aberto / (valor_pos if manual else patrimonio) if (valor_pos if manual else patrimonio) else 0),
+        "kill_switch": False if manual else risco.kill_switch(cfg.risco, patrimonio), "parar": risco.parada_manual_ativa(RAIZ),
         "posicoes": posicoes, "trades": cart.trades[-50:], "pendentes": [o.to_dict() for o in cart.pendentes],
         "mercado": {
             "ibov": _f(ib.iloc[-1], 0), "ibov_dia": _f(ib.iloc[-1] / ib.iloc[-2] - 1),
@@ -705,3 +715,11 @@ def acoes_manuais() -> dict:
     if mudou:
         _repo().salvar(itens)          # guarda a máxima observada (base do trailing stop)
     return {"acoes": _consolidar(acoes), "acompanhando": len(ativos), "atualizado": time.strftime("%H:%M")}
+
+
+def zerar_registros() -> dict:
+    """Recomeça do zero no modo manual: esvazia posições, operações e acompanhamentos registrados."""
+    cfg = _cfg()
+    Carteira(cfg.risco.capital_teste, cfg.risco.custo_percentual).salvar(RAIZ / cfg.pasta_estado / "carteira_manual.json")
+    _repo().salvar({})
+    return {"ok": True}

@@ -79,3 +79,11 @@ def test_vender_nao_vem_com_conselho_de_manter(ambiente):
               "sinais": ["abaixo da MME21 (51.31)"]}]
     a = dp._consolidar(itens)
     assert len(a) == 1 and "complemento" not in a[0] and "45,24" in a[0]["texto"]
+
+
+def test_zerar_registros(ambiente):
+    dp.registrar_compra({"ticker": "PETR4", "quantidade": 100, "preco": 40.0, "stop": 38.0})
+    dp.zerar_registros()
+    assert dp.acoes_manuais()["acompanhando"] == 0
+    cart, nome = dp.carregar_carteira()
+    assert nome == "manual" and not cart.posicoes and not cart.operacoes

@@ -174,6 +174,11 @@ def manual_venda(o: OperacaoManual):
     return _proteger(dp.registrar_venda, o.model_dump())
 
 
+@app.post("/api/manual/zerar")
+def manual_zerar():
+    return _proteger(dp.zerar_registros)
+
+
 @app.get("/api/manual/acoes")
 def manual_acoes():
     return _proteger(dp.acoes_manuais)
