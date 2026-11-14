@@ -85,6 +85,17 @@ class Evolution:
         return r.status_code
 
 
+    def configurar_webhook(self, url: str) -> int:
+        """Aponta o webhook da instância para o servidor de prospecção. Como no envio,
+        o corpo varia entre versões (campos soltos ou dentro de `webhook`)."""
+        dados = {"enabled": True, "url": url, "events": ["MESSAGES_UPSERT", "CONNECTION_UPDATE"], "base64": False}
+        for corpo in (dados, {"webhook": dados}):
+            r = self.http.post(f"{self.url}/webhook/set/{self.instancia}", headers=self.cab, json=corpo, timeout=30)
+            if r.status_code != 400:
+                break
+        return r.status_code
+
+
 # ------------------------------------------------------------------ estado do motor
 def ler_estado(base: B.Base) -> dict:
     arq = base.pasta / "estado.json"

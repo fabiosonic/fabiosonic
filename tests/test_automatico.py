@@ -155,3 +155,31 @@ class Automatico(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Preparacao(unittest.TestCase):
+    def test_diagnostico_aponta_o_que_falta(self):
+        from prospeccao import diagnostico
+        with tempfile.TemporaryDirectory() as pasta:
+            linhas = []
+            cfg = {**CFG, "painel": {"token": "troque-isto"}, "evolution": {"url": "http://x", "instancia": "i", "apikey": "SUA-CHAVE"}}
+            ok = diagnostico.rodar(cfg, pasta, ler_site=lambda u: {"vivo": True, "paginas": []}, api=ApiFalsa(conectado=False), imprimir=linhas.append)
+            self.assertFalse(ok)
+            faltas = [l for l in linhas if l.startswith("[FALTA]")]
+            self.assertTrue(any("painel.token" in l for l in faltas))
+            self.assertTrue(any("Evolution API configurada" in l for l in faltas))
+            self.assertTrue(any("conectada ao WhatsApp" in l for l in faltas))
+
+    def test_webhook_tenta_os_dois_formatos(self):
+        class R:
+            def __init__(self, c): self.status_code = c
+        class Http:
+            def __init__(self): self.corpos = []
+            def post(self, url, headers=None, json=None, timeout=None):
+                self.corpos.append(json)
+                return R(400 if "webhook" not in json else 201)
+        http = Http()
+        api = W.Evolution({"evolution": {"url": "http://x/", "instancia": "i", "apikey": "k"}}, http=http)
+        self.assertEqual(api.configurar_webhook("http://p/webhook/t"), 201)
+        self.assertEqual(len(http.corpos), 2)
+        self.assertEqual(http.corpos[1]["webhook"]["events"], ["MESSAGES_UPSERT", "CONNECTION_UPDATE"])

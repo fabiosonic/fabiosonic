@@ -28,6 +28,8 @@ def main(argv=None) -> None:
     r.add_argument("id"); r.add_argument("resultado", choices=fila.RESULTADOS); r.add_argument("--notas", default="")
     sub.add_parser("relatorio", help="taxas por gancho e por setor")
     sub.add_parser("servidor", help="modo automático: motor de envio, funil, webhook e painel")
+    sub.add_parser("diagnostico", help="confere configuração, chaves, site e conexão antes de ligar")
+    sub.add_parser("webhook", help="aponta o webhook da Evolution API para este servidor")
     a = p.parse_args(argv)
 
     base = B.Base(a.dados)
@@ -52,6 +54,15 @@ def main(argv=None) -> None:
         return print(f"{ok} texto(s) liberado(s) para a fila.")
 
     cfg = B.carregar_config(a.config)
+    if a.cmd == "diagnostico":
+        from . import diagnostico
+        raise SystemExit(0 if diagnostico.rodar(cfg, a.dados) else 1)
+    if a.cmd == "webhook":
+        from . import whatsapp
+        p_ = cfg.get("painel", {})
+        url = f"{p_.get('url_webhook', 'http://127.0.0.1:' + str(p_.get('porta', 8787))).rstrip('/')}/webhook/{p_.get('token', '')}"
+        codigo = whatsapp.Evolution(cfg).configurar_webhook(url)
+        return print("Webhook configurado." if codigo < 300 else f"A Evolution API recusou (HTTP {codigo}). Configure o webhook pelo painel dela.")
     if a.cmd == "servidor":
         from . import servidor
         return servidor.rodar(cfg, a.dados)

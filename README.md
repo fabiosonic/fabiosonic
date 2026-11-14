@@ -51,15 +51,21 @@ pelo WhatsApp, trata as respostas e serve o painel em `http://127.0.0.1:8787/?t=
 
 ![Painel com dados de exemplo](painel-exemplo.png)
 
-**Pré-requisitos**
+**Primeira instalação, na ordem**
 
-1. [Evolution API](https://github.com/evolution-foundation/evolution-api) rodando, com uma instância
-   conectada ao número do escritório (QR code). Preencha `evolution` em `config.json`.
-2. Webhook da instância apontando para `http://<host>:8787/webhook/<token>`, com os eventos
-   `MESSAGES_UPSERT` e `CONNECTION_UPDATE`. Sem ele o sistema não vê resposta nem pedido de saída —
-   não ligue o envio automático sem o webhook.
-3. `painel.token` trocado por um texto longo e aleatório. O servidor escuta só em `127.0.0.1`;
-   para acessar de fora, ponha atrás de um proxy com HTTPS.
+1. Suba a [Evolution API](https://github.com/evolution-foundation/evolution-api) pelo
+   [guia oficial de Docker](https://docs.evolutionfoundation.com.br/evolution-api/install/docker.md)
+   (ela exige PostgreSQL e Redis), crie uma instância e conecte o número de prospecção pelo QR code.
+2. Preencha `config.json`: `evolution` (url, instância, apikey), `painel.token` (16+ caracteres
+   aleatórios) e `painel.url_webhook` — o endereço pelo qual a Evolution enxerga este servidor
+   (`http://host.docker.internal:8787` quando ela roda em Docker na mesma máquina; nesse caso use
+   `painel.host: "0.0.0.0"` e mantenha a porta fechada no firewall).
+3. `python -m prospeccao diagnostico` — lista o que falta. Só siga quando não houver `[FALTA]`.
+4. `python -m prospeccao webhook` — aponta o webhook da instância para este servidor
+   (`MESSAGES_UPSERT` e `CONNECTION_UPDATE`). Sem ele o sistema não vê resposta nem pedido de
+   saída: não ligue o envio automático sem o webhook.
+5. `python -m prospeccao servidor`. Para acessar o painel de fora da máquina, ponha atrás de um
+   proxy com HTTPS.
 
 **Ética sem leitura humana.** Como ninguém lê o texto antes de sair, ele passa por duas barreiras:
 o checklist determinístico (abaixo) e uma auditoria por um segundo prompt, que confere a NBC PG 01

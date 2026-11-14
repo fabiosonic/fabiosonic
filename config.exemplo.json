@@ -3,7 +3,7 @@
     "nome": "Moraes & Oliveira Contabilidade",
     "cidade": "Itaboraí",
     "crc": "CRC/RJ 007873/O",
-    "site": "https://SEU-SITE-AQUI.com.br",
+    "site": "https://moraeseoliveiracontabil.com.br",
     "assinatura": "Equipe Moraes & Oliveira"
   },
   "regiao": [
@@ -44,6 +44,7 @@
   "painel": {
     "host": "127.0.0.1",
     "porta": 8787,
-    "token": "troque-por-um-texto-longo-e-aleatorio"
+    "token": "troque-por-um-texto-longo-e-aleatorio",
+    "url_webhook": "http://host.docker.internal:8787"
   }
 }
