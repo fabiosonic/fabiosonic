@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
+import threading
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -27,6 +29,7 @@ COLUNAS = [
 NOVO, QUALIFICADO, PRONTO, NA_FILA, ENVIADO, DESCARTADO, REMOVIDO = (
     "novo", "qualificado", "pronto", "na fila", "enviado", "descartado", "removido",
 )
+EM_CONVERSA, BARRADO = "em conversa", "barrado"   # respondeu (humano assume) / texto reprovado 2 vezes
 
 
 def carregar_config(caminho: str = "config.json") -> dict:
@@ -61,23 +64,45 @@ def chave_fone(numero: str) -> str:
     return so_digitos(numero)[-9:]
 
 
+_TRAVA_ARQUIVO = threading.Lock()
+
+
+def _ler_csv(arq: Path) -> list[dict]:
+    if not arq.exists():
+        return []
+    with arq.open(encoding="utf-8", newline="") as f:
+        return [{c: r.get(c, "") or "" for c in COLUNAS} for r in csv.DictReader(f)]
+
+
 class Base:
     def __init__(self, pasta: str = "dados"):
         self.pasta = Path(pasta)
         self.pasta.mkdir(parents=True, exist_ok=True)
         self.arq = self.pasta / "base.csv"
         self.arq_remocao = self.pasta / "remocao.csv"
-        self.leads: list[dict] = []
-        if self.arq.exists():
-            with self.arq.open(encoding="utf-8", newline="") as f:
-                self.leads = [{c: r.get(c, "") or "" for c in COLUNAS} for r in csv.DictReader(f)]
+        self.leads: list[dict] = _ler_csv(self.arq)
+        self._lido = {l["id"]: dict(l) for l in self.leads}
 
     # ---------- persistência
     def salvar(self) -> None:
-        with self.arq.open("w", encoding="utf-8", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=COLUNAS)
-            w.writeheader()
-            w.writerows(self.leads)
+        """Grava mesclando com o que está em disco: o motor de envio, o webhook e o
+        abastecimento trabalham ao mesmo tempo, cada um com a sua cópia. Linha que
+        esta cópia alterou prevalece; linha que ela não tocou fica como está no disco."""
+        with _TRAVA_ARQUIVO:
+            disco = {l["id"]: l for l in _ler_csv(self.arq)}
+            for lead in self.leads:
+                no_disco = disco.get(lead["id"])
+                if no_disco is not None and lead == self._lido.get(lead["id"]):
+                    lead.update(no_disco)            # não mexi: vale o disco
+            meus = {l["id"] for l in self.leads}
+            self.leads += [l for i, l in disco.items() if i not in meus]   # criados por outro processo
+            tmp = self.arq.with_suffix(".tmp")
+            with tmp.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=COLUNAS)
+                w.writeheader()
+                w.writerows(self.leads)
+            os.replace(tmp, self.arq)
+            self._lido = {l["id"]: dict(l) for l in self.leads}
 
     def por_id(self, id_: str) -> dict:
         for lead in self.leads:
@@ -136,7 +161,10 @@ class Base:
             return None, "pediu remoção"
         if self.duplicado(lead):
             return None, "já está na base"
-        lead["id"] = self.proximo_id()
+        with _TRAVA_ARQUIVO:   # id único mesmo com outra cópia inserindo
+            usados = {l["id"] for l in _ler_csv(self.arq)} | {l["id"] for l in self.leads}
+        n = max((int(i[1:]) for i in usados if i[1:].isdigit()), default=0)
+        lead["id"] = f"P{n + 1:04d}"
         lead["status"] = lead["status"] or NOVO
         self.leads.append(lead)
         return lead, "ok"

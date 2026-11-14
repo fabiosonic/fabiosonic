@@ -312,25 +312,58 @@ def revisar(lead: dict, outros: list[str] = ()) -> list[str]:
     return alertas
 
 
+SCHEMA_AUDITORIA = objeto({"aprovado": {"type": "boolean"}, "motivos": lista(TXT)})
+
+SISTEMA_AUDITORIA = (
+    "Você é o revisor de ética e de fatos de um escritório de contabilidade. A mensagem abaixo será enviada "
+    "sem leitura humana, então reprove na dúvida. Reprove se houver qualquer um destes pontos, e diga qual:\n"
+    "1. NBC PG 01 (itens 11 a 15): preço ou honorário; promessa de resultado ou de economia; comparação com "
+    "outro profissional ou insinuação de que o contador atual errou; autoelogio sem base; tom mercantilista "
+    "ou de urgência artificial.\n"
+    "2. Oferta de trabalho antes de contrato (análise, diagnóstico, conferência, revisão) ou de recuperação "
+    "de valores.\n"
+    "3. Fato sobre a empresa que não está no texto do site (número, unidade, serviço, convênio), ou fato "
+    "arredondado ou exagerado.\n"
+    "4. Norma citada que não esteja na base de normas conferidas, ou citada sem a condição que ela exige, "
+    "ou afirmação de que a regra se aplica à empresa quando isso depende de análise.\n"
+    "5. Dado pessoal fora do contexto empresarial.\n"
+    "Se nada disso ocorrer, aprove com 'motivos' vazio."
+)
+
+
 def material(cfg: dict, base: B.Base, limite: int = 25, ler_site=S.ler_site, ia=perguntar) -> dict:
-    conta = {"prontos": 0, "com_alerta": 0}
+    """Gera o material e só libera o texto que passa no checklist E na auditoria de ética.
+    Texto reprovado é refeito uma vez; reprovado de novo, o lead fica 'barrado' e não é enviado."""
+    conta = {"prontos": 0, "com_alerta": 0, "barrados": 0}
     conhecimento = CONHECIMENTO.read_text(encoding="utf-8")
+    modelo = cfg.get("modelo", "claude-opus-5-5")
     for lead in [l for l in base.leads if l["status"] == B.QUALIFICADO][:limite]:
         leitura = ler_site(lead["site"])
+        site_txt = S.texto_para_ia(leitura)
+        refazendo = f"\n\nA versão anterior foi reprovada por: {lead['alertas']}. Corrija." if lead["alertas"] else ""
         usuario = (f"BASE DE DORES POR SETOR (normas já conferidas):\n{conhecimento}\n\n"
                    f"EMPRESA: {lead['empresa']} — {lead['subsetor']} — {lead['municipio']}\n"
-                   f"SINAIS COMPROVADOS: {lead['sinais']}\n\nSITE DA EMPRESA:\n{S.texto_para_ia(leitura)}")
-        m = ia(SISTEMA_MATERIAL, usuario, SCHEMA_MATERIAL, cfg.get("modelo", "claude-opus-5-5"))
+                   f"SINAIS COMPROVADOS: {lead['sinais']}\n\nSITE DA EMPRESA:\n{site_txt}{refazendo}")
+        m = ia(SISTEMA_MATERIAL, usuario, SCHEMA_MATERIAL, modelo)
+        versao = "v2" if lead["texto_versao"] == "v1" else "v1"
         lead.update(dor=json.dumps(m["dores"], ensure_ascii=False), gancho=m["gancho"],
                     o_que_vimos=m["o_que_vimos"].strip(), a_conta=m["a_conta"].strip(),
-                    evidencias=json.dumps(m["evidencias"], ensure_ascii=False), texto_versao="v1")
+                    evidencias=json.dumps(m["evidencias"], ensure_ascii=False), texto_versao=versao)
         outros = [l["o_que_vimos"] for l in base.leads if l is not lead and l["o_que_vimos"]]
         alertas = revisar(lead, outros)
+        if not alertas:   # segunda barreira: auditoria de ética e de fatos por outro prompt
+            a = ia(SISTEMA_AUDITORIA, f"BASE DE NORMAS CONFERIDAS:\n{conhecimento}\n\nSITE DA EMPRESA:\n{site_txt}\n\n"
+                   f"MENSAGEM:\n{lead['o_que_vimos']}\n{lead['a_conta']}", SCHEMA_AUDITORIA, modelo)
+            if not a["aprovado"]:
+                alertas = ["auditoria: " + m_ for m_ in a["motivos"]] or ["auditoria: reprovado"]
         lead["alertas"] = "; ".join(alertas)
-        if alertas:
-            conta["com_alerta"] += 1          # fica em 'qualificado' até alguém corrigir e rodar 'revisar'
-        else:
+        if not alertas:
             lead["status"] = B.PRONTO
             conta["prontos"] += 1
+        elif versao == "v2":
+            lead["status"] = B.BARRADO
+            conta["barrados"] += 1
+        else:
+            conta["com_alerta"] += 1
         base.salvar()
     return conta

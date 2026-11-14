@@ -143,14 +143,14 @@ def marcar_enviado(base: B.Base, id_: str, agora: datetime | None = None) -> dic
     return lead
 
 
-RESULTADOS = ("automatica", "sem_resposta", "negativa", "positiva", "reuniao", "optout")
+RESULTADOS = ("respondeu", "automatica", "sem_resposta", "negativa", "positiva", "reuniao", "optout")
 
 
 def registrar_resultado(base: B.Base, id_: str, resultado: str, notas: str = "") -> dict:
     if resultado not in RESULTADOS:
         raise SystemExit("Resultado deve ser um de: " + ", ".join(RESULTADOS))
     lead = base.por_id(id_)
-    lead.update(resultado=resultado, data_resultado=date.today().isoformat(), notas_resultado=notas)
+    lead.update(resultado=resultado, data_resultado=date.today().isoformat(), notas_resultado=notas or lead["notas_resultado"])
     if resultado == "optout":      # sai da base em todos os canais, para sempre
         base.registrar_remocao(lead, notas or "pediu remoção")
         lead["status"] = B.REMOVIDO

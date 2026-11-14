@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de prospecção</title>
+<style>
+:root{--fundo:#f4f5f7;--cartao:#fff;--tinta:#18212c;--suave:#5d6978;--linha:#dde2e8;--marca:#1d5c8f;--ok:#1f7a4d;--alerta:#b3261e;--aviso:#9a6400;--barra:#c9d8e6}
+@media (prefers-color-scheme:dark){:root{--fundo:#12171d;--cartao:#1b222b;--tinta:#e7ecf1;--suave:#9aa6b4;--linha:#2c3642;--marca:#7fb6e6;--ok:#5fc08f;--alerta:#f08a80;--aviso:#e0b050;--barra:#2f4257}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--tinta);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--linha);background:var(--cartao)}
+h1{font-size:1.15rem;margin:0}h1 small{font-weight:400;color:var(--suave);margin-left:.5rem}
+h2{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave);margin:0 0 .7rem}
+main{max-width:1200px;margin:0 auto;padding:1rem 1.25rem 3rem;display:grid;gap:1rem;grid-template-columns:minmax(0,1fr)}
+section{background:var(--cartao);border:1px solid var(--linha);border-radius:10px;padding:1rem 1.1rem;min-width:0}
+@media(min-width:860px){main{grid-template-columns:repeat(12,minmax(0,1fr))}section{grid-column:span 12}.m6{grid-column:span 6}.m4{grid-column:span 4}.m8{grid-column:span 8}}
+.estado{display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center}
+.selo{font-weight:600;padding:.25rem .7rem;border-radius:999px;border:1px solid currentColor}
+.ok{color:var(--ok)}.alerta{color:var(--alerta)}.aviso{color:var(--aviso)}
+.num{font-size:1.7rem;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.1}
+.rot{color:var(--suave);font-size:.82rem}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1rem}
+button{font:inherit;padding:.45rem .9rem;border-radius:8px;border:1px solid var(--linha);background:var(--cartao);color:var(--tinta);cursor:pointer}
+button.pri{background:var(--marca);border-color:var(--marca);color:#fff}
+@media (prefers-color-scheme:dark){button.pri{color:#0e1620}}
+.faixa{display:grid;grid-template-columns:minmax(90px,150px) 1fr 3rem;gap:.6rem;align-items:center;margin:.3rem 0}
+.faixa i{display:block;height:14px;border-radius:4px;background:var(--marca);min-width:2px}
+.faixa b{text-align:right;font-variant-numeric:tabular-nums}
+.dias{display:flex;align-items:flex-end;gap:3px;height:120px}
+.dias div{flex:1 1 0;min-width:0;overflow:hidden;text-align:center;font-size:.62rem;color:var(--suave)}
+.dias i{display:block;background:var(--marca);border-radius:3px 3px 0 0;margin:0 auto 3px;width:100%}
+.dias b{display:block;color:var(--tinta);font-size:.75rem}
+.rol{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--linha);vertical-align:top}
+th{color:var(--suave);font-weight:500;font-size:.8rem}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.lead{border-top:1px solid var(--linha);padding:.7rem 0}.lead:first-of-type{border-top:0;padding-top:0}
+.lead p{margin:.25rem 0}.lead .txt{color:var(--suave)}
+.acoes{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem}.acoes button{padding:.25rem .6rem;font-size:.85rem}
+.vazio{color:var(--suave)}
+ul.ev{list-style:none;margin:0;padding:0;max-height:330px;overflow:auto;font-size:.88rem}
+ul.ev li{padding:.25rem 0;border-bottom:1px solid var(--linha)}ul.ev span{color:var(--suave);margin-right:.5rem}
+a{color:var(--marca)}
+</style>
+<header>
+  <h1 id="titulo">Painel de prospecção</h1>
+  <div><span class="rot" id="agora"></span> <button id="alterna"></button></div>
+</header>
+<main>
+  <section><div class="estado" id="motor"></div></section>
+  <section><h2>Totais</h2><div class="kpis" id="kpis"></div></section>
+  <section class="m6"><h2>Funil</h2><div id="funil"></div></section>
+  <section class="m6"><h2>Envios por dia — últimos 14 dias</h2><div class="dias" id="dias"></div></section>
+  <section class="m6"><h2>Conversas aguardando o escritório</h2><div id="conversas"></div></section>
+  <section class="m6"><h2>Próximos envios</h2><div id="proximos"></div></section>
+  <section class="m6"><h2>Resultado por setor</h2><div class="rol" id="setor"></div></section>
+  <section class="m6"><h2>Resultado por gancho (norma)</h2><div class="rol" id="gancho"></div></section>
+  <section class="m8"><h2>Textos barrados pelo checklist ou pela auditoria de ética</h2><div id="barrados"></div></section>
+  <section class="m4"><h2>Motivos de descarte</h2><div id="descartes"></div></section>
+  <section><h2>Registro do motor</h2><ul class="ev" id="eventos"></ul></section>
+</main>
+<script>
+const t = new URLSearchParams(location.search).get("t") || "";
+const $ = id => document.getElementById(id);
+const e = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "—";
+const api = (rota, corpo) => fetch(`${rota}?t=${encodeURIComponent(t)}`, corpo ? {method:"POST", body:JSON.stringify(corpo)} : {}).then(r => r.json());
+
+function tabela(linhas) {
+  if (!linhas.length) return '<p class="vazio">Sem envios ainda.</p>';
+  return `<table><tr><th>Grupo</th><th class="n">Enviados</th><th class="n">Respostas</th><th class="n">Taxa</th><th class="n">Proposta/reunião</th><th class="n">Saídas</th></tr>` +
+    linhas.map(l => `<tr><td>${e(l.nome)}</td><td class="n">${l.enviados}</td><td class="n">${l.respostas}</td><td class="n">${pct(l.respostas, l.enviados)}</td><td class="n">${l.positivas}</td><td class="n">${l.saidas}</td></tr>`).join("") + "</table>";
+}
+function cartao(l, acoes) {
+  const dec = l.decisor_nome ? `${e(l.decisor_nome)} — ${e(l.decisor_cargo)}` : "decisor não identificado";
+  return `<div class="lead"><p><b>${e(l.id)} · ${e(l.empresa)}</b> <span class="rot">${e(l.subsetor)} · ${e(l.municipio)} · prioridade ${e(l.prioridade)}</span></p>
+    <p class="rot">${dec} · ${e(l.whatsapp)} (<a href="${e(l.fonte_whatsapp)}" target="_blank" rel="noopener">fonte do número</a>)</p>
+    ${l.notas_resultado ? `<p><b>Respondeu:</b> ${e(l.notas_resultado)}</p>` : ""}
+    ${l.alertas ? `<p class="alerta">${e(l.alertas)}</p>` : ""}
+    <p class="txt">${e(l.o_que_vimos)} ${e(l.a_conta)}</p>
+    ${acoes ? `<div class="acoes">${["positiva","reuniao","negativa","automatica","optout"].map(r => `<button data-id="${e(l.id)}" data-r="${r}">${({positiva:"Pediu proposta",reuniao:"Reunião marcada",negativa:"Sem interesse",automatica:"Resposta automática",optout:"Pediu para sair"})[r]}</button>`).join("")}</div>` : ""}</div>`;
+}
+function lista(id, itens, acoes, vazio) { $(id).innerHTML = itens.length ? itens.map(l => cartao(l, acoes)).join("") : `<p class="vazio">${vazio}</p>`; }
+
+let pausado = false;
+async function carregar() {
+  const d = await api("/api/painel");
+  if (d.erro) { document.querySelector("main").innerHTML = `<section>${e(d.erro)}</section>`; return; }
+  const m = d.motor; pausado = m.pausado;
+  $("titulo").innerHTML = `Painel de prospecção <small>${e(d.escritorio)}</small>`;
+  $("agora").textContent = "Atualizado " + d.agora;
+  $("alterna").textContent = pausado ? "Retomar envios" : "Pausar envios"; $("alterna").className = pausado ? "pri" : "";
+  const selo = pausado ? `<span class="selo alerta">Pausado</span>` : m.janela ? `<span class="selo ok">Enviando</span>` : `<span class="selo aviso">Fora da janela</span>`;
+  const porque = pausado ? m.motivo : m.janela ? (m.proximo_envio ? `próximo envio a partir de ${m.proximo_envio}` : "") : m.motivo_janela;
+  $("motor").innerHTML = `${selo}<div>${e(porque)}</div>
+    <div><div class="num">${m.enviados_hoje} / ${m.teto_hoje}</div><div class="rot">enviados hoje / teto de hoje</div></div>
+    <div><div class="num ${m.risco >= m.limite_risco ? "alerta" : m.risco >= 30 ? "aviso" : ""}">${m.risco}</div><div class="rot">risco do número (pausa em ${m.limite_risco})</div></div>
+    <div><div class="num">${pct(m.respostas, m.maduros)}</div><div class="rot">resposta em envios com 3+ dias (${m.respostas} de ${m.maduros})</div></div>`;
+  const T = d.totais;
+  $("kpis").innerHTML = [[T.enviados,"mensagens enviadas"],[T.respostas,"respostas"],[T.positivas,"propostas / reuniões"],[T.prontos,"prontos para enviar"],[T.barrados,"textos barrados"],[T.saidas,"pedidos de saída"]]
+    .map(([n, r]) => `<div><div class="num">${n}</div><div class="rot">${r}</div></div>`).join("");
+  const topo = Math.max(1, ...d.funil.map(f => f.n));
+  $("funil").innerHTML = d.funil.map(f => `<div class="faixa"><span>${e(f.etapa)}</span><i style="width:${100 * f.n / topo}%"></i><b>${f.n}</b></div>`).join("");
+  const maxd = Math.max(1, ...d.por_dia.map(x => x.n));
+  $("dias").innerHTML = d.por_dia.map(x => `<div><b>${x.n || ""}</b><i style="height:${85 * x.n / maxd}px"></i>${x.dia.slice(0, 5)}</div>`).join("");
+  $("setor").innerHTML = tabela(d.por_setor); $("gancho").innerHTML = tabela(d.por_gancho);
+  lista("conversas", d.conversas, true, "Nenhuma conversa aberta.");
+  lista("proximos", d.proximos, false, "Nenhum texto aprovado na fila.");
+  lista("barrados", d.barrados, false, "Nenhum texto barrado.");
+  $("descartes").innerHTML = d.descartes.length ? d.descartes.map(x => `<div class="faixa" style="grid-template-columns:1fr 3rem"><span>${e(x.motivo)}</span><b>${x.n}</b></div>`).join("") : '<p class="vazio">Nenhum descarte.</p>';
+  $("eventos").innerHTML = d.eventos.map(x => `<li><span>${e(x.quando)}</span><b>${e(x.tipo)}</b> — ${e(x.detalhe)}</li>`).join("") || '<li class="vazio">Sem eventos.</li>';
+}
+$("alterna").onclick = async () => {
+  if (pausado && !confirm("Retomar os envios automáticos? Se a pausa foi por risco, confira antes o motivo no registro.")) return;
+  await api(pausado ? "/api/retomar" : "/api/pausar", {}); carregar();
+};
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("button[data-id]"); if (!b) return;
+  await api("/api/resultado", {id: b.dataset.id, resultado: b.dataset.r}); carregar();
+});
+carregar(); setInterval(carregar, 30000);
+</script>
+</html>

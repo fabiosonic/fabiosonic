@@ -27,6 +27,7 @@ def main(argv=None) -> None:
     r = sub.add_parser("resultado", help="registra a resposta do lead")
     r.add_argument("id"); r.add_argument("resultado", choices=fila.RESULTADOS); r.add_argument("--notas", default="")
     sub.add_parser("relatorio", help="taxas por gancho e por setor")
+    sub.add_parser("servidor", help="modo automático: motor de envio, funil, webhook e painel")
     a = p.parse_args(argv)
 
     base = B.Base(a.dados)
@@ -51,6 +52,9 @@ def main(argv=None) -> None:
         return print(f"{ok} texto(s) liberado(s) para a fila.")
 
     cfg = B.carregar_config(a.config)
+    if a.cmd == "servidor":
+        from . import servidor
+        return servidor.rodar(cfg, a.dados)
     if a.cmd == "nichos":
         out = etapas.nichos(cfg, a.dados)
         print(out["resumo_escritorio"])

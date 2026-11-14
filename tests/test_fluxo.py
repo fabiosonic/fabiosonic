@@ -33,8 +33,10 @@ def ler_site_falso(url):
 
 def ia_falsa(vimos="Vimos que o Laboratório Vida faz coleta nas unidades de Manilha e Centro e atende convênios.",
              conta="Em laboratório com convênio, a retenção de 11% do INSS (Lei 8.212/1991, art. 31) precisa ser "
-                   "acompanhada mês a mês, senão o valor fica parado."):
+                   "acompanhada mês a mês, senão o valor fica parado.", aprova=True):
     def ia(sistema, usuario, schema, modelo=None):
+        if "aprovado" in schema["properties"]:
+            return {"aprovado": aprova, "motivos": [] if aprova else ["promessa de resultado"]}
         if "pessoas" in schema["properties"]:
             return {"ativa": True, "rede_nacional": False, "subsetor": "Laboratório de análises clínicas",
                     "porte": "2 unidades", "ticket": "alto", "motivo_descarte": "",
@@ -133,7 +135,7 @@ class Fluxo(unittest.TestCase):
         self._lead()
         etapas.qualificar(CFG, self.base, ler_site=ler_site_falso, ia=ia_falsa())
         r = etapas.material(CFG, self.base, ler_site=ler_site_falso, ia=ia_falsa(conta="Vocês vão economizar 30%!"))
-        self.assertEqual(r, {"prontos": 0, "com_alerta": 1})
+        self.assertEqual(r, {"prontos": 0, "com_alerta": 1, "barrados": 0})
         self.assertEqual(fila.gerar(CFG, self.base, TERCA_10H)["fila"], [])
 
     def test_janela_e_teto(self):

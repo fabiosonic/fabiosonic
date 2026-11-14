@@ -6,13 +6,44 @@
     "site": "https://SEU-SITE-AQUI.com.br",
     "assinatura": "Equipe Moraes & Oliveira"
   },
-  "regiao": ["Itaboraí RJ", "São Gonçalo RJ", "Niterói RJ"],
+  "regiao": [
+    "Itaboraí RJ",
+    "São Gonçalo RJ",
+    "Niterói RJ"
+  ],
   "whatsapp": {
-    "teto_dia": 8,
+    "rampa": [
+      5,
+      5,
+      8,
+      8,
+      10,
+      12,
+      15,
+      15,
+      18,
+      20
+    ],
+    "teto_dia": 20,
+    "max_por_hora": 4,
+    "intervalo_min": [
+      9,
+      22
+    ],
     "hora_inicio": 9,
     "hora_fim": 18,
     "feriados_extras": []
   },
   "modelo": "claude-opus-5-5",
-  "dias_recontato": 90
+  "dias_recontato": 90,
+  "evolution": {
+    "url": "http://localhost:8080",
+    "instancia": "prospeccao",
+    "apikey": "SUA-CHAVE-DA-EVOLUTION"
+  },
+  "painel": {
+    "host": "127.0.0.1",
+    "porta": 8787,
+    "token": "troque-por-um-texto-longo-e-aleatorio"
+  }
 }
