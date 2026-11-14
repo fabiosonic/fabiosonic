@@ -1,0 +1,18 @@
+{
+  "escritorio": {
+    "nome": "Moraes & Oliveira Contabilidade",
+    "cidade": "Itaboraí",
+    "crc": "CRC/RJ 007873/O",
+    "site": "https://SEU-SITE-AQUI.com.br",
+    "assinatura": "Equipe Moraes & Oliveira"
+  },
+  "regiao": ["Itaboraí RJ", "São Gonçalo RJ", "Niterói RJ"],
+  "whatsapp": {
+    "teto_dia": 8,
+    "hora_inicio": 9,
+    "hora_fim": 18,
+    "feriados_extras": []
+  },
+  "modelo": "claude-opus-5-5",
+  "dias_recontato": 90
+}
