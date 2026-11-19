@@ -82,7 +82,8 @@ class Agendador:
                 HUB.publicar("ERRO", f"Google Drive: {e}")
 
     def proximas(self) -> list[str]:
-        return [j.next_run_time.isoformat() for j in self.sched.get_jobs() if j.next_run_time]
+        return sorted(j.next_run_time.isoformat() for j in self.sched.get_jobs()
+                      if j.next_run_time and j.id.startswith("captura-"))
 
     def parar(self) -> None:
         if self.sched.running:
