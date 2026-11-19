@@ -352,13 +352,27 @@ def _ler_resnfe(raiz, conteudo: bytes, h: str) -> DocumentoXML:
     return d
 
 
-def verificar_assinatura_xmldsig(nfe_el, inf_el) -> tuple[bool, str]:
-    """Confere DigestValue (SHA-1, C14N inclusiva) e SignatureValue (RSA-SHA1/SHA256).
+def _c14n_variantes(el) -> list[bytes]:
+    """Canonicalização C14N 1.0 nas duas formas aceitas na prática pela NF-e/NFC-e.
 
-    Verifica integridade do conteúdo assinado pelo emitente. Não valida a cadeia
+    A NT declara C14N inclusiva, mas as ferramentas de assinatura homologadas produzem,
+    para o subárvore extraída, o resultado da forma EXCLUSIVA (namespaces herdados não usados
+    não são repetidos). Tentamos exclusiva primeiro (caso real) e inclusiva como alternativa."""
+    out = []
+    for excl in (True, False):
+        try:
+            out.append(etree.tostring(el, method="c14n", exclusive=excl))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def verificar_assinatura_xmldsig(nfe_el, inf_el) -> tuple[bool, str]:
+    """Confere DigestValue e SignatureValue (RSA-SHA1/SHA256), aceitando C14N exclusiva ou inclusiva.
+
+    Verifica a integridade do conteúdo assinado pelo emitente. Não valida a cadeia
     ICP-Brasil do certificado do emitente (ver LIMITACOES.md)."""
     from cryptography import x509
-    from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import padding
 
@@ -374,18 +388,16 @@ def verificar_assinatura_xmldsig(nfe_el, inf_el) -> tuple[bool, str]:
     except Exception as e:  # noqa: BLE001
         return False, f"assinatura incompleta: {e}"
     hdig = hashlib.sha256 if alg_dig.endswith("sha256") else hashlib.sha1
-    c14n_inf = etree.tostring(inf_el, method="c14n")
-    if hdig(c14n_inf).digest() != dig_esperado:
+    if not any(hdig(c).digest() == dig_esperado for c in _c14n_variantes(inf_el)):
         return False, "DigestValue não confere: conteúdo de infNFe foi alterado após a assinatura"
-    c14n_si = etree.tostring(si, method="c14n")
     halg = hashes.SHA256() if alg_sig.endswith("sha256") else hashes.SHA1()
-    try:
-        cert.public_key().verify(valor, c14n_si, padding.PKCS1v15(), halg)
-    except InvalidSignature:
-        return False, "SignatureValue inválido"
-    except Exception as e:  # noqa: BLE001
-        return False, f"falha ao verificar assinatura: {e}"
-    return True, "assinatura íntegra"
+    for c14n_si in _c14n_variantes(si):
+        try:
+            cert.public_key().verify(valor, c14n_si, padding.PKCS1v15(), halg)
+            return True, "assinatura íntegra"
+        except Exception:  # noqa: BLE001 - tenta a outra canonicalização
+            continue
+    return False, "SignatureValue inválido"
 
 
 def montar_nfeproc(nfe_xml: bytes, prot_nfe_xml: bytes) -> bytes:

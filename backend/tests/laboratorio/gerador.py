@@ -50,7 +50,8 @@ def gerar_certificado_teste(cnpj: str, razao: str, dias_validade: int = 365, sen
 def assinar(el_pai: etree._Element, el_assinado: etree._Element, chave, cert: x509.Certificate) -> None:
     """XMLDSig enveloped, C14N 1.0, RSA-SHA1/SHA1 (padrão NF-e 4.00)."""
     ident = el_assinado.get("Id")
-    digest = base64.b64encode(hashlib.sha1(etree.tostring(el_assinado, method="c14n")).digest()).decode()
+    # Assina como a SEFAZ real: C14N 1.0 EXCLUSIVA sobre o subárvore (regressão do bug de canonicalização).
+    digest = base64.b64encode(hashlib.sha1(etree.tostring(el_assinado, method="c14n", exclusive=True)).digest()).decode()
     sig = etree.SubElement(el_pai, f"{{{NS_DS}}}Signature", nsmap={None: NS_DS})
     si = etree.SubElement(sig, f"{{{NS_DS}}}SignedInfo")
     etree.SubElement(si, f"{{{NS_DS}}}CanonicalizationMethod", Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
@@ -61,7 +62,7 @@ def assinar(el_pai: etree._Element, el_assinado: etree._Element, chave, cert: x5
     etree.SubElement(tr, f"{{{NS_DS}}}Transform", Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
     etree.SubElement(ref, f"{{{NS_DS}}}DigestMethod", Algorithm="http://www.w3.org/2000/09/xmldsig#sha1")
     etree.SubElement(ref, f"{{{NS_DS}}}DigestValue").text = digest
-    valor = chave.sign(etree.tostring(si, method="c14n"), padding.PKCS1v15(), hashes.SHA1())
+    valor = chave.sign(etree.tostring(si, method="c14n", exclusive=True), padding.PKCS1v15(), hashes.SHA1())
     etree.SubElement(sig, f"{{{NS_DS}}}SignatureValue").text = base64.b64encode(valor).decode()
     ki = etree.SubElement(etree.SubElement(sig, f"{{{NS_DS}}}KeyInfo"), f"{{{NS_DS}}}X509Data")
     etree.SubElement(ki, f"{{{NS_DS}}}X509Certificate").text = base64.b64encode(

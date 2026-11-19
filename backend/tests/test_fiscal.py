@@ -101,3 +101,14 @@ def test_validacao_xsd_oficial_registra_aviso_sem_rejeitar(emissor):
     d = xf.ler(proc)
     xsd = [p for p in d.problemas if p.codigo == "XSD"]
     assert xsd and not any(p.grave for p in xsd) and d.e_xml_integral
+
+
+def test_assinatura_c14n_exclusiva(emissor):
+    """Regressão: NF-e/NFC-e reais assinam com C14N exclusiva; a verificação deve aceitá-la."""
+    from lxml import etree as ET
+    k, c = emissor
+    _, proc, _ = gerador.gerar_nfe(CNPJ, "EMISSOR", "RJ", "65", 5, 28593, datetime.now(UTC), k, c)
+    inf = ET.fromstring(proc).find(".//{http://www.portalfiscal.inf.br/nfe}infNFe")
+    assert inf is not None
+    d = xf.ler(proc)
+    assert d.assinatura_ok and d.e_xml_integral
