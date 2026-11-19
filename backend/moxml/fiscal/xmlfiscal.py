@@ -129,6 +129,31 @@ def _t(el: etree._Element | None, xp: str) -> str | None:
     return v.strip() if v else None
 
 
+_XSD_DIR = __import__("pathlib").Path(__file__).resolve().parent.parent / "sefaz" / "schemas" / "nfe"
+_XSD_RAIZ = {"nfeProc": "procNFe_v4.00.xsd", "NFe": "nfe_v4.00.xsd", "procEventoNFe": "procEventoNFe_v1.00.xsd",
+             "procInutNFe": "procInutNFe_v4.00.xsd"}
+_XSD_CACHE: dict[str, etree.XMLSchema] = {}
+
+
+def validar_xsd(raiz: etree._Element) -> list[str]:
+    """Valida contra o pacote oficial de schemas (PL_010g). Erros de XSD são registrados como
+    AVISO (não rejeitam): um XML autorizado pela SEFAZ pode ter sido validado por pacote de outra
+    versão (ex.: grupos da Reforma Tributária). A integridade é garantida pela assinatura."""
+    nome = etree.QName(raiz).localname
+    arq = _XSD_RAIZ.get(nome)
+    if not arq or not (_XSD_DIR / arq).exists():
+        return []
+    try:
+        if arq not in _XSD_CACHE:
+            _XSD_CACHE[arq] = etree.XMLSchema(etree.parse(str(_XSD_DIR / arq)))
+        esquema = _XSD_CACHE[arq]
+    except (etree.XMLSchemaParseError, OSError) as e:
+        return [f"schema {arq} indisponível: {e}"]
+    if esquema.validate(raiz):
+        return []
+    return [f"{arq}: {err.message} (linha {err.line})" for err in list(esquema.error_log)[:5]]
+
+
 def sha256(conteudo: bytes) -> str:
     return hashlib.sha256(conteudo).hexdigest()
 
@@ -136,7 +161,7 @@ def sha256(conteudo: bytes) -> str:
 _PARSER = etree.XMLParser(resolve_entities=False, no_network=True, remove_blank_text=False, huge_tree=False)
 
 
-def ler(conteudo: bytes | str, verificar_assinatura: bool = True) -> DocumentoXML:
+def ler(conteudo: bytes | str, verificar_assinatura: bool = True, validar_esquema: bool = True) -> DocumentoXML:
     if isinstance(conteudo, str):
         conteudo = conteudo.encode("utf-8")
     h = sha256(conteudo)
@@ -156,7 +181,10 @@ def ler(conteudo: bytes | str, verificar_assinatura: bool = True) -> DocumentoXM
         return DocumentoXML(TipoXML.INVALIDO, conteudo, h,
                             [Problema("NAMESPACE", f"namespace inesperado: {ns!r} (esperado {NS})")])
     if nome in ("nfeProc", "NFe"):
-        return _ler_nfe(raiz, conteudo, h, verificar_assinatura)
+        d = _ler_nfe(raiz, conteudo, h, verificar_assinatura)
+        if validar_esquema:
+            d.problemas += [Problema("XSD", m, grave=False) for m in validar_xsd(raiz)]
+        return d
     if nome in ("procEventoNFe", "evento"):
         return _ler_evento(raiz, conteudo, h)
     if nome in ("procInutNFe", "inutNFe"):

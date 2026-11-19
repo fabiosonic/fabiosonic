@@ -34,7 +34,7 @@ moxml = "moxml.cli:main"
 include = ["moxml*"]
 
 [tool.setuptools.package-data]
-moxml = ["sefaz/*.json", "sefaz/schemas/**/*.xsd", "migrations/*", "web/**/*"]
+moxml = ["sefaz/*.json", "sefaz/schemas/**/*", "migrations/*", "migrations/versions/*.py", "web/*", "web/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

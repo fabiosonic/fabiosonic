@@ -87,7 +87,7 @@ def gerar_nfe(cnpj: str, razao: str, uf: str, modelo: str, serie: int, numero: i
     inf.set("Id", f"NFe{ch}")
     ide = _sub(inf, "ide")
     for tag, val in (("cUF", chv.UF_CODIGO[uf]), ("cNF", cnf), ("natOp", "VENDA"), ("mod", modelo), ("serie", serie),
-                     ("nNF", numero), ("dhEmi", emissao.isoformat()), ("tpNF", 1), ("idDest", 1),
+                     ("nNF", numero), ("dhEmi", emissao.replace(microsecond=0).isoformat()), ("tpNF", 1), ("idDest", 1),
                      ("cMunFG", "3304557"), ("tpImp", 4 if modelo == "65" else 1), ("tpEmis", tp_emis),
                      ("cDV", ch[-1]), ("tpAmb", tp_amb), ("finNFe", 1), ("indFinal", 1), ("indPres", 1),
                      ("procEmi", 0), ("verProc", "LAB-MOXML")):

@@ -1,0 +1,1 @@
+Origem: pacote de schemas oficial PL_010g (Portal Nacional da NF-e), conforme espelhado em nfephp-org/sped-nfe/schemes/PL_010g (commit 4596b89).

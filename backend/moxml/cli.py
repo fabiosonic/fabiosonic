@@ -40,6 +40,13 @@ def cmd_init(a) -> None:  # noqa: ANN001
 def cmd_servidor(a) -> None:  # noqa: ANN001
     import uvicorn
 
+    if sys.stdout is None or sys.stderr is None:  # pythonw.exe (tarefa agendada, sem console)
+        from .config import obter_config
+        pasta = obter_config().pasta_logs
+        pasta.mkdir(parents=True, exist_ok=True)
+        saida = open(pasta / "servidor.log", "a", encoding="utf-8", buffering=1)  # noqa: SIM115
+        sys.stdout = sys.stderr = saida
+
     from .api.app import criar_api
 
     app = _app()

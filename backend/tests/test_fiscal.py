@@ -92,3 +92,12 @@ def test_chave_divergente_do_conteudo(emissor):
     raiz.find(".//{http://www.portalfiscal.inf.br/nfe}nNF").text = "13"
     d = xf.ler(etree.tostring(raiz))
     assert any(p.codigo == "CHAVE_DIVERGENTE" for p in d.problemas)
+
+
+def test_validacao_xsd_oficial_registra_aviso_sem_rejeitar(emissor):
+    # o XML de laboratório é propositalmente mínimo: o pacote PL_010g aponta divergências como AVISO
+    k, c = emissor
+    _, proc, _ = gerador.gerar_nfe(CNPJ, "EMISSOR", "RJ", "55", 1, 14, datetime.now(UTC), k, c)
+    d = xf.ler(proc)
+    xsd = [p for p in d.problemas if p.codigo == "XSD"]
+    assert xsd and not any(p.grave for p in xsd) and d.e_xml_integral

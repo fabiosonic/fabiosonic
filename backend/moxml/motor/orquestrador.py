@@ -25,7 +25,7 @@ from ..conectores.base import Capacidade, ContextoCaptura, FonteSemDados, XmlRec
 from ..conectores.pastas import PastaEmissorConector
 from ..conectores.registro import PRIORIDADE_RECUPERACAO
 from ..conectores.sefaz_consulta import DescobertaImpossivel, SefazConsultaConector
-from ..conectores.svrs_portal import CaptchaExigido, SvrsPortalConector
+from ..conectores.svrs_portal import CaptchaExigido
 from ..db.modelos import (
     ArquivoImportado, Checkpoint, ChaveConhecida, Documento, Empresa, Execucao, LogExecucao, PastaMonitorada, Serie,
 )
