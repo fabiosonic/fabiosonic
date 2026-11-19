@@ -1,0 +1,55 @@
+{
+  "_fonte": "Endereços oficiais: Portal Nacional da NF-e / MOC 7.0, Portal DF-e SVRS, NT SAE-NFC-e (SEFAZ-SP). Conferidos contra nfephp-org/sped-nfe (commit 4596b89, 13/11/2026) e por acesso direto em 19/11/2026. Só entram serviços publicados oficialmente para contribuintes.",
+  "autorizador_por_uf": {
+    "55": {"RJ": "SVRS", "SP": "SP"},
+    "65": {"RJ": "SVRS", "SP": "SP"}
+  },
+  "servicos": {
+    "NfeConsultaProtocolo": {
+      "operation": "NFeConsultaProtocolo4", "method": "nfeConsultaNF", "versao": "4.00", "wrapper": null,
+      "urls": {
+        "SVRS|55|1": "https://nfe.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx",
+        "SVRS|55|2": "https://nfe-homologacao.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx",
+        "SVRS|65|1": "https://nfce.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx",
+        "SVRS|65|2": "https://nfce-homologacao.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx"
+      }
+    },
+    "NfeStatusServico": {
+      "operation": "NFeStatusServico4", "method": "nfeStatusServicoNF", "versao": "4.00", "wrapper": null,
+      "urls": {
+        "SVRS|55|1": "https://nfe.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx",
+        "SVRS|55|2": "https://nfe-homologacao.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx",
+        "SVRS|65|1": "https://nfce.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx",
+        "SVRS|65|2": "https://nfce-homologacao.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx"
+      }
+    },
+    "NFCeListagemChaves": {
+      "operation": "NFCeListagemChaves", "method": "nfceListagemChaves", "versao": "1.00", "wrapper": null,
+      "urls": {
+        "SP|65|1": "https://nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx",
+        "SP|65|2": "https://homologacao.nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx"
+      }
+    },
+    "NFCeDownloadXML": {
+      "operation": "NFCeDownloadXML", "method": "nfceDownloadXML", "versao": "1.00", "wrapper": null,
+      "urls": {
+        "SP|65|1": "https://nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx",
+        "SP|65|2": "https://homologacao.nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx"
+      }
+    }
+  },
+  "portais": {
+    "SVRS_DownloadXMLDFe": {
+      "_evidencia": "Notícia SVRS 12/02/2019 ('Download Arquivo da NFC-e' para usuário com certificado relacionado ao documento); páginas observadas em 19/11/2026 respondendo 'Esta consulta exige Certificado Digital emitido por AC credenciada junto ao ICP-Brasil' sem certificado.",
+      "urls": {
+        "SVRS|55|1": "https://dfe-portal.svrs.rs.gov.br/NFESSL/DownloadXMLDFe",
+        "SVRS|65|1": "https://dfe-portal.svrs.rs.gov.br/NFCESSL/DownloadXMLDFe"
+      }
+    }
+  },
+  "indisponiveis_documentados": {
+    "RJ|65|SAE": "Nenhuma NT de Serviços de Apoio à Escrituração (listagem de chaves) publicada pela SEFAZ-RJ ou pela SVRS até 19/11/2026. O SAE-NFC-e é serviço próprio da SEFAZ-SP.",
+    "RJ|55|SAE": "Não existe serviço oficial de LISTAGEM de NF-e emitidas para o próprio emitente no RJ/SVRS. A descoberta é feita pela consulta de protocolo (MOC, regra J04/cStat 562).",
+    "RJ|55|SVRS_DownloadXMLDFe|2": "Portal de download não possui endereço de homologação publicado."
+  }
+}

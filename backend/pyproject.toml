@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moxml"
+version = "1.0.0"
+description = "M&O XML Captador — captura de XML de saída NF-e 55 e NFC-e 65 (MORAES E OLIVEIRA CONTABILIDADE LTDA)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "httpx>=0.27",
+    "lxml>=5.3",
+    "cryptography>=43",
+    "apscheduler>=3.10,<4",
+    "python-multipart>=0.0.9",
+    "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2"]
+gdrive = ["google-api-python-client>=2.140", "google-auth>=2.34", "google-auth-oauthlib>=1.2"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+moxml = "moxml.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["moxml*"]
+
+[tool.setuptools.package-data]
+moxml = ["sefaz/*.json", "sefaz/schemas/**/*.xsd", "migrations/*", "web/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
