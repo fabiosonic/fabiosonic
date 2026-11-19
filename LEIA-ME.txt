@@ -1,0 +1,24 @@
+M&O XML CAPTADOR - NF-e 55 e NFC-e 65 de saida (Rio de Janeiro)
+================================================================
+
+Esta e a pasta do projeto. No Windows, use os 3 arquivos abaixo, nesta ordem:
+
+  1) INSTALAR.bat   - instala tudo o que for necessario e registra o servico
+                      (so precisa do Python 3 instalado - python.org, marque "Add to PATH").
+  2) INICIAR.bat    - abre o painel no navegador (http://127.0.0.1:8765).
+  3) TESTAR.bat     - roda os testes automaticos (nao acessa a SEFAZ; nao precisa de certificado).
+
+Para dar dois cliques: se a janela preta so piscar e fechar, abra o Prompt de Comando,
+arraste o arquivo .bat para dentro dele e aperte Enter (assim a janela fica aberta).
+
+IMPORTANTE
+----------
+- Rodar TESTAR apenas confere que o programa esta integro. Nao busca XML.
+- Para o programa buscar os XMLs reais pela SVRS, apos INSTALAR:
+    a) abra o painel (INICIAR.bat),
+    b) cadastre a empresa, o certificado A1 do cliente (com a autorizacao) e um XML semente por serie,
+    c) rode a verificacao da SVRS:
+         backend\.venv\Scripts\python -m moxml svrs --empresa 1
+       (detecta se o Portal DF-e SVRS exige CAPTCHA e tenta baixar o XML de 55 e 65).
+
+Documentacao: README.md e a pasta docs\ (MANUAL_SVRS.md, MANUAL_INSTALACAO.md, MANUAL_OPERACAO.md).
