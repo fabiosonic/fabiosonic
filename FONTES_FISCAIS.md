@@ -60,7 +60,9 @@ Retorna `protNFe` e `procEventoNFe` (cancelamento, CC-e). Status: **CONFIRMADO**
 
 > Correção (19/11/2026): a hipótese de obter o `procNFe` do emitente pela `NFeDistribuicaoDFe consChNFe` foi **refutada**. O fixture do `nfelib` é dado sintético de teste, não prova de comportamento do AN. O MOC da `NFeDistribuicaoDFe` define **cStat 641 "NF-e indisponível para o emitente"**: a Distribuição DFe NÃO entrega ao emitente o XML da própria nota. E não distribui NFC-e. A SEFAZ-SP confirmou por escrito que não há webservice de captura de NFC-e por CNPJ sem a chave.
 
-Portanto, **não existe webservice da SEFAZ** que devolva o XML completo das notas de saída ao emitente. Pela SEFAZ, o XML completo (55 e 65) só sai pelo **Portal DF-e SVRS (DownloadXMLDFe) com A1** — que pode exigir CAPTCHA (NÃO COMPROVADO; o sistema não contorna).
+Portanto, **não existe webservice da SEFAZ** que devolva o XML completo das notas de saída ao emitente. Pela SEFAZ, o XML completo (55 e 65) só sai pelo **Portal DF-e SVRS (DownloadXMLDFe) com A1**.
+
+> **CAPTCHA CONFIRMADO (19/11/2026):** teste `moxml svrs` com certificado A1 real (CNPJ 09.295.435/0001-85) provou que o Portal DF-e SVRS **exige CAPTCHA** para 55 e 65 (`portal_captcha: true`, download interrompido com `CaptchaExigido`). Conclusão: **a captura 100% automática do XML diretamente da SVRS é IMPOSSÍVEL PELO MÉTODO** para o RJ. O XML completo das notas novas, de forma automática, só pela origem (sistema emissor do cliente) ou por fornecedor comercial.
 
 Status: **NÃO COMPROVADO**. O formulário só aparece com certificado ICP-Brasil. Há relato público (PortalSPED, 2020) de CAPTCHA "Não sou um robô". Se houver CAPTCHA, o conector **para** e registra **IMPOSSÍVEL PELO MÉTODO**: o sistema não contorna desafios humanos.
 

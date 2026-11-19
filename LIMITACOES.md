@@ -20,7 +20,7 @@ Situação em 19/11/2026. O sistema **não é declarado operacional** para nenhu
    - **NF-e 55:** a Distribuição DFe (`NFeDistribuicaoDFe`), consultada pelo emitente sobre a própria nota, responde **cStat 641 "NF-e indisponível para o emitente"** (MOC, regra de validação). Ela só entrega documentos de ENTRADA (quando o CNPJ é destinatário/autXML) — fora do escopo.
    - **NFC-e 65:** o Ambiente Nacional **nem distribui** NFC-e. A SEFAZ-SP declarou oficialmente que não há API/webservice para captura de NFC-e por CNPJ sem a chave. Não existe equivalente para o RJ.
    - **Consequência:** a descoberta por webservice (consulta de protocolo) dá chave, situação, cancelamentos e numeração, mas **não** o XML completo. O XML completo, pela SEFAZ, só sai pelo **Portal DF-e SVRS** (web, com certificado).
-3. **Portal SVRS pode exigir CAPTCHA ou login gov.br** (afeta 55 e 65). Nesse caso o download por ele é IMPOSSÍVEL PELO MÉTODO (o sistema não contorna). Restariam:
+3. **CONFIRMADO em 19/11/2026 (teste com certificado real do CNPJ 09.295.435/0001-85, BAR TOCA DA GAMBA LTDA):** o Portal DF-e SVRS (`/NfeSSL/DownloadXmlDfe` e `/NfceSSL/DownloadXmlDfe`) **exige CAPTCHA** para NF-e 55 e NFC-e 65. O download automático do XML pela SEFAZ/SVRS é, portanto, **IMPOSSÍVEL PELO MÉTODO** para o RJ (o sistema não contorna CAPTCHA). Evidência: `evidencias/svrs-20261119-103040.json` (`portal_captcha: true`, `download_erro: CaptchaExigido`). Restam, para obter o XML completo das notas novas:
    - (a) a pasta do emissor do cliente;
    - (b) o conector comercial opcional;
    - (c) a descoberta J04/562, que continua entregando chave, situação, protocolo e eventos, e permite cobrar do cliente os XMLs faltantes com precisão.
