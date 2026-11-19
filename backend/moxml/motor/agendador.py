@@ -8,11 +8,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select
 
 from ..db.modelos import Certificado
@@ -67,6 +68,11 @@ class Agendador:
                                max_instances=1, coalesce=True, misfire_grace_time=6 * 3600, replace_existing=True)
         self.sched.add_job(lambda: atualizar_status_certificados(self.app), CronTrigger(hour=6, minute=50, timezone=FUSO),
                            id="certificados", replace_existing=True)
+        if getattr(self.app.cfg, "executar_ao_iniciar", True):
+            quando = datetime.now(FUSO) + timedelta(seconds=8)
+            self.sched.add_job(self._rodar, DateTrigger(run_date=quando), id="inicial",
+                               max_instances=1, coalesce=True, misfire_grace_time=600, replace_existing=True)
+            log.info("primeira captura agendada para ~8s após iniciar")
         self.sched.start()
         log.info("agendador iniciado: %s", self.app.cfg.horarios_execucao)
 

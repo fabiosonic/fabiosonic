@@ -39,6 +39,7 @@ class Configuracoes(BaseSettings):
     # Agendamento (cron simplificado: horários HH:MM separados por vírgula)
     horarios_execucao: str = "07:30,12:30,19:30"
     agendamento_ativo: bool = True
+    executar_ao_iniciar: bool = True  # primeira captura dispara alguns segundos após iniciar o serviço
 
     # Rede / SEFAZ
     timeout_segundos: float = 30.0
