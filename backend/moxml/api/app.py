@@ -47,6 +47,7 @@ from ..motor.agendador import Agendador
 from ..motor.aplicacao import Aplicacao
 from ..motor.logs import HUB
 from ..motor.orquestrador import Opcoes, Orquestrador, executar_com_trava
+from ..motor.repositorio import Repositorio
 from ..motor.semente import SementeInvalida
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -420,6 +421,34 @@ def criar_api(app: Aplicacao, iniciar_agendador: bool = True) -> FastAPI:
                 "cofre": app.cofre.mecanismo, "timeout_segundos": c.timeout_segundos, "retentativas": c.retentativas,
                 "gdrive_ativo": c.gdrive_ativo, "apisimples_ativo": c.apisimples_ativo,
                 "token_api_exigido": bool(c.api_token)}
+
+    # ------------------------------------------------------------------ ingestão (agente coletor)
+    @api.post("/api/ingestao", dependencies=dep)
+    async def ingestao(arquivos: list[UploadFile] = File(...), origem: str = Form("agente_coletor")):
+        """Recebe XMLs enviados pelo agente coletor instalado na origem (ERP/PDV do cliente).
+
+        A empresa é identificada pelo CNPJ do emitente contido no próprio XML: o agente não
+        precisa saber ids. Totalmente autônomo e sem CAPTCHA (o XML já é do emitente)."""
+        res = {"recebidos": 0, "novos": 0, "duplicados": 0, "rejeitados": 0, "detalhes": []}
+        with app.sessoes() as s:
+            repo = Repositorio(s, app.armazenamento, app.modo)
+            for arq in arquivos:
+                dados = await arq.read()
+                res["recebidos"] += 1
+                try:
+                    r = repo.registrar_xml(dados, f"{origem}:{arq.filename}"[:40])
+                    s.commit()
+                except Exception as e:  # noqa: BLE001
+                    s.rollback()
+                    res["rejeitados"] += 1
+                    res["detalhes"].append({"arquivo": arq.filename, "resultado": "ERRO", "mensagem": str(e)[:200]})
+                    continue
+                chave = {"NOVO": "novos", "ATUALIZADO": "novos", "EVENTO": "novos", "INUTILIZACAO": "novos",
+                         "RESUMO": "novos", "DUPLICADO": "duplicados", "REJEITADO": "rejeitados"}.get(r.resultado, "novos")
+                res[chave] += 1
+                if r.resultado == "REJEITADO":
+                    res["detalhes"].append({"arquivo": arq.filename, "resultado": r.resultado, "mensagem": r.mensagem})
+        return res
 
     # ------------------------------------------------------------------ frontend
     if (WEB / "index.html").exists():

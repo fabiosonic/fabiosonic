@@ -148,3 +148,45 @@ def test_api_token(app):
     assert cli.get("/api/resumo").status_code == 401
     assert cli.get("/api/resumo", headers={"x-api-token": "segredo-forte"}).status_code == 200
     assert cli.get("/api/saude").status_code == 200
+
+
+def test_ingestao_do_agente_coletor(app, empresa, lab, base):
+    """O agente envia XMLs brutos; o servidor identifica a empresa pelo CNPJ do emitente."""
+    from fastapi.testclient import TestClient
+    cli = TestClient(criar_api(app, iniciar_agendador=False))
+    notas = lab.popular(CNPJ, RAZAO, "55", 1, 1, 3, base)
+    arquivos = [("arquivos", (f"{n.chave}.xml", n.xml_proc, "application/xml")) for n in notas]
+    r = cli.post("/api/ingestao", files=arquivos, data={"origem": "agente_coletor"})
+    assert r.status_code == 200 and r.json()["novos"] == 3 and r.json()["recebidos"] == 3
+    # reenvio é idempotente
+    assert cli.post("/api/ingestao", files=arquivos).json()["duplicados"] == 3
+    # XML de empresa não cadastrada é rejeitado, não cria empresa
+    lab.popular("99000002000148", "OUTRA", "55", 1, 1, 1, base)
+    outro = next(n for n in lab.notas.values() if n.cnpj == "99000002000148")
+    rr = cli.post("/api/ingestao", files=[("arquivos", ("x.xml", outro.xml_proc, "application/xml"))])
+    assert rr.json()["rejeitados"] == 1
+
+
+def test_agente_coleta_incremental(tmp_path):
+    """Agente standalone: coleta incremental, expande zip, ignora arquivo recém-gravado."""
+    import time, zipfile
+    sys_path = __import__("sys").path
+    raiz = Path(__file__).resolve().parent.parent.parent / "agente"
+    sys_path.insert(0, str(raiz))
+    import moxml_agente as ag
+    pasta = tmp_path / "pdv"
+    pasta.mkdir()
+    antigo = time.time() - 300
+    (pasta / "a.xml").write_bytes(b"<nfeProc>a</nfeProc>")
+    import os
+    os.utime(pasta / "a.xml", (antigo, antigo))
+    with zipfile.ZipFile(pasta / "lote.zip", "w") as z:
+        z.writestr("b.xml", b"<nfeProc>b</nfeProc>")
+    os.utime(pasta / "lote.zip", (antigo, antigo))
+    (pasta / "gravando.xml").write_bytes(b"<nfeProc>c</nfeProc>")  # recém-escrito: fica para depois
+    estado = ag.Estado(tmp_path / "estado.json")
+    itens = list(ag.coletar([pasta], True, estado))
+    nomes = sorted(n for n, _ in itens)
+    assert nomes == ["a.xml", "lote.zip!b.xml"]
+    estado.salvar()
+    assert list(ag.coletar([pasta], True, ag.Estado(tmp_path / "estado.json"))) == []  # incremental

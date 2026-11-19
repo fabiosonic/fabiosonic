@@ -33,8 +33,16 @@ backend/moxml/      núcleo Python (FastAPI, SQLAlchemy, conectores, motor)
 backend/tests/      67 testes (laboratório interno, sem rede)
 frontend/           painel React + TypeScript (build em backend/moxml/web)
 windows/            instalar/iniciar/parar/atualizar/testar/backup/diagnostico/capturar
+agente/             agente coletor autônomo (lado do cliente) — só biblioteca padrão
 docs/               manuais e relatório de testes reais
 ```
+
+## Operação autônoma (sem CAPTCHA)
+O sistema é feito para rodar sozinho. As fontes **100% automáticas** (sem CAPTCHA, sem humano) são:
+- **Consulta oficial (webservice SVRS, mTLS)** — descobre todas as notas, situação, cancelamentos e numeração faltante.
+- **Coleta na origem** — o XML já é do emitente. Pastas acessíveis pela rede entram em *Configurações → Pastas monitoradas*; nas demais, o **agente coletor** (`agente/`) é instalado no PC do cliente e envia os XMLs novos ao escritório por HTTPS, continuamente.
+
+O download pelo Portal DF-e SVRS é opcional e **não é necessário** para a operação autônoma: se o portal exigir CAPTCHA, o sistema não o contorna — segue pelas fontes acima. Referência de modelos a partir dos XSDs oficiais: [akretion/nfelib](https://github.com/akretion/nfelib) (a validação já usa os XSDs oficiais PL_010g + assinatura criptográfica).
 
 ## Documentos
 | Documento | Conteúdo |

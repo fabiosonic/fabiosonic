@@ -1,0 +1,17 @@
+[agente]
+# Endereco do servidor do escritorio (o PC onde roda o M&O XML Captador).
+# Use HTTPS se o servidor estiver exposto; em rede local, http://IP:8765
+url = http://192.168.0.10:8765
+
+# Token definido em MOXML_API_TOKEN no servidor (deixe vazio se o servidor nao exige token).
+token =
+
+# Pastas onde o ERP/PDV grava os XMLs (uma por linha; aceita caminho de rede).
+pastas =
+    C:\PDV\XML
+    C:\ERP\NFe\Autorizadas
+
+recursivo = true
+intervalo_segundos = 300
+timeout_segundos = 60
+origem = agente_coletor
