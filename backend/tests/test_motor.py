@@ -8,9 +8,16 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 
 from moxml import servicos
-from moxml.db.modelos import ChaveConhecida, Documento, Empresa, Evento, Execucao, Lacuna
+from moxml.db.modelos import (
+    ChaveConhecida,
+    Documento,
+    Empresa,
+    Evento,
+    Execucao,
+    Lacuna,
+)
 from moxml.motor.orquestrador import Opcoes, Orquestrador
-from moxml.simulador import gerador
+from tests.laboratorio import gerador
 
 from .conftest import CNPJ, RAZAO
 
@@ -43,7 +50,7 @@ def test_uma_nota_alem_da_semente(app, empresa, lab, base):
     assert contar(app, Documento) == 2
     with app.sessoes() as s:
         d = s.scalar(select(Documento).where(Documento.numero == 11))
-    assert d.origem == "svrs_portal_download" and d.tipo_xml == "NFE_AUTORIZADA" and d.modo == "SIMULADO"
+    assert d.origem == "svrs_portal_download" and d.tipo_xml == "NFE_AUTORIZADA" and d.modo == "TESTE"
     assert (app.cfg.pasta_xml / d.caminho_xml).exists()
     assert "/NFE_SAIDA/" in d.caminho_xml and d.caminho_xml.startswith("1-CLIENTES/CLIENTES ATIVOS/")
 
@@ -171,9 +178,18 @@ def test_sem_fonte_de_xml_integral_mantem_pendente(app, empresa, lab, base):
     assert contar(app, Documento) == 1  # só a semente; nada é inventado
 
 
+def test_modo_real_recusa_transporte_de_teste(app, empresa, lab, base):
+    notas = lab.popular(CNPJ, RAZAO, "55", 1, 1, 2, base)
+    semente(app, empresa, notas[0])
+    app.modo = "REAL"  # produção: o laboratório injetado não pode ser usado
+    import pytest
+    with pytest.raises(RuntimeError, match="somente com fontes reais"):
+        app.cliente_soap(CNPJ, None)
+    assert lab.chamadas == []
+
+
 def test_modo_real_sem_certificado_nao_consulta(app, empresa, lab, base):
-    from moxml.config import Modo
-    app.cfg.modo = Modo.REAL
+    app.modo = "REAL"
     app.transporte_soap = lambda _c: None
     Orquestrador(app).executar(Opcoes(paralelismo=1))
     with app.sessoes() as s:

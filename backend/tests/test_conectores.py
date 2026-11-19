@@ -10,7 +10,13 @@ from moxml.conectores.sefaz_sae import SefazSaeConector
 from moxml.conectores.svrs_portal import CaptchaExigido, SvrsPortalConector
 from moxml.fiscal import xmlfiscal as xf
 from moxml.sefaz import catalogo
-from moxml.sefaz.transporte import ClienteSoap, ErroRede, LimitadorTaxa, LimiteExcedido, RespostaInvalida
+from moxml.sefaz.transporte import (
+    ClienteSoap,
+    ErroRede,
+    LimitadorTaxa,
+    LimiteExcedido,
+    RespostaInvalida,
+)
 
 CNPJ = "99000001000101"
 
@@ -98,7 +104,7 @@ def test_sae_paginacao_milhares(lab):
         lab.emitir("99000002000148", "65", 1, i + 1, base + timedelta(minutes=i))
     # milhares de notas (exige paginação por dhEmisUltNfce/cStat 101): chaves sintéticas evitam 2500 assinaturas
     from moxml.fiscal import chave as chv
-    from moxml.simulador.sefaz_fake import NotaLab
+    from tests.laboratorio.sefaz_fake import NotaLab
     modelo = next(iter(lab.notas.values()))
     for i in range(3, 2500):
         ch = chv.montar_chave("SP", base.year, base.month, "99000002000148", "65", 1, i + 1, 1, f"{i:08d}")

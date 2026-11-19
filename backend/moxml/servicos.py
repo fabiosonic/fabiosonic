@@ -8,9 +8,21 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 
-from .certificados.a1 import carregar_pfx, impedimentos_bloqueantes, validar_para_empresa
+from .certificados.a1 import (
+    carregar_pfx,
+    impedimentos_bloqueantes,
+    validar_para_empresa,
+)
 from .db.modelos import (
-    ChaveConhecida, Certificado, Documento, Empresa, Evento, Execucao, Lacuna, PastaMonitorada, RegistroFonte,
+    Certificado,
+    ChaveConhecida,
+    Documento,
+    Empresa,
+    Evento,
+    Execucao,
+    Lacuna,
+    PastaMonitorada,
+    RegistroFonte,
 )
 from .fiscal import chave as chv
 from .motor.aplicacao import Aplicacao
@@ -65,6 +77,9 @@ def cadastrar_certificado(app: Aplicacao, empresa_id: int, pfx: bytes, senha: st
             raise ErroNegocio("empresa não encontrada")
         problemas = validar_para_empresa(cert, emp.cnpj)
         bloq = impedimentos_bloqueantes(problemas)
+        if app.modo == "REAL" and not cert.info.icp_brasil:
+            bloq.append(f"certificado não emitido sob a ICP-Brasil (emissor: {cert.info.emissor}); "
+                        "somente e-CNPJ A1 ICP-Brasil é aceito em produção")
         if bloq:
             raise ErroNegocio("; ".join(bloq))
         sufixo = secrets.token_hex(6)

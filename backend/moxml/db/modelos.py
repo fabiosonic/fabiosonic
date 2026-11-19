@@ -6,7 +6,16 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text,
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship

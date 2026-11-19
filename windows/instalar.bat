@@ -40,5 +40,5 @@ rem 5) Inicializacao automatica (tarefa agendada no logon/boot, reinicio automat
 powershell -NoProfile -ExecutionPolicy Bypass -File "%RAIZ%\windows\servico.ps1" -Acao instalar
 echo.
 echo Instalacao concluida. Painel: http://127.0.0.1:8765
-echo Edite %DADOS%\moxml.env para definir MOXML_MODO=REAL quando for operar com certificados reais.
+echo Cadastre empresas, certificados A1 e XML semente pelo painel. Operacao somente com notas reais.
 endlocal

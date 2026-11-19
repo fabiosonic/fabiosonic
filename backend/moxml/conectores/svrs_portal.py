@@ -23,7 +23,15 @@ import httpx
 
 from ..fiscal import chave as chv
 from ..sefaz import catalogo
-from .base import Capacidade, Conector, ContextoCaptura, Disponibilidade, Limites, StatusFonte, XmlRecuperado
+from .base import (
+    Capacidade,
+    Conector,
+    ContextoCaptura,
+    Disponibilidade,
+    Limites,
+    StatusFonte,
+    XmlRecuperado,
+)
 
 RE_CAPTCHA = re.compile(r"g-recaptcha|h-captcha|hcaptcha|recaptcha|turnstile|data-sitekey|captcha", re.I)
 RE_CAMPO_CHAVE = re.compile(r"chave|chnfe|chdfe|chaveacesso|ch_?acesso", re.I)

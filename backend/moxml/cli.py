@@ -10,7 +10,7 @@ import socket
 import ssl
 import sys
 import zipfile
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from . import __version__
@@ -244,38 +244,6 @@ def cmd_teste_real(a) -> None:  # noqa: ANN001
     _imprimir(executar_teste_real(_app(), a.empresa, a.chave, a.autorizado_por))
 
 
-def cmd_demo(a) -> None:  # noqa: ANN001
-    """Popula o laboratório SIMULADO com 3 empresas fictícias (CNPJs de teste) e roda uma captura."""
-    from .config import Modo
-    from .motor.orquestrador import Opcoes, Orquestrador
-    from .simulador.sefaz_fake import laboratorio_padrao
-    from . import servicos
-    app = _app()
-    if app.cfg.modo != Modo.SIMULADO:
-        raise SystemExit("demo só pode ser usado com MOXML_MODO=SIMULADO")
-    lab = laboratorio_padrao(app)
-    base = datetime.now(UTC) - timedelta(days=5)
-    # CNPJs fictícios (raiz 99000001..3) com DV válido — não correspondem a empresas reais conhecidas
-    exemplos = [("MERCADINHO EXEMPLO LTDA (SIMULADO)", "99000001000101"),
-                ("PADARIA MODELO LTDA (SIMULADO)", "99000002000148"),
-                ("DISTRIBUIDORA TESTE LTDA (SIMULADO)", "99000003000192")]
-    for i, (razao, cnpj) in enumerate(exemplos):
-        try:
-            emp = servicos.cadastrar_empresa(app, razao, cnpj)
-        except servicos.ErroNegocio:
-            continue
-        nfce = lab.popular(cnpj, razao, "65", 1, 1000 * (i + 1), 40, base, pular={1000 * (i + 1) + 17}, cancelar={1000 * (i + 1) + 5})
-        nfe = lab.popular(cnpj, razao, "55", 1, 200 * (i + 1), 12, base, cancelar={200 * (i + 1) + 3})
-        lab.carta_correcao(nfe[1].chave)
-        servicos.importar_semente_bytes(app, emp.id, nfce[0].xml_proc)
-        servicos.importar_semente_bytes(app, emp.id, nfe[0].xml_proc)
-    lab.salvar(app.cfg.home / "simulado" / "laboratorio.json")
-    app.transporte_soap = lambda _c: lab.transport()
-    app.transporte_http = lambda _c: lab.transport()
-    Orquestrador(app).executar(Opcoes(gatilho="MANUAL"))
-    print("Laboratório SIMULADO populado e captura executada. Abra o painel para conferir.")
-
-
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="moxml", description="M&O XML Captador — NF-e 55 e NFC-e 65 de saída")
     p.add_argument("--versao", action="version", version=__version__)
@@ -346,7 +314,6 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--chave", required=True)
     sp.add_argument("--autorizado-por", required=True)
     sp.set_defaults(f=cmd_teste_real)
-    sub.add_parser("demo", help="popula o modo SIMULADO com dados fictícios").set_defaults(f=cmd_demo)
     a = p.parse_args(argv)
     a.f(a)
 

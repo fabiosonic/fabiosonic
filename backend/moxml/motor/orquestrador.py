@@ -27,7 +27,15 @@ from ..conectores.registro import PRIORIDADE_RECUPERACAO
 from ..conectores.sefaz_consulta import DescobertaImpossivel, SefazConsultaConector
 from ..conectores.svrs_portal import CaptchaExigido
 from ..db.modelos import (
-    ArquivoImportado, Checkpoint, ChaveConhecida, Documento, Empresa, Execucao, LogExecucao, PastaMonitorada, Serie,
+    ArquivoImportado,
+    ChaveConhecida,
+    Checkpoint,
+    Documento,
+    Empresa,
+    Execucao,
+    LogExecucao,
+    PastaMonitorada,
+    Serie,
 )
 from ..fiscal import xmlfiscal as xf
 from ..sefaz.transporte import LimiteExcedido

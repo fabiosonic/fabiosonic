@@ -43,7 +43,7 @@ export const api = {
 };
 
 export interface Resumo {
-  modo: "SIMULADO" | "REAL";
+  modo: "REAL" | "TESTE";
   empresas_cadastradas: number;
   empresas_ativas: number;
   empresas_processadas_ultimo_lote: number;

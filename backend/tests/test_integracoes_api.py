@@ -12,7 +12,7 @@ from moxml.db.modelos import ArquivoDrive
 from moxml.integracoes import dominio
 from moxml.integracoes.gdrive import sincronizar_drive
 from moxml.motor.orquestrador import Opcoes, Orquestrador
-from moxml.simulador import gerador
+from tests.laboratorio import gerador
 
 from .conftest import CNPJ, RAZAO
 
@@ -116,7 +116,7 @@ def test_exportacao_dominio_preserva_xml(app, empresa, capturado, tmp_path):
 
 def test_api_fluxo_basico(app, lab, base):
     cli = TestClient(criar_api(app, iniciar_agendador=False))
-    assert cli.get("/api/saude").json()["modo"] == "SIMULADO"
+    assert cli.get("/api/saude").json()["modo"] == "TESTE"
     r = cli.post("/api/empresas", json={"razao_social": RAZAO, "cnpj": "99.000.001/0001-01"})
     assert r.status_code == 201
     eid = r.json()["id"]
@@ -132,7 +132,7 @@ def test_api_fluxo_basico(app, lab, base):
     assert cli.post(f"/api/empresas/{eid}/semente", files={"arquivo": ("s.xml", n[0].xml_proc)}).status_code == 200
     Orquestrador(app).executar(Opcoes(paralelismo=1))
     res = cli.get("/api/resumo").json()
-    assert res["nfe_recuperadas"] == 3 and res["xmls_recuperados"] == 3 and res["modo"] == "SIMULADO"
+    assert res["nfe_recuperadas"] == 3 and res["xmls_recuperados"] == 3 and res["modo"] == "TESTE"
     docs = cli.get("/api/documentos", params={"modelo": "55"}).json()
     assert docs["total"] == 3
     xml = cli.get(f"/api/documentos/{docs['itens'][0]['id']}/xml")

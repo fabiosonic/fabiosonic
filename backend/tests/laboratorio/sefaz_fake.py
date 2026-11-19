@@ -18,7 +18,8 @@ from decimal import Decimal
 import httpx
 from lxml import etree
 
-from ..fiscal import chave as chv
+from moxml.fiscal import chave as chv
+
 from . import gerador
 
 NS = "http://www.portalfiscal.inf.br/nfe"
@@ -230,43 +231,3 @@ class Laboratorio:
             return httpx.Response(200, content="<html><p>Documento não encontrado</p></html>".encode(),
                                   headers={"content-type": "text/html"})
         return httpx.Response(200, content=n.xml_proc, headers={"content-type": "application/xml"})
-
-
-    # ------------------------------------------------------------------ persistência (modo SIMULADO do painel)
-    def salvar(self, caminho) -> None:  # noqa: ANN001
-        import base64
-        import json
-        from pathlib import Path
-        b = lambda x: base64.b64encode(x).decode()  # noqa: E731
-        dados = {"emissores": [{"cnpj": e.cnpj, "razao": e.razao, "uf": e.uf, "pfx": b(e.pfx)} for e in self.emissores.values()],
-                 "notas": [{"chave": n.chave, "cnpj": n.cnpj, "modelo": n.modelo, "serie": n.serie, "numero": n.numero,
-                            "emissao": n.emissao.isoformat(), "proc": b(n.xml_proc), "nfe": b(n.xml_nfe), "prot": b(n.prot),
-                            "eventos": [b(e) for e in n.eventos], "cancelada": n.cancelada} for n in self.notas.values()]}
-        Path(caminho).parent.mkdir(parents=True, exist_ok=True)
-        Path(caminho).write_text(json.dumps(dados), encoding="utf-8")
-
-    @classmethod
-    def carregar(cls, caminho) -> Laboratorio:  # noqa: ANN001
-        import base64
-        import json
-        from pathlib import Path
-
-        from cryptography.hazmat.primitives.serialization import pkcs12
-        d = json.loads(Path(caminho).read_text(encoding="utf-8"))
-        lab = cls()
-        for e in d["emissores"]:
-            pfx = base64.b64decode(e["pfx"])
-            k, c, _ = pkcs12.load_key_and_certificates(pfx, b"teste")
-            lab.emissores[e["cnpj"]] = Emissor(e["cnpj"], e["razao"], e["uf"], k, c, pfx)
-        for n in d["notas"]:
-            lab.notas[n["chave"]] = NotaLab(n["chave"], n["cnpj"], n["modelo"], n["serie"], n["numero"],
-                                            datetime.fromisoformat(n["emissao"]), base64.b64decode(n["proc"]),
-                                            base64.b64decode(n["nfe"]), base64.b64decode(n["prot"]),
-                                            [base64.b64decode(x) for x in n["eventos"]], n["cancelada"])
-        return lab
-
-
-def laboratorio_padrao(app) -> Laboratorio:  # noqa: ANN001
-    """Laboratório do modo SIMULADO do painel (dados fictícios claramente marcados)."""
-    caminho = app.cfg.home / "simulado" / "laboratorio.json"
-    return Laboratorio.carregar(caminho) if caminho.exists() else Laboratorio()

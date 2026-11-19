@@ -1,5 +1,8 @@
 """Configuração central.
 
+O sistema opera SEMPRE com notas reais das fontes oficiais: não existe modo de simulação
+em produção (o laboratório de testes fica em tests/ e não é instalado).
+
 Todas as opções podem vir de variáveis de ambiente com prefixo ``MOXML_`` ou do
 arquivo ``<MOXML_HOME>/moxml.env``. Senhas e chaves NUNCA ficam aqui: ficam no
 cofre (``moxml.seguranca.cofre``), protegido por DPAPI no Windows.
@@ -8,19 +11,11 @@ cofre (``moxml.seguranca.cofre``), protegido por DPAPI no Windows.
 from __future__ import annotations
 
 import os
-from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-class Modo(StrEnum):
-    """SIMULADO usa respostas de laboratório; REAL fala com as fontes de verdade."""
-
-    SIMULADO = "SIMULADO"
-    REAL = "REAL"
 
 
 def _home_padrao() -> Path:
@@ -34,7 +29,6 @@ class Configuracoes(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MOXML_", extra="ignore")
 
     home: Path = Field(default_factory=_home_padrao)
-    modo: Modo = Modo.SIMULADO
     database_url: str | None = None  # padrão: SQLite em <home>/moxml.db
 
     # Servidor web local

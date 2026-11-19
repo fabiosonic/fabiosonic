@@ -22,8 +22,16 @@ from ..fiscal.xmlfiscal import NS
 from ..sefaz import catalogo
 from ..sefaz.transporte import ClienteSoap, LimiteExcedido
 from .base import (
-    Capacidade, Conector, ContextoCaptura, Disponibilidade, DocumentoDescoberto, EventoRecuperado, FonteSemDados,
-    Limites, StatusFonte, XmlRecuperado,
+    Capacidade,
+    Conector,
+    ContextoCaptura,
+    Disponibilidade,
+    DocumentoDescoberto,
+    EventoRecuperado,
+    FonteSemDados,
+    Limites,
+    StatusFonte,
+    XmlRecuperado,
 )
 
 JANELA_DIAS = 100

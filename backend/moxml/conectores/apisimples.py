@@ -18,8 +18,15 @@ from collections.abc import Callable, Iterator
 import httpx
 
 from .base import (
-    Capacidade, Conector, ContextoCaptura, Disponibilidade, DocumentoDescoberto, FonteSemDados, Limites,
-    StatusFonte, XmlRecuperado,
+    Capacidade,
+    Conector,
+    ContextoCaptura,
+    Disponibilidade,
+    DocumentoDescoberto,
+    FonteSemDados,
+    Limites,
+    StatusFonte,
+    XmlRecuperado,
 )
 
 COBERTURA_PUBLICADA = {  # https://apisimples.com/cobertura (atualizada 17/11/2026)

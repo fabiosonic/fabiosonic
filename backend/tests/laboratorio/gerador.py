@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 from lxml import etree
 
-from ..fiscal import chave as chv
+from moxml.fiscal import chave as chv
 
 NS = "http://www.portalfiscal.inf.br/nfe"
 NS_DS = "http://www.w3.org/2000/09/xmldsig#"

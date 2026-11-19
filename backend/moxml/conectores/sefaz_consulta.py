@@ -33,8 +33,15 @@ from ..fiscal.xmlfiscal import NS
 from ..sefaz import catalogo
 from ..sefaz.transporte import ClienteSoap, LimiteExcedido
 from .base import (
-    Capacidade, Conector, ContextoCaptura, Disponibilidade, DocumentoDescoberto, EventoRecuperado, Limites,
-    Situacao, StatusFonte,
+    Capacidade,
+    Conector,
+    ContextoCaptura,
+    Disponibilidade,
+    DocumentoDescoberto,
+    EventoRecuperado,
+    Limites,
+    Situacao,
+    StatusFonte,
 )
 
 RE_CHAVE_MSG = re.compile(r"chNFe\s*:\s*([0-9A-Z]{44})", re.I)

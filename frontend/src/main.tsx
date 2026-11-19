@@ -44,10 +44,9 @@ function Shell() {
       <main>
         {modo && (
           <div className={`faixa-modo ${modo === "REAL" ? "real" : "simulado"}`}>
-            Ambiente <strong>{modo}</strong>
-            {modo === "SIMULADO"
-              ? " — dados de laboratório, nenhum acesso à SEFAZ. Não use estes números em produção."
-              : " — conectado às fontes oficiais com certificados autorizados."}
+            {modo === "REAL"
+              ? <>Produção — <strong>notas reais</strong> obtidas das fontes oficiais com o certificado A1 de cada cliente.</>
+              : <>Atenção: servidor em modo <strong>{modo}</strong> (uso exclusivo de testes automatizados). Não utilize.</>}
           </div>
         )}
         <Routes>

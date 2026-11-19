@@ -5,22 +5,20 @@
 - Python 3.14 (python.org, com "py launcher"). Opcional: PostgreSQL 16+ local.
 - Termo de autorização de uso do certificado A1 assinado por cada cliente (modelo no MANUAL_OPERACAO.md).
 
-## Fase 1: instalação em modo SIMULADO (meio dia)
+## Fase 1: instalação (meio dia)
 1. Copiar ou clonar o projeto para `C:\MO-XML-Captador`.
 2. Executar `windows\instalar.bat` com o usuário dedicado.
-3. Opcional: `backend\.venv\Scripts\python -m moxml demo` para treinar a equipe com dados fictícios.
-4. `windows\testar.bat`: os 65 testes devem passar.
+3. `windows\testar.bat`: os 67 testes automatizados devem passar (laboratório interno, sem tocar na SEFAZ).
 
 ## Fase 2: piloto com 1 CNPJ autorizado (1 a 2 dias)
-1. Trocar para `MOXML_MODO=REAL` (novo `MOXML_HOME` ou banco limpo, para não misturar com dados simulados).
-2. Cadastrar a empresa piloto, o certificado A1 (com o termo) e **um XML semente por modelo/série**.
-3. `windows\diagnostico.bat <id>`: verifica TLS, banco e a estrutura do Portal SVRS (registra se há CAPTCHA).
-4. `moxml teste-real` para **NF-e 55** e, separadamente, para **NFC-e 65**.
-5. Analisar as evidências em `evidencias\`. Decisão por modelo:
+1. Cadastrar a empresa piloto, o certificado A1 (com o termo) e **um XML semente por modelo/série**.
+2. `windows\diagnostico.bat <id>`: verifica TLS, banco e a estrutura do Portal SVRS (registra se há CAPTCHA).
+3. `moxml teste-real` para **NF-e 55** e, separadamente, para **NFC-e 65**.
+4. Analisar as evidências em `evidencias\`. Decisão por modelo:
    - todos os critérios OK → operacional;
    - critério 4 = IMPOSSÍVEL → descoberta indisponível; operar só com pasta do emissor e chaves;
    - critério 5 com CAPTCHA → XML integral só pela pasta do emissor ou pelo conector comercial.
-6. Atualizar FONTES_FISCAIS.md e o RELATORIO_TESTES_REAIS.md com o resultado.
+5. Atualizar FONTES_FISCAIS.md e o RELATORIO_TESTES_REAIS.md com o resultado.
 
 ## Fase 3: ondas de entrada (2 a 4 semanas)
 - Onda 1: 10 empresas de NF-e. Onda 2: 10 empresas de NFC-e de alto volume (calibrar limites). Ondas seguintes: 30 empresas por semana até as cerca de 110.

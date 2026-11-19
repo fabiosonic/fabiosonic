@@ -4,9 +4,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from moxml import servicos
-from moxml.certificados.a1 import SenhaIncorreta, carregar_pfx, impedimentos_bloqueantes, validar_para_empresa
+from moxml.certificados.a1 import (
+    SenhaIncorreta,
+    carregar_pfx,
+    impedimentos_bloqueantes,
+    validar_para_empresa,
+)
 from moxml.seguranca.cofre import Cofre
-from moxml.simulador import gerador
+from tests.laboratorio import gerador
 
 CNPJ = "99000001000101"
 
@@ -87,3 +92,10 @@ def test_validar_cnpj(cnpj, ok):
     else:
         with pytest.raises(servicos.ErroNegocio):
             servicos.validar_cnpj(cnpj)
+
+
+def test_producao_recusa_certificado_fora_da_icp_brasil(app, empresa):
+    pfx, _, _ = gerador.gerar_certificado_teste(CNPJ, "EMPRESA X")  # autoassinado de laboratório
+    app.modo = "REAL"
+    with pytest.raises(servicos.ErroNegocio, match="ICP-Brasil"):
+        servicos.cadastrar_certificado(app, empresa.id, pfx, "teste", "Sócio", "Contrato")

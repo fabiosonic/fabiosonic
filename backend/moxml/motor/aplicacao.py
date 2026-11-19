@@ -12,17 +12,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..certificados.a1 import CertificadoA1, carregar_pfx
-from ..config import Configuracoes, Modo
 from ..conectores.apisimples import ApiSimplesConector
 from ..conectores.pastas import PastaEmissorConector
 from ..conectores.registro import Registro
 from ..conectores.sefaz_consulta import SefazConsultaConector
 from ..conectores.sefaz_sae import SefazSaeConector
 from ..conectores.svrs_portal import SvrsPortalConector
+from ..config import Configuracoes
 from ..db.modelos import Certificado, ConectorConfig, RegistroFonte
 from ..db.sessao import aplicar_migrations, fabrica
-from ..seguranca.cofre import Cofre
 from ..sefaz.transporte import ClienteSoap, LimitadorTaxa
+from ..seguranca.cofre import Cofre
 from .armazenamento import Armazenamento
 
 _RE_CSTAT = re.compile(rb"<cStat>(\d{3})</cStat>")
@@ -37,15 +37,13 @@ class Aplicacao:
     armazenamento: Armazenamento
     registro: Registro
     limitador: LimitadorTaxa
-    # Fábricas de transporte: em SIMULADO apontam para o laboratório; em REAL, para a rede com mTLS.
+    # Produção: modo "REAL" e transportes None (rede com mTLS e o A1 do emitente).
+    # Somente o pytest troca modo para "TESTE" e injeta o laboratório; em "REAL" a injeção é recusada.
+    modo: str = "REAL"
     transporte_soap: Callable[[str], httpx.BaseTransport | None] = lambda _cnpj: None
     transporte_http: Callable[[str], httpx.BaseTransport | None] = lambda _cnpj: None
     _cache_cert: dict[str, CertificadoA1] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
-
-    @property
-    def modo(self) -> str:
-        return self.cfg.modo.value
 
     # ----------------------------------------------------------------- certificados
     def certificado_ativo(self, s: Session, empresa_id: int) -> Certificado | None:
@@ -68,12 +66,10 @@ class Aplicacao:
 
     # ----------------------------------------------------------------- clientes
     def cliente_soap(self, cnpj: str, cert: CertificadoA1 | None) -> ClienteSoap:
-        transp = self.transporte_soap(cnpj)
+        transp = self._transporte(self.transporte_soap, cnpj)
         if transp is not None:
             return ClienteSoap(None, self.cfg.timeout_segundos, self.cfg.retentativas, self.limitador, transport=transp,
                                dormir=lambda _s: None, registrar=self._registrador(cnpj))
-        if self.cfg.modo != Modo.REAL:
-            raise RuntimeError("modo SIMULADO sem transporte de laboratório configurado")
         if cert is None:
             raise RuntimeError("certificado A1 obrigatório para acesso real")
         return ClienteSoap(cert.contexto_ssl(self.cfg.ca_bundle), self.cfg.timeout_segundos, self.cfg.retentativas,
@@ -98,14 +94,20 @@ class Aplicacao:
         return registrar
 
     def cliente_http(self, cnpj: str, cert: CertificadoA1 | None) -> httpx.Client:
-        transp = self.transporte_http(cnpj)
+        transp = self._transporte(self.transporte_http, cnpj)
         cab = {"User-Agent": "MO-XML-Captador/1.0 (+contribuinte; uso com certificado do emitente)"}
         if transp is not None:
             return httpx.Client(transport=transp, timeout=self.cfg.timeout_segundos, headers=cab)
-        if self.cfg.modo != Modo.REAL or cert is None:
+        if cert is None:
             raise RuntimeError("certificado A1 obrigatório para acesso real ao portal")
         return httpx.Client(verify=cert.contexto_ssl(self.cfg.ca_bundle), timeout=self.cfg.timeout_segundos,
                             headers=cab)
+
+    def _transporte(self, fabrica, cnpj: str):  # noqa: ANN001, ANN202
+        t = fabrica(cnpj)
+        if t is not None and self.modo == "REAL":
+            raise RuntimeError("transporte de teste recusado: o sistema opera somente com fontes reais")
+        return t
 
     def conector_ativo(self, s: Session, nome: str, padrao: bool) -> bool:
         c = s.scalar(select(ConectorConfig).where(ConectorConfig.nome == nome))
@@ -140,12 +142,5 @@ def criar_aplicacao(cfg: Configuracoes, migrar: bool = True) -> Aplicacao:
     cofre = Cofre(cfg.pasta_cofre)
     app = Aplicacao(cfg=cfg, sessoes=fabrica(cfg.url_banco), cofre=cofre, armazenamento=Armazenamento(cfg.pasta_xml),
                     registro=criar_registro(cfg, cofre),
-                    limitador=LimitadorTaxa(por_minuto={"dfe-portal.svrs.rs.gov.br": 12}, padrao_por_minuto=30)
-                    if cfg.modo == Modo.REAL else LimitadorTaxa(padrao_por_minuto=1_000_000))
-    if cfg.modo == Modo.SIMULADO:
-        from ..simulador.sefaz_fake import laboratorio_padrao
-
-        lab = laboratorio_padrao(app)
-        app.transporte_soap = lambda _c: lab.transport()
-        app.transporte_http = lambda _c: lab.transport()
+                    limitador=LimitadorTaxa(por_minuto={"dfe-portal.svrs.rs.gov.br": 12}, padrao_por_minuto=30))
     return app

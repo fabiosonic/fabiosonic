@@ -10,7 +10,16 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -19,8 +28,19 @@ from sqlalchemy import func, or_, select
 from .. import __version__, servicos
 from ..certificados.a1 import ErroCertificado, SenhaIncorreta
 from ..db.modelos import (
-    ArquivoDrive, ChaveConhecida, Certificado, ConectorConfig, Documento, Empresa, Evento, Execucao, Lacuna,
-    LogExecucao, PastaMonitorada, RegistroFonte, Serie,
+    ArquivoDrive,
+    Certificado,
+    ChaveConhecida,
+    ConectorConfig,
+    Documento,
+    Empresa,
+    Evento,
+    Execucao,
+    Lacuna,
+    LogExecucao,
+    PastaMonitorada,
+    RegistroFonte,
+    Serie,
 )
 from ..integracoes import dominio
 from ..motor.agendador import Agendador
@@ -394,7 +414,7 @@ def criar_api(app: Aplicacao, iniciar_agendador: bool = True) -> FastAPI:
     @api.get("/api/configuracoes", dependencies=dep)
     def configuracoes():
         c = app.cfg
-        return {"modo": c.modo.value, "home": str(c.home), "banco": c.url_banco.split("@")[-1],
+        return {"modo": app.modo, "home": str(c.home), "banco": c.url_banco.split("@")[-1],
                 "horarios_execucao": c.horarios_execucao, "agendamento_ativo": c.agendamento_ativo,
                 "pasta_xml": str(c.pasta_xml), "ca_bundle": str(c.ca_bundle) if c.ca_bundle else None,
                 "cofre": app.cofre.mecanismo, "timeout_segundos": c.timeout_segundos, "retentativas": c.retentativas,

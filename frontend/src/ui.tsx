@@ -42,7 +42,7 @@ const TOM: Record<string, string> = {
   PENDENTE: "alerta", SEM_PROTOCOLO: "alerta", INUTILIZADA: "neutro", CHAVE_CONHECIDA_XML_PENDENTE: "alerta",
   NAO_CONSTA_NA_SEFAZ: "info", LACUNA_NAO_INVESTIGADA: "alerta", EM_ANDAMENTO: "info", NAO_CONFIGURADO: "neutro",
   ERRO: "erro", FALHA: "erro", VENCIDO: "erro", INDISPONIVEL: "neutro", INTERROMPIDA: "erro", SEM_FONTE: "erro",
-  BLOQUEADO: "erro", AVISO: "alerta", INFO: "info", SIMULADO: "alerta", REAL: "ok",
+  BLOQUEADO: "erro", AVISO: "alerta", INFO: "info", TESTE: "erro", REAL: "ok",
 };
 
 export function Selo({ v }: { v: string | null | undefined }) {

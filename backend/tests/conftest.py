@@ -1,4 +1,4 @@
-"""Fixtures: aplicação isolada em diretório temporário + laboratório SEFAZ simulado. Nenhuma chamada real."""
+"""Fixtures: aplicação isolada em diretório temporário + laboratório de testes. Nenhuma chamada real."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from moxml.config import Configuracoes, Modo
+from moxml.config import Configuracoes
 from moxml.db.modelos import Empresa
 from moxml.motor.aplicacao import criar_aplicacao
-from moxml.simulador.sefaz_fake import Laboratorio
+from moxml.sefaz.transporte import LimitadorTaxa
+from tests.laboratorio.sefaz_fake import Laboratorio
 
 CNPJ = "99000001000101"
 RAZAO = "LOJA LABORATORIO LTDA"
@@ -22,8 +23,10 @@ def lab() -> Laboratorio:
 
 @pytest.fixture
 def app(tmp_path, lab):
-    cfg = Configuracoes(home=tmp_path / "home", modo=Modo.SIMULADO, agendamento_ativo=False)
+    cfg = Configuracoes(home=tmp_path / "home", agendamento_ativo=False)
     a = criar_aplicacao(cfg)
+    a.modo = "TESTE"  # única forma de usar o laboratório; em "REAL" a injeção é recusada
+    a.limitador = LimitadorTaxa(padrao_por_minuto=1_000_000)
     a.transporte_soap = lambda _c: lab.transport()
     a.transporte_http = lambda _c: lab.transport()
     return a

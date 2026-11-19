@@ -10,11 +10,11 @@ ou
 cd backend && python -m pytest tests
 ```
 
-Os testes usam **somente** o laboratório SIMULADO (`moxml/simulador`): certificados autoassinados de teste, NF-e/NFC-e assinadas e uma SEFAZ/portal falsos que reproduzem as regras do MOC. **Nenhuma chamada fiscal real é feita.**
+Os testes automatizados usam o laboratório de testes (`backend/tests/laboratorio`, não instalado em produção): certificados autoassinados de teste, NF-e/NFC-e assinadas e uma SEFAZ/portal falsos que reproduzem as regras do MOC. **Nenhuma chamada fiscal real é feita.**
 
 ## Resultado nesta entrega
 
-- **65 testes, 65 aprovados**, em **CPython 3.14.6** (Linux, 19/11/2026). Versões das dependências fixadas em `backend/requirements.txt`.
+- **67 testes, 67 aprovados**, em **CPython 3.14.6** (Linux, 19/11/2026). Versões das dependências fixadas em `backend/requirements.txt`.
 - O build do frontend (`tsc --noEmit && vite build`) passou.
 - O painel foi aberto em Chromium headless (Playwright) nas páginas principais, sem erros de console.
 - Não executado: testes em Windows real, PostgreSQL real e chamadas reais à SEFAZ/SVRS/Drive. Ver LIMITACOES.md.
@@ -57,7 +57,6 @@ Exige CNPJ autorizado e uma chave real já conhecida, separadamente para cada mo
 
 ```bat
 set MOXML_HOME=%PROGRAMDATA%\MO-XML-Captador
-rem com MOXML_MODO=REAL no moxml.env
 backend\.venv\Scripts\python -m moxml teste-real --empresa 1 --chave <CHAVE_NFE_55_CONHECIDA> --autorizado-por "Nome / cargo"
 backend\.venv\Scripts\python -m moxml teste-real --empresa 1 --chave <CHAVE_NFCE_65_CONHECIDA> --autorizado-por "Nome / cargo"
 ```

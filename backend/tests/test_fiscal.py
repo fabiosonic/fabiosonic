@@ -6,7 +6,7 @@ from lxml import etree
 from moxml.fiscal import chave as chv
 from moxml.fiscal import xmlfiscal as xf
 from moxml.fiscal.xmlfiscal import TipoXML
-from moxml.simulador import gerador
+from tests.laboratorio import gerador
 
 CNPJ = "99000001000101"
 

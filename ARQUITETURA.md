@@ -38,7 +38,7 @@
 | **Checkpoints e commit por chave** | Cada chave descoberta é persistida antes de avançar o checkpoint. Execuções interrompidas são marcadas `INTERROMPIDA` na subida e retomam sem perda (testado). |
 | **Isolamento por empresa × modelo** | Cada tarefa tem sessão e `Execucao` próprias. Exceções não se propagam (testado). |
 | **Janela sobreposta de eventos** | Documentos dos últimos 35 dias são re-consultados a cada 20 h (cobre CC-e de até 30 dias e cancelamentos extemporâneos). |
-| **Modo SIMULADO vs REAL** | Em SIMULADO, todo transporte vai para o laboratório (`moxml/simulador`), registros ficam marcados `modo=SIMULADO` e o painel exibe uma faixa de alerta. Em REAL, sem certificado nada é consultado. |
+| **Somente notas reais** | Não existe modo de simulação em produção. O laboratório (SEFAZ/portal falsos) fica em `backend/tests/laboratorio`, fora do pacote instalado; só o pytest o injeta, com `modo="TESTE"`. Com `modo="REAL"` (padrão fixo) a aplicação recusa qualquer transporte injetado, e o cadastro só aceita e-CNPJ ICP-Brasil. Sem certificado, nada é consultado. |
 | **Domínio** | Pacote de importação com os XMLs originais, em pasta plana por modelo, mais relatórios e manifesto SHA-256. A integração direta não foi validada, então não é simulada. |
 | **Serviço Windows via Agendador de Tarefas** | Roda com o **mesmo usuário** que cifrou o cofre DPAPI, inicia com o Windows, reinicia em falha e funciona com o painel fechado. |
 
