@@ -19,7 +19,6 @@ from sqlalchemy import select
 
 from .certificados.a1 import impedimentos_bloqueantes, validar_para_empresa
 from .conectores.base import ContextoCaptura
-from .conectores.dist_dfe import DistribuicaoDFeConector
 from .conectores.sefaz_consulta import DescobertaImpossivel, SefazConsultaConector
 from .conectores.svrs_portal import SvrsPortalConector
 from .db.modelos import Empresa, Execucao
@@ -80,11 +79,9 @@ def executar_teste_real(app: Aplicacao, empresa_id: int, chave_conhecida: str, a
             marca(4, "IMPOSSIVEL_PELO_METODO", str(e))
         except Exception as e:  # noqa: BLE001
             marca(4, "FALHA", f"{type(e).__name__}: {e}")
-        # 5/6. XML integral: NF-e 55 → DistDFe por chave (webservice); NFC-e 65 → portal SVRS.
-        fontes_xml = []
-        if ck.modelo == "55":
-            fontes_xml.append(("dist_dfe_chave", DistribuicaoDFeConector()))
-        fontes_xml.append(("svrs_portal_download", portal))
+        # 5/6. XML integral pela SVRS: Portal DF-e SVRS DownloadXMLDFe (55 e 65).
+        # (A Distribuição DFe não serve para saída: o emitente recebe cStat 641.)
+        fontes_xml = [("svrs_portal_download", portal)]
         try:
             rel["portal_inspecao"] = portal.inspecionar(ctx)
         except Exception as e:  # noqa: BLE001
@@ -120,9 +117,8 @@ def executar_teste_real(app: Aplicacao, empresa_id: int, chave_conhecida: str, a
             r1 = repo.registrar_xml(xml, origem_xml or "teste_real", emp, ck.chave)
             s.commit()
             marca(7, "OK" if r1.resultado in ("NOVO", "ATUALIZADO", "DUPLICADO") else "FALHA", f"{r1.resultado} {r1.mensagem}")
-            fonte2 = DistribuicaoDFeConector() if origem_xml == "dist_dfe_chave" else portal
             try:
-                xml2 = fonte2.recuperar_xml(ctx, ck.chave).xml
+                xml2 = portal.recuperar_xml(ctx, ck.chave).xml
                 marca(8, "OK" if xf.sha256(xml2) == xf.sha256(xml) else "FALHA",
                       "segundo download idêntico" if xf.sha256(xml2) == xf.sha256(xml) else "conteúdo divergente")
                 r2 = repo.registrar_xml(xml2, "svrs_portal_download", emp, ck.chave)

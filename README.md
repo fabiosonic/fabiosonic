@@ -54,6 +54,7 @@ O download pelo Portal DF-e SVRS é opcional e **não é necessário** para a op
 | [TESTES.md](TESTES.md) | testes automatizados e teste de aceitação real |
 | [LIMITACOES.md](LIMITACOES.md) | pendências e riscos |
 | [PLANO_IMPLANTACAO.md](PLANO_IMPLANTACAO.md) | implantação, backup e restauração |
+| [docs/MANUAL_SVRS.md](docs/MANUAL_SVRS.md) | **programa que funciona com a SVRS (RJ): como rodar e verificar** |
 | [docs/MANUAL_INSTALACAO.md](docs/MANUAL_INSTALACAO.md) | instalação |
 | [docs/MANUAL_OPERACAO.md](docs/MANUAL_OPERACAO.md) | operação diária e mensal |
 | [docs/RELATORIO_TESTES_REAIS.md](docs/RELATORIO_TESTES_REAIS.md) | evidências reais (pendente) |

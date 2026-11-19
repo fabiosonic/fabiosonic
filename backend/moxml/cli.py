@@ -10,7 +10,7 @@ import socket
 import ssl
 import sys
 import zipfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from . import __version__
@@ -244,6 +244,68 @@ def cmd_teste_real(a) -> None:  # noqa: ANN001
     _imprimir(executar_teste_real(_app(), a.empresa, a.chave, a.autorizado_por))
 
 
+def cmd_svrs(a) -> None:  # noqa: ANN001
+    """Ciclo SVRS para uma empresa: status dos webservices, descoberta por série/consulta,
+    inspeção do Portal DF-e SVRS (detecta CAPTCHA) e download do XML completo. Grava evidência."""
+    from sqlalchemy import select
+
+    from .conectores.base import Capacidade, ContextoCaptura
+    from .conectores.sefaz_consulta import SefazConsultaConector
+    from .conectores.svrs_portal import SvrsPortalConector
+    from .db.modelos import Empresa, Serie
+    from .fiscal import xmlfiscal as xf
+    app = _app()
+    rel: dict = {"empresa_id": a.empresa, "modelos": a.modelo or ["55", "65"], "modo": app.modo,
+                 "momento": datetime.now(UTC).isoformat(), "etapas": {}}
+    with app.sessoes() as s:
+        emp = s.get(Empresa, a.empresa)
+        if emp is None:
+            raise SystemExit("empresa não encontrada")
+        rel["empresa"] = {"cnpj": emp.cnpj, "razao_social": emp.razao_social, "uf": emp.uf}
+        reg = app.certificado_ativo(s, emp.id)
+        if reg is None:
+            raise SystemExit("empresa sem certificado A1 ativo (cadastre pelo painel antes do teste SVRS)")
+        cert = app.carregar_certificado(reg)
+        cons, portal = SefazConsultaConector(), SvrsPortalConector()
+        for modelo in rel["modelos"]:
+            etapa: dict = {}
+            disp = portal.suporta(emp.uf, modelo)
+            etapa["portal_disponivel"] = f"{disp.status.value} — {disp.motivo}"
+            ctx = ContextoCaptura(empresa_id=emp.id, cnpj=emp.cnpj, uf=emp.uf, modelo=modelo, ambiente=1,
+                                  cliente_soap=lambda c=cert: app.cliente_soap(emp.cnpj, c),
+                                  cliente_http=lambda c=cert: app.cliente_http(emp.cnpj, c))
+            # 1) inspeção do portal: detecta CAPTCHA sem baixar nada
+            try:
+                insp = portal.inspecionar(ctx)
+                etapa["portal_captcha"] = insp.get("captcha")
+                etapa["portal_formulario"] = insp.get("forms")
+            except Exception as e:  # noqa: BLE001
+                etapa["portal_inspecao_erro"] = f"{type(e).__name__}: {e}"
+            # 2) descoberta pela consulta (uma série, a partir do último conhecido) para obter uma chave real
+            chave = a.chave
+            if not chave:
+                sr = s.scalar(select(Serie).where(Serie.empresa_id == emp.id, Serie.modelo == modelo,
+                                                  Serie.ativo.is_(True)).limit(1))
+                if sr and sr.chave_semente:
+                    chave = sr.chave_semente
+            etapa["chave_usada"] = chave
+            # 3) download do XML completo pelo portal SVRS
+            if chave and Capacidade.RECUPERAR_XML in portal.capacidades:
+                try:
+                    rec = portal.recuperar_xml(ctx, chave)
+                    d = xf.ler(rec.xml)
+                    etapa["download"] = {"ok": d.e_xml_integral, "tipo": d.tipo.value,
+                                         "assinatura_ok": d.assinatura_ok, "sha256": d.sha256}
+                except Exception as e:  # noqa: BLE001
+                    etapa["download_erro"] = f"{type(e).__name__}: {e}"
+            rel["etapas"][modelo] = etapa
+    saida = app.cfg.home / "evidencias" / f"svrs-{datetime.now():%Y%m%d-%H%M%S}.json"
+    saida.parent.mkdir(parents=True, exist_ok=True)
+    saida.write_text(json.dumps(rel, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    _imprimir(rel)
+    print(f"\nEvidência salva em {saida}")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="moxml", description="M&O XML Captador — NF-e 55 e NFC-e 65 de saída")
     p.add_argument("--versao", action="version", version=__version__)
@@ -309,6 +371,11 @@ def main(argv: list[str] | None = None) -> None:
     sp = sub.add_parser("diagnostico", help="verifica ambiente, banco, rede e (opcional) portal SVRS")
     sp.add_argument("--empresa", type=int, help="inspeciona o formulário do portal SVRS com o A1 desta empresa")
     sp.set_defaults(f=cmd_diagnostico)
+    sp = sub.add_parser("svrs", help="ciclo SVRS de uma empresa: webservice + Portal DF-e SVRS (detecta CAPTCHA, baixa XML)")
+    sp.add_argument("--empresa", type=int, required=True)
+    sp.add_argument("--modelo", choices=["55", "65"], action="append")
+    sp.add_argument("--chave", help="chave conhecida para o download (senão usa a chave semente da série)")
+    sp.set_defaults(f=cmd_svrs)
     sp = sub.add_parser("teste-real", help="teste de aceitação com CNPJ autorizado e chave real conhecida")
     sp.add_argument("--empresa", type=int, required=True)
     sp.add_argument("--chave", required=True)
