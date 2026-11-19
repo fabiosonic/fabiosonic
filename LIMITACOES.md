@@ -16,7 +16,8 @@ Situação em 19/11/2026. O sistema **não é declarado operacional** para nenhu
 ## Riscos técnicos conhecidos
 
 1. **Concatenação da chave na rejeição 562 é "opcional" no MOC.** Se a SVRS não a fizer, a descoberta por numeração fica IMPOSSÍVEL PELO MÉTODO. O sistema detecta e registra isso (`DescobertaImpossivel`) e passa a depender de chaves vindas de outras fontes (pasta do emissor, cadastro manual).
-2. **Portal SVRS pode exigir CAPTCHA ou login gov.br.** Nesse caso o download automático é IMPOSSÍVEL PELO MÉTODO (o sistema não contorna). Restariam:
+2. **NF-e 55 tem via de webservice (DistDFe por chave), sem CAPTCHA.** O risco é a SEFAZ devolver só o `resNFe` (resumo) e não o `procNFe` completo ao emitente por chave — a NT permite ambos. Se só vier o resumo, usa-se o portal SVRS ou a pasta do emissor. **A NFC-e 65 não tem essa via** (o AN não distribui NFC-e): o XML completo da 65 vem do portal SVRS (possível CAPTCHA) ou da pasta do emissor.
+3. **Portal SVRS pode exigir CAPTCHA ou login gov.br** (afeta sobretudo a NFC-e 65). Nesse caso o download por ele é IMPOSSÍVEL PELO MÉTODO (o sistema não contorna). Restariam:
    - (a) a pasta do emissor do cliente;
    - (b) o conector comercial opcional;
    - (c) a descoberta J04/562, que continua entregando chave, situação, protocolo e eventos, e permite cobrar do cliente os XMLs faltantes com precisão.

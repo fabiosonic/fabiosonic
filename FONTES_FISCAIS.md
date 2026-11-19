@@ -31,6 +31,7 @@ Nenhum serviço foi chamado com certificado real: este ambiente não tem certifi
 | 5 | `https://dfe-portal.svrs.rs.gov.br/NFESSL/DownloadXMLDFe` | Portal DF-e: download do XML por chave (e, segundo o manual RJ, por série/número) | 55 | RJ (SVRS) | produção | certificado ICP-Brasil "relacionado ao documento" (TLS cliente) | página web (formulário) | não publicados; possível CAPTCHA | notícia SVRS 12/02/2019; resposta observada em 19/11/2026: "Esta consulta exige Certificado Digital emitido por AC credenciada junto ao ICP-Brasil" | **pendente** |
 | 6 | `https://dfe-portal.svrs.rs.gov.br/NFCESSL/DownloadXMLDFe` | idem | 65 | RJ | produção | idem | idem | idem | idem | **pendente** |
 | 7 | `https://nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx` | SAE-NFC-e: listagem de chaves | 65 | SP | produção (há homologação) | mTLS e-CNPJ | NT "Serviços de Apoio à Escrituração da NFC-e" v1.00 + XSD (arquivados em `backend/moxml/sefaz/schemas/sae/`) | 2000 chaves por chamada (101 → paginar por `dhEmisUltNfce`); 100 dias; limite por IP (656) | NT oficial SEFAZ-SP | pendente (fora do RJ) |
+| 7b | `https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx` | NFeDistribuicaoDFe `consChNFe` (XML completo por chave) | 55 | AN | produção (há homologação) | mTLS e-CNPJ do emitente | NT 2014.002; `docZip` gzip+base64 | ~3 meses; 656 | código verificado (PyTrustNFe/nfelib); fixture com `procNFe` completo | **pendente** |
 | 8 | `https://nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx` | SAE-NFC-e: download por chave | 65 | SP | produção | mTLS | idem; o `nfeProc` retornado é **simplificado** (sem `protNFe`) | 100 dias; 656 | idem | pendente |
 | 9 | `https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx` | DistDFe | 55 | AN | produção | mTLS | NT 2014.002 | 3 meses, NSU | oficial | **não usado** (exige autXML ou papel de destinatário) |
 | 10 | Fisco Fácil (SEFAZ-RJ): "Extração de documentos fiscais" | extração em lote (web, pedido assíncrono) | 55/65 | RJ | produção | e-CNPJ ou procuração | web | segundo relatos, ~10 dias de defasagem e 3 pedidos simultâneos | manual NFC-e RJ 1.43 (cópia pública) + fórum Contábeis | **excluído por decisão do escritório** |
@@ -55,7 +56,11 @@ Status: **PROVÁVEL** para a SVRS. A concatenação é "opcional" no MOC e preci
 
 Retorna `protNFe` e `procEventoNFe` (cancelamento, CC-e). Status: **CONFIRMADO** documentalmente (MOC). Nunca é tratado como XML integral.
 
-**Etapa C: XML integral (Portal DF-e SVRS, DownloadXMLDFe com A1)**
+**Etapa C (NF-e 55): XML integral por webservice — NFeDistribuicaoDFe por chave (consChNFe)**
+
+Verificado no código de `danimaribeiro/PyTrustNFe` (o método `download_nfe` chama `NFeDistribuicaoDFe`) e no fixture de `akretion/nfelib` (a consulta por `consChNFe` devolve dois `docZip`: `resNFe` e **`procNFe` completo com protocolo**). Pela NT 2014.002, quem está vinculado ao documento recebe o XML completo; o **emitente** está vinculado pelo seu próprio CNPJ, **sem necessidade de autXML**. O `docZip` vem em gzip+base64. Status: **NÃO COMPROVADO** (confirmar no teste real se o AN devolve o `procNFe` completo ao emitente por chave; se vier só `resNFe`, registra-se a chave/situação). Endpoint: Ambiente Nacional, `https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`. **Não cobre NFC-e 65.**
+
+**Etapa C (NFC-e 65): XML integral (Portal DF-e SVRS, DownloadXMLDFe com A1)**
 
 Status: **NÃO COMPROVADO**. O formulário só aparece com certificado ICP-Brasil. Há relato público (PortalSPED, 2020) de CAPTCHA "Não sou um robô". Se houver CAPTCHA, o conector **para** e registra **IMPOSSÍVEL PELO MÉTODO**: o sistema não contorna desafios humanos.
 
@@ -67,7 +72,7 @@ O emitente é obrigado a guardar o XML. Quando o ERP/PDV do cliente grava os arq
 
 | UF | Modelo | Descoberta | XML integral | Eventos | Status operacional |
 |---|---|---|---|---|---|
-| RJ | 55 | Consulta J04/562 (PROVÁVEL) | Portal SVRS (NÃO COMPROVADO) · pasta do emissor (DISPONÍVEL) · API Simples (opcional, NÃO CONFIGURADO) | Consulta de situação (CONFIRMADO documental) | **Não operacional até o teste real** (critérios 1 a 10, seção 17) |
+| RJ | 55 | Consulta J04/562 (PROVÁVEL) | **DistDFe por chave — webservice, sem CAPTCHA (NÃO COMPROVADO)** · Portal SVRS · pasta do emissor · API Simples (opcional) | DistDFe/consulta de situação | **Não operacional até o teste real** (critérios 1 a 10, seção 17) |
 | RJ | 65 | Consulta J04/562 (PROVÁVEL) | Portal SVRS (NÃO COMPROVADO) · pasta do emissor · API Simples (opcional) | Consulta de situação | **Não operacional até o teste real**, avaliado separadamente do modelo 55 |
 | SP | 65 | SAE ListagemChaves (documentado) | SAE DownloadXML + protocolo pela consulta | SAE | Fora do escopo inicial; conector pronto, NÃO COMPROVADO |
 | SP | 55 | sem fonte oficial | pasta do emissor | — | IMPOSSÍVEL PELO MÉTODO oficial (a própria DFe Digital afirma: "a SEFAZ-SP não oferece as NF-e emitidas") |

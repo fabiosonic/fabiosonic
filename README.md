@@ -10,8 +10,9 @@ Captura de XML de **saída** de **NF-e (modelo 55)** e **NFC-e (modelo 65)** de 
 1. **XML semente** por série: fornece CNPJ, modelo, série e numeração.
 2. **Descoberta oficial** (NFeConsultaProtocolo/SVRS): uma consulta por número. O MOC (regra J04, cStat 562) prevê que a SEFAZ devolva ao emitente a chave existente. Sem força bruta. *Provável; confirmar no teste real.*
 3. **Situação e eventos**: protocolo, cancelamentos e CC-e pela mesma consulta.
-4. **XML integral**: Portal DF-e SVRS (`DownloadXMLDFe`) com o A1 do emitente. *Não comprovado; interrompe se houver CAPTCHA.* Fontes complementares: pasta do emissor do cliente e conector comercial opcional (desligado).
-5. **Validação** (assinatura criptográfica, chave/DV, protocolo, XSD PL_010g), **deduplicação**, gravação sem sobrescrever, **auditoria de numeração**, **Google Drive** com confirmação por MD5 e **pacote para o Domínio**.
+4. **XML integral — NF-e 55**: **NFeDistribuicaoDFe por chave** (`consChNFe`, Ambiente Nacional, webservice, mTLS). O emitente consulta a própria nota pela chave e recebe o `nfeProc` completo com protocolo e eventos. **Sem CAPTCHA e sem autXML** (autXML é só para terceiros; o emitente tem direito ao próprio documento). *A confirmar no teste real.*
+5. **XML integral — NFC-e 65**: a Distribuição DFe não cobre NFC-e. A via da SEFAZ é o Portal DF-e SVRS (`DownloadXMLDFe`); se exigir CAPTCHA, o sistema não o contorna.
+6. **Validação** (assinatura criptográfica, chave/DV, protocolo, XSD PL_010g), **deduplicação**, gravação sem sobrescrever, **auditoria de numeração**, **Google Drive** com confirmação por MD5 e **pacote para o Domínio**.
 
 ## Início rápido (Windows)
 ```bat

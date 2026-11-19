@@ -179,3 +179,28 @@ def test_apisimples_paginacao_e_base64():
     docs = list(c.listar_documentos(ctx))
     assert [d.ref_fonte for d in docs] == ["id1", "id2", "id3"]
     assert c.recuperar_xml(ctx, docs[0].chave, docs[0].ref_fonte).xml == xml
+
+
+def test_distdfe_por_chave_retorna_xml_completo(lab):
+    from moxml.conectores.dist_dfe import DistribuicaoDFeConector
+    notas = lab.popular(CNPJ, "LOJA", "55", 1, 1, 2, datetime.now(), cancelar={2})
+    rec = DistribuicaoDFeConector().recuperar_xml(ctx_para(lab, "55"), notas[1].chave)
+    d = xf.ler(rec.xml)
+    assert d.e_xml_integral and d.chave == notas[1].chave and d.assinatura_ok
+    assert rec.eventos and b"procEventoNFe" in rec.eventos[0].xml  # cancelamento junto
+
+
+def test_distdfe_indisponivel_para_nfce(lab):
+    from moxml.conectores.dist_dfe import DistribuicaoDFeConector
+    assert DistribuicaoDFeConector().suporta("RJ", "65").status.value == "INDISPONIVEL"
+    assert DistribuicaoDFeConector().suporta("RJ", "55").status.value == "NAO_COMPROVADO"
+
+
+def test_distdfe_sem_documento(lab):
+    from moxml.conectores.dist_dfe import DistribuicaoDFeConector
+    from moxml.conectores.base import FonteSemDados
+    from moxml.fiscal import chave as chv
+    lab.emissor(CNPJ, "LOJA")
+    inexistente = chv.montar_chave("RJ", 2026, 1, CNPJ, "55", 9, 999, 1, "11111111")
+    with pytest.raises(FonteSemDados):
+        DistribuicaoDFeConector().recuperar_xml(ctx_para(lab, "55"), inexistente)

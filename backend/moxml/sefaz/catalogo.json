@@ -23,6 +23,13 @@
         "SVRS|65|2": "https://nfce-homologacao.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx"
       }
     },
+    "NfeDistribuicaoDFe": {
+      "operation": "NFeDistribuicaoDFe", "method": "nfeDistDFeInteresse", "versao": "1.01", "wrapper": "nfeDistDFeInteresse",
+      "urls": {
+        "AN|55|1": "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx",
+        "AN|55|2": "https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx"
+      }
+    },
     "NFCeListagemChaves": {
       "operation": "NFCeListagemChaves", "method": "nfceListagemChaves", "versao": "1.00", "wrapper": null,
       "urls": {

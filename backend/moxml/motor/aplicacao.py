@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ..certificados.a1 import CertificadoA1, carregar_pfx
 from ..conectores.apisimples import ApiSimplesConector
+from ..conectores.dist_dfe import DistribuicaoDFeConector
 from ..conectores.pastas import PastaEmissorConector
 from ..conectores.registro import Registro
 from ..conectores.sefaz_consulta import SefazConsultaConector
@@ -127,6 +128,7 @@ def criar_registro(cfg: Configuracoes, cofre: Cofre, apisimples_transport: httpx
     conectores = [
         SefazSaeConector(extra),
         SefazConsultaConector(catalogo_extra=extra),
+        DistribuicaoDFeConector(extra),
         SvrsPortalConector(extra),
         PastaEmissorConector(),
         ApiSimplesConector(cfg.apisimples_base_url, chave_emitente, ativo=cfg.apisimples_ativo,

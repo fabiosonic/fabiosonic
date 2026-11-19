@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import base64
+import gzip
 import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -145,6 +147,8 @@ class Laboratorio:
                               f"<cStat>656</cStat><xMotivo>Rejeição: Consumo Indevido</xMotivo><cUF>33</cUF></retConsSitNFe>")
         if nome == "consSitNFe":
             return self._consulta(msg)
+        if nome == "distDFeInt":
+            return self._distdfe(msg)
         if nome == "nfceListagemChaves":
             return self._sae_lista(msg)
         if nome == "nfceDownloadXML":
@@ -180,6 +184,22 @@ class Laboratorio:
         if nota.cancelada:
             return ret("101", "Cancelamento de NF-e homologado", prot + evs)
         return ret("100", "Autorizado o uso da NF-e", prot + evs)
+
+    def _distdfe(self, msg) -> httpx.Response:
+        ch = msg.findtext(f".//{{{NS}}}consChNFe/{{{NS}}}chNFe")
+        n = self.notas.get(ch) if ch else None
+        base = (f'<retDistDFeInt xmlns="{NS}" versao="1.01"><tpAmb>1</tpAmb><verAplic>AN-LAB</verAplic>'
+                f"<dhResp>{datetime.now(UTC).isoformat()}</dhResp><ultNSU>0</ultNSU><maxNSU>0</maxNSU>")
+        if n is None or n.modelo != "55":  # AN distribui apenas NF-e 55
+            return self._soap(base + "<cStat>137</cStat><xMotivo>Nenhum documento localizado</xMotivo></retDistDFeInt>")
+
+        def zipar(xml: bytes) -> str:
+            return base64.b64encode(gzip.compress(xml)).decode()
+        itens = f'<docZip NSU="000000000000001" schema="procNFe_v4.00.xsd">{zipar(n.xml_proc)}</docZip>'
+        for e in n.eventos:
+            itens += f'<docZip NSU="000000000000002" schema="procEventoNFe_v1.00.xsd">{zipar(e)}</docZip>'
+        return self._soap(base + f"<cStat>138</cStat><xMotivo>Documento localizado</xMotivo>"
+                                 f"<loteDistDFeInt>{itens}</loteDistDFeInt></retDistDFeInt>")
 
     def _sae_lista(self, msg) -> httpx.Response:
         ini = datetime.fromisoformat(msg.findtext(f"{{{NS}}}dataHoraInicial"))

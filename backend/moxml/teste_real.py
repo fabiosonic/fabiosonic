@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from .certificados.a1 import impedimentos_bloqueantes, validar_para_empresa
 from .conectores.base import ContextoCaptura
+from .conectores.dist_dfe import DistribuicaoDFeConector
 from .conectores.sefaz_consulta import DescobertaImpossivel, SefazConsultaConector
 from .conectores.svrs_portal import SvrsPortalConector
 from .db.modelos import Empresa, Execucao
@@ -79,15 +80,31 @@ def executar_teste_real(app: Aplicacao, empresa_id: int, chave_conhecida: str, a
             marca(4, "IMPOSSIVEL_PELO_METODO", str(e))
         except Exception as e:  # noqa: BLE001
             marca(4, "FALHA", f"{type(e).__name__}: {e}")
-        # 5/6. portal: inspeção + download
+        # 5/6. XML integral: NF-e 55 → DistDFe por chave (webservice); NFC-e 65 → portal SVRS.
+        fontes_xml = []
+        if ck.modelo == "55":
+            fontes_xml.append(("dist_dfe_chave", DistribuicaoDFeConector()))
+        fontes_xml.append(("svrs_portal_download", portal))
         try:
             rel["portal_inspecao"] = portal.inspecionar(ctx)
         except Exception as e:  # noqa: BLE001
             rel["portal_inspecao"] = {"erro": f"{type(e).__name__}: {e}"}
         xml = None
+        origem_xml = None
+        ultimo = ""
+        for nome_fonte, conector in fontes_xml:
+            try:
+                rec = conector.recuperar_xml(ctx, ck.chave)
+                xml, origem_xml = rec.xml, nome_fonte
+                rel["chamadas"].append({"servico": nome_fonte, "resultado": "XML recebido"})
+                break
+            except Exception as e:  # noqa: BLE001
+                ultimo = f"{nome_fonte}: {type(e).__name__}: {e}"
+                rel["chamadas"].append({"servico": nome_fonte, "resultado": ultimo})
         try:
-            rec = portal.recuperar_xml(ctx, ck.chave)
-            xml = rec.xml
+            if xml is None:
+                raise RuntimeError(ultimo or "nenhuma fonte entregou XML")
+            rel["fonte_xml"] = origem_xml
             d = xf.ler(xml)
             marca(5, "OK" if d.chave == ck.chave and d.tipo in (xf.TipoXML.NFE_AUTORIZADA, xf.TipoXML.NFE_DENEGADA) else "FALHA",
                   f"tipo {d.tipo}, chave {d.chave}")
@@ -100,11 +117,12 @@ def executar_teste_real(app: Aplicacao, empresa_id: int, chave_conhecida: str, a
             rel["traceback"] = traceback.format_exc()[-2000:]
         if xml is not None and crit["6"]["status"] == "OK":
             repo = Repositorio(s, app.armazenamento, app.modo)
-            r1 = repo.registrar_xml(xml, "svrs_portal_download", emp, ck.chave)
+            r1 = repo.registrar_xml(xml, origem_xml or "teste_real", emp, ck.chave)
             s.commit()
             marca(7, "OK" if r1.resultado in ("NOVO", "ATUALIZADO", "DUPLICADO") else "FALHA", f"{r1.resultado} {r1.mensagem}")
+            fonte2 = DistribuicaoDFeConector() if origem_xml == "dist_dfe_chave" else portal
             try:
-                xml2 = portal.recuperar_xml(ctx, ck.chave).xml
+                xml2 = fonte2.recuperar_xml(ctx, ck.chave).xml
                 marca(8, "OK" if xf.sha256(xml2) == xf.sha256(xml) else "FALHA",
                       "segundo download idêntico" if xf.sha256(xml2) == xf.sha256(xml) else "conteúdo divergente")
                 r2 = repo.registrar_xml(xml2, "svrs_portal_download", emp, ck.chave)
