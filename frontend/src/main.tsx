@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { Component, ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 import { Resumo } from "./api";
@@ -14,6 +14,32 @@ import Integracoes from "./pages/Integracoes";
 import Lacunas from "./pages/Lacunas";
 import VisaoGeral from "./pages/VisaoGeral";
 import { useDados } from "./ui";
+
+/** Para-quedas: se uma página falhar ao renderizar, mostra o erro em vez de tela branca. */
+class Limite extends Component<{ children: ReactNode }, { erro: Error | null }> {
+  state = { erro: null as Error | null };
+  static getDerivedStateFromError(erro: Error) {
+    return { erro };
+  }
+  render() {
+    if (this.state.erro) {
+      return (
+        <div style={{ padding: 24 }}>
+          <div className="aviso erro" style={{ display: "block" }}>
+            <strong>Esta página encontrou um erro.</strong>
+            <p style={{ margin: "8px 0" }}>{this.state.erro.message}</p>
+            <p className="mudo" style={{ fontSize: 12 }}>
+              Se você acabou de atualizar o sistema, atualize a página forçando o recarregamento
+              (Ctrl+Shift+R). Se persistir, clique abaixo.
+            </p>
+            <button onClick={() => { this.setState({ erro: null }); location.reload(); }}>Recarregar painel</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const MENU: [string, string][] = [
   ["/", "Visão geral"], ["/empresas", "Empresas"], ["/certificados", "Certificados"], ["/capturas", "Capturas"],
@@ -49,6 +75,7 @@ function Shell() {
               : <>Atenção: servidor em modo <strong>{modo}</strong> (uso exclusivo de testes automatizados). Não utilize.</>}
           </div>
         )}
+        <Limite>
         <Routes>
           <Route path="/" element={<VisaoGeral />} />
           <Route path="/empresas" element={<Empresas />} />
@@ -61,6 +88,7 @@ function Shell() {
           <Route path="/integracoes" element={<Integracoes />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
         </Routes>
+        </Limite>
       </main>
     </div>
   );

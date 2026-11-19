@@ -458,6 +458,8 @@ def criar_api(app: Aplicacao, iniciar_agendador: bool = True) -> FastAPI:
         def spa(caminho: str):
             if caminho.startswith("api/"):
                 return Response(status_code=404)
-            return FileResponse(WEB / "index.html")
+            # index.html nunca é cacheado (evita painel velho após atualizar); os assets têm
+            # nome com hash e podem ser cacheados à vontade.
+            return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     return api
