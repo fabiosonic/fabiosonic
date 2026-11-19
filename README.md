@@ -17,7 +17,7 @@ Captura de XML de **saída** de **NF-e (modelo 55)** e **NFC-e (modelo 65)** de 
 ```bat
 windows\instalar.bat          :: instala, migra o banco e registra o serviço
 start http://127.0.0.1:8765   :: painel (opera somente com notas reais)
-windows\testar.bat            :: testes automatizados
+windows\testar.bat            :: testes automatizados (dois cliques; prepara tudo sozinho)
 ```
 O sistema **não possui modo de simulação** em operação: só traz notas reais das fontes oficiais, com o A1 de cada cliente. O laboratório existe apenas dentro dos testes automatizados (`backend/tests/laboratorio`) e não é instalado.
 
@@ -64,4 +64,5 @@ O download pelo Portal DF-e SVRS é opcional e **não é necessário** para a op
 cd backend && python3.14 -m venv .venv && .venv/bin/pip install -r requirements.txt -e .
 MOXML_HOME=./dados .venv/bin/python -m moxml servidor
 cd frontend && npm install && npm run dev      # painel com proxy para a API
+# Testes (prepara o ambiente sozinho): ./testar.sh   (ou windows\testar.bat no Windows)
 ```

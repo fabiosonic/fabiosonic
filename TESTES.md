@@ -1,14 +1,13 @@
 # Testes
 
-## Como executar
+## Como executar (forma fácil — um comando, prepara tudo sozinho)
 
-```bat
-windows\testar.bat
-```
-ou
-```bash
-cd backend && python -m pytest tests
-```
+- **Windows:** dê dois cliques em `windows\testar.bat`. Na primeira vez ele cria o ambiente e
+  instala as dependências automaticamente; depois é só rodar. Ao final mostra "todos os testes passaram".
+- **Linux/macOS:** `./testar.sh` (mesma preparação automática).
+
+Sem preparar nada à mão. Para filtrar um teste: `./testar.sh -k nome` ou
+`windows\testar.bat` e, manualmente, `backend\.venv\Scripts\python -m pytest tests -k nome`.
 
 Os testes automatizados usam o laboratório de testes (`backend/tests/laboratorio`, não instalado em produção): certificados autoassinados de teste, NF-e/NFC-e assinadas e uma SEFAZ/portal falsos que reproduzem as regras do MOC. **Nenhuma chamada fiscal real é feita.**
 

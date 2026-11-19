@@ -21,3 +21,4 @@ backup/
 agente/agente.ini
 agente/estado.json
 agente/agente.log
+backend/.venv/
