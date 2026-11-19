@@ -8,7 +8,7 @@ from .base import Capacidade, Conector
 
 # Ordem de preferência: oficiais primeiro; comercial por último.
 PRIORIDADE_DESCOBERTA = ["sefaz_sae_nfce", "sefaz_consulta", "apisimples"]
-PRIORIDADE_RECUPERACAO = ["dist_dfe_chave", "sefaz_sae_nfce", "svrs_portal_download", "apisimples"]
+PRIORIDADE_RECUPERACAO = ["sefaz_sae_nfce", "svrs_portal_download", "apisimples"]  # dist_dfe não serve p/ saída (641)
 
 
 @dataclass

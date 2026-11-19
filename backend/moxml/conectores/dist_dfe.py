@@ -49,7 +49,7 @@ class DistribuicaoDFeConector(Conector):
     descricao = ("Ambiente Nacional — NFeDistribuicaoDFe por chave (consChNFe): XML completo da "
                  "NF-e 55 do emitente, por webservice, sem CAPTCHA.")
     oficial = True
-    capacidades = frozenset({Capacidade.RECUPERAR_XML, Capacidade.RECUPERAR_EVENTOS})
+    capacidades = frozenset({Capacidade.RECUPERAR_XML, Capacidade.RECUPERAR_EVENTOS})  # só para ENTRADA (fora do escopo)
 
     def __init__(self, catalogo_extra: str | None = None):
         self.extra = catalogo_extra
@@ -58,14 +58,13 @@ class DistribuicaoDFeConector(Conector):
         if modelo != "55":
             return Disponibilidade(StatusFonte.INDISPONIVEL,
                                    "NFeDistribuicaoDFe não distribui NFC-e (65); apenas NF-e (55)")
-        try:
-            catalogo.servico("NfeDistribuicaoDFe", "AN", "55", 1, self.extra)
-        except catalogo.ServicoIndisponivel as e:
-            return Disponibilidade(StatusFonte.INDISPONIVEL, str(e))
+        # FATO CONFIRMADO no MOC (cStat 641 "NF-e indisponível para o emitente"): a Distribuição DFe
+        # NÃO entrega ao emitente o XML da própria NF-e de SAÍDA. Só serve quando o escritório é
+        # destinatário/autXML (notas de ENTRADA), o que está fora do escopo deste projeto.
         return Disponibilidade(
-            StatusFonte.NAO_COMPROVADO,
-            "Webservice oficial (AN). Devolução do procNFe completo ao emitente por chave a confirmar no teste real.",
-            "NT 2014.002; consChNFe (akretion/nfelib, danimaribeiro/PyTrustNFe)")
+            StatusFonte.INDISPONIVEL,
+            "Emitente recebe cStat 641 (NF-e indisponível para o emitente): não é fonte para notas de saída.",
+            "MOC NFeDistribuicaoDFe, regra de validação — cStat 641")
 
     def consultar_limites(self) -> Limites:
         return Limites(requisicoes_por_minuto=20, janela_retroativa_dias=90,

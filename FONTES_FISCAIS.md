@@ -56,11 +56,11 @@ Status: **PROVÁVEL** para a SVRS. A concatenação é "opcional" no MOC e preci
 
 Retorna `protNFe` e `procEventoNFe` (cancelamento, CC-e). Status: **CONFIRMADO** documentalmente (MOC). Nunca é tratado como XML integral.
 
-**Etapa C (NF-e 55): XML integral por webservice — NFeDistribuicaoDFe por chave (consChNFe)**
+**Etapa C: XML integral — a verdade confirmada (55 e 65)**
 
-Verificado no código de `danimaribeiro/PyTrustNFe` (o método `download_nfe` chama `NFeDistribuicaoDFe`) e no fixture de `akretion/nfelib` (a consulta por `consChNFe` devolve dois `docZip`: `resNFe` e **`procNFe` completo com protocolo**). Pela NT 2014.002, quem está vinculado ao documento recebe o XML completo; o **emitente** está vinculado pelo seu próprio CNPJ, **sem necessidade de autXML**. O `docZip` vem em gzip+base64. Status: **NÃO COMPROVADO** (confirmar no teste real se o AN devolve o `procNFe` completo ao emitente por chave; se vier só `resNFe`, registra-se a chave/situação). Endpoint: Ambiente Nacional, `https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`. **Não cobre NFC-e 65.**
+> Correção (19/11/2026): a hipótese de obter o `procNFe` do emitente pela `NFeDistribuicaoDFe consChNFe` foi **refutada**. O fixture do `nfelib` é dado sintético de teste, não prova de comportamento do AN. O MOC da `NFeDistribuicaoDFe` define **cStat 641 "NF-e indisponível para o emitente"**: a Distribuição DFe NÃO entrega ao emitente o XML da própria nota. E não distribui NFC-e. A SEFAZ-SP confirmou por escrito que não há webservice de captura de NFC-e por CNPJ sem a chave.
 
-**Etapa C (NFC-e 65): XML integral (Portal DF-e SVRS, DownloadXMLDFe com A1)**
+Portanto, **não existe webservice da SEFAZ** que devolva o XML completo das notas de saída ao emitente. Pela SEFAZ, o XML completo (55 e 65) só sai pelo **Portal DF-e SVRS (DownloadXMLDFe) com A1** — que pode exigir CAPTCHA (NÃO COMPROVADO; o sistema não contorna).
 
 Status: **NÃO COMPROVADO**. O formulário só aparece com certificado ICP-Brasil. Há relato público (PortalSPED, 2020) de CAPTCHA "Não sou um robô". Se houver CAPTCHA, o conector **para** e registra **IMPOSSÍVEL PELO MÉTODO**: o sistema não contorna desafios humanos.
 

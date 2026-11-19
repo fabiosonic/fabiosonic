@@ -50,7 +50,7 @@ def test_uma_nota_alem_da_semente(app, empresa, lab, base):
     assert contar(app, Documento) == 2
     with app.sessoes() as s:
         d = s.scalar(select(Documento).where(Documento.numero == 11))
-    assert d.origem == "dist_dfe_chave" and d.tipo_xml == "NFE_AUTORIZADA" and d.modo == "TESTE"  # webservice tem prioridade
+    assert d.origem == "svrs_portal_download" and d.tipo_xml == "NFE_AUTORIZADA" and d.modo == "TESTE"
     assert (app.cfg.pasta_xml / d.caminho_xml).exists()
     assert "/NFE_SAIDA/" in d.caminho_xml and d.caminho_xml.startswith("1-CLIENTES/CLIENTES ATIVOS/")
 

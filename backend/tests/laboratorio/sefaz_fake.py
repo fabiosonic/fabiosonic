@@ -192,6 +192,10 @@ class Laboratorio:
                 f"<dhResp>{datetime.now(UTC).isoformat()}</dhResp><ultNSU>0</ultNSU><maxNSU>0</maxNSU>")
         if n is None or n.modelo != "55":  # AN distribui apenas NF-e 55
             return self._soap(base + "<cStat>137</cStat><xMotivo>Nenhum documento localizado</xMotivo></retDistDFeInt>")
+        # Emitente consultando a propria nota: MOC cStat 641 (NF-e indisponivel para o emitente).
+        if n.cnpj == msg.findtext(f".//{{{NS}}}CNPJ"):
+            return self._soap(base + "<cStat>641</cStat><xMotivo>Rejeicao: NF-e indisponivel para o emitente"
+                              "</xMotivo></retDistDFeInt>")
 
         def zipar(xml: bytes) -> str:
             return base64.b64encode(gzip.compress(xml)).decode()

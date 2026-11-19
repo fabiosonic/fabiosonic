@@ -16,8 +16,11 @@ Situação em 19/11/2026. O sistema **não é declarado operacional** para nenhu
 ## Riscos técnicos conhecidos
 
 1. **Concatenação da chave na rejeição 562 é "opcional" no MOC.** Se a SVRS não a fizer, a descoberta por numeração fica IMPOSSÍVEL PELO MÉTODO. O sistema detecta e registra isso (`DescobertaImpossivel`) e passa a depender de chaves vindas de outras fontes (pasta do emissor, cadastro manual).
-2. **NF-e 55 tem via de webservice (DistDFe por chave), sem CAPTCHA.** O risco é a SEFAZ devolver só o `resNFe` (resumo) e não o `procNFe` completo ao emitente por chave — a NT permite ambos. Se só vier o resumo, usa-se o portal SVRS ou a pasta do emissor. **A NFC-e 65 não tem essa via** (o AN não distribui NFC-e): o XML completo da 65 vem do portal SVRS (possível CAPTCHA) ou da pasta do emissor.
-3. **Portal SVRS pode exigir CAPTCHA ou login gov.br** (afeta sobretudo a NFC-e 65). Nesse caso o download por ele é IMPOSSÍVEL PELO MÉTODO (o sistema não contorna). Restariam:
+2. **NÃO existe webservice da SEFAZ que devolva ao emitente o XML da própria nota de saída (CONFIRMADO).**
+   - **NF-e 55:** a Distribuição DFe (`NFeDistribuicaoDFe`), consultada pelo emitente sobre a própria nota, responde **cStat 641 "NF-e indisponível para o emitente"** (MOC, regra de validação). Ela só entrega documentos de ENTRADA (quando o CNPJ é destinatário/autXML) — fora do escopo.
+   - **NFC-e 65:** o Ambiente Nacional **nem distribui** NFC-e. A SEFAZ-SP declarou oficialmente que não há API/webservice para captura de NFC-e por CNPJ sem a chave. Não existe equivalente para o RJ.
+   - **Consequência:** a descoberta por webservice (consulta de protocolo) dá chave, situação, cancelamentos e numeração, mas **não** o XML completo. O XML completo, pela SEFAZ, só sai pelo **Portal DF-e SVRS** (web, com certificado).
+3. **Portal SVRS pode exigir CAPTCHA ou login gov.br** (afeta 55 e 65). Nesse caso o download por ele é IMPOSSÍVEL PELO MÉTODO (o sistema não contorna). Restariam:
    - (a) a pasta do emissor do cliente;
    - (b) o conector comercial opcional;
    - (c) a descoberta J04/562, que continua entregando chave, situação, protocolo e eventos, e permite cobrar do cliente os XMLs faltantes com precisão.

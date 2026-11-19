@@ -4,15 +4,14 @@ Captura de XML de **saída** de **NF-e (modelo 55)** e **NFC-e (modelo 65)** de 
 
 **Independente** do Fisco Fácil, do Hubstrom e do autXML. Prioriza fontes oficiais e usa o certificado A1 do próprio emitente, com autorização registrada.
 
-> **Situação (19/11/2026):** software completo e testado em laboratório (67 testes em Python 3.14.6). **Nenhuma recuperação real de XML foi feita ainda**: falta o teste com um certificado A1 autorizado. Até esse teste (`moxml teste-real`, um por modelo), nenhuma UF/modelo é considerada operacional. Ver [LIMITACOES.md](LIMITACOES.md).
+> **Aviso de viabilidade (19/11/2026) — leia antes de tudo:** **não existe webservice da SEFAZ** que devolva ao emitente o XML completo das próprias NF-e 55 e NFC-e 65 de saída (confirmado: Distribuição DFe responde **cStat 641 "NF-e indisponível para o emitente"** e nem distribui NFC-e). A única via da SEFAZ para esse XML é o **Portal DF-e SVRS com certificado**, que pode exigir CAPTCHA — e o sistema **não** burla CAPTCHA. Ou seja, **captura 100% automática apenas pela SEFAZ não é garantida**, sobretudo para a NFC-e. Ver [LIMITACOES.md](LIMITACOES.md).
 
 ## Como funciona no RJ
 1. **XML semente** por série: fornece CNPJ, modelo, série e numeração.
 2. **Descoberta oficial** (NFeConsultaProtocolo/SVRS): uma consulta por número. O MOC (regra J04, cStat 562) prevê que a SEFAZ devolva ao emitente a chave existente. Sem força bruta. *Provável; confirmar no teste real.*
 3. **Situação e eventos**: protocolo, cancelamentos e CC-e pela mesma consulta.
-4. **XML integral — NF-e 55**: **NFeDistribuicaoDFe por chave** (`consChNFe`, Ambiente Nacional, webservice, mTLS). O emitente consulta a própria nota pela chave e recebe o `nfeProc` completo com protocolo e eventos. **Sem CAPTCHA e sem autXML** (autXML é só para terceiros; o emitente tem direito ao próprio documento). *A confirmar no teste real.*
-5. **XML integral — NFC-e 65**: a Distribuição DFe não cobre NFC-e. A via da SEFAZ é o Portal DF-e SVRS (`DownloadXMLDFe`); se exigir CAPTCHA, o sistema não o contorna.
-6. **Validação** (assinatura criptográfica, chave/DV, protocolo, XSD PL_010g), **deduplicação**, gravação sem sobrescrever, **auditoria de numeração**, **Google Drive** com confirmação por MD5 e **pacote para o Domínio**.
+4. **XML integral (55 e 65)**: **não há webservice da SEFAZ** que entregue ao emitente o XML da própria nota de saída (ver abaixo). A via da SEFAZ é o **Portal DF-e SVRS** (`DownloadXMLDFe`) com o A1 do emitente; se o portal exigir CAPTCHA, o sistema não o contorna.
+5. **Validação** (assinatura criptográfica, chave/DV, protocolo, XSD PL_010g), **deduplicação**, gravação sem sobrescrever, **auditoria de numeração**, **Google Drive** com confirmação por MD5 e **pacote para o Domínio**.
 
 ## Início rápido (Windows)
 ```bat
