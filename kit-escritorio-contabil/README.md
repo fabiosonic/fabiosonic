@@ -10,7 +10,10 @@ Este kit configura um agente de IA para trabalhar em um escritório de contabili
 | **OpenClaw** (recomendado) | Assistente 24h com painel web e opção de WhatsApp/Telegram, memória e skills | Nativo (`agents.defaults.model.fallbacks`) |
 | **OpenClaude** (opcional) | Agente de terminal para planilhas, scripts e arquivos | Via proxy LiteLLM incluso |
 
+> **Usa o OpenBot (openbot.run)?** Comece por [`openbot/GUIA-OPENBOT.md`](openbot/GUIA-OPENBOT.md).
+
 ```
+openbot/       guia do OpenBot, instruções de 6 agentes e proxy de modelos gratuitos
 openclaw/      config (openclaw.json), instalador e alternância do modo sigiloso
 openclaude/    proxy LiteLLM, instalador e inicializador
 workspace/     "cérebro" comum: AGENTS.md, SOUL.md, USER.md, IDENTITY.md e skills/
