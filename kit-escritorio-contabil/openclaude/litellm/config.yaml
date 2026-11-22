@@ -1,0 +1,66 @@
+# Proxy LiteLLM - roteamento "gratuito primeiro, Claude Haiku 5.5 por último"
+# O OpenClaude chama o modelo "contabil" (ou "contabil-sigiloso") em http://localhost:4000/v1
+# e o LiteLLM decide qual provedor atende.
+
+model_list:
+  # ---------- Camada 1: gratuitos na nuvem ----------
+  - model_name: gratis-gemini
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: gratis-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+
+  - model_name: gratis-openrouter
+    litellm_params:
+      # Modelos ":free" do OpenRouter mudam com frequência.
+      # Confira em https://openrouter.ai/models?max_price=0 e troque se sair do ar.
+      model: openrouter/deepseek/deepseek-chat-v3-0324:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # ---------- Camada 2: gratuito local (opcional, exige Ollama instalado) ----------
+  - model_name: local-ollama
+    litellm_params:
+      model: ollama_chat/qwen2.5:14b
+      api_base: http://localhost:11434
+
+  # ---------- Camada 3: pago - último recurso ----------
+  - model_name: pago-haiku
+    litellm_params:
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ---------- Nomes que o OpenClaude usa ----------
+  # "contabil": uso geral (legislação, minutas, planilhas, código)
+  - model_name: contabil
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  # "contabil-sigiloso": dados de clientes (CPF/CNPJ, folha, extratos).
+  # Não passa pelos planos gratuitos que podem usar dados para treino.
+  - model_name: contabil-sigiloso
+    litellm_params:
+      model: ollama_chat/qwen2.5:14b
+      api_base: http://localhost:11434
+
+router_settings:
+  num_retries: 1
+  timeout: 300
+  allowed_fails: 2      # após 2 falhas o provedor entra em "castigo"
+  cooldown_time: 600    # 10 min sem tentar o provedor que estourou a cota
+  fallbacks:
+    - contabil: [gratis-groq, gratis-openrouter, local-ollama, pago-haiku]
+    - contabil-sigiloso: [pago-haiku]
+  context_window_fallbacks:
+    - contabil: [pago-haiku]
+
+litellm_settings:
+  drop_params: true     # ignora parâmetros que o provedor não aceita
+  set_verbose: false
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
