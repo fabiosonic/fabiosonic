@@ -8,7 +8,9 @@ proxy/     proxy opcional: vários modelos gratuitos e Claude Haiku 5.5 por últ
 
 O OpenBot é um app de desktop com "colegas de IA". Cada agente tem nome, instruções, modelo e uma pasta de trabalho própria, e os agentes conversam entre si e passam tarefas uns para os outros. A configuração é feita **na interface do app**. Este guia traz o passo a passo e os textos prontos para colar.
 
-> ⚠️ **Licença:** o uso pessoal é gratuito, mas a licença do OpenBot (PolyForm Noncommercial) **não cobre uso comercial**. Um escritório de contabilidade precisa da *Work license*. Segundo a página de preços, ela está **gratuita até 1º/12/2026** e depois custa a partir de €10/mês (Starter) ou €25/mês (Team, 2 membros). Ative em **Settings → Billing** antes de usar com clientes.
+> **Versão usada neste kit: Pessoal (gratuita).** Não é preciso cadastrar licença nem servidor: basta instalar o app e conectar os provedores de IA. Nada precisa ser configurado em **Settings → Billing**.
+>
+> ℹ️ Pelos termos do OpenBot, a versão pessoal cobre uso não comercial (estudo, testes, projetos pessoais). Uso em nome de empresa ou para clientes é considerado comercial e exige a licença de trabalho (a partir de €10/mês). A decisão é sua; veja https://openbot.run/pt/pricing.
 
 > ⚠️ **Segurança:** depois do consentimento inicial, os agentes do OpenBot rodam com acesso total (leem e alteram arquivos e executam comandos **sem pedir confirmação a cada ação**). Por isso:
 > - use um **usuário do Windows exclusivo** para o OpenBot, ou deixe nele apenas as pastas de clientes necessárias;
