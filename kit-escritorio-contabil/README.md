@@ -43,7 +43,7 @@ O OpenBot informa que o agente **muda para um modelo reserva** quando o plano at
 ### Alternativa mais robusta: proxy com várias camadas gratuitas
 Se quiser que **vários** gratuitos sejam tentados antes do Haiku (Gemini → Groq → OpenRouter → Ollama → Haiku):
 1. `python -m pip install "litellm[proxy]"`
-2. Rode `.\proxy\iniciar-proxy.ps1` (na 1ª vez ele abre o `.env` para você colar as chaves; rode de novo) (deixe a janela aberta).
+2. Rode `.\proxy\iniciar-proxy.ps1` . Na 1ª vez ele abre o `.env` para você colar as chaves; rode de novo e deixe a janela aberta.
 3. No OpenBot, adicione o **servidor compatível com OpenAI** com endereço `http://127.0.0.1:4000/v1`, chave `sk-escritorio-local` e modelo `contabil` (ou `contabil-sigiloso` para dados de clientes).
 
 Nessa opção, o último degrau é o Haiku pela **API da Anthropic** (créditos pagos, separados da assinatura).
