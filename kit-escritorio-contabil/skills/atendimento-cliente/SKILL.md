@@ -18,4 +18,4 @@ description: Redige respostas, e-mails, mensagens de WhatsApp e comunicados para
 - **Envio de guia:** "Segue a guia do {tributo} de {competência}, vencimento em {data}, valor R$ {valor}. Depois do pagamento, por favor, nos envie o comprovante."
 - **Mudança na legislação:** resumo em 3 linhas, o que muda para o cliente e o que ele precisa fazer, além de um convite para conversar.
 
-Sempre que houver dados pessoais na mensagem, lembre a equipe de usar o modo sigiloso.
+Sempre que houver dados pessoais na mensagem, lembre a equipe de usar um agente com modelo local (Ollama) ou o modelo `contabil-sigiloso`.

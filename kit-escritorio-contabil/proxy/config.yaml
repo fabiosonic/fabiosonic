@@ -1,5 +1,5 @@
 # Proxy LiteLLM - roteamento "gratuito primeiro, Claude Haiku 5.5 por último"
-# O OpenClaude chama o modelo "contabil" (ou "contabil-sigiloso") em http://localhost:4000/v1
+# O OpenBot chama o modelo "contabil" (ou "contabil-sigiloso") em http://localhost:4000/v1
 # e o LiteLLM decide qual provedor atende.
 
 model_list:
@@ -33,7 +33,7 @@ model_list:
       model: anthropic/claude-haiku-5-5
       api_key: os.environ/ANTHROPIC_API_KEY
 
-  # ---------- Nomes que o OpenClaude usa ----------
+  # ---------- Nomes que o OpenBot usa ----------
   # "contabil": uso geral (legislação, minutas, planilhas, código)
   - model_name: contabil
     litellm_params:

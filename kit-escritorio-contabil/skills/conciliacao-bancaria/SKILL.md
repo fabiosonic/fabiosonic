@@ -12,4 +12,4 @@ description: Concilia extrato bancário (OFX, CSV, XLSX, PDF convertido) com o r
 5. Para os itens "só no extrato", sugira conta e histórico: tarifas → despesas bancárias; rendimentos → receita financeira com IRRF a compensar; IOF; PIX de clientes → baixa de duplicatas.
 6. Não lance nada sem aprovação. Entregue a lista de ajustes em formato de importação do sistema do escritório, se ele for informado.
 
-**LGPD:** extrato é dado sensível. Recomende o modo sigiloso (`-Sigiloso`) ou processar localmente via script.
+**LGPD:** extrato é dado sensível. Recomende usar um agente com modelo local (Ollama) ou o modelo `contabil-sigiloso` do proxy, ou processar localmente via script.
